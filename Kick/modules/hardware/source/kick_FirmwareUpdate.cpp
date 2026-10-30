@@ -446,7 +446,7 @@ namespace mt
 
         std::future<void> future = std::async( std::launch::async, [&command] {
             // Execute the command
-            std::system( command.c_str() );
+            runBoardCommand( command.c_str() );
         } );
 
         sleep( 1 );

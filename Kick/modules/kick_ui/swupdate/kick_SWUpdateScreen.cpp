@@ -1,4 +1,5 @@
 #include "kick_SWUpdateScreen.h"
+#include "hardware/source/kick_HardwareMode.h"
 namespace kick_ui
 {
     SWUpdateScreen::SWUpdateScreen()
@@ -122,7 +123,7 @@ namespace kick_ui
             mt::utils::showDialog( "SUCCESS!", warningPopup, [&]( int R ) {
                 if( R == UI::APPLY )
                 {
-                    if( system( "reboot -nf" ) == 0 )
+                    if( mt::runBoardCommand( "reboot -nf" ) == 0 )
                         DBG( "Rebooting the device so new firmware will apply" );
                 }
                 else if( R == UI::CANCEL )
