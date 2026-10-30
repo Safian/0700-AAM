@@ -27,6 +27,7 @@
 #if KICK_APP_SMOKE_TEST
  #include "../../tests/platform/AppSmoke.h"
 #endif
+#include "contracts/utils/keyboard/keyboard_detector.h"
 
 #ifdef PERFETTO
     #include "melatonin_perfetto/melatonin_perfetto.h"
@@ -252,6 +253,11 @@ public:
         {
             setTitle( name );
             setContentOwned( &kick_ui::KickHome::Instance(), true );
+#if defined( KICK_KEYBOARD_PANEL ) && !defined( _WIN32 ) && !defined( _WIN64 )
+            // KickHome clears the keyboard focus on every screen change. With nothing focused, JUCE sends keys to this window, which
+            // is outside KickHome's own key listener, so listen here as well.
+            addKeyListener( &contracts::getKeypressDetector() );
+#endif
         }
 
         ~HomeWindow() final = default;
