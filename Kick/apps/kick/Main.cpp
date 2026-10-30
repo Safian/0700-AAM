@@ -137,7 +137,9 @@ public:
         adapter.reset( new KickDeviceAdapter() );
         // This method is where you should put your application's initialisation code ...
         const bool smoke = commandLine.contains("--smoke-test");
+#if ! JUCE_IOS
         if (!smoke) juce::Desktop::getInstance().getMainMouseSource().enableUnboundedMouseMovement(true, true);
+#endif
 
         // Exit kiosk mode ...
         juce::Desktop::getInstance().setKioskModeComponent( nullptr );
@@ -170,14 +172,17 @@ public:
         //bounds = display.logicalToPhysical( ui::layout::screen, nullptr );
         w->setBounds( bounds );
 
-#if( JUCE_IOS || JUCE_ANDROID || JUCE_LINUX || __linux__ )
-        if (!smoke) juce::Desktop::getInstance().setKioskModeComponent( w.get(), false );
-#endif
         // Position ...
         w->setTopLeftPosition( 0, 0 );
 
         // Visibility...
         w->setVisible(!smoke);
+
+#if JUCE_IOS
+        if (!smoke) juce::Desktop::getInstance().setKioskModeComponent( w.get(), true );
+#elif( JUCE_ANDROID || JUCE_LINUX || __linux__ )
+        if (!smoke) juce::Desktop::getInstance().setKioskModeComponent( w.get(), false );
+#endif
         if (smoke) juce::Timer::callAfterDelay(1500, [this] {
 #if KICK_APP_SMOKE_TEST
             const auto error = runKickAppSmoke();
