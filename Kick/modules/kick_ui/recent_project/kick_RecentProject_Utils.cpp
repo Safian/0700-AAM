@@ -39,9 +39,12 @@ namespace ui
 
     void LoadProjectAndAnimation::run()
     {
-        mt::getAudioInterface().loadProject( proj );
-        juce::MessageManager::callAsync( [] {
+        const auto loaded = mt::getAudioInterface().loadProject(proj);
+        // Publish completion after all message-thread persistence barriers.
+        // Quit can then join this worker without blocking a barrier it needs.
+        juce::MessageManager::callAsync([this, loaded] {
+            if (!loaded) stopAnimation();
             ui::RecentProject::isProjectLoading = false;
-        } );
+        });
     }
 }

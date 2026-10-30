@@ -31,6 +31,7 @@
 #if KICK_APP_SMOKE_TEST
  #include "../../tests/platform/AppSmoke.h"
 #endif
+#include "contracts/utils/keyboard/keyboard_detector.h"
 
 #ifdef PERFETTO
     #include "melatonin_perfetto/melatonin_perfetto.h"
@@ -240,6 +241,9 @@ public:
             juce::Timer::callAfterDelay(100, [this] { systemRequestedQuit(); });
             return;
         }
+        // Check while the UI and live programs still exist. A rejected save
+        // leaves the project open and its global error visible for recovery.
+        if (!mt::getAudioInterface().saveProject()) return;
 #if PERFETTO
         MelatoninPerfetto::get().endSession();
 #endif
@@ -248,7 +252,7 @@ public:
         // carry on running, or call quit() to allow the app to close.
         auto mgr = juce::ModalComponentManager::getInstance();
         if( mgr->cancelAllModalComponents() )
-            juce::Timer::callAfterDelay( 100, [this] { quit(); } );
+            juce::Timer::callAfterDelay( 100, [this] { systemRequestedQuit(); } );
         else
             quit();
     }
@@ -275,6 +279,9 @@ public:
             setContentNonOwned( chassisComponent.get(), false );
 
             addKeyListener( this );
+#if defined( KICK_KEYBOARD_PANEL )
+            addKeyListener( &contracts::getKeypressDetector() );
+#endif
 
             menuModel = std::make_unique<kick_mac::KickMacMenuModel>( [this]( int cmd ) {
                 handleMenuCommand( cmd );
@@ -564,6 +571,7 @@ public:
         std::unique_ptr<kick_mac::KickMacMenuModel>    menuModel;
     };
 #else
+#if JUCE_IOS
     class HomeWindow : public juce::DocumentWindow
     {
     public:
@@ -597,6 +605,38 @@ public:
     private:
         std::unique_ptr<kick_mobile::KickMobileTLayout> mobileLayout;
     };
+#else
+    class HomeWindow : public juce::DocumentWindow
+    {
+    public:
+        explicit HomeWindow( const juce::String& name )
+            : juce::DocumentWindow( name, juce::Colours::black, 0 )
+        {
+            setTitle( name );
+            setContentOwned( &kick_ui::KickHome::Instance(), true );
+#if defined( KICK_KEYBOARD_PANEL ) && !defined( _WIN32 ) && !defined( _WIN64 )
+            // KickHome clears the keyboard focus on every screen change. With nothing focused, JUCE sends keys to this window, which
+            // is outside KickHome's own key listener, so listen here as well.
+            addKeyListener( &contracts::getKeypressDetector() );
+#endif
+        }
+
+        ~HomeWindow() final = default;
+
+        void closeButtonPressed() override
+        {
+            juce::JUCEApplication::getInstance()->systemRequestedQuit();
+        }
+
+        void inputAttemptWhenModal() override
+        {
+            auto numModal = getNumCurrentlyModalComponents();
+            auto index    = juce::jmax( 0, numModal - 1 );
+            if( auto p = getCurrentlyModalComponent( index ) )
+                p->toFront( true );
+        }
+    };
+#endif
 #endif
 
 private:

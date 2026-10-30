@@ -55,9 +55,7 @@ private:
                 message.pktType = static_cast<CPktMgr::enumPacketType>(incoming.type);
                 message.pktDir = static_cast<CPktMgr::enumPacketDir>(incoming.direction);
                 message.pktCmd = incoming.command; message.data = incoming.data;
-                const auto required = message.pktType == CPktMgr::EN_PKT_TYPE_BUTTON ? 2 :
-                    (message.pktType == CPktMgr::EN_PKT_TYPE_KNOBS || message.pktType == CPktMgr::EN_PKT_TYPE_PAD) ? 3 : 0;
-                if (message.data.size() < static_cast<size_t>(required)) return;
+                if (!contracts::DclContractsHelper::isValidHardwareInput(message)) return;
                 if (contracts::DclContractsHelper::isButtonMessage(message) && contracts::DclContractsHelper::getButtonCode(message) == contracts::DeviceControlContracts::EN_SHIFT)
                     shiftBtnState.store(contracts::DclContractsHelper::getButtonState(message));
                 InputEvents::dispatchHardwareEvent(message);

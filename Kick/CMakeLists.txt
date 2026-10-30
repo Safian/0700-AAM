@@ -3,6 +3,13 @@ include_guard()
 cmake_minimum_required(VERSION 3.16)
 project(KIckDevelopment)
 
+option(KICK_CLAP_HOST_ONLY "Build independent CLAP hosting without the application modules" OFF)
+if(KICK_CLAP_HOST_ONLY)
+    enable_testing()
+    add_subdirectory(clap_host)
+    return()
+endif()
+
 ## Set CPM cache location
 if( NOT CPM_SOURCE_CACHE )
     set(CPM_SOURCE_CACHE ${CMAKE_SOURCE_DIR}/../.3rdPartySourceCache )
@@ -35,6 +42,8 @@ set(KICK_THEME "Default" CACHE STRING "Initial theme for Kick (e.g. Default or P
 if(NOT KICK_THEME STREQUAL "Default")
     add_compile_definitions(KICK_DEFAULT_THEME="${KICK_THEME}")
 endif()
+option( KICK_DESKTOP_KEYBOARD "Map the PC keyboard to the front panel buttons and pads (always on for Windows)" OFF )
+option( KICK_KEYBOARD_QWERTZ "Use QWERTZ layout for PC keyboard mapping (swaps Y and Z for physical pad layout)" OFF )
 
 #Compile commands, useful for some IDEs like VS-Code
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -49,6 +58,14 @@ endif()
 
 if(USE_VALUE_TREE_DEBUGGER)
     add_definitions(-DUSE_VALUE_TREE_DEBUGGER=1)
+endif()
+
+if(KICK_DESKTOP_KEYBOARD)
+    add_definitions(-DKICK_DESKTOP_KEYBOARD=1)
+endif()
+
+if(KICK_KEYBOARD_QWERTZ)
+    add_definitions(-DKICK_KEYBOARD_QWERTZ=1)
 endif()
 
 if(USE_ASAN_KICK)
@@ -114,6 +131,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 ## CMake package management...
 ## Fetch 3rd Party dependencies from their respective git repositories...
 include(3rdParty.cmake)
+
+set(KICK_CLAP_BUILD_JUCE ON CACHE BOOL "Build the KICK CLAP adapter" FORCE)
+set(KICK_CLAP_BUILD_TESTS OFF CACHE BOOL "Build standalone CLAP tests separately")
+add_subdirectory(clap_host)
 
 # Add project applications...
 if( TIMESTAMP )

@@ -141,6 +141,7 @@ namespace kick_ui
     KickHome::KickHome()
         : statusBar_( &AppStatusbar::Instance() )
     {
+        mt::getAudioInterface().addListener(this);
         //mt::FocusDebugger::enableFocusDebugger( true );
 
         // Setup default look and feel.
@@ -265,8 +266,22 @@ namespace kick_ui
         } );
     }
 
+    void KickHome::onProjectSaveFailed(const juce::String& reason)
+    {
+        if (statusBar_) statusBar_->setBoxInfo("UNSAVED: " + reason);
+        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+            "Project not saved", reason + "\nYour changes remain open. The previous saved file has been preserved.");
+    }
+
+    void KickHome::onProjectDirtyChanged(bool dirty)
+    {
+        if (statusBar_ && mt::getAudioInterface().getProjectSaveError().isEmpty())
+            statusBar_->setBoxInfo(dirty ? "Unsaved project changes" : "Project saved");
+    }
+
     KickHome::~KickHome()
     {
+        mt::getAudioInterface().removeListener(this);
         removeKeyListener( &contracts::getKeypressDetector() );
         contracts::DclSignals::hardwareInputTriggered.disconnect_all();
         ctrlBar_.reset();
@@ -473,7 +488,8 @@ namespace kick_ui
                             dynamic_cast<KnobEdit*>( screens_[Screen::MenuKnobEdit].get() )->knobLongPress();
                             break;
                         case contracts::DeviceControlContracts::EN_SAVE:
-                            ae.saveProject();
+                            if (!ae.saveProject())
+                                statusBar_->setBoxInfo("UNSAVED: " + ae.getProjectSaveError());
                             break;
 
                         default: break;
