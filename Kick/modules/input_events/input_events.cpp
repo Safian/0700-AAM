@@ -8,6 +8,7 @@
 
 
 namespace Controls {
+std::atomic<bool> shiftBtnState{false}, halfLevelState{false};
 sigslot::signal<CPktMgr::HWMsg_t&> InputEvents::dispatchHardwareEvent = {};
 
 class HwSerialData final : private juce::Thread {
@@ -55,6 +56,8 @@ private:
                 message.pktDir = static_cast<CPktMgr::enumPacketDir>(incoming.direction);
                 message.pktCmd = incoming.command; message.data = incoming.data;
                 if (!contracts::DclContractsHelper::isValidHardwareInput(message)) return;
+                if (contracts::DclContractsHelper::isButtonMessage(message) && contracts::DclContractsHelper::getButtonCode(message) == contracts::DeviceControlContracts::EN_SHIFT)
+                    shiftBtnState.store(contracts::DclContractsHelper::getButtonState(message));
                 InputEvents::dispatchHardwareEvent(message);
             });
             if (!count) wait(2);

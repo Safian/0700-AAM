@@ -21,7 +21,8 @@ namespace ui
         header.setAutoLoadToggleState( settings.projects.isAutoLoad() );
 
         longPressComp->onLoadTriggered = [&]( int Index ) {
-            recentItems[Index]->onMouseDown( Index, juce::File() );
+            if( juce::isPositiveAndBelow( Index, recentItems.size() ) )
+                recentItems[Index]->onMouseDown( Index, juce::File() );
         };
 
         longPressComp->onRemoveTriggered = [&]( int Index ) {
@@ -374,7 +375,7 @@ namespace ui
 
     void RecentProject::knobClicked()
     {
-        if( selectedIndex >= 0 )
+        if( juce::isPositiveAndBelow( selectedIndex, recentItems.size() ) )
             if( recentItems[selectedIndex]->onMouseDown )
                 recentItems[selectedIndex]->onMouseDown( selectedIndex, juce::File() );
     }
@@ -399,7 +400,7 @@ namespace ui
             recentItems[selectedIndex]->showBorder( true );
 
         auto projectsStartIndex = demoList.getSize() + templateList.getSize();
-        if( selectedIndex >= projectsStartIndex )
+        if( juce::isPositiveAndBelow( selectedIndex, recentItems.size() ) && selectedIndex >= projectsStartIndex )
         {
             auto visibleWidth    = projectList.getWidth();
             auto componentBounds = recentItems[selectedIndex]->getBounds();
@@ -434,7 +435,8 @@ namespace ui
             selectedIndex          = ( 0 < ( projectList.getSize() ) ) ? projectStartIndex : 0;
 
             clearAllShowBorder();
-            recentItems[selectedIndex]->showBorder( true );
+            if( juce::isPositiveAndBelow( selectedIndex, recentItems.size() ) )
+                recentItems[selectedIndex]->showBorder( true );
 
             // Check if we have come here on first launch,
             if( bFirstLaunch )

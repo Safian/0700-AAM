@@ -10,4 +10,13 @@ inline bool hardwareEnabled() noexcept {
     return false;
 #endif
 }
+// system() is unavailable on iOS. Behaviour on every other platform is unchanged.
+inline int runBoardCommand(const char* command) noexcept {
+#if JUCE_IOS
+    juce::ignoreUnused(command);
+    return -1;
+#else
+    return std::system(command);
+#endif
+}
 }

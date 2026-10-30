@@ -29,7 +29,13 @@ namespace AudIO
 
     DawRouting::~DawRouting()
     {
-        removeFromSends();
+        try
+        {
+            removeFromSends();
+        }
+        catch( ... )
+        {
+        }
     }
 
     int DawRouting::getNumIns() { return (int)gBuses.ins.size(); }

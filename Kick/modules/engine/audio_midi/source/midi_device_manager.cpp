@@ -42,7 +42,7 @@ namespace mt
         midiOutPorts.reserve( 8 );
 
         // Create MIDI output devices...
-#if JUCE_LINUX || JUCE_BSD || JUCE_MAC || JUCE_IOS
+#if (JUCE_LINUX || JUCE_BSD || JUCE_MAC) && ! JUCE_IOS
         for( auto i = 0; i < 8; ++i )
         {
             auto device = juce::MidiOutput::createNewDevice( "Kick:Out:" + juce::String( i + 1 ) );

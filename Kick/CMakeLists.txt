@@ -38,6 +38,10 @@ option( KICK_MULTITOUCH "KICK Multitouch demo App" OFF )
 option( DEBUG_TOUCH "Enable mouse cursor" OFF )
 option( USE_ASAN_KICK "enable address sanitizer" OFF )
 option( PERFETTO "Enable tracing using Perfetto" OFF )
+set(KICK_THEME "Default" CACHE STRING "Initial theme for Kick (e.g. Default or Proper)")
+if(NOT KICK_THEME STREQUAL "Default")
+    add_compile_definitions(KICK_DEFAULT_THEME="${KICK_THEME}")
+endif()
 option( KICK_DESKTOP_KEYBOARD "Map the PC keyboard to the front panel buttons and pads (always on for Windows)" OFF )
 option( KICK_KEYBOARD_QWERTZ "Use QWERTZ layout for PC keyboard mapping (swaps Y and Z for physical pad layout)" OFF )
 
@@ -95,9 +99,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # If we are using MSVC we want static runtime linkage
-if(APPLE)
+if(APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set (CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE INTERNAL "")
-endif(APPLE)
+endif()
 
 # Compile with werror in release builds
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")

@@ -131,6 +131,13 @@ namespace kick_ui
         void visibilityChanged() override {}
     };
 
+    KickHome& KickHome::Instance()
+    {
+        static juce::Component::SafePointer<KickHome> instance;
+        if (!instance) instance = new KickHome;
+        return *instance;
+    }
+
     KickHome::KickHome()
         : statusBar_( &AppStatusbar::Instance() )
     {
@@ -156,12 +163,21 @@ namespace kick_ui
         // Close existing screen and open screen as passed in argument.
         signals::sigScreenClose.connect( [&]( Screen NewScrn ) {
             Screen loadScreen = NewScrn;
+            while( !stack.empty() && ( stack.top() == currentScreen || stack.top() == Screen::Invalid ) )
+            {
+                stack.pop();
+            }
             if( !stack.empty() )
             {
                 if( NewScrn == Screen::Invalid )
+                {
                     loadScreen = stack.top();
-
-                stack.pop();
+                    stack.pop();
+                }
+            }
+            else if( loadScreen == Screen::Invalid )
+            {
+                loadScreen = Screen::HomeListView;
             }
 
             juce::MessageManager::callAsync( [loadScreen, this]() {
@@ -187,7 +203,10 @@ namespace kick_ui
 
         // Global components
         ctrlBar_ = std::make_unique<AppTopbar>();
+        hardwareDrawer_ = std::make_unique<MobileHardwareDrawer>();
         mt::utils::addChildComponents( this, ctrlBar_.get(), statusBar_ );
+        addChildComponent( hardwareDrawer_.get() );
+        hardwareDrawer_->setVisible( false );
         // First launch screen.
         screenAdder( Screen::RecentProject, std::make_unique<ui::RecentProject>() );
 
@@ -202,6 +221,9 @@ namespace kick_ui
         setBufferedToImage( true );
         setPaintingIsUnclipped( true );
         setSize( ui::appWidth, ui::appHeight );
+
+        // Host loading animation on KickHome screen only (prevents full-screen white flash)
+        mt::utils::LoadAnimation::setHost( this );
 
         // Load default startup screen.
         //signals::sigScreenOpen( Screen::Temp );
@@ -340,11 +362,33 @@ namespace kick_ui
             ctrlBar_->setBounds( b.removeFromTop( ui::layout::header.getHeight() ) );
             statusBar_->setBounds( b.removeFromBottom( ui::layout::statusBar.getHeight() ) );
         }
+        if( auto p = screens_[currentScreen].get() )
+            if( auto pScr = dynamic_cast<juce::Component*>( p ) )
+                pScr->setBounds( getScreenBounds( p ) );
+        if( hardwareDrawer_ && hardwareDrawer_->isVisible() )
+        {
+            hardwareDrawer_->setBounds( getLocalBounds() );
+            hardwareDrawer_->toFront( false );
+        }
     }
 
     void KickHome::AssignSampleStartUp()
     {
         dynamic_cast<AppAssignSample*>( screens_[Screen::MenuAssignSample].get() )->startup();
+    }
+
+    void KickHome::setHardwareDrawerVisible( bool isVisible )
+    {
+        if( hardwareDrawer_ )
+        {
+            hardwareDrawer_->setVisible( isVisible );
+            resized();
+        }
+    }
+
+    bool KickHome::isHardwareDrawerVisible() const
+    {
+        return hardwareDrawer_ ? hardwareDrawer_->isVisible() : false;
     }
 
     void KickHome::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )

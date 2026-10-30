@@ -44,6 +44,9 @@ namespace mt
                 return *instance;
             }
 
+            static void setHost( juce::Component* host ) { hostComponent = host; }
+            static juce::Component* getHost() { return hostComponent.getComponent(); }
+
             inline bool isAnimationRunning() { return isAnimating.load(); };
 
             void startAnimation();
@@ -62,6 +65,7 @@ namespace mt
             std::atomic<bool>               isAnimating{ false };
             std::atomic<int>                id{ 0 };
             fsPopup*                        popup{ nullptr };
+            inline static juce::Component::SafePointer<juce::Component> hostComponent{ nullptr };
         };
     };
 

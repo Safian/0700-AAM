@@ -11,7 +11,8 @@
 #include "kick_ui_grid.h"
 
 //dialogs
-#include "dialogs/kick_AppMainMode.cpp"
+    #include "hardware_drawer/kick_HardwareDrawer.cpp"
+    #include "dialogs/kick_AppMainMode.cpp"
 #include "dialogs/kick_AppHome.cpp"
 #include "dialogs/kick_AppMenuOptions.cpp"
 #include "dialogs/kick_AppAssignSample.cpp"

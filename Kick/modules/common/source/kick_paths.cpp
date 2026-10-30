@@ -40,7 +40,40 @@ juce::File getAppDirs( DirType T )
         if (T == MTSamples) return root.getChildFile("sounds");
     }
     auto seprator = juce::File::getSeparatorString();
-#if defined( _WIN32 ) || defined( _WIN64 )
+#if defined( JUCE_IOS )
+    auto bundleDir = juce::File::getSpecialLocation( juce::File::currentApplicationFile );
+    auto userDocs  = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Kick" );
+    if( T == MTAssets )
+        return bundleDir.getChildFile( "assets" );
+    else if( T == MTDemos )
+        return bundleDir.getChildFile( "demos" );
+    else if( T == MTTemp )
+        return bundleDir.getChildFile( "templates" );
+    else if( T == MTProjects )
+    {
+        auto dir = userDocs.getChildFile( "projects" );
+        dir.createDirectory();
+        return dir;
+    }
+    else if( T == MTSamples )
+    {
+        auto dir = userDocs.getChildFile( "sounds" );
+        dir.createDirectory();
+        return dir;
+    }
+    else if( T == MTLog )
+    {
+        auto dir = userDocs.getChildFile( "logs" );
+        dir.createDirectory();
+        return dir;
+    }
+    else if( T == MTPrefs )
+    {
+        auto dir = userDocs.getChildFile( "prefs" );
+        dir.createDirectory();
+        return dir;
+    }
+#elif defined( _WIN32 ) || defined( _WIN64 )
     auto rootP = juce::File::getSpecialLocation( juce::File::currentApplicationFile ).getParentDirectory().getFullPathName() + seprator;
     if( T == MTAssets )
         return juce::File( rootP + juce::String( MT_SOURCE_SRCDIR ) + seprator + "assets" );
@@ -57,20 +90,35 @@ juce::File getAppDirs( DirType T )
     else if( T == MTPrefs )
         return juce::File( rootP + juce::String( MT_SOURCE_SRCDIR ) + seprator + "prefs" + seprator );
 #elif defined( __APPLE_CPP__ ) || defined( __APPLE_CC__ ) || defined( JUCE_MAC )
+    auto appParent = juce::File::getSpecialLocation( juce::File::currentApplicationFile ).getParentDirectory();
+    auto resolveMacPath = [&] (const juce::String& rel) -> juce::File
+    {
+        juce::File local (rel);
+        if (local.exists())
+            return local;
+        auto relClean = rel.startsWith ("./") ? rel.substring (2) : rel;
+        auto fromApp = appParent.getChildFile (relClean);
+        if (fromApp.exists())
+            return fromApp;
+        auto fromKick = appParent.getParentDirectory().getChildFile ("Kick").getChildFile (relClean);
+        if (fromKick.exists())
+            return fromKick;
+        return local;
+    };
     if( T == MTAssets )
-        return juce::File( "./assets" );
+        return resolveMacPath( "./assets" );
     else if( T == MTSamples )
-        return juce::File( "./data/samplesKick/" );
+        return resolveMacPath( "./data/samplesKick/" );
     else if( T == MTDemos )
-        return juce::File( "./demos" );
+        return resolveMacPath( "./demos" );
     else if( T == MTTemp )
-        return juce::File( "./templates" );
+        return resolveMacPath( "./templates" );
     else if( T == MTProjects )
-        return juce::File( "./projects" );
+        return resolveMacPath( "./projects" );
     else if( T == MTLog )
-        return juce::File( "./logs/" );
+        return resolveMacPath( "./logs/" );
     else if( T == MTPrefs )
-        return juce::File( "./prefs" );
+        return resolveMacPath( "./prefs" );
 #elif defined( LINUX ) || defined( __linux__ )
     if( T == MTAssets )
         return juce::File( "/app/assets" );
@@ -96,7 +144,10 @@ juce::File getDefaultPath()
     juce::File rootP;
     auto       seprator = juce::File::getSeparatorString();
 
-#if defined( _WIN32 ) || defined( _WIN64 )
+#if defined( JUCE_IOS )
+    rootP = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Kick" );
+    rootP.createDirectory();
+#elif defined( _WIN32 ) || defined( _WIN64 )
     rootP = juce::File::getSpecialLocation( juce::File::currentApplicationFile ).getParentDirectory().getFullPathName() + seprator;
 
 #elif defined( __APPLE_CPP__ ) || defined( __APPLE_CC__ ) || defined( JUCE_MAC )

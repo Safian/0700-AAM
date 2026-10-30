@@ -436,12 +436,30 @@ namespace ui
     KickVirtualKeyBoard::KickVirtualKeyBoard( const juce::String& initialKeyvalue )
         : inputTextLabel( initialKeyvalue )
     {
+#if !(JUCE_IOS || JUCE_ANDROID)
         mt::utils::addChildComponents( this, inputTextLabel, letterComp, numComp, speSym, upperCaseComp );
+#else
+        mt::utils::addChildComponents( this, inputTextLabel, createButton );
+        createButton.setColours(
+            juce::Colour( 0xffffffff ),
+            juce::Colour( 0xff00d4ff ),
+            juce::Colour( 0xff008855 ),
+            1
+        );
+        createButton.setCornerRadius( 6.0f );
+        createButton.onClick = [this]() {
+            close();
+        };
+#endif
 
         setInterceptsMouseClicks( false, true );
         setBufferedToImage( true );
 
+#if JUCE_IOS || JUCE_ANDROID
+        juce::Font fnt( 24.f );
+#else
         juce::Font fnt( 36.f );
+#endif
         inputTextLabel.clear();
         inputTextLabel.setFont( fnt );
         inputTextLabel.setColour( juce::TextEditor::backgroundColourId, ui::Theme::backgroundColour( 13 ) );
@@ -453,6 +471,11 @@ namespace ui
         inputTextLabel.selectAll();
         inputTextLabel.setFocusContainerType( juce::Component::FocusContainerType::focusContainer );
         inputTextLabel.setJustification( juce::Justification::centredLeft );
+#if JUCE_IOS || JUCE_ANDROID
+        inputTextLabel.setMultiLine( false );
+        inputTextLabel.setReturnKeyStartsNewLine( false );
+        inputTextLabel.setKeyboardType( juce::TextInputTarget::textKeyboard );
+#endif
 
         auto keyEntered = [this]( const juce::String& key ) {
             if( !key.compareIgnoreCase( "clear" ) )
@@ -516,6 +539,7 @@ namespace ui
         currentType = type;
 
         inputTextLabel.setVisible( true );
+#if !(JUCE_IOS || JUCE_ANDROID)
         letterComp.setVisible( false );
         numComp.setVisible( false );
         speSym.setVisible( false );
@@ -525,21 +549,67 @@ namespace ui
         if( Type::KEYS_NUMERIC == currentType ) numComp.setVisible( true );
         if( Type::KEYS_SPECIAL == currentType ) speSym.setVisible( true );
         if( Type::KEYS_UPPERCASE_ALPHABETIC == currentType ) upperCaseComp.setVisible( true );
+#endif
     }
 
     void KickVirtualKeyBoard::show( const juce::String& Title, Type KeyboardType, std::function<void( int )> Callback, juce::Rectangle<int> Bounds )
     {
         showKeyboard( KeyboardType );
+#if JUCE_IOS || JUCE_ANDROID
+        juce::String btnText = ( Title.containsIgnoreCase( "CREATE" ) || Title.containsIgnoreCase( "NEW" ) ) ? "CREATE" : "APPLY";
+        createButton.setButtonText( btnText );
+        createButton.setVisible( true );
+
+        inputTextLabel.setFont( juce::Font( 24.0f ) );
+        inputTextLabel.setMultiLine( false );
+        inputTextLabel.setReturnKeyStartsNewLine( false );
+        inputTextLabel.setKeyboardType( juce::TextInputTarget::textKeyboard );
+
+        inputTextLabel.onReturnKey = [this]() {
+            close();
+        };
+        inputTextLabel.onEscapeKey = [this]() {
+            mt::utils::exitDialog( this, UI::BUTTONS::CANCEL );
+        };
+        inputTextLabel.onTextChange = [this]() {
+            auto raw = inputTextLabel.getText();
+            if( raw.containsChar( '\n' ) || raw.containsChar( '\r' ) )
+            {
+                auto clean = raw.replace( "\n", "" ).replace( "\r", "" ).trim();
+                inputTextLabel.setText( clean, juce::dontSendNotification );
+                close();
+            }
+        };
+
+        // Compact dialog bounds on mobile sitting above the native keyboard: 600 x 115
+        juce::Rectangle<int> mobileBounds( 0, 0, 600, 115 );
+        mt::utils::showDialog( Title, this, std::forward<std::function<void( int )>>( Callback ), mobileBounds );
+
+        juce::Timer::callAfterDelay( 120, [this]() {
+            inputTextLabel.grabKeyboardFocus();
+            inputTextLabel.selectAll();
+        } );
+#else
         mt::utils::showOptions( Title, this, std::forward<std::function<void( int )>>( Callback ), Bounds );
+#endif
     }
 
     void KickVirtualKeyBoard::close()
     {
-        mt::utils::exitDialog( getCurrentlyFocusedComponent(), UI::APPLY );
+        auto cleanText = inputTextLabel.getText().replace( "\n", "" ).replace( "\r", "" ).trim();
+        inputTextLabel.setText( cleanText, juce::dontSendNotification );
+        mt::utils::exitDialog( this, UI::BUTTONS::APPLY );
     }
 
     void KickVirtualKeyBoard::resized()
     {
+#if JUCE_IOS || JUCE_ANDROID
+        auto b = getLocalBounds().reduced( 8, 8 );
+        auto btnW = 120;
+        createButton.setBounds( b.removeFromRight( btnW ) );
+        b.removeFromRight( 10 );
+        inputTextLabel.setBounds( b );
+#else
         auto b = getLocalBounds().reduced( compSpaceAround );
         inputTextLabel.setBounds( b.removeFromTop( inputLabelHeight ) );
         b.removeFromTop( compSpaceAround );
@@ -548,6 +618,7 @@ namespace ui
         numComp.setBounds( kBounds );
         speSym.setBounds( kBounds );
         upperCaseComp.setBounds( kBounds );
+#endif
     }
 
 }

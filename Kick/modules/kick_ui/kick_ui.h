@@ -55,6 +55,7 @@
     #include "dialogs/kick_AppMenuOptions.h"
     #include "dialogs/kick_AppAssignSample.h"
     #include "dialogs/kick_Inserts.h"
+    #include "hardware_drawer/kick_HardwareDrawer.h"
 
     // Abstract Interfaces
     #include "row_view/kick_IRowView.h"

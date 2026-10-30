@@ -166,6 +166,9 @@ namespace mt
         closeProject();
         MTAudioRecorderManager::closeRecorder();
         _previewer = nullptr;
+        closeProject();
+        MTAudioRecorderManager::closeRecorder();
+        _previewer = nullptr;
         // Base destruction happens after the live program manager is gone.
         // A failed shutdown save must not be replaced with stale XML later.
         detachWithoutSaving();

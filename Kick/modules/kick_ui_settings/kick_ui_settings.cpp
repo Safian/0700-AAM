@@ -118,7 +118,7 @@ namespace kick_ui
         }
         selectors[0].setToggleState( true, juce::sendNotification );
 
-        header.onBackButtonPressed = [&]( bool ) { closeScreen(); };
+        header.onBackButtonPressed = [&]( bool ) { closeScreen( kick_ui::Screen::HomeListView ); };
 
         // Defaults...
         selectors[0].setToggleState( true, juce::sendNotification );
