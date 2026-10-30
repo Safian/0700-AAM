@@ -66,15 +66,36 @@ typedef struct {
 static volatile bool g_running = true;
 static SynthEngine g_synth;
 
+#define MAX_TOUCH_SLOTS 10
+
+enum NoteSource {
+    NOTE_SRC_NONE = 0,
+    NOTE_SRC_KEYBED = 1,
+    NOTE_SRC_PAD = 2,
+    NOTE_SRC_BOTH = 3
+};
+
+struct TouchSlot {
+    bool active;
+    int tracking_id;
+    int raw_x;
+    int raw_y;
+    int ui_x;
+    int ui_y;
+    bool has_x;
+    bool has_y;
+    int last_note;
+    NoteSource last_src;
+};
+
 // UI State
-static bool g_pad_active[16];
-static bool g_key_active[61]; // 61 keys (MIDI 36 to 96, C2 to C7)
+static TouchSlot g_slots[MAX_TOUCH_SLOTS];
+static int g_current_slot = 0;
+static int g_key_press_count[61]; // 61 keys (MIDI 36 to 96, C2 to C7)
+static int g_pad_press_count[16]; // 16 MPC drum pads
 static bool g_is_playing = false;
 static bool g_is_recording = false;
 static int g_knob_vals[4] = { 75, 40, 10, 85 };
-static bool g_touch_active = false;
-static int g_touch_x = -1;
-static int g_touch_y = -1;
 static pthread_mutex_t g_ui_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static uint32_t g_render_buf[SCREEN_W * SCREEN_H];
@@ -101,9 +122,21 @@ static const char* note_name(int note) {
 static void synth_init(SynthEngine* s) {
     pthread_mutex_init(&s->lock, NULL);
     for (int i = 0; i < MAX_VOICES; ++i) s->voices[i].active = false;
+    for (int i = 0; i < 61; ++i) g_key_press_count[i] = 0;
+    for (int i = 0; i < 16; ++i) g_pad_press_count[i] = 0;
+    for (int i = 0; i < MAX_TOUCH_SLOTS; ++i) {
+        g_slots[i].active = false;
+        g_slots[i].tracking_id = -1;
+        g_slots[i].last_note = -1;
+        g_slots[i].last_src = NOTE_SRC_NONE;
+        g_slots[i].has_x = false;
+        g_slots[i].has_y = false;
+        g_slots[i].ui_x = -1;
+        g_slots[i].ui_y = -1;
+    }
 }
 
-static void synth_note_on(SynthEngine* s, int note, int vel, bool is_pad = false) {
+static void synth_note_on(SynthEngine* s, int note, int vel, NoteSource src = NOTE_SRC_KEYBED) {
     if (vel <= 0) return;
     pthread_mutex_lock(&s->lock);
     int target = -1;
@@ -126,18 +159,20 @@ static void synth_note_on(SynthEngine* s, int note, int vel, bool is_pad = false
     v->releasing = false;
     pthread_mutex_unlock(&s->lock);
 
-    // Update UI Key State
+    // Update UI Key State - completely independent!
     pthread_mutex_lock(&g_ui_lock);
     int key_idx = note - 36;
-    if (key_idx >= 0 && key_idx < 61) g_key_active[key_idx] = true;
-    if (is_pad) {
-        int pad_idx = note - 36;
-        if (pad_idx >= 0 && pad_idx < 16) g_pad_active[pad_idx] = true;
+    if (src == NOTE_SRC_KEYBED || src == NOTE_SRC_BOTH) {
+        if (key_idx >= 0 && key_idx < 61) g_key_press_count[key_idx]++;
+    }
+    int pad_idx = note - 36;
+    if (src == NOTE_SRC_PAD || src == NOTE_SRC_BOTH) {
+        if (pad_idx >= 0 && pad_idx < 16) g_pad_press_count[pad_idx]++;
     }
     pthread_mutex_unlock(&g_ui_lock);
 }
 
-static void synth_note_off(SynthEngine* s, int note) {
+static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_KEYBED) {
     pthread_mutex_lock(&s->lock);
     for (int i = 0; i < MAX_VOICES; ++i) {
         if (s->voices[i].active && s->voices[i].note == note) {
@@ -149,9 +184,17 @@ static void synth_note_off(SynthEngine* s, int note) {
     // Update UI Key State
     pthread_mutex_lock(&g_ui_lock);
     int key_idx = note - 36;
-    if (key_idx >= 0 && key_idx < 61) g_key_active[key_idx] = false;
+    if (src == NOTE_SRC_KEYBED || src == NOTE_SRC_BOTH) {
+        if (key_idx >= 0 && key_idx < 61) {
+            if (g_key_press_count[key_idx] > 0) g_key_press_count[key_idx]--;
+        }
+    }
     int pad_idx = note - 36;
-    if (pad_idx >= 0 && pad_idx < 16) g_pad_active[pad_idx] = false;
+    if (src == NOTE_SRC_PAD || src == NOTE_SRC_BOTH) {
+        if (pad_idx >= 0 && pad_idx < 16) {
+            if (g_pad_press_count[pad_idx] > 0) g_pad_press_count[pad_idx]--;
+        }
+    }
     pthread_mutex_unlock(&g_ui_lock);
 }
 
@@ -438,7 +481,7 @@ static void render_ui() {
             int pw = 165;
             int ph = 88;
 
-            bool active = g_pad_active[pad_num];
+            bool active = (g_pad_press_count[pad_num] > 0);
             uint32_t pad_color = active ? COLOR_PAD_ACTIVE : COLOR_PAD_BASE;
             uint32_t border_col = active ? COLOR_GOLD : 0x00454D5A;
 
@@ -479,7 +522,7 @@ static void render_ui() {
             int w = (int)kw - 2;
             int h = 180;
 
-            bool active = g_key_active[i];
+            bool active = (g_key_press_count[i] > 0);
             uint32_t col = active ? COLOR_GOLD : 0x00EEEEEE;
             fill_rect(kx, ky, w, h, col);
             draw_rect(kx, ky, w, h, 0x00999999);
@@ -507,26 +550,31 @@ static void render_ui() {
             int w = (int)(kw * 0.70f);
             int h = 110;
 
-            bool active = g_key_active[i];
+            bool active = (g_key_press_count[i] > 0);
             uint32_t col = active ? COLOR_ORANGE : 0x00151515;
             fill_rect(kx, ky, w, h, col);
             draw_rect(kx, ky, w, h, 0x00000000);
         }
     }
-    // 6. Touch Visual Feedback Indicator
-    if (g_touch_active && g_touch_x >= 0 && g_touch_x < SCREEN_W && g_touch_y >= 0 && g_touch_y < SCREEN_H) {
-        int tr = 14;
-        for (int dy = -tr; dy <= tr; ++dy) {
-            for (int dx = -tr; dx <= tr; ++dx) {
-                int dist2 = dx*dx + dy*dy;
-                if (dist2 <= tr*tr && dist2 >= (tr-3)*(tr-3)) {
-                    draw_pixel(g_touch_x + dx, g_touch_y + dy, COLOR_CYAN);
+    // 6. Touch Visual Feedback Indicator for all active slots
+    for (int s = 0; s < MAX_TOUCH_SLOTS; ++s) {
+        if (!g_slots[s].active || !g_slots[s].has_x || !g_slots[s].has_y) continue;
+        int tx = g_slots[s].ui_x;
+        int ty = g_slots[s].ui_y;
+        if (tx >= 0 && tx < SCREEN_W && ty >= 0 && ty < SCREEN_H) {
+            int tr = 14;
+            for (int dy = -tr; dy <= tr; ++dy) {
+                for (int dx = -tr; dx <= tr; ++dx) {
+                    int dist2 = dx*dx + dy*dy;
+                    if (dist2 <= tr*tr && dist2 >= (tr-3)*(tr-3)) {
+                        draw_pixel(tx + dx, ty + dy, COLOR_CYAN);
+                    }
                 }
             }
-        }
-        for (int dy = -2; dy <= 2; ++dy) {
-            for (int dx = -2; dx <= 2; ++dx) {
-                draw_pixel(g_touch_x + dx, g_touch_y + dy, COLOR_GOLD);
+            for (int dy = -2; dy <= 2; ++dy) {
+                for (int dx = -2; dx <= 2; ++dx) {
+                    draw_pixel(tx + dx, ty + dy, COLOR_GOLD);
+                }
             }
         }
     }
@@ -653,7 +701,7 @@ static int get_pad_note_at(int x, int y) {
 }
 
 // -------------------------------------------------------------
-// Touchscreen Thread (reads /dev/input/event0 with poll)
+// Touchscreen Thread (reads /dev/input/event0 with multi-touch slots)
 // -------------------------------------------------------------
 static void* touch_thread_func(void* arg) {
     (void)arg;
@@ -663,13 +711,21 @@ static void* touch_thread_func(void* arg) {
         return NULL;
     }
 
-    printf("[TOUCH] Connected to ILI2117 Touchscreen (/dev/input/event0)\n");
+    printf("[TOUCH] Connected to ILI2117 Touchscreen (/dev/input/event0) - Multi-touch enabled\n");
 
     struct pollfd pfd = { fd, POLLIN, 0 };
     struct input_event ev;
-    int raw_x = 0, raw_y = 0;
-    bool touching = false;
-    int last_touched_note = -1;
+
+    for (int s = 0; s < MAX_TOUCH_SLOTS; ++s) {
+        g_slots[s].active = false;
+        g_slots[s].tracking_id = -1;
+        g_slots[s].last_note = -1;
+        g_slots[s].last_src = NOTE_SRC_NONE;
+        g_slots[s].has_x = false;
+        g_slots[s].has_y = false;
+        g_slots[s].ui_x = -1;
+        g_slots[s].ui_y = -1;
+    }
 
     while (g_running) {
         if (poll(&pfd, 1, 50) <= 0) continue;
@@ -678,83 +734,120 @@ static void* touch_thread_func(void* arg) {
         if (n != sizeof(ev)) continue;
 
         if (ev.type == EV_ABS) {
-            if (ev.code == ABS_MT_POSITION_X || ev.code == ABS_X) raw_x = ev.value;
-            if (ev.code == ABS_MT_POSITION_Y || ev.code == ABS_Y) raw_y = ev.value;
-            if (ev.code == ABS_MT_TRACKING_ID) {
-                if (ev.value == -1) {
-                    touching = false;
-                    if (last_touched_note != -1) {
-                        synth_note_off(&g_synth, last_touched_note);
-                        last_touched_note = -1;
-                    }
-                    g_touch_active = false;
-                } else {
-                    touching = true;
+            if (ev.code == ABS_MT_SLOT) {
+                if (ev.value >= 0 && ev.value < MAX_TOUCH_SLOTS) {
+                    g_current_slot = ev.value;
                 }
+            } else if (ev.code == ABS_MT_TRACKING_ID) {
+                TouchSlot* slot = &g_slots[g_current_slot];
+                if (ev.value == -1) {
+                    // Finger lifted from this slot
+                    if (slot->active) {
+                        if (slot->last_note != -1) {
+                            synth_note_off(&g_synth, slot->last_note, slot->last_src);
+                            slot->last_note = -1;
+                            slot->last_src = NOTE_SRC_NONE;
+                        }
+                        slot->active = false;
+                        slot->tracking_id = -1;
+                        slot->has_x = false;
+                        slot->has_y = false;
+                    }
+                } else {
+                    // New finger contact
+                    slot->active = true;
+                    slot->tracking_id = ev.value;
+                    slot->has_x = false;
+                    slot->has_y = false;
+                }
+            } else if (ev.code == ABS_MT_POSITION_X || ev.code == ABS_X) {
+                TouchSlot* slot = &g_slots[g_current_slot];
+                slot->raw_x = ev.value;
+                slot->has_x = true;
+            } else if (ev.code == ABS_MT_POSITION_Y || ev.code == ABS_Y) {
+                TouchSlot* slot = &g_slots[g_current_slot];
+                slot->raw_y = ev.value;
+                slot->has_y = true;
             }
         } else if (ev.type == EV_KEY && ev.code == BTN_TOUCH) {
-            touching = (ev.value > 0);
-            if (!touching) {
-                if (last_touched_note != -1) {
-                    synth_note_off(&g_synth, last_touched_note);
-                    last_touched_note = -1;
-                }
-                g_touch_active = false;
-            }
-        } else if (ev.type == EV_SYN && ev.code == SYN_REPORT && touching) {
-            int ui_x = 0, ui_y = 0;
-            raw_touch_to_ui(raw_x, raw_y, &ui_x, &ui_y);
-
-            g_touch_active = true;
-            g_touch_x = ui_x;
-            g_touch_y = ui_y;
-
-            // 1. Transport Buttons
-            if (ui_y >= 14 && ui_y < 46) {
-                if (ui_x >= 1060 && ui_x < 1120) {
-                    g_is_playing = true;
-                } else if (ui_x >= 1130 && ui_x < 1190) {
-                    g_is_playing = false;
-                    g_is_recording = false;
-                } else if (ui_x >= 1200 && ui_x < 1260) {
-                    g_is_recording = !g_is_recording;
-                    if (g_is_recording) g_is_playing = true;
+            if (ev.value == 0) {
+                // All touches released
+                for (int s = 0; s < MAX_TOUCH_SLOTS; ++s) {
+                    TouchSlot* slot = &g_slots[s];
+                    if (slot->active) {
+                        if (slot->last_note != -1) {
+                            synth_note_off(&g_synth, slot->last_note, slot->last_src);
+                            slot->last_note = -1;
+                            slot->last_src = NOTE_SRC_NONE;
+                        }
+                        slot->active = false;
+                        slot->tracking_id = -1;
+                        slot->has_x = false;
+                        slot->has_y = false;
+                    }
                 }
             }
+        } else if (ev.type == EV_SYN && ev.code == SYN_REPORT) {
+            for (int s = 0; s < MAX_TOUCH_SLOTS; ++s) {
+                TouchSlot* slot = &g_slots[s];
+                if (!slot->active || !slot->has_x || !slot->has_y) continue;
 
-            // 2. Q-Link Knobs (Vertical Drag or Tap)
-            for (int k = 0; k < 4; ++k) {
-                int kx = 50 + (k % 2) * 190;
-                int ky = 200 + (k / 2) * 130;
-                if (ui_x >= kx && ui_x < kx + 160 && ui_y >= ky && ui_y < ky + 100) {
-                    int val = 100 - ((ui_y - ky - 10) * 100 / 80);
-                    if (val < 0) val = 0;
-                    if (val > 100) val = 100;
-                    g_knob_vals[k] = val;
-                }
-            }
+                int ui_x = 0, ui_y = 0;
+                raw_touch_to_ui(slot->raw_x, slot->raw_y, &ui_x, &ui_y);
+                slot->ui_x = ui_x;
+                slot->ui_y = ui_y;
 
-            // 3. MPC 16 Drum Pads
-            int pad_note = get_pad_note_at(ui_x, ui_y);
-            if (pad_note != -1) {
-                if (pad_note != last_touched_note) {
-                    if (last_touched_note != -1) synth_note_off(&g_synth, last_touched_note);
-                    synth_note_on(&g_synth, pad_note, 115, true /* is_pad */);
-                    last_touched_note = pad_note;
+                // 1. Transport Buttons (Single slot hit)
+                if (ui_y >= 14 && ui_y < 46) {
+                    if (ui_x >= 1060 && ui_x < 1120) {
+                        g_is_playing = true;
+                    } else if (ui_x >= 1130 && ui_x < 1190) {
+                        g_is_playing = false;
+                        g_is_recording = false;
+                    } else if (ui_x >= 1200 && ui_x < 1260) {
+                        g_is_recording = !g_is_recording;
+                        if (g_is_recording) g_is_playing = true;
+                    }
                 }
-            } else {
-                // 4. 61-Key Keyboard Piano
-                int kb_note = get_keyboard_note_at(ui_x, ui_y);
-                if (kb_note != -1) {
-                    if (kb_note != last_touched_note) {
-                        if (last_touched_note != -1) synth_note_off(&g_synth, last_touched_note);
-                        synth_note_on(&g_synth, kb_note, 105, false /* is_pad */);
-                        last_touched_note = kb_note;
+
+                // 2. Q-Link Knobs (Vertical Drag or Tap)
+                for (int k = 0; k < 4; ++k) {
+                    int kx = 50 + (k % 2) * 190;
+                    int ky = 200 + (k / 2) * 130;
+                    if (ui_x >= kx && ui_x < kx + 160 && ui_y >= ky && ui_y < ky + 100) {
+                        int val = 100 - ((ui_y - ky - 10) * 100 / 80);
+                        if (val < 0) val = 0;
+                        if (val > 100) val = 100;
+                        g_knob_vals[k] = val;
+                    }
+                }
+
+                // 3. MPC 16 Drum Pads (ONLY activates pad, NOT keyboard key!)
+                int pad_note = get_pad_note_at(ui_x, ui_y);
+                if (pad_note != -1) {
+                    if (slot->last_note != pad_note || slot->last_src != NOTE_SRC_PAD) {
+                        if (slot->last_note != -1) synth_note_off(&g_synth, slot->last_note, slot->last_src);
+                        synth_note_on(&g_synth, pad_note, 115, NOTE_SRC_PAD);
+                        slot->last_note = pad_note;
+                        slot->last_src = NOTE_SRC_PAD;
                     }
                 } else {
-                    if (last_touched_note != -1) {
-                        synth_note_off(&g_synth, last_touched_note);
-                        last_touched_note = -1;
+                    // 4. 61-Key Keyboard Piano (ONLY activates keyboard key, NOT pad!)
+                    int kb_note = get_keyboard_note_at(ui_x, ui_y);
+                    if (kb_note != -1) {
+                        if (slot->last_note != kb_note || slot->last_src != NOTE_SRC_KEYBED) {
+                            if (slot->last_note != -1) synth_note_off(&g_synth, slot->last_note, slot->last_src);
+                            synth_note_on(&g_synth, kb_note, 105, NOTE_SRC_KEYBED);
+                            slot->last_note = kb_note;
+                            slot->last_src = NOTE_SRC_KEYBED;
+                        }
+                    } else {
+                        // Background / non-note area
+                        if (slot->last_note != -1) {
+                            synth_note_off(&g_synth, slot->last_note, slot->last_src);
+                            slot->last_note = -1;
+                            slot->last_src = NOTE_SRC_NONE;
+                        }
                     }
                 }
             }
@@ -785,11 +878,11 @@ static void* midi_thread_func(void* arg) {
                     uint8_t b = buf[i];
                     if ((b & 0xF0) == 0x90 && (i + 2 < n)) {
                         int note = buf[i+1], vel = buf[i+2];
-                        if (vel > 0) synth_note_on(&g_synth, note, vel);
-                        else synth_note_off(&g_synth, note);
+                        if (vel > 0) synth_note_on(&g_synth, note, vel, NOTE_SRC_KEYBED);
+                        else synth_note_off(&g_synth, note, NOTE_SRC_KEYBED);
                         i += 2;
                     } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
-                        synth_note_off(&g_synth, buf[i+1]);
+                        synth_note_off(&g_synth, buf[i+1], NOTE_SRC_KEYBED);
                         i += 2;
                     }
                 }
@@ -803,11 +896,11 @@ static void* midi_thread_func(void* arg) {
                     uint8_t b = buf[i];
                     if ((b & 0xF0) == 0x90 && (i + 2 < n)) {
                         int note = buf[i+1], vel = buf[i+2];
-                        if (vel > 0) synth_note_on(&g_synth, note, vel);
-                        else synth_note_off(&g_synth, note);
+                        if (vel > 0) synth_note_on(&g_synth, note, vel, NOTE_SRC_KEYBED);
+                        else synth_note_off(&g_synth, note, NOTE_SRC_KEYBED);
                         i += 2;
                     } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
-                        synth_note_off(&g_synth, buf[i+1]);
+                        synth_note_off(&g_synth, buf[i+1], NOTE_SRC_KEYBED);
                         i += 2;
                     }
                 }
