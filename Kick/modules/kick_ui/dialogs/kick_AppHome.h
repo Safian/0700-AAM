@@ -41,6 +41,9 @@ namespace kick_ui
 
         void AssignSampleStartUp( void );
 
+        void setHardwareDrawerVisible( bool isVisible );
+        bool isHardwareDrawerVisible() const;
+
     private:
         KickHome();
         ~KickHome();

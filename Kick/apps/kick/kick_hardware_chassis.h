@@ -499,6 +499,7 @@ private:
         }
     }
 
+public:
     void sendPadMessage( int padIndex, bool pressed, int velocity )
     {
         CPktMgr::HWMsg_t msg;
@@ -561,10 +562,14 @@ public:
         idHardwareView = 1001,
         idDisplayOnlyView = 1002,
         idToggleView = 1003,
+        idToggleDrawer = 1004,
         idScale100 = 1010,
         idScale120 = 1011,
         idScale140 = 1012,
-        idScaleFit = 1013
+        idScaleFit = 1013,
+        idProjectDemo1 = 2001,
+        idProjectBrowser = 2002,
+        idProjectPlayPause = 2003
     };
 
     explicit KickMacMenuModel( std::function<void( int )> onCommand )
@@ -576,7 +581,8 @@ public:
 
     juce::StringArray getMenuBarNames() override
     {
-        return { juce::String::fromUTF8( "Nézet (View)" ) };
+        return { juce::String::fromUTF8( "Nézet (View)" ),
+                 juce::String::fromUTF8( "Projekt (Project)" ) };
     }
 
     juce::PopupMenu getMenuForIndex( int topLevelMenuIndex, const juce::String& /*menuName*/ ) override
@@ -606,6 +612,12 @@ public:
             itemToggle.shortcutKeyDescription = "F5";
             menu.addItem( itemToggle );
 
+            juce::PopupMenu::Item itemDrawer;
+            itemDrawer.itemID = idToggleDrawer;
+            itemDrawer.text = juce::String::fromUTF8( "Virtuális kezelősáv (Virtual Controls Drawer)" );
+            itemDrawer.isTicked = kick_ui::KickHome::Instance().isHardwareDrawerVisible();
+            menu.addItem( itemDrawer );
+
             menu.addSeparator();
 
             juce::PopupMenu scaleMenu;
@@ -614,6 +626,28 @@ public:
             scaleMenu.addItem( idScale140, juce::String::fromUTF8( "140% (Nagy: 980×994)" ) );
             scaleMenu.addItem( idScaleFit, juce::String::fromUTF8( "Képernyőhöz igazítás (Fit to Screen)" ) );
             menu.addSubMenu( juce::String::fromUTF8( "Ablak méret (Scale)" ), scaleMenu );
+        }
+        else if( topLevelMenuIndex == 1 )
+        {
+            juce::PopupMenu::Item itemDemo;
+            itemDemo.itemID = idProjectDemo1;
+            itemDemo.text = juce::String::fromUTF8( "Demo 01 betöltése (Drum & Bass - 174 BPM, 16 Pad)" );
+            itemDemo.shortcutKeyDescription = "Cmd+D";
+            menu.addItem( itemDemo );
+
+            juce::PopupMenu::Item itemRecent;
+            itemRecent.itemID = idProjectBrowser;
+            itemRecent.text = juce::String::fromUTF8( "Projektek böngészője... (Projects & Demos)" );
+            itemRecent.shortcutKeyDescription = "Cmd+O";
+            menu.addItem( itemRecent );
+
+            menu.addSeparator();
+
+            juce::PopupMenu::Item itemPlay;
+            itemPlay.itemID = idProjectPlayPause;
+            itemPlay.text = juce::String::fromUTF8( "Lejátszás indítása / leállítás (Play / Stop)" );
+            itemPlay.shortcutKeyDescription = "Space";
+            menu.addItem( itemPlay );
         }
         return menu;
     }

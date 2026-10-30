@@ -319,6 +319,10 @@ public:
                 case kick_mac::KickMacMenuModel::idToggleView:
                     toggleViewMode();
                     break;
+                case kick_mac::KickMacMenuModel::idToggleDrawer:
+                    kick_ui::KickHome::Instance().setHardwareDrawerVisible( !kick_ui::KickHome::Instance().isHardwareDrawerVisible() );
+                    if( menuModel ) menuModel->menuItemsChanged();
+                    break;
                 case kick_mac::KickMacMenuModel::idScale100:
                     setWindowScale( 1.0f );
                     break;
@@ -331,8 +335,41 @@ public:
                 case kick_mac::KickMacMenuModel::idScaleFit:
                     fitToScreen();
                     break;
+                case kick_mac::KickMacMenuModel::idProjectDemo1:
+                    loadDemoProject( 1 );
+                    break;
+                case kick_mac::KickMacMenuModel::idProjectBrowser:
+                    kick_ui::signals::sigScreenClose( kick_ui::Screen::RecentProject );
+                    break;
+                case kick_mac::KickMacMenuModel::idProjectPlayPause:
+                    if( chassisComponent != nullptr )
+                        chassisComponent->sendButtonMessage( contracts::DeviceControlContracts::EN_PLAY, true );
+                    break;
                 default:
                     break;
+            }
+        }
+
+        void loadDemoProject( int demoNumber )
+        {
+            auto demoName = juce::String( "Demo " ) + juce::String::formatted( "%02d", demoNumber );
+            auto demoDir = getAppDirs( MTDemos ).getChildFile( demoName );
+            auto demoFile = demoDir.getChildFile( demoName + ".kickPrj" );
+            if( !demoFile.existsAsFile() )
+            {
+                demoFile = juce::File( "Kick/demos" ).getChildFile( demoName ).getChildFile( demoName + ".kickPrj" );
+            }
+            if( !demoFile.existsAsFile() )
+            {
+                demoFile = juce::File( "build/demos" ).getChildFile( demoName ).getChildFile( demoName + ".kickPrj" );
+            }
+            if( demoFile.existsAsFile() )
+            {
+                ui::LoadProjectAndAnimation::getInstance().startLoading( demoFile );
+            }
+            else
+            {
+                std::cerr << "Demo project not found: " << demoFile.getFullPathName().toStdString() << std::endl;
             }
         }
 
@@ -444,6 +481,20 @@ public:
             if( key.isKeyCode( juce::KeyPress::F5Key ) )
             {
                 toggleViewMode();
+                return true;
+            }
+
+            // Cmd+D -> Load Demo 01 (Drum & Bass Kit)
+            if( ( key.isKeyCode( 'd' ) || key.isKeyCode( 'D' ) ) && key.getModifiers().isCommandDown() )
+            {
+                loadDemoProject( 1 );
+                return true;
+            }
+
+            // Cmd+O -> Open Projects / Demos List
+            if( ( key.isKeyCode( 'o' ) || key.isKeyCode( 'O' ) ) && key.getModifiers().isCommandDown() )
+            {
+                kick_ui::signals::sigScreenClose( kick_ui::Screen::RecentProject );
                 return true;
             }
 
