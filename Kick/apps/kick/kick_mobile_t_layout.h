@@ -152,22 +152,7 @@ public:
         }
     }
 
-    void setHorizontalOffset( float offset )
-    {
-        if( std::abs( horizontalOffset - offset ) > 0.1f )
-        {
-            horizontalOffset = offset;
-            updateControlPositions();
-            repaint();
-        }
-    }
-
     void resized() override
-    {
-        updateControlPositions();
-    }
-
-    void updateControlPositions()
     {
         auto bounds = getLocalBounds().toFloat();
         const float targetAspect = 746.0f / 402.0f;
@@ -176,12 +161,12 @@ public:
         if( currentAspect > targetAspect )
         {
             float w = bounds.getHeight() * targetAspect;
-            renderedRect = juce::Rectangle<float>( ( bounds.getWidth() - w ) * 0.5f + horizontalOffset, 0.0f, w, bounds.getHeight() );
+            renderedRect = juce::Rectangle<float>( ( bounds.getWidth() - w ) * 0.5f, 0.0f, w, bounds.getHeight() );
         }
         else
         {
             float h = bounds.getWidth() / targetAspect;
-            renderedRect = juce::Rectangle<float>( horizontalOffset, ( bounds.getHeight() - h ) * 0.5f, bounds.getWidth(), h );
+            renderedRect = juce::Rectangle<float>( 0.0f, ( bounds.getHeight() - h ) * 0.5f, bounds.getWidth(), h );
         }
 
         if( renderedRect.isEmpty() ) return;
@@ -255,7 +240,6 @@ public:
 private:
     juce::Image bgImage;
     juce::Rectangle<float> renderedRect;
-    float horizontalOffset{ 0.0f };
 
     // Reusable kick_hw_ui components
     std::unique_ptr<kick_hw_ui::HardwarePad>        pads[16];
@@ -448,9 +432,9 @@ public:
         addAndMakeVisible( qlinkPanel.get() );
 
         bottomPanel = std::make_unique<MobileBottomChassisPanel>();
-        addChildComponent( bottomPanel.get() );
+        addAndMakeVisible( bottomPanel.get() );
 
-        // Listen for multi-touch gestures across all children
+        // Listen for gestures and touches across entire layout
         addMouseListener( this, true );
 
         startTimerHz( 60 );
@@ -474,33 +458,16 @@ public:
 
     void setPanelState( PanelState newState )
     {
-        if( targetState != newState )
-        {
-            targetState = newState;
-
-            if( targetState == PanelState::BottomPads )
-            {
-                if( bottomPanel != nullptr )
-                {
-                    bottomPanel->setVisible( true );
-                    bottomPanel->toFront( true );
-                }
-            }
-            else
-            {
-                if( masterPanel != nullptr ) masterPanel->setVisible( true );
-                if( qlinkPanel != nullptr )  qlinkPanel->setVisible( true );
-            }
-
-            repaint();
-        }
+        targetState = newState;
+        repaint();
     }
 
     PanelState getPanelState() const noexcept { return targetState; }
 
     void paint( juce::Graphics& g ) override
     {
-        g.fillAll( juce::Colours::black );
+        // Continuous dark chassis metal background filling gaps
+        g.fillAll( juce::Colour( 0xff121215 ) );
     }
 
     void resized() override
@@ -508,13 +475,13 @@ public:
         updateLayout();
     }
 
-    void getDawGeometry( float& outDawX, float& outDawY, float& outDawW, float& outDawH ) const
+    void getDawGeometry( float& outDawW, float& outDawH ) const
     {
         int w = getWidth();
         int h = getHeight();
         if( w <= 0 || h <= 0 )
         {
-            outDawX = outDawY = outDawW = outDawH = 0.0f;
+            outDawW = outDawH = 0.0f;
             return;
         }
 
@@ -525,15 +492,11 @@ public:
         {
             outDawH = (float)h;
             outDawW = (float)h * targetAspect;
-            outDawX = ( (float)w - outDawW ) * 0.5f;
-            outDawY = 0.0f;
         }
         else
         {
             outDawW = (float)w;
             outDawH = (float)w / targetAspect;
-            outDawX = 0.0f;
-            outDawY = ( (float)h - outDawH ) * 0.5f;
         }
     }
 
@@ -547,91 +510,116 @@ public:
         return (float)getHeight() * ( 74.0f / 302.0f );
     }
 
-    float getMasterRevealShift() const
+    void getSnapTarget( PanelState state, float& outCamX, float& outCamY ) const
     {
-        float dawX = 0.0f, dawY = 0.0f, dawW = 0.0f, dawH = 0.0f;
-        getDawGeometry( dawX, dawY, dawW, dawH );
+        int w = getWidth();
+        int h = getHeight();
+        if( w <= 0 || h <= 0 ) return;
+
+        float dawW = 0.0f, dawH = 0.0f;
+        getDawGeometry( dawW, dawH );
+
         float masterW = getMasterPanelWidth();
-        // Shift DAW to the right so Master panel is completely visible with comfortable margin
-        float shift = masterW - dawX + 24.0f;
-        return juce::jmax( 55.0f, shift );
+        float qlinkW  = getQLinkPanelWidth();
+
+        // Horizontal camera position so DAW is centered on screen:
+        // Screen DAW X = 0 - camX = (w - dawW) * 0.5f => camX = -(w - dawW) * 0.5f
+        float centerCamX = -( (float)w - dawW ) * 0.5f;
+
+        switch( state )
+        {
+            case PanelState::DAW:
+                outCamX = centerCamX;
+                outCamY = 0.0f;
+                break;
+
+            case PanelState::MasterStrip:
+                // Camera positioned so Master strip left edge is comfortably visible on screen (padding 16pt):
+                // Screen Master X = -masterW - camX = 16.0f => camX = -masterW - 16.0f
+                outCamX = -masterW - 16.0f;
+                outCamY = 0.0f;
+                break;
+
+            case PanelState::QLinkStrip:
+                // Camera positioned so Q-Link strip right edge is comfortably visible on screen (padding 16pt from right):
+                // Screen Q-Link right = dawW + qlinkW - camX = w - 16.0f => camX = dawW + qlinkW - w + 16.0f
+                outCamX = dawW + qlinkW - (float)w + 16.0f;
+                outCamY = 0.0f;
+                break;
+
+            case PanelState::BottomPads:
+                // Pad & Bank is situated directly under the DAW, so horizontal center is identical to DAW center!
+                outCamX = centerCamX;
+                outCamY = dawH;
+                break;
+        }
     }
 
-    float getQLinkRevealShift() const
+    PanelState findClosestSnapState( float camX, float camY, float vx = 0.0f, float vy = 0.0f ) const
     {
-        float dawX = 0.0f, dawY = 0.0f, dawW = 0.0f, dawH = 0.0f;
-        getDawGeometry( dawX, dawY, dawW, dawH );
-        float qlinkW = getQLinkPanelWidth();
-        // Shift DAW to the left so Q-Link panel is comfortably inside the screen away from bezel
-        float shift = qlinkW - dawX + 24.0f;
-        return juce::jmax( 75.0f, shift );
+        int w = getWidth();
+        int h = getHeight();
+        if( w <= 0 || h <= 0 ) return PanelState::DAW;
+
+        float dawW = 0.0f, dawH = 0.0f;
+        getDawGeometry( dawW, dawH );
+
+        float masterW = getMasterPanelWidth();
+        float qlinkW  = getQLinkPanelWidth();
+
+        // Project position based on drag velocity
+        float projX = camX - vx * 0.16f;
+        float projY = camY - vy * 0.16f;
+
+        // Vertical decision: closer to bottom row or top row?
+        if( projY > dawH * 0.40f )
+        {
+            return PanelState::BottomPads;
+        }
+
+        // Horizontal decision in top row
+        float targetMasterX = -masterW - 16.0f;
+        float targetCenterX = -( (float)w - dawW ) * 0.5f;
+        float targetQLinkX  = dawW + qlinkW - (float)w + 16.0f;
+
+        float distMaster = std::abs( projX - targetMasterX );
+        float distCenter = std::abs( projX - targetCenterX );
+        float distQLink  = std::abs( projX - targetQLinkX );
+
+        if( distMaster < distCenter && distMaster < distQLink )
+            return PanelState::MasterStrip;
+
+        if( distQLink < distCenter && distQLink < distMaster )
+            return PanelState::QLinkStrip;
+
+        return PanelState::DAW;
     }
 
     void timerCallback() override
     {
-        float targetDawY = ( targetState == PanelState::BottomPads ) ? -(float)getHeight() : 0.0f;
-        float targetDawX = 0.0f;
+        float targetCamX = 0.0f;
+        float targetCamY = 0.0f;
+        getSnapTarget( targetState, targetCamX, targetCamY );
 
-        if( targetState == PanelState::MasterStrip )
+        if( !isUserDragging )
         {
-            targetDawX = getMasterRevealShift();
-        }
-        else if( targetState == PanelState::QLinkStrip )
-        {
-            targetDawX = -getQLinkRevealShift();
-        }
-        else
-        {
-            targetDawX = 0.0f;
-        }
+            // Monotonic exponential ease-out with ZERO BOUNCE / ZERO OVERSHOOT!
+            const float snapSpeed = 0.25f;
 
-        // Damped spring physics for X (soft carousel bounce)
-        const float tensionX = 0.14f;
-        const float dampingX = 0.72f;
+            float dx = targetCamX - currentCamX;
+            float dy = targetCamY - currentCamY;
 
-        float forceX = ( targetDawX - currentDawX ) * tensionX;
-        vx = ( vx + forceX ) * dampingX;
-        currentDawX += vx;
+            if( std::abs( dx ) > 0.3f )
+                currentCamX += dx * snapSpeed;
+            else
+                currentCamX = targetCamX;
 
-        // Damped spring physics for Y (smooth vertical slide)
-        const float tensionY = 0.18f;
-        const float dampingY = 0.74f;
+            if( std::abs( dy ) > 0.3f )
+                currentCamY += dy * snapSpeed;
+            else
+                currentCamY = targetCamY;
 
-        float forceY = ( targetDawY - currentDawY ) * tensionY;
-        vy = ( vy + forceY ) * dampingY;
-        currentDawY += vy;
-
-        bool settledX = ( std::abs( targetDawX - currentDawX ) < 0.2f && std::abs( vx ) < 0.2f );
-        bool settledY = ( std::abs( targetDawY - currentDawY ) < 0.2f && std::abs( vy ) < 0.2f );
-
-        if( settledX )
-        {
-            currentDawX = targetDawX;
-            vx = 0.0f;
-        }
-        if( settledY )
-        {
-            currentDawY = targetDawY;
-            vy = 0.0f;
-        }
-
-        updateLayout();
-
-        // Control visibility when animation settles
-        if( targetState == PanelState::BottomPads && settledY )
-        {
-            if( masterPanel != nullptr && masterPanel->isVisible() ) masterPanel->setVisible( false );
-            if( qlinkPanel != nullptr && qlinkPanel->isVisible() )   qlinkPanel->setVisible( false );
-        }
-        else
-        {
-            if( masterPanel != nullptr && !masterPanel->isVisible() ) masterPanel->setVisible( true );
-            if( qlinkPanel != nullptr && !qlinkPanel->isVisible() )   qlinkPanel->setVisible( true );
-        }
-
-        if( targetState != PanelState::BottomPads && settledY )
-        {
-            if( bottomPanel != nullptr && bottomPanel->isVisible() ) bottomPanel->setVisible( false );
+            updateLayout();
         }
     }
 
@@ -641,45 +629,66 @@ public:
         int h = getHeight();
         if( w <= 0 || h <= 0 ) return;
 
-        float dawX = 0.0f, dawY = 0.0f, dawW = 0.0f, dawH = 0.0f;
-        getDawGeometry( dawX, dawY, dawW, dawH );
+        float dawW = 0.0f, dawH = 0.0f;
+        getDawGeometry( dawW, dawH );
 
-        // 1. DAW Screen
+        float masterW = getMasterPanelWidth();
+        float qlinkW  = getQLinkPanelWidth();
+
+        // Single rigid 2D planar canvas coordinate mapping:
+        // Screen Position = Canvas Position - Camera Position
+
+        // 1. DAW Screen: Canvas X in [0, dawW], Canvas Y in [0, dawH]
         if( kickHome != nullptr )
         {
+            float dawScreenX = 0.0f - currentCamX;
+            float dawScreenY = 0.0f - currentCamY;
+
             kickHome->setBounds( 0, 0, 1024, 600 );
             kickHome->setTransform(
                 juce::AffineTransform::scale( dawW / 1024.0f, dawH / 600.0f )
-                                     .translated( dawX + currentDawX, dawY + currentDawY )
+                                     .translated( dawScreenX, dawScreenY )
             );
         }
 
-        // 2. Master Panel: Attached directly to left edge of DAW
-        float masterW = getMasterPanelWidth();
+        // 2. Master Panel: Canvas X in [-masterW, 0], Canvas Y in [0, dawH]
         if( masterPanel != nullptr )
         {
-            float mX = dawX + currentDawX - masterW;
-            masterPanel->setBounds( (int)std::round( mX ), (int)std::round( dawY ), (int)std::round( masterW ), (int)std::round( dawH ) );
+            float mScreenX = -masterW - currentCamX;
+            float mScreenY = 0.0f - currentCamY;
+            masterPanel->setBounds( (int)std::round( mScreenX ),
+                                    (int)std::round( mScreenY ),
+                                    (int)std::round( masterW ),
+                                    (int)std::round( dawH ) );
         }
 
-        // 3. Q-Link Panel: Attached directly to right edge of DAW
-        float qlinkW = getQLinkPanelWidth();
+        // 3. Q-Link Panel: Canvas X in [dawW, dawW + qlinkW], Canvas Y in [0, dawH]
         if( qlinkPanel != nullptr )
         {
-            float qX = dawX + dawW + currentDawX;
-            qlinkPanel->setBounds( (int)std::round( qX ), (int)std::round( dawY ), (int)std::round( qlinkW ), (int)std::round( dawH ) );
+            float qScreenX = dawW - currentCamX;
+            float qScreenY = 0.0f - currentCamY;
+            qlinkPanel->setBounds( (int)std::round( qScreenX ),
+                                   (int)std::round( qScreenY ),
+                                   (int)std::round( qlinkW ),
+                                   (int)std::round( dawH ) );
         }
 
-        // 4. Bottom Hardware Panel: Aligned horizontally with currentDawX, slides up with currentDawY
+        // 4. Pad & Bank Panel (Directly under DAW!):
+        // Canvas X in [0, dawW], Canvas Y in [dawH, 2*dawH]
+        // Left gap is masterW wide, right gap is qlinkW wide!
         if( bottomPanel != nullptr )
         {
-            bottomPanel->setHorizontalOffset( currentDawX );
-            bottomPanel->setBounds( 0, (int)std::round( currentDawY + (float)h ), w, h );
+            float bScreenX = 0.0f - currentCamX;
+            float bScreenY = dawH - currentCamY;
+            bottomPanel->setBounds( (int)std::round( bScreenX ),
+                                    (int)std::round( bScreenY ),
+                                    (int)std::round( dawW ),
+                                    (int)std::round( dawH ) );
         }
     }
 
     //==========================================================================
-    // Multi-touch & gesture recognition
+    // Gesture & Touch Handling
     //==========================================================================
     struct TouchPoint
     {
@@ -697,6 +706,12 @@ public:
         activeTouches[sourceIdx] = { true, screenP, screenP, e.eventComponent };
         gestureTriggered = false;
 
+        dragStartCamX = currentCamX;
+        dragStartCamY = currentCamY;
+        lastTouchP    = screenP;
+        dragVx = 0.0f;
+        dragVy = 0.0f;
+
         // Check if touch occurred on Q-Link strip or any of its knobs
         bool isQLinkTouch = ( qlinkPanel != nullptr && ( e.eventComponent == qlinkPanel.get() || qlinkPanel->isParentOf( e.eventComponent ) ) );
         if( !isQLinkTouch && qlinkPanel != nullptr && qlinkPanel->isVisible() )
@@ -711,7 +726,7 @@ public:
             isMasterTouch = masterPanel->getBounds().toFloat().contains( localP );
         }
 
-        // Automatically reveal side panel when user touches / interacts with it
+        // Tap on peeking control -> magnetizes to that panel
         if( isQLinkTouch )
         {
             if( targetState != PanelState::QLinkStrip && targetState != PanelState::BottomPads )
@@ -726,7 +741,7 @@ public:
                 setPanelState( PanelState::MasterStrip );
             }
         }
-        // Explicit user requirement: DAW must NOT jump back on click/tap, only on swipe!
+        // Tapping DAW does not jump back
     }
 
     void mouseDrag( const juce::MouseEvent& e ) override
@@ -739,8 +754,6 @@ public:
         {
             it->second.currentPos = screenP;
         }
-
-        if( gestureTriggered ) return;
 
         int count = 0;
         float totalDx = 0.0f;
@@ -756,91 +769,34 @@ public:
             }
         }
 
+        float dtVx = screenP.x - lastTouchP.x;
+        float dtVy = screenP.y - lastTouchP.y;
+        dragVx = dragVx * 0.6f + dtVx * 0.4f;
+        dragVy = dragVy * 0.6f + dtVy * 0.4f;
+        lastTouchP = screenP;
+
         bool has3Fingers = ( count >= 3 ) || ( e.mods.isShiftDown() && count >= 1 );
 
-        bool startedOnQLink = false;
-        bool startedOnMaster = false;
+        bool startedOnChassis = false;
         if( it != activeTouches.end() )
         {
-            if( qlinkPanel != nullptr && ( it->second.startComponent == qlinkPanel.get() || qlinkPanel->isParentOf( it->second.startComponent ) ) )
-                startedOnQLink = true;
-            if( masterPanel != nullptr && ( it->second.startComponent == masterPanel.get() || masterPanel->isParentOf( it->second.startComponent ) ) )
-                startedOnMaster = true;
+            auto* comp = it->second.startComponent;
+            if( comp == this || comp == masterPanel.get() || comp == qlinkPanel.get() )
+                startedOnChassis = true;
         }
 
-        const float threshold = 38.0f;
-
-        // 1. Swipe UP on side controls or 3 fingers anywhere -> Open Bottom Pads with carousel bounce!
-        if( has3Fingers || ( ( startedOnQLink || startedOnMaster ) && count == 1 ) )
-        {
-            float singleDy = it != activeTouches.end() ? ( it->second.currentPos.y - it->second.startPos.y ) : totalDy;
-            float singleDx = it != activeTouches.end() ? ( it->second.currentPos.x - it->second.startPos.x ) : totalDx;
-
-            if( singleDy < -threshold && std::abs( singleDy ) > std::abs( singleDx ) * 1.3f )
-            {
-                gestureTriggered = true;
-                setPanelState( PanelState::BottomPads );
-                return;
-            }
-        }
-
-        // 2. 3-Finger Gestures anywhere on screen
-        if( has3Fingers )
+        // 3 fingers drag ANYWHERE or 1 finger drag on background/chassis
+        if( has3Fingers || ( startedOnChassis && count == 1 ) )
         {
             float avgDx = totalDx / (float)juce::jmax( 1, count );
             float avgDy = totalDy / (float)juce::jmax( 1, count );
 
-            if( std::abs( avgDy ) > threshold && std::abs( avgDy ) > std::abs( avgDx ) * 1.3f )
+            if( std::abs( avgDx ) > 12.0f || std::abs( avgDy ) > 12.0f )
             {
-                gestureTriggered = true;
-                if( avgDy < 0.0f )
-                {
-                    setPanelState( PanelState::BottomPads );
-                }
-                else
-                {
-                    setPanelState( PanelState::DAW );
-                }
-            }
-            else if( std::abs( avgDx ) > threshold && std::abs( avgDx ) > std::abs( avgDy ) * 1.3f )
-            {
-                gestureTriggered = true;
-                if( avgDx > 0.0f )
-                {
-                    // Swipe right
-                    if( targetState == PanelState::DAW )
-                        setPanelState( PanelState::MasterStrip );
-                    else if( targetState == PanelState::QLinkStrip )
-                        setPanelState( PanelState::DAW );
-                }
-                else
-                {
-                    // Swipe left
-                    if( targetState == PanelState::DAW )
-                        setPanelState( PanelState::QLinkStrip );
-                    else if( targetState == PanelState::MasterStrip )
-                        setPanelState( PanelState::DAW );
-                }
-            }
-        }
-        // 3. Single-finger swipe horizontally on side panels to dock back
-        else if( count == 1 && ( startedOnQLink || startedOnMaster ) )
-        {
-            float singleDx = it->second.currentPos.x - it->second.startPos.x;
-            float singleDy = it->second.currentPos.y - it->second.startPos.y;
-
-            if( std::abs( singleDx ) > threshold && std::abs( singleDx ) > std::abs( singleDy ) * 1.3f )
-            {
-                if( startedOnQLink && singleDx > 0.0f && targetState == PanelState::QLinkStrip )
-                {
-                    gestureTriggered = true;
-                    setPanelState( PanelState::DAW );
-                }
-                else if( startedOnMaster && singleDx < 0.0f && targetState == PanelState::MasterStrip )
-                {
-                    gestureTriggered = true;
-                    setPanelState( PanelState::DAW );
-                }
+                isUserDragging = true;
+                currentCamX = dragStartCamX - avgDx;
+                currentCamY = dragStartCamY - avgDy;
+                updateLayout();
             }
         }
     }
@@ -860,6 +816,13 @@ public:
 
         if( remaining == 0 )
         {
+            if( isUserDragging )
+            {
+                isUserDragging = false;
+                // Magnetize / snap to the closest / most trivial point!
+                PanelState best = findClosestSnapState( currentCamX, currentCamY, dragVx, dragVy );
+                setPanelState( best );
+            }
             gestureTriggered = false;
         }
     }
@@ -899,10 +862,15 @@ private:
 
     PanelState targetState{ PanelState::DAW };
 
-    float currentDawY{ 0.0f };
-    float currentDawX{ 0.0f };
-    float vx{ 0.0f };
-    float vy{ 0.0f };
+    float currentCamX{ 0.0f };
+    float currentCamY{ 0.0f };
+
+    bool  isUserDragging{ false };
+    float dragStartCamX{ 0.0f };
+    float dragStartCamY{ 0.0f };
+    juce::Point<float> lastTouchP;
+    float dragVx{ 0.0f };
+    float dragVy{ 0.0f };
 
     std::map<int, TouchPoint> activeTouches;
     bool                      gestureTriggered{ false };
