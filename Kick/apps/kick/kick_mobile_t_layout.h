@@ -993,16 +993,11 @@ public:
         dragVy = dragVy * 0.6f + dtVy * 0.4f;
         lastTouchP = screenP;
 
-        bool has3Fingers = ( count >= 3 ) || ( e.mods.isShiftDown() && count >= 1 );
+        // Multi-touch camera pan: requires 2 or 3 fingers (or Shift+drag on desktop/simulator).
+        // 1-finger touches are strictly reserved for normal UI interaction to prevent accidental sliding.
+        bool isMultiFingerDrag = ( count >= 2 ) || ( e.mods.isShiftDown() && count >= 1 );
 
-        bool startedOnNonInteractive = false;
-        if( it != activeTouches.end() && !it->second.isInteractive )
-        {
-            startedOnNonInteractive = true;
-        }
-
-        // 3 fingers drag ANYWHERE or 1 finger drag on non-interactive surfaces
-        if( has3Fingers || ( startedOnNonInteractive && count == 1 ) )
+        if( isMultiFingerDrag )
         {
             float avgDx = totalDx / (float)juce::jmax( 1, count );
             float avgDy = totalDy / (float)juce::jmax( 1, count );
@@ -1033,15 +1028,11 @@ public:
     {
         int sourceIdx = e.source.getIndex();
         auto it = activeTouches.find( sourceIdx );
-        float totalDx = 0.0f;
-        float totalDy = 0.0f;
         juce::uint32 elapsedMs = 0;
 
         if( it != activeTouches.end() )
         {
             it->second.isDown = false;
-            totalDx   = it->second.currentPos.x - it->second.startPos.x;
-            totalDy   = it->second.currentPos.y - it->second.startPos.y;
             elapsedMs = juce::Time::getMillisecondCounter() - it->second.startTimeMs;
         }
 
@@ -1054,7 +1045,9 @@ public:
             if( isUserDragging )
             {
                 isUserDragging = false;
-                PanelState next = evaluateSwipeGesture( dragStartState, totalDx, totalDy, dragVx, dragVy, elapsedMs );
+                float netDx = dragStartCamX - currentCamX;
+                float netDy = dragStartCamY - currentCamY;
+                PanelState next = evaluateSwipeGesture( dragStartState, netDx, netDy, dragVx, dragVy, elapsedMs );
                 setPanelState( next );
             }
             gestureTriggered = false;
