@@ -24,6 +24,7 @@
 #include "kick_device_adapter.h"
 #include "kick_audio_engine_adapter.h"
 #include "kick_audio_interface.h"
+#include "kick_mobile_t_layout.h"
 #if JUCE_MAC
  #include "kick_hardware_chassis.h"
 #endif
@@ -316,6 +317,9 @@ public:
                 case kick_mac::KickMacMenuModel::idDisplayOnlyView:
                     setViewMode( kick_mac::KickHardwareChassis::ViewMode::DisplayOnly );
                     break;
+                case kick_mac::KickMacMenuModel::idMobileView:
+                    setViewMode( kick_mac::KickHardwareChassis::ViewMode::MobileTLayout );
+                    break;
                 case kick_mac::KickMacMenuModel::idToggleView:
                     toggleViewMode();
                     break;
@@ -400,7 +404,7 @@ public:
                 centreWithSize( getWidth(), getHeight() );
                 setName( juce::String::fromUTF8( "Behringer Kick - Hardver nézet" ) );
             }
-            else
+            else if( mode == kick_mac::KickHardwareChassis::ViewMode::DisplayOnly )
             {
                 getConstrainer()->setFixedAspectRatio( 1024.0 / 600.0 );
                 setResizeLimits( 512, 300, 2048, 1200 );
@@ -409,10 +413,21 @@ public:
                 centreWithSize( getWidth(), getHeight() );
                 setName( juce::String::fromUTF8( "Behringer Kick - Kijelző nézet" ) );
             }
+            else // MobileTLayout
+            {
+                getConstrainer()->setFixedAspectRatio( 852.0 / 393.0 );
+                setResizeLimits( 500, 230, 1704, 786 );
+
+                setContentComponentSize( 852, 393 );
+                centreWithSize( getWidth(), getHeight() );
+                setName( juce::String::fromUTF8( "Behringer Kick - Mobil T-Elrendezés (iPhone)" ) );
+            }
 
             if( menuModel != nullptr )
             {
-                menuModel->setHardwareViewActive( mode == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis );
+                int modeIdx = ( mode == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis ) ? 0
+                            : ( mode == kick_mac::KickHardwareChassis::ViewMode::DisplayOnly ) ? 1 : 2;
+                menuModel->setActiveViewMode( modeIdx );
             }
         }
 
@@ -477,6 +492,25 @@ public:
                 return true;
             }
 
+            // Cmd+3 or F3 -> Mobile T-Layout View
+            if( ( key.isKeyCode( '3' ) && key.getModifiers().isCommandDown() ) || key.isKeyCode( juce::KeyPress::F3Key ) )
+            {
+                setViewMode( kick_mac::KickHardwareChassis::ViewMode::MobileTLayout );
+                return true;
+            }
+
+            // Arrow Keys in Mobile T-Layout mode
+            if( chassisComponent != nullptr && chassisComponent->getViewMode() == kick_mac::KickHardwareChassis::ViewMode::MobileTLayout )
+            {
+                if( auto* ml = chassisComponent->getMobileLayout() )
+                {
+                    if( key == juce::KeyPress::leftKey ) { ml->navigateTo( kick_mobile::TView::Banks ); return true; }
+                    if( key == juce::KeyPress::rightKey ) { ml->navigateTo( kick_mobile::TView::Pads ); return true; }
+                    if( key == juce::KeyPress::upKey ) { ml->navigateTo( kick_mobile::TView::Controls ); return true; }
+                    if( key == juce::KeyPress::downKey || key == juce::KeyPress::escapeKey ) { ml->navigateTo( kick_mobile::TView::DAW ); return true; }
+                }
+            }
+
             // F5 -> Toggle View
             if( key.isKeyCode( juce::KeyPress::F5Key ) )
             {
@@ -524,10 +558,15 @@ public:
             : juce::DocumentWindow( name, juce::Colours::black, 0 )
         {
             setTitle( name );
-            setContentOwned( &kick_ui::KickHome::Instance(), true );
+            mobileLayout = std::make_unique<kick_mobile::KickMobileTLayout>();
+            setContentNonOwned( mobileLayout.get(), false );
         }
 
-        ~HomeWindow() final = default;
+        ~HomeWindow() override
+        {
+            clearContentComponent();
+            mobileLayout.reset();
+        }
 
         void closeButtonPressed() override
         {
@@ -541,6 +580,9 @@ public:
             if( auto p = getCurrentlyModalComponent( index ) )
                 p->toFront( true );
         }
+
+    private:
+        std::unique_ptr<kick_mobile::KickMobileTLayout> mobileLayout;
     };
 #endif
 

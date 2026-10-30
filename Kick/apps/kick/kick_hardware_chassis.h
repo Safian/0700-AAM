@@ -28,6 +28,7 @@
 #include "contracts/dcl/dcl_signals.h"
 #include "PktMgr/PktMgr.hpp"
 #include "common/common.h"
+#include "kick_mobile_t_layout.h"
 
 #if JUCE_MAC
 
@@ -46,7 +47,8 @@ public:
     enum class ViewMode
     {
         HardwareChassis = 0,
-        DisplayOnly
+        DisplayOnly,
+        MobileTLayout
     };
 
     KickHardwareChassis()
@@ -58,6 +60,7 @@ public:
 
     ~KickHardwareChassis() override
     {
+        mobileLayout.reset();
         if( kickHome != nullptr )
         {
             kickHome->setTransform( juce::AffineTransform() );
@@ -69,6 +72,26 @@ public:
     {
         if( currentMode != mode )
         {
+            if( mode == ViewMode::MobileTLayout )
+            {
+                if( kickHome != nullptr )
+                {
+                    kickHome->setTransform( juce::AffineTransform() );
+                    removeChildComponent( kickHome );
+                }
+                mobileLayout = std::make_unique<kick_mobile::KickMobileTLayout>();
+                addAndMakeVisible( mobileLayout.get() );
+            }
+            else
+            {
+                if( mobileLayout != nullptr )
+                {
+                    mobileLayout.reset();
+                    kickHome = &kick_ui::KickHome::Instance();
+                    addAndMakeVisible( kickHome );
+                }
+            }
+
             currentMode = mode;
             resized();
             repaint();
@@ -76,6 +99,7 @@ public:
     }
 
     ViewMode getViewMode() const noexcept { return currentMode; }
+    kick_mobile::KickMobileTLayout* getMobileLayout() const noexcept { return mobileLayout.get(); }
 
     void paint( juce::Graphics& g ) override
     {
@@ -130,6 +154,17 @@ public:
 
     void resized() override
     {
+        if( currentMode == ViewMode::MobileTLayout )
+        {
+            screenCutoutRect = {};
+            renderedChassisRect = {};
+            if( mobileLayout != nullptr )
+            {
+                mobileLayout->setBounds( getLocalBounds() );
+            }
+            return;
+        }
+
         if( currentMode == ViewMode::DisplayOnly )
         {
             screenCutoutRect = {};
@@ -547,6 +582,7 @@ public:
     }
 
     kick_ui::KickHome*     kickHome{ nullptr };
+    std::unique_ptr<kick_mobile::KickMobileTLayout> mobileLayout;
     juce::Image            chassisImage;
     ViewMode               currentMode{ ViewMode::HardwareChassis };
     juce::Rectangle<float> renderedChassisRect;
@@ -573,6 +609,7 @@ public:
     {
         idHardwareView = 1001,
         idDisplayOnlyView = 1002,
+        idMobileView = 1005,
         idToggleView = 1003,
         idToggleDrawer = 1004,
         idScale100 = 1010,
@@ -606,15 +643,22 @@ public:
             itemHw.itemID = idHardwareView;
             itemHw.text = juce::String::fromUTF8( "Hardver nézet (Hardware Chassis)" );
             itemHw.shortcutKeyDescription = "Cmd+1 / F1";
-            itemHw.isTicked = isHardwareView;
+            itemHw.isTicked = ( activeViewMode == 0 );
             menu.addItem( itemHw );
 
             juce::PopupMenu::Item itemDisp;
             itemDisp.itemID = idDisplayOnlyView;
             itemDisp.text = juce::String::fromUTF8( "Csak kijelző (Display Only)" );
             itemDisp.shortcutKeyDescription = "Cmd+2 / F2";
-            itemDisp.isTicked = !isHardwareView;
+            itemDisp.isTicked = ( activeViewMode == 1 );
             menu.addItem( itemDisp );
+
+            juce::PopupMenu::Item itemMob;
+            itemMob.itemID = idMobileView;
+            itemMob.text = juce::String::fromUTF8( "Mobil T-Elrendezés (Mobile T-Layout)" );
+            itemMob.shortcutKeyDescription = "Cmd+3 / F3";
+            itemMob.isTicked = ( activeViewMode == 2 );
+            menu.addItem( itemMob );
 
             menu.addSeparator();
 
@@ -670,18 +714,23 @@ public:
             commandHandler( menuItemID );
     }
 
-    void setHardwareViewActive( bool active )
+    void setActiveViewMode( int mode )
     {
-        if( isHardwareView != active )
+        if( activeViewMode != mode )
         {
-            isHardwareView = active;
+            activeViewMode = mode;
             menuItemsChanged();
         }
     }
 
+    void setHardwareViewActive( bool active )
+    {
+        setActiveViewMode( active ? 0 : 1 );
+    }
+
 private:
     std::function<void( int )> commandHandler;
-    bool isHardwareView{ true };
+    int activeViewMode{ 0 };
 };
 
 } // namespace kick_mac

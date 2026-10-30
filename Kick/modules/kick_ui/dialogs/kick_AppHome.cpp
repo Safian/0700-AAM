@@ -195,12 +195,8 @@ namespace kick_ui
         ctrlBar_ = std::make_unique<AppTopbar>();
         hardwareDrawer_ = std::make_unique<MobileHardwareDrawer>();
         mt::utils::addChildComponents( this, ctrlBar_.get(), statusBar_ );
-#if ! JUCE_MAC
-        addAndMakeVisible( hardwareDrawer_.get() );
-#else
         addChildComponent( hardwareDrawer_.get() );
         hardwareDrawer_->setVisible( false );
-#endif
         // First launch screen.
         screenAdder( Screen::RecentProject, std::make_unique<ui::RecentProject>() );
 
