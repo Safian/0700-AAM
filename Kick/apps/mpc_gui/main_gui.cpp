@@ -177,6 +177,109 @@ static bool g_knob_touched[4] = { false, false, false, false };
 static float g_master_volume = 0.50f; // Default 50% (-6 dB studio reference headroom)
 static pthread_mutex_t g_ui_lock = PTHREAD_MUTEX_INITIALIZER;
 
+// Hardware Auto-Detection & Control Surface State
+enum HardwareModel {
+    HW_GENERIC_LINUX = 0,
+    HW_AKAI_MPC_KEY_61,
+    HW_AKAI_MPC_KEY_37,
+    HW_AKAI_MPC_ONE,
+    HW_AKAI_MPC_ONE_MK2,
+    HW_AKAI_MPC_LIVE,
+    HW_AKAI_MPC_LIVE_MK2,
+    HW_AKAI_MPC_X,
+    HW_AKAI_MPC_XL,
+    HW_AKAI_FORCE,
+    HW_BEHRINGER_KICK
+};
+
+static HardwareModel g_hardware_model = HW_GENERIC_LINUX;
+static char g_hardware_name[64] = "GENERIC LINUX DAW";
+static char g_hardware_badge[64] = "LINUX";
+
+static float g_bpm = 120.0f;
+static uint64_t g_last_tap_time_ms = 0;
+static int g_tap_tempo_flash = 0;
+
+static int g_octave_shift = 0; // -3 to +3 octaves transposition
+static bool g_octave_down_held = false;
+static bool g_octave_up_held = false;
+static int g_active_key_pitch[128] = { 0 };
+
+static bool g_shift_down = false;
+static bool g_full_level = false;
+static bool g_16_levels = false;
+static bool g_note_repeat = false;
+static bool g_is_overdub = false;
+
+static void detect_hardware() {
+    // 1. Check Device Tree model
+    FILE* f = fopen("/sys/firmware/devicetree/base/model", "r");
+    char model_buf[128] = {0};
+    if (f) {
+        if (fgets(model_buf, sizeof(model_buf), f)) {
+            size_t len = strlen(model_buf);
+            while (len > 0 && (model_buf[len-1] == '\n' || model_buf[len-1] == '\r' || model_buf[len-1] == ' ')) {
+                model_buf[--len] = '\0';
+            }
+        }
+        fclose(f);
+    }
+
+    // 2. Check Device Tree product-code
+    f = fopen("/sys/firmware/devicetree/base/inmusic,product-code", "r");
+    char prod_buf[32] = {0};
+    if (f) {
+        if (fgets(prod_buf, sizeof(prod_buf), f)) {
+            size_t len = strlen(prod_buf);
+            while (len > 0 && (prod_buf[len-1] == '\n' || prod_buf[len-1] == '\r' || prod_buf[len-1] == ' ')) {
+                prod_buf[--len] = '\0';
+            }
+        }
+        fclose(f);
+    }
+
+    // 3. Check ALSA cards
+    f = fopen("/proc/asound/cards", "r");
+    char cards_buf[512] = {0};
+    if (f) {
+        fread(cards_buf, 1, sizeof(cards_buf) - 1, f);
+        fclose(f);
+    }
+
+    if (strstr(model_buf, "Key 61") || strstr(prod_buf, "ACVM") || strstr(cards_buf, "MPC Key 61")) {
+        g_hardware_model = HW_AKAI_MPC_KEY_61;
+        snprintf(g_hardware_name, sizeof(g_hardware_name), "AKAI MPC KEY 61");
+        snprintf(g_hardware_badge, sizeof(g_hardware_badge), "MPC KEY 61");
+    } else if (strstr(model_buf, "Key 37") || strstr(cards_buf, "MPC Key 37")) {
+        g_hardware_model = HW_AKAI_MPC_KEY_37;
+        snprintf(g_hardware_name, sizeof(g_hardware_name), "AKAI MPC KEY 37");
+        snprintf(g_hardware_badge, sizeof(g_hardware_badge), "MPC KEY 37");
+    } else if (strstr(model_buf, "MPC One") || strstr(prod_buf, "ACVE") || strstr(cards_buf, "MPC One")) {
+        g_hardware_model = HW_AKAI_MPC_ONE;
+        snprintf(g_hardware_name, sizeof(g_hardware_name), "AKAI MPC ONE");
+        snprintf(g_hardware_badge, sizeof(g_hardware_badge), "MPC ONE");
+    } else if (strstr(model_buf, "MPC Live") || strstr(prod_buf, "ACV8") || strstr(cards_buf, "MPC Live")) {
+        g_hardware_model = HW_AKAI_MPC_LIVE;
+        snprintf(g_hardware_name, sizeof(g_hardware_name), "AKAI MPC LIVE");
+        snprintf(g_hardware_badge, sizeof(g_hardware_badge), "MPC LIVE");
+    } else if (strstr(model_buf, "MPC X") || strstr(prod_buf, "ACVA") || strstr(cards_buf, "MPC X")) {
+        g_hardware_model = HW_AKAI_MPC_X;
+        snprintf(g_hardware_name, sizeof(g_hardware_name), "AKAI MPC X");
+        snprintf(g_hardware_badge, sizeof(g_hardware_badge), "MPC X");
+    } else if (strstr(model_buf, "Force") || strstr(prod_buf, "ACVB") || strstr(cards_buf, "Force")) {
+        g_hardware_model = HW_AKAI_FORCE;
+        snprintf(g_hardware_name, sizeof(g_hardware_name), "AKAI FORCE");
+        snprintf(g_hardware_badge, sizeof(g_hardware_badge), "AKAI FORCE");
+    } else {
+        g_hardware_model = HW_GENERIC_LINUX;
+        snprintf(g_hardware_name, sizeof(g_hardware_name), "GENERIC LINUX DAW");
+        snprintf(g_hardware_badge, sizeof(g_hardware_badge), "LINUX");
+    }
+
+    printf("[HARDWARE] Auto-Detected Hardware: %s (Model ID: %d, Code: %s)\n",
+           g_hardware_name, g_hardware_model, prod_buf[0] ? prod_buf : "N/A");
+}
+
 static uint32_t g_render_buf[SCREEN_W * SCREEN_H];
 static uint32_t* g_fb_ptr = NULL;
 static size_t g_fb_size = 0;
@@ -192,10 +295,14 @@ static inline float midi_to_freq(int note) {
 
 static const char* note_name(int note) {
     static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    static char buf[16];
+    static char bufs[4][16];
+    static int idx = 0;
+    idx = (idx + 1) % 4;
+    if (note < 0) note = 0;
+    if (note > 127) note = 127;
     int octave = (note / 12) - 1;
-    snprintf(buf, sizeof(buf), "%s%d", names[note % 12], octave);
-    return buf;
+    snprintf(bufs[idx], sizeof(bufs[idx]), "%s%d", names[note % 12], octave);
+    return bufs[idx];
 }
 
 // -------------------------------------------------------------
@@ -374,19 +481,19 @@ static void synth_init(SynthEngine* s) {
     }
 }
 
-static void synth_note_on(SynthEngine* s, int note, int vel, NoteSource src = NOTE_SRC_KEYBED) {
+static void synth_note_on_transposed(SynthEngine* s, int sound_pitch, int phys_note, int vel, NoteSource src = NOTE_SRC_KEYBED) {
     if (vel <= 0) return;
 
     if (src == NOTE_SRC_PAD) {
-        int pad_num = note - 36;
+        int pad_num = sound_pitch - 36;
         if (pad_num >= 0 && pad_num < 16) {
             trigger_pad_sample(pad_num, vel);
         }
     } else {
         // Genuine Acoustic Concert Grand Piano Multi-Sampled Voice
-        int root_idx = find_closest_piano_root(note);
+        int root_idx = find_closest_piano_root(sound_pitch);
         int root_note = g_piano_roots[root_idx];
-        float pitch_ratio = powf(2.0f, (float)(note - root_note) / 12.0f);
+        float pitch_ratio = powf(2.0f, (float)(sound_pitch - root_note) / 12.0f);
 
         pthread_mutex_lock(&s->lock);
         int target = -1;
@@ -401,7 +508,7 @@ static void synth_note_on(SynthEngine* s, int note, int vel, NoteSource src = NO
         }
 
         PianoVoice* pv = &s->piano_voices[target];
-        pv->note = note;
+        pv->note = sound_pitch;
         pv->velocity = (float)vel / 127.0f;
         pv->root_note = root_note;
         pv->sample = &g_piano_samples[root_idx];
@@ -417,22 +524,22 @@ static void synth_note_on(SynthEngine* s, int note, int vel, NoteSource src = NO
 
     // Update UI Key State - completely independent!
     pthread_mutex_lock(&g_ui_lock);
-    int key_idx = note - 36;
+    int key_idx = phys_note - 36;
     if (src == NOTE_SRC_KEYBED || src == NOTE_SRC_BOTH) {
         if (key_idx >= 0 && key_idx < 61) g_key_press_count[key_idx]++;
     }
-    int pad_idx = note - 36;
+    int pad_idx = sound_pitch - 36;
     if (src == NOTE_SRC_PAD || src == NOTE_SRC_BOTH) {
         if (pad_idx >= 0 && pad_idx < 16) g_pad_press_count[pad_idx]++;
     }
     pthread_mutex_unlock(&g_ui_lock);
 }
 
-static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_KEYBED) {
+static void synth_note_off_transposed(SynthEngine* s, int sound_pitch, int phys_note, NoteSource src = NOTE_SRC_KEYBED) {
     if (src != NOTE_SRC_PAD) {
         pthread_mutex_lock(&s->lock);
         for (int i = 0; i < MAX_VOICES; ++i) {
-            if (s->piano_voices[i].active && s->piano_voices[i].note == note) {
+            if (s->piano_voices[i].active && s->piano_voices[i].note == sound_pitch) {
                 s->piano_voices[i].key_down = false;
                 // If sustain pedal is NOT pressed, damp the string now
                 if (!s->sustain_pedal && !s->piano_voices[i].releasing) {
@@ -445,19 +552,27 @@ static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_K
 
     // Update UI Key State
     pthread_mutex_lock(&g_ui_lock);
-    int key_idx = note - 36;
+    int key_idx = phys_note - 36;
     if (src == NOTE_SRC_KEYBED || src == NOTE_SRC_BOTH) {
         if (key_idx >= 0 && key_idx < 61) {
             if (g_key_press_count[key_idx] > 0) g_key_press_count[key_idx]--;
         }
     }
-    int pad_idx = note - 36;
+    int pad_idx = sound_pitch - 36;
     if (src == NOTE_SRC_PAD || src == NOTE_SRC_BOTH) {
         if (pad_idx >= 0 && pad_idx < 16) {
             if (g_pad_press_count[pad_idx] > 0) g_pad_press_count[pad_idx]--;
         }
     }
     pthread_mutex_unlock(&g_ui_lock);
+}
+
+static void synth_note_on(SynthEngine* s, int note, int vel, NoteSource src = NOTE_SRC_KEYBED) {
+    synth_note_on_transposed(s, note, note, vel, src);
+}
+
+static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_KEYBED) {
+    synth_note_off_transposed(s, note, note, src);
 }
 
 static void synth_cc(SynthEngine* s, int cc, int val) {
@@ -754,7 +869,14 @@ static void render_ui() {
     fill_rect(0, 59, SCREEN_W, 1, COLOR_BORDER);
 
     draw_string(24, 20, "KICK DAW", COLOR_ORANGE, 3);
-    draw_string(200, 24, "AKAI MPC KEY 61", COLOR_TEXT_BOLD, 2);
+    draw_string(185, 24, g_hardware_name, COLOR_TEXT_BOLD, 2);
+
+    // Hardware mapping badge
+    if (g_hardware_model == HW_AKAI_MPC_KEY_61) {
+        fill_rect(375, 20, 56, 20, 0x001B3A4D);
+        draw_rect(375, 20, 56, 20, COLOR_CYAN);
+        draw_string(381, 26, "MAPPED", COLOR_CYAN, 1);
+    }
 
     // Master Volume Control (Touch Buttons & Slider)
     fill_rect(440, 14, 260, 32, COLOR_PANEL_HI);
@@ -785,10 +907,15 @@ static void render_ui() {
     snprintf(vol_pct_str, sizeof(vol_pct_str), "%3d%%", (int)(g_master_volume * 100.0f + 0.5f));
     draw_string(648, 24, vol_pct_str, COLOR_TEXT_BOLD, 1);
 
-    // BPM & Latency badge
-    fill_rect(720, 14, 110, 32, COLOR_PANEL_HI);
-    draw_rect(720, 14, 110, 32, COLOR_BORDER);
-    draw_string(735, 22, "120.0 BPM", COLOR_GOLD, 2);
+    // BPM & Latency badge (Pulsing gold flash on Tap Tempo!)
+    uint32_t bpm_bg = (g_tap_tempo_flash > 0) ? 0x005E4410 : COLOR_PANEL_HI;
+    uint32_t bpm_fg = (g_tap_tempo_flash > 0) ? COLOR_TEXT_BOLD : COLOR_GOLD;
+    fill_rect(720, 14, 110, 32, bpm_bg);
+    draw_rect(720, 14, 110, 32, (g_tap_tempo_flash > 0) ? COLOR_GOLD : COLOR_BORDER);
+    char bpm_str[32];
+    snprintf(bpm_str, sizeof(bpm_str), "%.1f BPM", g_bpm);
+    draw_string(728, 22, bpm_str, bpm_fg, 2);
+    if (g_tap_tempo_flash > 0) g_tap_tempo_flash--;
 
     fill_rect(845, 14, 190, 32, COLOR_PANEL_HI);
     draw_rect(845, 14, 190, 32, COLOR_BORDER);
@@ -824,16 +951,24 @@ static void render_ui() {
     sustain_on = g_synth.sustain_pedal;
     pthread_mutex_unlock(&g_synth.lock);
 
-    fill_rect(44, 172, 130, 20, sustain_on ? 0x001B4D2E : COLOR_PANEL_HI);
-    draw_rect(44, 172, 130, 20, sustain_on ? COLOR_GREEN : COLOR_BORDER);
-    draw_string(52, 178, sustain_on ? "PEDAL: SUSTAIN" : "PEDAL: OFF", sustain_on ? COLOR_GREEN : COLOR_TEXT_DIM, 1);
+    fill_rect(44, 172, 115, 20, sustain_on ? 0x001B4D2E : COLOR_PANEL_HI);
+    draw_rect(44, 172, 115, 20, sustain_on ? COLOR_GREEN : COLOR_BORDER);
+    draw_string(50, 178, sustain_on ? "PEDAL: SUSTAIN" : "PEDAL: OFF", sustain_on ? COLOR_GREEN : COLOR_TEXT_DIM, 1);
 
     // Master Volume info badge
-    fill_rect(185, 172, 180, 20, COLOR_PANEL_HI);
-    draw_rect(185, 172, 180, 20, COLOR_BORDER);
+    fill_rect(168, 172, 130, 20, COLOR_PANEL_HI);
+    draw_rect(168, 172, 130, 20, COLOR_BORDER);
     char master_info[32];
-    snprintf(master_info, sizeof(master_info), "MASTER VOL: %d%%", (int)(g_master_volume * 100.0f + 0.5f));
-    draw_string(195, 178, master_info, COLOR_GOLD, 1);
+    snprintf(master_info, sizeof(master_info), "MASTER: %d%%", (int)(g_master_volume * 100.0f + 0.5f));
+    draw_string(176, 178, master_info, COLOR_GOLD, 1);
+
+    // Octave Shift info badge
+    bool oct_active = (g_octave_shift != 0);
+    fill_rect(308, 172, 116, 20, oct_active ? 0x00452E10 : COLOR_PANEL_HI);
+    draw_rect(308, 172, 116, 20, oct_active ? COLOR_GOLD : COLOR_BORDER);
+    char oct_info[32];
+    snprintf(oct_info, sizeof(oct_info), "OCTAVE: %+d", g_octave_shift);
+    draw_string(318, 178, oct_info, oct_active ? COLOR_GOLD : COLOR_TEXT_DIM, 1);
 
     // 4 Q-Link Knobs Simulation (Hardware Encoders + Touch Sensors)
     const char* knob_labels[4] = { "CUTOFF", "RESONANCE", "ATTACK", "DECAY" };
@@ -905,9 +1040,47 @@ static void render_ui() {
     }
     pthread_mutex_unlock(&g_ui_lock);
 
-    // 5. Bottom 61-Key Keyboard Piano (Height = 200, Y = 580 to 780)
-    fill_rect(24, 580, 1232, 200, COLOR_PANEL);
-    draw_rect(24, 580, 1232, 200, COLOR_BORDER);
+    // 5a. Keybed Status & Octave Transposition Control Bar (Y = 560 to 586)
+    fill_rect(24, 560, 1232, 26, COLOR_PANEL);
+    draw_rect(24, 560, 1232, 26, COLOR_BORDER);
+
+    int low_c = 36 + g_octave_shift * 12;
+    int high_c = 96 + g_octave_shift * 12;
+    char kb_range[64];
+    snprintf(kb_range, sizeof(kb_range), "KEYBED 61: %s - %s", note_name(low_c), note_name(high_c));
+    draw_string(36, 568, kb_range, COLOR_TEXT_BOLD, 1);
+
+    // Center Octave Buttons
+    int oct_btn_x = 540;
+    draw_string(oct_btn_x - 90, 568, "OCTAVE:", COLOR_TEXT_NORM, 1);
+
+    // [-]
+    fill_rect(oct_btn_x, 563, 24, 20, (g_octave_shift < 0) ? 0x00452E10 : 0x002A303D);
+    draw_rect(oct_btn_x, 563, 24, 20, (g_octave_shift < 0) ? COLOR_GOLD : COLOR_BORDER);
+    draw_string(oct_btn_x + 8, 568, "-", COLOR_CYAN, 1);
+
+    // [+X] badge
+    char oct_str[16];
+    snprintf(oct_str, sizeof(oct_str), "%+d", g_octave_shift);
+    fill_rect(oct_btn_x + 28, 563, 40, 20, (g_octave_shift != 0) ? 0x00452E10 : COLOR_PANEL_HI);
+    draw_rect(oct_btn_x + 28, 563, 40, 20, (g_octave_shift != 0) ? COLOR_GOLD : COLOR_BORDER);
+    draw_string(oct_btn_x + 40, 568, oct_str, (g_octave_shift != 0) ? COLOR_GOLD : COLOR_TEXT_NORM, 1);
+
+    // [+]
+    fill_rect(oct_btn_x + 72, 563, 24, 20, (g_octave_shift > 0) ? 0x00452E10 : 0x002A303D);
+    draw_rect(oct_btn_x + 72, 563, 24, 20, (g_octave_shift > 0) ? COLOR_GOLD : COLOR_BORDER);
+    draw_string(oct_btn_x + 80, 568, "+", COLOR_CYAN, 1);
+
+    // Right Side Status
+    if (g_hardware_model == HW_AKAI_MPC_KEY_61) {
+        draw_string(880, 568, "AKAI MPC KEY 61: HARDWARE CONTROLS ACTIVE", COLOR_GREEN, 1);
+    } else {
+        draw_string(940, 568, "STANDARD MIDI MAPPING ACTIVE", COLOR_TEXT_DIM, 1);
+    }
+
+    // 5b. Bottom 61-Key Keyboard Piano (Height = 195, Y = 588 to 783)
+    fill_rect(24, 588, 1232, 195, COLOR_PANEL);
+    draw_rect(24, 588, 1232, 195, COLOR_BORDER);
 
     // Count white keys in 61 keys (from C2 = 36 to C7 = 96)
     // 61 keys has exactly 36 white keys and 25 black keys
@@ -924,7 +1097,7 @@ static void render_ui() {
                          note_in_octave == 8 || note_in_octave == 10);
         if (!is_black) {
             int kx = 32 + (int)(white_idx * kw);
-            int ky = 590;
+            int ky = 596;
             int w = (int)kw - 2;
             int h = 180;
 
@@ -933,8 +1106,9 @@ static void render_ui() {
             fill_rect(kx, ky, w, h, col);
             draw_rect(kx, ky, w, h, 0x00999999);
 
-            if (note_in_octave == 0) { // Mark C notes
-                draw_string(kx + 6, ky + h - 25, note_name(note), 0x00333333, 1);
+            if (note_in_octave == 0) { // Mark C notes with transposed octave number!
+                int transposed_note = note + g_octave_shift * 12;
+                draw_string(kx + 6, ky + h - 25, note_name(transposed_note), 0x00333333, 1);
             }
             white_idx++;
         }
@@ -952,7 +1126,7 @@ static void render_ui() {
         } else {
             // Position black key between white_idx-1 and white_idx
             int kx = 32 + (int)((white_idx - 1) * kw) + (int)(kw * 0.65f);
-            int ky = 590;
+            int ky = 596;
             int w = (int)(kw * 0.70f);
             int h = 110;
 
@@ -1150,7 +1324,9 @@ static void* touch_thread_func(void* arg) {
                     // Finger lifted from this slot
                     if (slot->active) {
                         if (slot->last_note != -1) {
-                            synth_note_off(&g_synth, slot->last_note, slot->last_src);
+                            int old_sound = (slot->last_src == NOTE_SRC_KEYBED) ?
+                                            (slot->last_note + (g_octave_shift * 12)) : slot->last_note;
+                            synth_note_off_transposed(&g_synth, old_sound, slot->last_note, slot->last_src);
                             slot->last_note = -1;
                             slot->last_src = NOTE_SRC_NONE;
                         }
@@ -1182,7 +1358,9 @@ static void* touch_thread_func(void* arg) {
                     TouchSlot* slot = &g_slots[s];
                     if (slot->active) {
                         if (slot->last_note != -1) {
-                            synth_note_off(&g_synth, slot->last_note, slot->last_src);
+                            int old_sound = (slot->last_src == NOTE_SRC_KEYBED) ?
+                                            (slot->last_note + (g_octave_shift * 12)) : slot->last_note;
+                            synth_note_off_transposed(&g_synth, old_sound, slot->last_note, slot->last_src);
                             slot->last_note = -1;
                             slot->last_src = NOTE_SRC_NONE;
                         }
@@ -1237,8 +1415,8 @@ static void* touch_thread_func(void* arg) {
                 }
 
                 // 1b. Left Inspector Panel Volume Badge Touch
-                if (ui_x >= 180 && ui_x < 370 && ui_y >= 165 && ui_y < 200) {
-                    if (ui_x < 275) {
+                if (ui_x >= 160 && ui_x < 300 && ui_y >= 150 && ui_y < 190) {
+                    if (ui_x < 230) {
                         g_master_volume -= 0.05f;
                         if (g_master_volume < 0.0f) g_master_volume = 0.0f;
                     } else {
@@ -1248,10 +1426,27 @@ static void* touch_thread_func(void* arg) {
                     printf("[VOL] Inspector Tap -> Master Volume: %.0f%%\n", g_master_volume * 100.0f);
                 }
 
+                // 1c. Keybed Octave Transposition Bar Touch Hitboxes (y: 550..588)
+                if (ui_y >= 550 && ui_y < 588) {
+                    if (ui_x >= 520 && ui_x < 566) {
+                        // [-] button
+                        if (g_octave_shift > -3) g_octave_shift--;
+                        printf("[UI] Octave Shift [-] -> %+d\n", g_octave_shift);
+                    } else if (ui_x >= 610 && ui_x < 650) {
+                        // [+] button
+                        if (g_octave_shift < 3) g_octave_shift++;
+                        printf("[UI] Octave Shift [+] -> %+d\n", g_octave_shift);
+                    } else if (ui_x >= 566 && ui_x < 610) {
+                        // Center badge tap -> Reset to 0
+                        g_octave_shift = 0;
+                        printf("[UI] Octave Shift Reset -> 0\n");
+                    }
+                }
+
                 // 2. Q-Link Knobs (Vertical Drag or Tap)
                 for (int k = 0; k < 4; ++k) {
                     int kx = 50 + (k % 2) * 190;
-                    int ky = 200 + (k / 2) * 130;
+                    int ky = 190 + (k / 2) * 130;
                     if (ui_x >= kx && ui_x < kx + 160 && ui_y >= ky && ui_y < ky + 100) {
                         int val = 100 - ((ui_y - ky - 10) * 100 / 80);
                         if (val < 0) val = 0;
@@ -1274,15 +1469,21 @@ static void* touch_thread_func(void* arg) {
                     int kb_note = get_keyboard_note_at(ui_x, ui_y);
                     if (kb_note != -1) {
                         if (slot->last_note != kb_note || slot->last_src != NOTE_SRC_KEYBED) {
-                            if (slot->last_note != -1) synth_note_off(&g_synth, slot->last_note, slot->last_src);
-                            synth_note_on(&g_synth, kb_note, 105, NOTE_SRC_KEYBED);
+                            if (slot->last_note != -1) {
+                                int old_sound = slot->last_note + (g_octave_shift * 12);
+                                synth_note_off_transposed(&g_synth, old_sound, slot->last_note, slot->last_src);
+                            }
+                            int sound_pitch = kb_note + (g_octave_shift * 12);
+                            synth_note_on_transposed(&g_synth, sound_pitch, kb_note, 105, NOTE_SRC_KEYBED);
                             slot->last_note = kb_note;
                             slot->last_src = NOTE_SRC_KEYBED;
                         }
                     } else {
                         // Background / non-note area
                         if (slot->last_note != -1) {
-                            synth_note_off(&g_synth, slot->last_note, slot->last_src);
+                            int old_sound = (slot->last_src == NOTE_SRC_KEYBED) ?
+                                            (slot->last_note + (g_octave_shift * 12)) : slot->last_note;
+                            synth_note_off_transposed(&g_synth, old_sound, slot->last_note, slot->last_src);
                             slot->last_note = -1;
                             slot->last_src = NOTE_SRC_NONE;
                         }
@@ -1300,10 +1501,28 @@ static void* touch_thread_func(void* arg) {
 // Hardware RawMIDI Thread (reads hw:0,0,0, hw:0,0,1, hw:0,0,2)
 // -------------------------------------------------------------
 typedef struct {
-    snd_rawmidi_t *in0, *in1, *in2, *out2;
+    snd_rawmidi_t *in0, *in1, *in2;
+    snd_rawmidi_t *out0, *out1, *out2;
 } MidiCtx;
 
-static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port) {
+static void send_hardware_led(snd_rawmidi_t* out, int note, int val) {
+    if (!out) return;
+    uint8_t msg[3] = { (uint8_t)0x90, (uint8_t)note, (uint8_t)val };
+    snd_rawmidi_write(out, msg, 3);
+}
+
+static void update_hardware_leds(MidiCtx* ctx) {
+    if (!ctx || !ctx->out1) return;
+    send_hardware_led(ctx->out1, 82, g_is_playing ? 127 : 0);
+    send_hardware_led(ctx->out1, 81, (!g_is_playing && !g_is_recording) ? 127 : 0);
+    send_hardware_led(ctx->out1, 73, g_is_recording ? 127 : 0);
+    send_hardware_led(ctx->out1, 7, (g_octave_shift < 0) ? 127 : 0);
+    send_hardware_led(ctx->out1, 10, (g_octave_shift > 0) ? 127 : 0);
+    send_hardware_led(ctx->out1, 39, g_full_level ? 127 : 0);
+    send_hardware_led(ctx->out1, 40, g_16_levels ? 127 : 0);
+}
+
+static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port, MidiCtx* ctx) {
     for (ssize_t i = 0; i < n; ++i) {
         uint8_t b = buf[i];
         if ((b & 0xF0) == 0x90 && (i + 2 < n)) {
@@ -1316,44 +1535,197 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port) {
                 g_knob_touched[k] = (vel > 0);
                 printf("[Q-LINK] Knob %d Touch: %s (ch=%d vel=%d)\n", k + 1, (vel > 0) ? "TOUCHED" : "RELEASED", ch, vel);
             }
-            // 2. Physical Transport Buttons on Akai Control Surface (Port 1)
-            else if (port == 1 && (note == 118 || note == 80)) {
-                if (vel > 0) g_is_playing = true;
-                printf("[HARDWARE-BUTTON] PLAY (Note %d)\n", note);
-            } else if (port == 1 && (note == 117 || note == 81)) {
-                if (vel > 0) { g_is_playing = false; g_is_recording = false; }
-                printf("[HARDWARE-BUTTON] STOP (Note %d)\n", note);
-            } else if (port == 1 && (note == 119 || note == 82)) {
-                if (vel > 0) g_is_recording = !g_is_recording;
-                printf("[HARDWARE-BUTTON] REC (Note %d) -> %s\n", note, g_is_recording ? "ON" : "OFF");
-            } else if (port == 1 && note == 35) {
-                printf("[HARDWARE-BUTTON] TAP TEMPO (Note 35)\n");
+            // 2. Hardware Octave Buttons on Akai MPC Key 61 (Note 7 = Down, Note 10 = Up)
+            else if (port == 1 && ch == 0 && note == 7) {
+                if (vel > 0) {
+                    g_octave_down_held = true;
+                    if (g_octave_up_held) {
+                        g_octave_shift = 0; // Both held = reset to 0
+                    } else if (g_octave_shift > -3) {
+                        g_octave_shift--;
+                    }
+                    printf("[KEYBED] OCTAVE DOWN (Note 7) -> Shift: %+d octaves\n", g_octave_shift);
+                    update_hardware_leds(ctx);
+                } else {
+                    g_octave_down_held = false;
+                }
+            } else if (port == 1 && ch == 0 && note == 10) {
+                if (vel > 0) {
+                    g_octave_up_held = true;
+                    if (g_octave_down_held) {
+                        g_octave_shift = 0; // Both held = reset to 0
+                    } else if (g_octave_shift < 3) {
+                        g_octave_shift++;
+                    }
+                    printf("[KEYBED] OCTAVE UP (Note 10) -> Shift: %+d octaves\n", g_octave_shift);
+                    update_hardware_leds(ctx);
+                } else {
+                    g_octave_up_held = false;
+                }
             }
-            // 3. Musical Keys and Pads
+            // 3. Transport Buttons
+            else if (port == 1 && (note == 81 || note == 117)) { // STOP
+                if (vel > 0) {
+                    g_is_playing = false;
+                    g_is_recording = false;
+                    printf("[HARDWARE-BUTTON] STOP (Note %d)\n", note);
+                    update_hardware_leds(ctx);
+                }
+            } else if (port == 1 && (note == 82 || note == 118)) { // PLAY
+                if (vel > 0) {
+                    g_is_playing = true;
+                    printf("[HARDWARE-BUTTON] PLAY (Note %d)\n", note);
+                    update_hardware_leds(ctx);
+                }
+            } else if (port == 1 && note == 83) { // PLAY START
+                if (vel > 0) {
+                    g_is_playing = true;
+                    printf("[HARDWARE-BUTTON] PLAY START (Note %d)\n", note);
+                    update_hardware_leds(ctx);
+                }
+            } else if (port == 1 && (note == 73 || note == 119)) { // REC
+                if (vel > 0) {
+                    g_is_recording = !g_is_recording;
+                    if (g_is_recording) g_is_playing = true;
+                    printf("[HARDWARE-BUTTON] REC (Note %d) -> %s\n", note, g_is_recording ? "ON" : "OFF");
+                    update_hardware_leds(ctx);
+                }
+            } else if (port == 1 && (note == 80 || note == 116)) { // OVERDUB
+                if (vel > 0) {
+                    g_is_overdub = !g_is_overdub;
+                    printf("[HARDWARE-BUTTON] OVERDUB (Note %d) -> %s\n", note, g_is_overdub ? "ON" : "OFF");
+                }
+            }
+            // 4. Tap Tempo
+            else if (port == 1 && (note == 53 || note == 35) && (ch == 15 || ch == 0)) {
+                if (vel > 0) {
+                    struct timespec ts;
+                    clock_gettime(CLOCK_MONOTONIC, &ts);
+                    uint64_t now_ms = (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+                    if (g_last_tap_time_ms > 0) {
+                        uint64_t dt = now_ms - g_last_tap_time_ms;
+                        if (dt >= 200 && dt <= 2500) {
+                            float new_bpm = 60000.0f / (float)dt;
+                            if (new_bpm >= 30.0f && new_bpm <= 300.0f) g_bpm = new_bpm;
+                        }
+                    }
+                    g_last_tap_time_ms = now_ms;
+                    g_tap_tempo_flash = 10;
+                    printf("[HARDWARE-BUTTON] TAP TEMPO (Note %d) -> BPM: %.1f\n", note, g_bpm);
+                }
+            }
+            // 5. Volume +/- Buttons (Notes 54 & 55)
+            else if (port == 1 && note == 54) { // PLUS (+)
+                if (vel > 0) {
+                    g_master_volume = fminf(1.0f, g_master_volume + 0.05f);
+                    printf("[HARDWARE-BUTTON] PLUS (+) -> Vol: %.0f%%\n", g_master_volume * 100.0f);
+                }
+            } else if (port == 1 && note == 55) { // MINUS (-)
+                if (vel > 0) {
+                    g_master_volume = fmaxf(0.0f, g_master_volume - 0.05f);
+                    printf("[HARDWARE-BUTTON] MINUS (-) -> Vol: %.0f%%\n", g_master_volume * 100.0f);
+                }
+            }
+            // 6. Undo / Erase
+            else if (port == 1 && (note == 67 || note == 20)) {
+                if (vel > 0) printf("[HARDWARE-BUTTON] UNDO (Note %d)\n", note);
+            } else if (port == 1 && (note == 9 || note == 21)) {
+                if (vel > 0) printf("[HARDWARE-BUTTON] ERASE (Note %d)\n", note);
+            }
+            // 7. Full Level / 16 Levels / Note Repeat
+            else if (port == 1 && note == 39) {
+                if (vel > 0) {
+                    g_full_level = !g_full_level;
+                    printf("[HARDWARE-BUTTON] FULL LEVEL -> %s\n", g_full_level ? "ON" : "OFF");
+                    update_hardware_leds(ctx);
+                }
+            } else if (port == 1 && (note == 40 || note == 59)) {
+                if (vel > 0) {
+                    g_16_levels = !g_16_levels;
+                    printf("[HARDWARE-BUTTON] 16 LEVELS -> %s\n", g_16_levels ? "ON" : "OFF");
+                    update_hardware_leds(ctx);
+                }
+            } else if (port == 1 && note == 11) {
+                if (vel > 0) {
+                    g_note_repeat = !g_note_repeat;
+                    printf("[HARDWARE-BUTTON] NOTE REPEAT -> %s\n", g_note_repeat ? "ON" : "OFF");
+                    update_hardware_leds(ctx);
+                }
+            }
+            // 8. Shift Button
+            else if (port == 1 && note == 49) {
+                g_shift_down = (vel > 0);
+                printf("[HARDWARE-BUTTON] SHIFT: %s\n", g_shift_down ? "DOWN" : "UP");
+            }
+            // 9. Data Wheel Click (ENTER, Note 111 / 0x6F)
+            else if (port == 1 && note == 111) {
+                if (vel > 0) printf("[HARDWARE-BUTTON] DATA WHEEL CLICK (ENTER)\n");
+            }
+            // 10. Musical Keys and Pads
             else {
                 NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
-                if (vel > 0) {
-                    synth_note_on(&g_synth, note, vel, src);
+                if (src == NOTE_SRC_KEYBED) {
+                    // Apply Octave Shift to physical keybed notes!
+                    int sound_pitch = note + (g_octave_shift * 12);
+                    if (sound_pitch < 0) sound_pitch = 0;
+                    if (sound_pitch > 127) sound_pitch = 127;
+                    if (vel > 0) {
+                        g_active_key_pitch[note] = sound_pitch;
+                        synth_note_on_transposed(&g_synth, sound_pitch, note, vel, NOTE_SRC_KEYBED);
+                    } else {
+                        synth_note_off_transposed(&g_synth, g_active_key_pitch[note], note, NOTE_SRC_KEYBED);
+                        g_active_key_pitch[note] = 0;
+                    }
+                    printf("[KEYBED-NOTE] PhysNote %d (%s) -> SoundNote %d (%s) Vel %d (OctShift %+d)\n",
+                           note, note_name(note), sound_pitch, note_name(sound_pitch), vel, g_octave_shift);
                 } else {
-                    synth_note_off(&g_synth, note, src);
+                    // MPC Drum Pads (Channel 9 / 10)
+                    if (vel > 0) {
+                        synth_note_on(&g_synth, note, g_full_level ? 127 : vel, NOTE_SRC_PAD);
+                    } else {
+                        synth_note_off(&g_synth, note, NOTE_SRC_PAD);
+                    }
+                    printf("[PAD-NOTE] Pad Note %d Vel %d\n", note, vel);
                 }
-                printf("[MIDI-NOTE] Port %d Ch %d Note %d Vel %d (%s)\n",
-                       port, ch, note, vel, (src == NOTE_SRC_PAD ? "PAD" : "KEY"));
             }
             i += 2;
         } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
             int ch = b & 0x0F;
             int note = buf[i+1];
 
+            // 1. Q-Link capacitive touch tops
             if (port == 1 && ch == 15 && (note >= 84 && note <= 87)) {
                 int k = note - 84;
                 g_knob_touched[k] = false;
                 printf("[Q-LINK] Knob %d Touch: RELEASED (ch=%d)\n", k + 1, ch);
-            } else if (port == 1 && (note == 117 || note == 118 || note == 119 || note == 80 || note == 81 || note == 82 || note == 35)) {
-                // Hardware button release - no musical note off needed
-            } else {
+            }
+            // 2. Hardware Octave buttons release
+            else if (port == 1 && ch == 0 && note == 7) {
+                g_octave_down_held = false;
+            } else if (port == 1 && ch == 0 && note == 10) {
+                g_octave_up_held = false;
+            }
+            // 3. Hardware control buttons release (ignore)
+            else if (port == 1 && (note == 81 || note == 82 || note == 83 || note == 73 || note == 80 ||
+                                   note == 117 || note == 118 || note == 119 || note == 116 ||
+                                   note == 53 || note == 35 || note == 54 || note == 55 ||
+                                   note == 67 || note == 20 || note == 9 || note == 21 ||
+                                   note == 39 || note == 40 || note == 59 || note == 11 ||
+                                   note == 49 || note == 111)) {
+                // Control button release - no musical note-off
+                if (note == 49) g_shift_down = false;
+            }
+            // 4. Musical Note-Off
+            else {
                 NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
-                synth_note_off(&g_synth, note, src);
+                if (src == NOTE_SRC_KEYBED) {
+                    int sound_pitch = g_active_key_pitch[note];
+                    if (sound_pitch == 0 && note != 0) sound_pitch = note + (g_octave_shift * 12);
+                    synth_note_off_transposed(&g_synth, sound_pitch, note, NOTE_SRC_KEYBED);
+                    g_active_key_pitch[note] = 0;
+                } else {
+                    synth_note_off(&g_synth, note, NOTE_SRC_PAD);
+                }
             }
             i += 2;
         } else if ((b & 0xF0) == 0xB0 && (i + 2 < n)) {
@@ -1367,6 +1739,15 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port) {
                 if (new_val > 100) new_val = 100;
                 g_knob_vals[k] = new_val;
                 printf("[Q-LINK] Knob %d (%s) -> %d%%\n", k + 1, (k==0?"CUTOFF":k==1?"RESONANCE":k==2?"ATTACK":"DECAY"), new_val);
+            } else if (cc_num == 60) {
+                // Data Wheel Rotary Jog (Relative 2's Complement delta)
+                int delta = (cc_val < 64) ? cc_val : (cc_val - 128);
+                g_master_volume = fminf(1.0f, fmaxf(0.0f, g_master_volume + (float)delta * 0.02f));
+                printf("[DATA-WHEEL] Delta %+d -> Master Volume: %.0f%%\n", delta, g_master_volume * 100.0f);
+            } else if (cc_num == 69) {
+                // Touch Strip (Continuous 0..127) -> Modulates Cutoff
+                g_knob_vals[0] = (cc_val * 100) / 127;
+                printf("[TOUCH-STRIP] Position %d -> Cutoff %d%%\n", cc_val, g_knob_vals[0]);
             } else {
                 synth_cc(&g_synth, cc_num, cc_val);
             }
@@ -1384,25 +1765,28 @@ static void* midi_thread_func(void* arg) {
     MidiCtx* ctx = (MidiCtx*)arg;
     uint8_t buf[256];
 
+    // Initial LED setup on hardware
+    update_hardware_leds(ctx);
+
     while (g_running) {
         if (ctx->in0) {
             ssize_t n = snd_rawmidi_read(ctx->in0, buf, sizeof(buf));
             if (n > 0) {
                 if (ctx->out2) snd_rawmidi_write(ctx->out2, buf, n);
-                handle_midi_packet(buf, n, 0);
+                handle_midi_packet(buf, n, 0, ctx);
             }
         }
         if (ctx->in1) {
             ssize_t n = snd_rawmidi_read(ctx->in1, buf, sizeof(buf));
             if (n > 0) {
                 if (ctx->out2) snd_rawmidi_write(ctx->out2, buf, n);
-                handle_midi_packet(buf, n, 1);
+                handle_midi_packet(buf, n, 1, ctx);
             }
         }
         if (ctx->in2) {
             ssize_t n = snd_rawmidi_read(ctx->in2, buf, sizeof(buf));
             if (n > 0) {
-                handle_midi_packet(buf, n, 2);
+                handle_midi_packet(buf, n, 2, ctx);
             }
         }
         usleep(1000);
@@ -1417,6 +1801,7 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, sig_handler);
 
     init_font();
+    detect_hardware();
 
     printf("===============================================================\n");
     printf("   KICK MPC KEY 61 - STANDALONE DAW GRAPHICAL APPLICATION      \n");
@@ -1478,7 +1863,7 @@ int main(int argc, char* argv[]) {
     }
 
     pthread_t m_thread;
-    MidiCtx mctx = { midi_in0, midi_in1, midi_in2, midi_out2 };
+    MidiCtx mctx = { midi_in0, midi_in1, midi_in2, midi_out0, midi_out1, midi_out2 };
     pthread_create(&m_thread, NULL, midi_thread_func, &mctx);
 
     // 4. Open Touchscreen Thread
