@@ -479,6 +479,15 @@ static void synth_cc(SynthEngine* s, int cc, int val) {
     } else if (cc == 7 || cc == 11) { // MIDI Volume / Expression
         g_master_volume = (float)val / 127.0f;
         printf("[MIDI] Master Volume CC%d -> %.0f%%\n", cc, g_master_volume * 100.0f);
+    } else if (cc == 69) { // Akai Touch Strip
+        g_knob_vals[0] = (val * 100) / 127;
+        printf("[TOUCH-STRIP] Position: %d -> Cutoff: %d%%\n", val, g_knob_vals[0]);
+    } else if (cc == 60) { // Akai Data Wheel (Relative Rotary Jog)
+        int delta = (val < 64) ? val : (val - 128);
+        g_master_volume += (float)delta * 0.02f;
+        if (g_master_volume < 0.0f) g_master_volume = 0.0f;
+        if (g_master_volume > 1.0f) g_master_volume = 1.0f;
+        printf("[DATA-DIAL] Jog Wheel Delta: %d -> Master Vol: %.0f%%\n", delta, g_master_volume * 100.0f);
     } else {
         printf("[MIDI] CC %d = %d\n", cc, val);
     }
@@ -1171,34 +1180,50 @@ static void* touch_thread_func(void* arg) {
                 raw_touch_to_ui(slot->raw_x, slot->raw_y, &ui_x, &ui_y);
                 slot->ui_x = ui_x;
                 slot->ui_y = ui_y;
+                printf("[TOUCH-RAW] Slot %d raw=(%d, %d) -> UI=(%d, %d)\n", s, slot->raw_x, slot->raw_y, ui_x, ui_y);
 
-                // 1. Transport Buttons & Master Volume Control
-                if (ui_y >= 14 && ui_y < 46) {
-                    if (ui_x >= 1060 && ui_x < 1120) {
+                // 1. Header Bar Controls (Transport & Master Volume) - Generous 0..75px hitbox!
+                if (ui_y >= 0 && ui_y < 75) {
+                    if (ui_x >= 1040 && ui_x < 1120) {
                         g_is_playing = true;
-                    } else if (ui_x >= 1130 && ui_x < 1190) {
+                        printf("[UI] PLAY Pressed\n");
+                    } else if (ui_x >= 1120 && ui_x < 1195) {
                         g_is_playing = false;
                         g_is_recording = false;
-                    } else if (ui_x >= 1200 && ui_x < 1260) {
+                        printf("[UI] STOP Pressed\n");
+                    } else if (ui_x >= 1195 && ui_x < 1270) {
                         g_is_recording = !g_is_recording;
                         if (g_is_recording) g_is_playing = true;
-                    } else if (ui_x >= 470 && ui_x < 508) {
+                        printf("[UI] REC Pressed: %s\n", g_is_recording ? "ON" : "OFF");
+                    } else if (ui_x >= 445 && ui_x < 510) {
                         // Volume [-] button
                         g_master_volume -= 0.05f;
                         if (g_master_volume < 0.0f) g_master_volume = 0.0f;
                         printf("[VOL] Master Volume: %.0f%%\n", g_master_volume * 100.0f);
-                    } else if (ui_x >= 610 && ui_x < 645) {
+                    } else if (ui_x >= 610 && ui_x < 685) {
                         // Volume [+] button
                         g_master_volume += 0.05f;
                         if (g_master_volume > 1.0f) g_master_volume = 1.0f;
                         printf("[VOL] Master Volume: %.0f%%\n", g_master_volume * 100.0f);
-                    } else if (ui_x >= 508 && ui_x < 610) {
+                    } else if (ui_x >= 510 && ui_x < 610) {
                         // Volume slider bar direct touch/drag
                         float new_vol = (float)(ui_x - 512) / 95.0f;
                         if (new_vol < 0.0f) new_vol = 0.0f;
                         if (new_vol > 1.0f) new_vol = 1.0f;
                         g_master_volume = new_vol;
                     }
+                }
+
+                // 1b. Left Inspector Panel Volume Badge Touch
+                if (ui_x >= 180 && ui_x < 370 && ui_y >= 165 && ui_y < 200) {
+                    if (ui_x < 275) {
+                        g_master_volume -= 0.05f;
+                        if (g_master_volume < 0.0f) g_master_volume = 0.0f;
+                    } else {
+                        g_master_volume += 0.05f;
+                        if (g_master_volume > 1.0f) g_master_volume = 1.0f;
+                    }
+                    printf("[VOL] Inspector Tap -> Master Volume: %.0f%%\n", g_master_volume * 100.0f);
                 }
 
                 // 2. Q-Link Knobs (Vertical Drag or Tap)
@@ -1263,12 +1288,27 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port) {
             int ch = b & 0x0F;
             int note = buf[i+1], vel = buf[i+2];
 
-            // Q-Link capacitive touch tops on Port 1 send notes 84..87 (non-drum ch)
+            // 1. Q-Link capacitive touch tops on Port 1 (notes 84..87, ch != 9)
             if (port == 1 && ch != 9 && (note >= 84 && note <= 87)) {
                 int k = note - 84;
                 g_knob_touched[k] = (vel > 0);
                 printf("[Q-LINK] Knob %d Touch: %s (ch=%d vel=%d)\n", k + 1, (vel > 0) ? "TOUCHED" : "RELEASED", ch, vel);
-            } else {
+            }
+            // 2. Physical Transport Buttons on Akai Control Surface (Port 1)
+            else if (port == 1 && (note == 118 || note == 80)) {
+                if (vel > 0) g_is_playing = true;
+                printf("[HARDWARE-BUTTON] PLAY (Note %d)\n", note);
+            } else if (port == 1 && (note == 117 || note == 81)) {
+                if (vel > 0) { g_is_playing = false; g_is_recording = false; }
+                printf("[HARDWARE-BUTTON] STOP (Note %d)\n", note);
+            } else if (port == 1 && (note == 119 || note == 82)) {
+                if (vel > 0) g_is_recording = !g_is_recording;
+                printf("[HARDWARE-BUTTON] REC (Note %d) -> %s\n", note, g_is_recording ? "ON" : "OFF");
+            } else if (port == 1 && note == 35) {
+                printf("[HARDWARE-BUTTON] TAP TEMPO (Note 35)\n");
+            }
+            // 3. Musical Keys and Pads
+            else {
                 NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
                 if (vel > 0) {
                     synth_note_on(&g_synth, note, vel, src);
@@ -1287,6 +1327,8 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port) {
                 int k = note - 84;
                 g_knob_touched[k] = false;
                 printf("[Q-LINK] Knob %d Touch: RELEASED (ch=%d)\n", k + 1, ch);
+            } else if (port == 1 && (note == 117 || note == 118 || note == 119 || note == 80 || note == 81 || note == 82 || note == 35)) {
+                // Hardware button release - no musical note off needed
             } else {
                 NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
                 synth_note_off(&g_synth, note, src);
@@ -1306,6 +1348,11 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port) {
             } else {
                 synth_cc(&g_synth, cc_num, cc_val);
             }
+            i += 2;
+        } else if ((b & 0xF0) == 0xE0 && (i + 2 < n)) {
+            int lsb = buf[i+1], msb = buf[i+2];
+            int pb_val = (msb << 7) | lsb;
+            printf("[PITCH-BEND] Port %d Ch %d Value: %d\n", port, b & 0x0F, pb_val);
             i += 2;
         }
     }
