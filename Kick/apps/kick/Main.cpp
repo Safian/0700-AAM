@@ -24,6 +24,9 @@
 #include "kick_device_adapter.h"
 #include "kick_audio_engine_adapter.h"
 #include "kick_audio_interface.h"
+#if JUCE_MAC
+ #include "kick_hardware_chassis.h"
+#endif
 #if KICK_APP_SMOKE_TEST
  #include "../../tests/platform/AppSmoke.h"
 #endif
@@ -153,9 +156,11 @@ public:
         // Initialize User Interface...
         w = std::make_unique<HomeWindow>( getApplicationName() );
 
+#if ! JUCE_MAC
         // Title bar ...
         w->setUsingNativeTitleBar( false );
         w->setTitleBarHeight( 0 );
+#endif
 
 #if defined( ENABLE_X11_FULLSCREEN ) && ( 0 < ENABLE_X11_FULLSCREEN )
     #if( JUCE_LINUX || __linux__ )
@@ -164,6 +169,7 @@ public:
     #endif
 #endif
 
+#if ! JUCE_MAC
         // Dimension ...
         juce::Rectangle<int> bounds  = ui::layout::screen;
         auto&                display = juce::Desktop::getInstance().getDisplays();
@@ -174,6 +180,7 @@ public:
 
         // Position ...
         w->setTopLeftPosition( 0, 0 );
+#endif
 
         // Visibility...
         w->setVisible(!smoke);
@@ -189,6 +196,13 @@ public:
             if (error.isNotEmpty()) {
                 std::cerr << "FAIL: " << error << std::endl;
                 setApplicationReturnValue(3);
+            }
+#endif
+#if JUCE_MAC
+            if (juce::SystemStats::getEnvironmentVariable("KICK_TEST_DISPLAY_ONLY", {}).isNotEmpty())
+            {
+                if (auto* hw = dynamic_cast<HomeWindow*>(w.get()))
+                    hw->setViewMode(kick_mac::KickHardwareChassis::ViewMode::DisplayOnly);
             }
 #endif
             const auto path = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SNAPSHOT", {});
@@ -246,6 +260,212 @@ public:
 
     //==============================================================================
     // This class implements the desktop window that contains an instance of our MainComponent class.
+#if JUCE_MAC
+    class HomeWindow : public juce::DocumentWindow, public juce::KeyListener
+    {
+    public:
+        explicit HomeWindow( const juce::String& name )
+            : juce::DocumentWindow( name, juce::Colours::black, juce::DocumentWindow::allButtons )
+        {
+            setUsingNativeTitleBar( true );
+            setResizable( true, true );
+
+            chassisComponent = std::make_unique<kick_mac::KickHardwareChassis>();
+            setContentNonOwned( chassisComponent.get(), false );
+
+            addKeyListener( this );
+
+            menuModel = std::make_unique<kick_mac::KickMacMenuModel>( [this]( int cmd ) {
+                handleMenuCommand( cmd );
+            } );
+            juce::MenuBarModel::setMacMainMenu( menuModel.get() );
+
+            // Start in Hardware Chassis view by default
+            setViewMode( kick_mac::KickHardwareChassis::ViewMode::HardwareChassis );
+        }
+
+        ~HomeWindow() override
+        {
+            removeKeyListener( this );
+            juce::MenuBarModel::setMacMainMenu( nullptr );
+            menuModel.reset();
+            clearContentComponent();
+            chassisComponent.reset();
+        }
+
+        void closeButtonPressed() override
+        {
+            juce::JUCEApplication::getInstance()->systemRequestedQuit();
+        }
+
+        void inputAttemptWhenModal() override
+        {
+            auto numModal = getNumCurrentlyModalComponents();
+            auto index    = juce::jmax( 0, numModal - 1 );
+            if( auto p = getCurrentlyModalComponent( index ) )
+                p->toFront( true );
+        }
+
+        void handleMenuCommand( int cmd )
+        {
+            switch( cmd )
+            {
+                case kick_mac::KickMacMenuModel::idHardwareView:
+                    setViewMode( kick_mac::KickHardwareChassis::ViewMode::HardwareChassis );
+                    break;
+                case kick_mac::KickMacMenuModel::idDisplayOnlyView:
+                    setViewMode( kick_mac::KickHardwareChassis::ViewMode::DisplayOnly );
+                    break;
+                case kick_mac::KickMacMenuModel::idToggleView:
+                    toggleViewMode();
+                    break;
+                case kick_mac::KickMacMenuModel::idScale100:
+                    setWindowScale( 1.0f );
+                    break;
+                case kick_mac::KickMacMenuModel::idScale120:
+                    setWindowScale( 1.2f );
+                    break;
+                case kick_mac::KickMacMenuModel::idScale140:
+                    setWindowScale( 1.4f );
+                    break;
+                case kick_mac::KickMacMenuModel::idScaleFit:
+                    fitToScreen();
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        void toggleViewMode()
+        {
+            if( chassisComponent == nullptr ) return;
+            auto nextMode = ( chassisComponent->getViewMode() == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis )
+                                ? kick_mac::KickHardwareChassis::ViewMode::DisplayOnly
+                                : kick_mac::KickHardwareChassis::ViewMode::HardwareChassis;
+            setViewMode( nextMode );
+        }
+
+        void setViewMode( kick_mac::KickHardwareChassis::ViewMode mode )
+        {
+            if( chassisComponent == nullptr ) return;
+
+            chassisComponent->setViewMode( mode );
+
+            if( mode == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis )
+            {
+                getConstrainer()->setFixedAspectRatio( 700.0 / 710.0 );
+                setResizeLimits( 500, 507, 1600, 1622 );
+
+                auto userArea = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
+                int targetH = juce::jmin( 852, (int)( userArea.getHeight() * 0.90f ) );
+                int targetW = (int)std::round( targetH * ( 700.0f / 710.0f ) );
+                setContentComponentSize( targetW, targetH );
+                centreWithSize( getWidth(), getHeight() );
+                setName( juce::String::fromUTF8( "Behringer Kick - Hardver nézet" ) );
+            }
+            else
+            {
+                getConstrainer()->setFixedAspectRatio( 1024.0 / 600.0 );
+                setResizeLimits( 512, 300, 2048, 1200 );
+
+                setContentComponentSize( 1024, 600 );
+                centreWithSize( getWidth(), getHeight() );
+                setName( juce::String::fromUTF8( "Behringer Kick - Kijelző nézet" ) );
+            }
+
+            if( menuModel != nullptr )
+            {
+                menuModel->setHardwareViewActive( mode == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis );
+            }
+        }
+
+        void setWindowScale( float scaleFactor )
+        {
+            if( chassisComponent == nullptr ) return;
+            if( chassisComponent->getViewMode() == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis )
+            {
+                int w = (int)std::round( 700.0f * scaleFactor );
+                int h = (int)std::round( 710.0f * scaleFactor );
+                setContentComponentSize( w, h );
+                centreWithSize( getWidth(), getHeight() );
+            }
+            else
+            {
+                int w = (int)std::round( 1024.0f * scaleFactor );
+                int h = (int)std::round( 600.0f * scaleFactor );
+                setContentComponentSize( w, h );
+                centreWithSize( getWidth(), getHeight() );
+            }
+        }
+
+        void fitToScreen()
+        {
+            if( chassisComponent == nullptr ) return;
+            auto userArea = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
+            if( chassisComponent->getViewMode() == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis )
+            {
+                int maxH = (int)( userArea.getHeight() * 0.92f );
+                int maxW = (int)( userArea.getWidth() * 0.92f );
+                float scale = juce::jmin( (float)maxW / 700.0f, (float)maxH / 710.0f );
+                int w = (int)std::round( 700.0f * scale );
+                int h = (int)std::round( 710.0f * scale );
+                setContentComponentSize( w, h );
+                centreWithSize( getWidth(), getHeight() );
+            }
+            else
+            {
+                int maxH = (int)( userArea.getHeight() * 0.92f );
+                int maxW = (int)( userArea.getWidth() * 0.92f );
+                float scale = juce::jmin( (float)maxW / 1024.0f, (float)maxH / 600.0f );
+                int w = (int)std::round( 1024.0f * scale );
+                int h = (int)std::round( 600.0f * scale );
+                setContentComponentSize( w, h );
+                centreWithSize( getWidth(), getHeight() );
+            }
+        }
+
+        bool handleKeyPress( const juce::KeyPress& key )
+        {
+            // Cmd+1 or F1 -> Hardware Chassis View
+            if( ( key.isKeyCode( '1' ) && key.getModifiers().isCommandDown() ) || key.isKeyCode( juce::KeyPress::F1Key ) )
+            {
+                setViewMode( kick_mac::KickHardwareChassis::ViewMode::HardwareChassis );
+                return true;
+            }
+
+            // Cmd+2 or F2 -> Display Only View
+            if( ( key.isKeyCode( '2' ) && key.getModifiers().isCommandDown() ) || key.isKeyCode( juce::KeyPress::F2Key ) )
+            {
+                setViewMode( kick_mac::KickHardwareChassis::ViewMode::DisplayOnly );
+                return true;
+            }
+
+            // F5 -> Toggle View
+            if( key.isKeyCode( juce::KeyPress::F5Key ) )
+            {
+                toggleViewMode();
+                return true;
+            }
+
+            return false;
+        }
+
+        bool keyPressed( const juce::KeyPress& key ) override
+        {
+            if( handleKeyPress( key ) ) return true;
+            return juce::DocumentWindow::keyPressed( key );
+        }
+
+        bool keyPressed( const juce::KeyPress& key, juce::Component* /*originatingComponent*/ ) override
+        {
+            return handleKeyPress( key );
+        }
+
+    private:
+        std::unique_ptr<kick_mac::KickHardwareChassis> chassisComponent;
+        std::unique_ptr<kick_mac::KickMacMenuModel>    menuModel;
+    };
+#else
     class HomeWindow : public juce::DocumentWindow
     {
     public:
@@ -271,6 +491,7 @@ public:
                 p->toFront( true );
         }
     };
+#endif
 
 private:
     std::unique_ptr<juce::DocumentWindow> w;
