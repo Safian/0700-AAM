@@ -42,6 +42,10 @@ team ID is `8R7QAX93QJ`. Simulator results are not evidence for audio timing –
 
 ## Known state
 - Branch `feat/mobile-slideout-ui`: macOS `Kick` target builds and starts. Other targets, tests, hardware and iOS unverified.
+- iOS simulator (Xcode 27.1 SDK): `Kick` target builds, but the app exits at launch with
+  "UIScene life cycle is required" (log: `xcrun simctl spawn <dev> log show --predicate 'process == "Kick"'`).
+  JUCE 7.0.12 uses the legacy single-window `UIApplicationDelegate`; fix needs a JUCE version with UIScene
+  support (check JUCE 8 release notes; the multitouch patch is pinned to 7.0.12) or a custom scene delegate.
 - Missing from the release: factory samples, Myriad Pro font, `juce_serialport`.
 
 ## Git
