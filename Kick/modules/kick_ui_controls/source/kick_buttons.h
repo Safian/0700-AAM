@@ -134,8 +134,21 @@ namespace ui
         std::function<void( int )> onMouseDown;
         explicit KickTextEditor( const juce::String& value = "" );
 
+        bool keyPressed( const juce::KeyPress& key ) override
+        {
+            if( key == juce::KeyPress::returnKey )
+            {
+                if( onReturnKey )
+                {
+                    onReturnKey();
+                    return true;
+                }
+            }
+            return juce::TextEditor::keyPressed( key );
+        }
+
     private:
-        void mouseDown( const juce::MouseEvent& e )
+        void mouseDown( const juce::MouseEvent& e ) override
         {
             juce::TextEditor::mouseDown( e );
             if( onMouseDown ) onMouseDown( getID() );

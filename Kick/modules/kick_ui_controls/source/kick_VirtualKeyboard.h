@@ -72,6 +72,7 @@ namespace ui
         SpecialSymbols           speSym;
         UpperCaseLetterComponent upperCaseComp;
         KickTextEditor           inputTextLabel;
+        KickButton               createButton{ "CREATE" };
 
         void resized() override;
 

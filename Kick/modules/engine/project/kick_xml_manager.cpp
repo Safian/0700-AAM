@@ -20,6 +20,7 @@
  */
 
 #include "kick_xml_manager.h"
+#include "common/common.h"
 
 namespace {
 // Never hold the document lock while waiting for the message thread. Project
@@ -114,6 +115,36 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
     }
     const juce::ScopedLock guard(lock);
     if (!vt.isValid()) return failSave("No valid project document to save", reason);
+
+    // Read-only projects (such as factory demos and templates shipped in the read-only application bundle)
+    // cannot and should not be saved over. Autosave and Close must succeed cleanly without writing or failing.
+    bool isReadOnlyLocation = false;
+#if defined( JUCE_IOS )
+    const auto bundleDir = juce::File::getSpecialLocation( juce::File::currentApplicationFile );
+    if (bundleDir.exists() && xmlFile.isAChildOf( bundleDir ))
+        isReadOnlyLocation = true;
+#endif
+    if (!isReadOnlyLocation && (!xmlFile.hasWriteAccess() || (xmlFile.getParentDirectory().exists() && !xmlFile.getParentDirectory().hasWriteAccess())))
+        isReadOnlyLocation = true;
+
+    const auto demosDir = getAppDirs( MTDemos );
+    if (!isReadOnlyLocation && demosDir.exists() && xmlFile.isAChildOf( demosDir ))
+        isReadOnlyLocation = true;
+
+    const auto tempDir = getAppDirs( MTTemp );
+    if (!isReadOnlyLocation && tempDir.exists() && xmlFile.isAChildOf( tempDir ))
+        isReadOnlyLocation = true;
+
+    if (isReadOnlyLocation) {
+        if (reason == SaveReason::Autosave || reason == SaveReason::Close) {
+            lastSaveError.clear();
+            dirty.store(false);
+            if (onDirtyChanged) onDirtyChanged(false);
+            return true;
+        }
+        return failSave("Cannot save over factory demo/template. Please use Save As to a project folder.", reason);
+    }
+
     const auto xml = vt.toXmlString();
     if (xmlFile.loadFileAsString() != xml) {
         juce::TemporaryFile temporary(xmlFile);

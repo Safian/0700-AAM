@@ -439,14 +439,24 @@ namespace ui
 #if !(JUCE_IOS || JUCE_ANDROID)
         mt::utils::addChildComponents( this, inputTextLabel, letterComp, numComp, speSym, upperCaseComp );
 #else
-        mt::utils::addChildComponents( this, inputTextLabel );
+        mt::utils::addChildComponents( this, inputTextLabel, createButton );
+        createButton.setColours(
+            juce::Colour( 0xffffffff ),
+            juce::Colour( 0xff00d4ff ),
+            juce::Colour( 0xff008855 ),
+            1
+        );
+        createButton.setCornerRadius( 6.0f );
+        createButton.onClick = [this]() {
+            close();
+        };
 #endif
 
         setInterceptsMouseClicks( false, true );
         setBufferedToImage( true );
 
 #if JUCE_IOS || JUCE_ANDROID
-        juce::Font fnt( 26.f );
+        juce::Font fnt( 24.f );
 #else
         juce::Font fnt( 36.f );
 #endif
@@ -462,6 +472,8 @@ namespace ui
         inputTextLabel.setFocusContainerType( juce::Component::FocusContainerType::focusContainer );
         inputTextLabel.setJustification( juce::Justification::centredLeft );
 #if JUCE_IOS || JUCE_ANDROID
+        inputTextLabel.setMultiLine( false );
+        inputTextLabel.setReturnKeyStartsNewLine( false );
         inputTextLabel.setKeyboardType( juce::TextInputTarget::textKeyboard );
 #endif
 
@@ -544,18 +556,34 @@ namespace ui
     {
         showKeyboard( KeyboardType );
 #if JUCE_IOS || JUCE_ANDROID
-        inputTextLabel.setFont( juce::Font( 26.0f ) );
+        juce::String btnText = ( Title.containsIgnoreCase( "CREATE" ) || Title.containsIgnoreCase( "NEW" ) ) ? "CREATE" : "APPLY";
+        createButton.setButtonText( btnText );
+        createButton.setVisible( true );
+
+        inputTextLabel.setFont( juce::Font( 24.0f ) );
+        inputTextLabel.setMultiLine( false );
+        inputTextLabel.setReturnKeyStartsNewLine( false );
         inputTextLabel.setKeyboardType( juce::TextInputTarget::textKeyboard );
+
         inputTextLabel.onReturnKey = [this]() {
             close();
         };
         inputTextLabel.onEscapeKey = [this]() {
-            mt::utils::exitDialog( this, UI::CANCEL );
+            mt::utils::exitDialog( this, UI::BUTTONS::CANCEL );
+        };
+        inputTextLabel.onTextChange = [this]() {
+            auto raw = inputTextLabel.getText();
+            if( raw.containsChar( '\n' ) || raw.containsChar( '\r' ) )
+            {
+                auto clean = raw.replace( "\n", "" ).replace( "\r", "" ).trim();
+                inputTextLabel.setText( clean, juce::dontSendNotification );
+                close();
+            }
         };
 
-        // Compact dialog bounds on mobile to sit above the native on-screen keyboard
-        juce::Rectangle<int> mobileBounds( 0, 0, 600, 180 );
-        mt::utils::showOptions( Title, this, std::forward<std::function<void( int )>>( Callback ), mobileBounds );
+        // Compact dialog bounds on mobile sitting above the native keyboard: 600 x 115
+        juce::Rectangle<int> mobileBounds( 0, 0, 600, 115 );
+        mt::utils::showDialog( Title, this, std::forward<std::function<void( int )>>( Callback ), mobileBounds );
 
         juce::Timer::callAfterDelay( 120, [this]() {
             inputTextLabel.grabKeyboardFocus();
@@ -568,16 +596,18 @@ namespace ui
 
     void KickVirtualKeyBoard::close()
     {
-        auto* comp = getCurrentlyFocusedComponent();
-        if( comp == nullptr )
-            comp = this;
-        mt::utils::exitDialog( comp, UI::APPLY );
+        auto cleanText = inputTextLabel.getText().replace( "\n", "" ).replace( "\r", "" ).trim();
+        inputTextLabel.setText( cleanText, juce::dontSendNotification );
+        mt::utils::exitDialog( this, UI::BUTTONS::APPLY );
     }
 
     void KickVirtualKeyBoard::resized()
     {
 #if JUCE_IOS || JUCE_ANDROID
-        auto b = getLocalBounds().reduced( 16, 12 );
+        auto b = getLocalBounds().reduced( 8, 8 );
+        auto btnW = 120;
+        createButton.setBounds( b.removeFromRight( btnW ) );
+        b.removeFromRight( 10 );
         inputTextLabel.setBounds( b );
 #else
         auto b = getLocalBounds().reduced( compSpaceAround );
