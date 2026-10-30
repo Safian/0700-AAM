@@ -24,6 +24,23 @@ target_compile_definitions(kick-keyboard-tests PRIVATE KICK_DESKTOP_KEYBOARD=1 K
 add_test(NAME kick-keyboard COMMAND kick-keyboard-tests)
 set_tests_properties(kick-keyboard PROPERTIES TIMEOUT 10)
 
+add_library(kick-mock-clap-synth MODULE MockClapSynth.cpp)
+target_include_directories(kick-mock-clap-synth PRIVATE ../../clap_host/third_party/clap/include)
+set_target_properties(kick-mock-clap-synth PROPERTIES PREFIX "" SUFFIX ".clap")
+
+add_executable(kick-clap-processor-tests
+    ClapInstrumentProcessorTests.cpp
+    ../../../AudIO/processors/ClapInstrumentProcessor.cpp
+)
+target_include_directories(kick-clap-processor-tests PRIVATE
+    ../../../AudIO/processors
+    ../../clap_host/third_party/clap/include
+)
+target_link_libraries(kick-clap-processor-tests PRIVATE ${CMAKE_DL_LIBS})
+add_dependencies(kick-clap-processor-tests kick-mock-clap-synth)
+add_test(NAME kick-clap-processor COMMAND kick-clap-processor-tests $<TARGET_FILE:kick-mock-clap-synth>)
+set_tests_properties(kick-clap-processor PROPERTIES TIMEOUT 10)
+
 if(NOT TARGET AudIO_juce)
     include("${CMAKE_CURRENT_SOURCE_DIR}/../../../AudIO/juce_modules.cmake")
 endif()
