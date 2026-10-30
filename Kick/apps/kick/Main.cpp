@@ -173,11 +173,11 @@ public:
 
 #if ! JUCE_MAC
         // Dimension ...
-        juce::Rectangle<int> bounds  = ui::layout::screen;
-        auto&                display = juce::Desktop::getInstance().getDisplays();
-        //bounds = display.findDisplayForRect( w->getBounds() ).totalArea;
-        //bounds = display.getPrimaryDisplay()->totalArea;
-        //bounds = display.logicalToPhysical( ui::layout::screen, nullptr );
+        juce::Rectangle<int> bounds = ui::layout::screen;
+#if JUCE_IOS
+        if( auto* primary = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay() )
+            bounds = primary->userArea;
+#endif
         w->setBounds( bounds );
 
         // Position ...

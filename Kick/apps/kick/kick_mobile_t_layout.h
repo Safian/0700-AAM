@@ -437,6 +437,9 @@ public:
         // Listen for gestures and touches across entire layout
         addMouseListener( this, true );
 
+        getSnapTarget( targetState, currentCamX, currentCamY );
+        hasInitializedCamera = true;
+
         startTimerHz( 60 );
     }
 
@@ -472,6 +475,11 @@ public:
 
     void resized() override
     {
+        if( !isUserDragging )
+        {
+            getSnapTarget( targetState, currentCamX, currentCamY );
+            hasInitializedCamera = true;
+        }
         updateLayout();
     }
 
@@ -1088,6 +1096,7 @@ private:
 
     PanelState targetState{ PanelState::DAW };
     PanelState dragStartState{ PanelState::DAW };
+    bool       hasInitializedCamera{ false };
 
     float currentCamX{ 0.0f };
     float currentCamY{ 0.0f };
