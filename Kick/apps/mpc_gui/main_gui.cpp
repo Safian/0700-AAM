@@ -48,28 +48,24 @@
 #define COLOR_PAD_ACTIVE 0x00FF8800
 
 typedef struct {
-    int note;
-    float velocity;
-    float phase1;
-    float phase2;
-    float phase3;
-    float phase4;
-    float freq;
-    float env;
-    float attack_env;
-    float hammer_env;
-    float decay_rate;
-    float filter_state;
-    bool active;
-    bool releasing;
-} Voice;
-
-typedef struct {
     float* data_l;
     float* data_r;
     size_t num_frames;
-    char name[24];
+    char name[64];
 } WavSample;
+
+typedef struct {
+    int note;
+    float velocity;
+    int root_note;
+    WavSample* sample;
+    float pos_fp;
+    float pitch_ratio;
+    float gain;
+    float release_env;
+    bool active;
+    bool releasing;
+} PianoVoice;
 
 typedef struct {
     bool active;
@@ -78,7 +74,37 @@ typedef struct {
     float gain;
 } SamplerVoice;
 
+#define NUM_PIANO_ROOTS 21
+static const int g_piano_roots[NUM_PIANO_ROOTS] = {
+    36, 39, 42, 45, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84, 87, 90, 93, 96
+};
+
+static const char* g_piano_paths[NUM_PIANO_ROOTS] = {
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-036 C1 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-039 Eb1 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-042 Gb1 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-045 A1 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-048 C2 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-051 Eb2 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-054 Gb2 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-057 A2 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-060 C3 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-063 Eb3 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-066 Gb3 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-069 A3 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-072 C4 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-075 Eb4 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-078 Gb4 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-081 A4 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-084 C5 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-087 Eb5 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-090 Gb5 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-093 A5 105.WAV",
+    "/sdcard/Expansions/F9 Instruments/Inst-Piano-F9 Grand Piano-096 C6 105.WAV"
+};
+
 static WavSample g_pad_samples[16];
+static WavSample g_piano_samples[NUM_PIANO_ROOTS];
 static SamplerVoice g_sampler_voices[MAX_SAMPLER_VOICES];
 
 static const char* g_pad_names[16] = {
@@ -108,7 +134,7 @@ static const char* g_sample_paths[16] = {
 };
 
 typedef struct {
-    Voice voices[MAX_VOICES];
+    PianoVoice piano_voices[MAX_VOICES];
     pthread_mutex_t lock;
 } SynthEngine;
 
@@ -208,6 +234,7 @@ static bool load_wav_file(const char* path, WavSample* sample, const char* label
         } else {
             fseek(f, chunk_size, SEEK_CUR);
         }
+        if (chunk_size % 2 != 0) fseek(f, 1, SEEK_CUR);
     }
 
     if (data_pos == 0 || audio_fmt != 1 || num_ch == 0 || data_size == 0) {
@@ -293,9 +320,22 @@ static inline float master_limit(float x) {
     return tanhf(x * 0.85f);
 }
 
+static int find_closest_piano_root(int note) {
+    int best = 0;
+    int min_d = 999;
+    for (int i = 0; i < NUM_PIANO_ROOTS; ++i) {
+        int d = abs(note - g_piano_roots[i]);
+        if (d < min_d) {
+            min_d = d;
+            best = i;
+        }
+    }
+    return best;
+}
+
 static void synth_init(SynthEngine* s) {
     pthread_mutex_init(&s->lock, NULL);
-    for (int i = 0; i < MAX_VOICES; ++i) s->voices[i].active = false;
+    for (int i = 0; i < MAX_VOICES; ++i) s->piano_voices[i].active = false;
     for (int i = 0; i < MAX_SAMPLER_VOICES; ++i) g_sampler_voices[i].active = false;
     for (int i = 0; i < 61; ++i) g_key_press_count[i] = 0;
     for (int i = 0; i < 16; ++i) g_pad_press_count[i] = 0;
@@ -310,10 +350,18 @@ static void synth_init(SynthEngine* s) {
         g_slots[i].ui_y = -1;
     }
 
-    // Load 16 MPC Drum Samples
+    // 1. Load 16 MPC Drum Samples
     printf("[SAMPLER] Initializing 16 Studio Drum Samples...\n");
     for (int i = 0; i < 16; ++i) {
         load_wav_file(g_sample_paths[i], &g_pad_samples[i], g_pad_names[i]);
+    }
+
+    // 2. Load 21 F9 Concert Grand Piano Multi-Samples
+    printf("[PIANO] Initializing 21 Acoustic Concert Grand Piano Multi-Samples...\n");
+    for (int i = 0; i < NUM_PIANO_ROOTS; ++i) {
+        char root_lbl[32];
+        snprintf(root_lbl, sizeof(root_lbl), "Grand Piano %s", note_name(g_piano_roots[i]));
+        load_wav_file(g_piano_paths[i], &g_piano_samples[i], root_lbl);
     }
 }
 
@@ -326,32 +374,34 @@ static void synth_note_on(SynthEngine* s, int note, int vel, NoteSource src = NO
             trigger_pad_sample(pad_num, vel);
         }
     } else {
-        // Acoustic Grand Piano Voice
+        // Genuine Acoustic Concert Grand Piano Multi-Sampled Voice
+        int root_idx = find_closest_piano_root(note);
+        int root_note = g_piano_roots[root_idx];
+        float pitch_ratio = powf(2.0f, (float)(note - root_note) / 12.0f);
+
         pthread_mutex_lock(&s->lock);
         int target = -1;
         for (int i = 0; i < MAX_VOICES; ++i) {
-            if (!s->voices[i].active) { target = i; break; }
+            if (!s->piano_voices[i].active) { target = i; break; }
         }
-        if (target == -1) target = 0;
+        if (target == -1) {
+            for (int i = 0; i < MAX_VOICES; ++i) {
+                if (s->piano_voices[i].releasing) { target = i; break; }
+            }
+            if (target == -1) target = 0;
+        }
 
-        Voice* v = &s->voices[target];
-        v->note = note;
-        v->velocity = (float)vel / 127.0f;
-        v->phase1 = 0.0f;
-        v->phase2 = 0.0f;
-        v->phase3 = 0.0f;
-        v->phase4 = 0.0f;
-        v->freq = midi_to_freq(note);
-        v->env = v->velocity;
-        v->attack_env = 0.0f; // Smooth attack ramp (zero clicks!)
-        v->hammer_env = v->velocity * 0.35f; // Felt hammer transient
-
-        float decay_sec = 4.2f - ((float)(note - 21) / 88.0f * 2.8f);
-        if (decay_sec < 0.6f) decay_sec = 0.6f;
-        v->decay_rate = powf(0.001f, 1.0f / (decay_sec * (float)SAMPLE_RATE));
-        v->filter_state = 0.0f;
-        v->active = true;
-        v->releasing = false;
+        PianoVoice* pv = &s->piano_voices[target];
+        pv->note = note;
+        pv->velocity = (float)vel / 127.0f;
+        pv->root_note = root_note;
+        pv->sample = &g_piano_samples[root_idx];
+        pv->pos_fp = 0.0f;
+        pv->pitch_ratio = pitch_ratio;
+        pv->gain = ((float)vel / 127.0f) * 0.95f;
+        pv->release_env = 1.0f;
+        pv->releasing = false;
+        pv->active = true;
         pthread_mutex_unlock(&s->lock);
     }
 
@@ -372,8 +422,8 @@ static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_K
     if (src != NOTE_SRC_PAD) {
         pthread_mutex_lock(&s->lock);
         for (int i = 0; i < MAX_VOICES; ++i) {
-            if (s->voices[i].active && s->voices[i].note == note) {
-                s->voices[i].releasing = true;
+            if (s->piano_voices[i].active && s->piano_voices[i].note == note && !s->piano_voices[i].releasing) {
+                s->piano_voices[i].releasing = true;
             }
         }
         pthread_mutex_unlock(&s->lock);
@@ -398,70 +448,43 @@ static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_K
 
 static void synth_render(SynthEngine* s, int32_t* out, size_t nframes) {
     pthread_mutex_lock(&s->lock);
-    const float rel_rate = powf(0.001f, 1.0f / (0.06f * (float)SAMPLE_RATE));
-    const float attack_step = 1.0f / (0.003f * (float)SAMPLE_RATE); // 3ms smooth attack
-    const float hammer_decay = powf(0.001f, 1.0f / (0.015f * (float)SAMPLE_RATE)); // 15ms hammer
+    const float rel_rate = powf(0.001f, 1.0f / (0.15f * (float)SAMPLE_RATE)); // 150ms acoustic damper release
 
     for (size_t f = 0; f < nframes; ++f) {
         float mix_l = 0.0f, mix_r = 0.0f;
 
-        // 1. Acoustic Concert Grand Piano Voices
+        // 1. Genuine Acoustic Concert Grand Piano Multi-Sampled Voices
         for (int i = 0; i < MAX_VOICES; ++i) {
-            Voice* v = &s->voices[i];
-            if (!v->active) continue;
+            PianoVoice* pv = &s->piano_voices[i];
+            if (!pv->active || !pv->sample || !pv->sample->data_l) continue;
 
-            // Smooth attack ramp to prevent pop/click
-            if (v->attack_env < 1.0f) {
-                v->attack_env += attack_step;
-                if (v->attack_env > 1.0f) v->attack_env = 1.0f;
-            }
+            size_t idx0 = (size_t)pv->pos_fp;
+            size_t idx1 = idx0 + 1;
+            float frac = pv->pos_fp - (float)idx0;
 
-            // Rich multi-harmonic piano timbre
-            float osc = sinf(v->phase1)
-                      + 0.45f * sinf(v->phase2)
-                      + 0.22f * sinf(v->phase3)
-                      + 0.10f * sinf(v->phase4);
-
-            // Subtle acoustic felt hammer noise
-            if (v->hammer_env > 0.001f) {
-                float noise = ((float)(rand() % 2000) / 1000.0f - 1.0f);
-                osc += noise * v->hammer_env;
-                v->hammer_env *= hammer_decay;
-            }
-
-            // Dynamic resonant filter (soft touch = mellow, hard touch = bright)
-            float cutoff = 0.12f + (v->velocity * 0.50f) * (v->env / (v->velocity + 0.001f));
-            if (cutoff > 0.85f) cutoff = 0.85f;
-            v->filter_state += cutoff * (osc - v->filter_state);
-
-            float voice = v->filter_state * v->env * v->attack_env;
-
-            // Stereo soundboard panning across 61 keys
-            float pan = (float)(v->note - 36) / 60.0f;
-            if (pan < 0.15f) pan = 0.15f; if (pan > 0.85f) pan = 0.85f;
-
-            mix_l += voice * (1.0f - pan * 0.5f);
-            mix_r += voice * (0.5f + pan * 0.5f);
-
-            // Natural harmonic phases
-            v->phase1 += 2.0f * PI_F * v->freq / (float)SAMPLE_RATE;
-            if (v->phase1 >= 2.0f * PI_F) v->phase1 -= 2.0f * PI_F;
-
-            v->phase2 += 2.0f * PI_F * (v->freq * 2.001f) / (float)SAMPLE_RATE;
-            if (v->phase2 >= 2.0f * PI_F) v->phase2 -= 2.0f * PI_F;
-
-            v->phase3 += 2.0f * PI_F * (v->freq * 3.003f) / (float)SAMPLE_RATE;
-            if (v->phase3 >= 2.0f * PI_F) v->phase3 -= 2.0f * PI_F;
-
-            v->phase4 += 2.0f * PI_F * (v->freq * 4.005f) / (float)SAMPLE_RATE;
-            if (v->phase4 >= 2.0f * PI_F) v->phase4 -= 2.0f * PI_F;
-
-            if (v->releasing) {
-                v->env *= rel_rate;
-                if (v->env < 0.0001f) v->active = false;
+            float s_l = 0.0f, s_r = 0.0f;
+            if (idx1 < pv->sample->num_frames) {
+                s_l = pv->sample->data_l[idx0] + frac * (pv->sample->data_l[idx1] - pv->sample->data_l[idx0]);
+                s_r = pv->sample->data_r[idx0] + frac * (pv->sample->data_r[idx1] - pv->sample->data_r[idx0]);
+            } else if (idx0 < pv->sample->num_frames) {
+                s_l = pv->sample->data_l[idx0];
+                s_r = pv->sample->data_r[idx0];
             } else {
-                v->env *= v->decay_rate;
-                if (v->env < 0.0001f) v->active = false;
+                pv->active = false;
+                continue;
+            }
+
+            float vol = pv->gain * pv->release_env;
+            mix_l += s_l * vol;
+            mix_r += s_r * vol;
+
+            pv->pos_fp += pv->pitch_ratio;
+
+            if (pv->releasing) {
+                pv->release_env *= rel_rate;
+                if (pv->release_env < 0.001f) {
+                    pv->active = false;
+                }
             }
         }
 
@@ -566,6 +589,9 @@ static void init_font() {
     set_glyph('|', 0x00, 0x00, 0x7F, 0x00, 0x00);
     set_glyph('[', 0x00, 0x7F, 0x41, 0x41, 0x00);
     set_glyph(']', 0x00, 0x41, 0x41, 0x7F, 0x00);
+    set_glyph('(', 0x00, 0x1C, 0x22, 0x41, 0x00);
+    set_glyph(')', 0x00, 0x41, 0x22, 0x1C, 0x00);
+    set_glyph(',', 0x00, 0x50, 0x30, 0x00, 0x00);
     set_glyph('%', 0x23, 0x13, 0x08, 0x64, 0x62);
     set_glyph('0', 0x3E, 0x51, 0x49, 0x45, 0x3E);
     set_glyph('1', 0x00, 0x42, 0x7F, 0x40, 0x00);
@@ -692,7 +718,7 @@ static void render_ui() {
     draw_rect(24, 80, 420, 480, COLOR_BORDER);
 
     draw_string(44, 100, "TRACK 1: ACOUSTIC GRAND", COLOR_TEXT_BOLD, 2);
-    draw_string(44, 130, "ENGINE: CLAP / KEYGROUP SAMPLER", COLOR_TEXT_DIM, 2);
+    draw_string(44, 130, "ENGINE: F9 CONCERT GRAND (MULTI-SAMPLED)", COLOR_TEXT_DIM, 1);
     draw_string(44, 155, "MIDI IN: KEYBED 61 + PADS  |  OUT: DIN A", COLOR_CYAN, 1);
 
     // 4 Q-Link Knobs Simulation
