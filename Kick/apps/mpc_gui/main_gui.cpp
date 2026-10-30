@@ -174,6 +174,7 @@ static bool g_is_playing = false;
 static bool g_is_recording = false;
 static int g_knob_vals[4] = { 75, 40, 10, 85 };
 static bool g_knob_touched[4] = { false, false, false, false };
+static float g_master_volume = 0.50f; // Default 50% (-6 dB studio reference headroom)
 static pthread_mutex_t g_ui_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static uint32_t g_render_buf[SCREEN_W * SCREEN_H];
@@ -312,7 +313,7 @@ static void trigger_pad_sample(int pad_num, int vel) {
     SamplerVoice* sv = &g_sampler_voices[target];
     sv->pad_num = pad_num;
     sv->pos = 0;
-    sv->gain = ((float)vel / 127.0f) * 0.95f;
+    sv->gain = ((float)vel / 127.0f) * 0.65f;
     sv->active = true;
     pthread_mutex_unlock(&g_synth.lock);
 }
@@ -406,7 +407,7 @@ static void synth_note_on(SynthEngine* s, int note, int vel, NoteSource src = NO
         pv->sample = &g_piano_samples[root_idx];
         pv->pos_fp = 0.0f;
         pv->pitch_ratio = pitch_ratio;
-        pv->gain = ((float)vel / 127.0f) * 0.95f;
+        pv->gain = ((float)vel / 127.0f) * 0.60f;
         pv->release_env = 1.0f;
         pv->key_down = true;
         pv->releasing = false;
@@ -460,7 +461,7 @@ static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_K
 }
 
 static void synth_cc(SynthEngine* s, int cc, int val) {
-    if (cc == 64) { // Damper / Sustain Pedal
+    if (cc == 64 || cc == 117) { // Damper / Sustain Pedal (Standard CC 64 or MPC Key 61 Footswitch CC 117)
         bool pedal_down = (val >= 64);
         pthread_mutex_lock(&s->lock);
         s->sustain_pedal = pedal_down;
@@ -474,7 +475,10 @@ static void synth_cc(SynthEngine* s, int cc, int val) {
             }
         }
         pthread_mutex_unlock(&s->lock);
-        printf("[MIDI] CC64 Sustain Pedal: %d -> %s\n", val, pedal_down ? "ACTIVE (SUSTAIN)" : "OFF (DAMP)");
+        printf("[PEDAL] CC %d Sustain: %d -> %s\n", cc, val, pedal_down ? "ACTIVE (SUSTAIN)" : "OFF (DAMP)");
+    } else if (cc == 7 || cc == 11) { // MIDI Volume / Expression
+        g_master_volume = (float)val / 127.0f;
+        printf("[MIDI] Master Volume CC%d -> %.0f%%\n", cc, g_master_volume * 100.0f);
     } else {
         printf("[MIDI] CC %d = %d\n", cc, val);
     }
@@ -537,12 +541,12 @@ static void synth_render(SynthEngine* s, int32_t* out, size_t nframes) {
             sv->pos++;
         }
 
-        // 3. Master Soft-Knee Limiter (Zero Clipping)
-        float out_l = master_limit(mix_l * 0.70f);
-        float out_r = master_limit(mix_r * 0.70f);
+        // 3. Master Soft-Knee Limiter (Zero Clipping) with Master Volume
+        float out_l = master_limit(mix_l * 0.45f) * g_master_volume;
+        float out_r = master_limit(mix_r * 0.45f) * g_master_volume;
 
-        int32_t sl = (int32_t)(out_l * 2147483647.0f);
-        int32_t sr = (int32_t)(out_r * 2147483647.0f);
+        int32_t sl = (int32_t)(out_l * 1073741824.0f);
+        int32_t sr = (int32_t)(out_r * 1073741824.0f);
 
         out[f * NUM_CHANNELS + 0] = sl;
         out[f * NUM_CHANNELS + 1] = sr;
@@ -719,7 +723,36 @@ static void render_ui() {
     fill_rect(0, 59, SCREEN_W, 1, COLOR_BORDER);
 
     draw_string(24, 20, "KICK DAW", COLOR_ORANGE, 3);
-    draw_string(210, 24, "AKAI MPC KEY 61 STANDALONE", COLOR_TEXT_BOLD, 2);
+    draw_string(200, 24, "AKAI MPC KEY 61", COLOR_TEXT_BOLD, 2);
+
+    // Master Volume Control (Touch Buttons & Slider)
+    fill_rect(440, 14, 260, 32, COLOR_PANEL_HI);
+    draw_rect(440, 14, 260, 32, COLOR_BORDER);
+    draw_string(450, 24, "VOL", COLOR_TEXT_BOLD, 1);
+
+    // [-] button
+    fill_rect(478, 18, 26, 24, 0x002A303D);
+    draw_rect(478, 18, 26, 24, COLOR_BORDER);
+    draw_string(487, 22, "-", COLOR_CYAN, 2);
+
+    // Volume Slider Bar
+    int bar_x = 512, bar_y = 22, bar_w = 95, bar_h = 16;
+    fill_rect(bar_x, bar_y, bar_w, bar_h, COLOR_BG);
+    draw_rect(bar_x, bar_y, bar_w, bar_h, COLOR_BORDER);
+    int fill_w = (int)(g_master_volume * (float)(bar_w - 2));
+    if (fill_w < 0) fill_w = 0;
+    if (fill_w > bar_w - 2) fill_w = bar_w - 2;
+    if (fill_w > 0) fill_rect(bar_x + 1, bar_y + 1, fill_w, bar_h - 2, COLOR_CYAN);
+
+    // [+] button
+    fill_rect(615, 18, 26, 24, 0x002A303D);
+    draw_rect(615, 18, 26, 24, COLOR_BORDER);
+    draw_string(623, 22, "+", COLOR_CYAN, 2);
+
+    // Volume percentage text
+    char vol_pct_str[16];
+    snprintf(vol_pct_str, sizeof(vol_pct_str), "%3d%%", (int)(g_master_volume * 100.0f + 0.5f));
+    draw_string(648, 24, vol_pct_str, COLOR_TEXT_BOLD, 1);
 
     // BPM & Latency badge
     fill_rect(720, 14, 110, 32, COLOR_PANEL_HI);
@@ -763,6 +796,13 @@ static void render_ui() {
     fill_rect(44, 172, 130, 20, sustain_on ? 0x001B4D2E : COLOR_PANEL_HI);
     draw_rect(44, 172, 130, 20, sustain_on ? COLOR_GREEN : COLOR_BORDER);
     draw_string(52, 178, sustain_on ? "PEDAL: SUSTAIN" : "PEDAL: OFF", sustain_on ? COLOR_GREEN : COLOR_TEXT_DIM, 1);
+
+    // Master Volume info badge
+    fill_rect(185, 172, 180, 20, COLOR_PANEL_HI);
+    draw_rect(185, 172, 180, 20, COLOR_BORDER);
+    char master_info[32];
+    snprintf(master_info, sizeof(master_info), "MASTER VOL: %d%%", (int)(g_master_volume * 100.0f + 0.5f));
+    draw_string(195, 178, master_info, COLOR_GOLD, 1);
 
     // 4 Q-Link Knobs Simulation (Hardware Encoders + Touch Sensors)
     const char* knob_labels[4] = { "CUTOFF", "RESONANCE", "ATTACK", "DECAY" };
@@ -1132,7 +1172,7 @@ static void* touch_thread_func(void* arg) {
                 slot->ui_x = ui_x;
                 slot->ui_y = ui_y;
 
-                // 1. Transport Buttons (Single slot hit)
+                // 1. Transport Buttons & Master Volume Control
                 if (ui_y >= 14 && ui_y < 46) {
                     if (ui_x >= 1060 && ui_x < 1120) {
                         g_is_playing = true;
@@ -1142,6 +1182,22 @@ static void* touch_thread_func(void* arg) {
                     } else if (ui_x >= 1200 && ui_x < 1260) {
                         g_is_recording = !g_is_recording;
                         if (g_is_recording) g_is_playing = true;
+                    } else if (ui_x >= 470 && ui_x < 508) {
+                        // Volume [-] button
+                        g_master_volume -= 0.05f;
+                        if (g_master_volume < 0.0f) g_master_volume = 0.0f;
+                        printf("[VOL] Master Volume: %.0f%%\n", g_master_volume * 100.0f);
+                    } else if (ui_x >= 610 && ui_x < 645) {
+                        // Volume [+] button
+                        g_master_volume += 0.05f;
+                        if (g_master_volume > 1.0f) g_master_volume = 1.0f;
+                        printf("[VOL] Master Volume: %.0f%%\n", g_master_volume * 100.0f);
+                    } else if (ui_x >= 508 && ui_x < 610) {
+                        // Volume slider bar direct touch/drag
+                        float new_vol = (float)(ui_x - 512) / 95.0f;
+                        if (new_vol < 0.0f) new_vol = 0.0f;
+                        if (new_vol > 1.0f) new_vol = 1.0f;
+                        g_master_volume = new_vol;
                     }
                 }
 
@@ -1207,30 +1263,30 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port) {
             int ch = b & 0x0F;
             int note = buf[i+1], vel = buf[i+2];
 
-            if (port == 1) {
-                // Port 1 (hw:0,0,1 MPC Private): Control surface touch sensors & buttons
-                if (note >= 84 && note <= 87) {
-                    int k = note - 84;
-                    g_knob_touched[k] = (vel > 0);
-                    printf("[Q-LINK] Knob %d Touch: %s\n", k + 1, (vel > 0) ? "TOUCHED" : "RELEASED");
-                }
-                // Do NOT play notes or highlight piano keys from Private control surface!
+            // Q-Link capacitive touch tops on Port 1 send notes 84..87 (non-drum ch)
+            if (port == 1 && ch != 9 && (note >= 84 && note <= 87)) {
+                int k = note - 84;
+                g_knob_touched[k] = (vel > 0);
+                printf("[Q-LINK] Knob %d Touch: %s (ch=%d vel=%d)\n", k + 1, (vel > 0) ? "TOUCHED" : "RELEASED", ch, vel);
             } else {
-                // Port 0 (hw:0,0,0 MPC Public) & Port 2 (DIN IN): Real Musical Keyboard & Pads
                 NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
-                if (vel > 0) synth_note_on(&g_synth, note, vel, src);
-                else synth_note_off(&g_synth, note, src);
+                if (vel > 0) {
+                    synth_note_on(&g_synth, note, vel, src);
+                } else {
+                    synth_note_off(&g_synth, note, src);
+                }
+                printf("[MIDI-NOTE] Port %d Ch %d Note %d Vel %d (%s)\n",
+                       port, ch, note, vel, (src == NOTE_SRC_PAD ? "PAD" : "KEY"));
             }
             i += 2;
         } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
             int ch = b & 0x0F;
             int note = buf[i+1];
-            if (port == 1) {
-                if (note >= 84 && note <= 87) {
-                    int k = note - 84;
-                    g_knob_touched[k] = false;
-                    printf("[Q-LINK] Knob %d Touch: RELEASED\n", k + 1);
-                }
+
+            if (port == 1 && ch != 9 && (note >= 84 && note <= 87)) {
+                int k = note - 84;
+                g_knob_touched[k] = false;
+                printf("[Q-LINK] Knob %d Touch: RELEASED (ch=%d)\n", k + 1, ch);
             } else {
                 NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
                 synth_note_off(&g_synth, note, src);
