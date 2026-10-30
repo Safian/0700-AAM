@@ -604,7 +604,7 @@ public:
         if( !isUserDragging )
         {
             // Monotonic exponential ease-out with ZERO BOUNCE / ZERO OVERSHOOT!
-            const float snapSpeed = 0.25f;
+            const float snapSpeed = 0.28f;
 
             float dx = targetCamX - currentCamX;
             float dy = targetCamY - currentCamY;
@@ -696,19 +696,219 @@ public:
         juce::Point<float> startPos;
         juce::Point<float> currentPos;
         juce::Component*   startComponent{ nullptr };
+        bool               isInteractive{ false };
+        juce::uint32       startTimeMs{ 0 };
     };
+
+    static bool isInteractiveTouchControl( juce::Component* comp )
+    {
+        if( comp == nullptr )
+            return false;
+
+        for( auto* c = comp; c != nullptr; c = c->getParentComponent() )
+        {
+            // 1. Standard JUCE interactive controls
+            if( dynamic_cast<juce::Button*>( c ) != nullptr ) return true;
+            if( dynamic_cast<juce::Slider*>( c ) != nullptr ) return true;
+            if( dynamic_cast<juce::TextEditor*>( c ) != nullptr ) return true;
+            if( dynamic_cast<juce::ComboBox*>( c ) != nullptr ) return true;
+            if( dynamic_cast<juce::ListBox*>( c ) != nullptr ) return true;
+            if( dynamic_cast<juce::TableListBox*>( c ) != nullptr ) return true;
+            if( dynamic_cast<juce::ScrollBar*>( c ) != nullptr ) return true;
+            if( dynamic_cast<juce::Viewport*>( c ) != nullptr ) return true;
+
+            // 2. Hardware custom controls
+            if( dynamic_cast<kick_hw_ui::HardwarePad*>( c ) != nullptr ) return true;
+            if( dynamic_cast<kick_hw_ui::HardwareButton*>( c ) != nullptr ) return true;
+            if( dynamic_cast<kick_hw_ui::HardwareRotaryKnob*>( c ) != nullptr ) return true;
+            if( dynamic_cast<kick_hw_ui::HardwareJogWheel*>( c ) != nullptr ) return true;
+            if( dynamic_cast<kick_hw_ui::HardwareRibbon*>( c ) != nullptr ) return true;
+
+            // 3. Known audio interactive editing surfaces
+            auto className = juce::String( typeid( *c ).name() );
+            if( className.containsIgnoreCase( "StepSequencer" )
+                || className.containsIgnoreCase( "GridComponent" )
+                || className.containsIgnoreCase( "SEViewComponent" )
+                || className.containsIgnoreCase( "Looper" )
+                || className.containsIgnoreCase( "Waveform" )
+                || className.containsIgnoreCase( "PadButton" )
+                || className.containsIgnoreCase( "VirtualKeyboard" ) )
+            {
+                return true;
+            }
+
+            if( c == &kick_ui::KickHome::Instance() )
+                break;
+        }
+
+        return false;
+    }
+
+    void applyDampedCameraBounds( float& camX, float& camY, PanelState state ) const
+    {
+        int w = getWidth();
+        int h = getHeight();
+        if( w <= 0 || h <= 0 ) return;
+
+        float dawW = 0.0f, dawH = 0.0f;
+        getDawGeometry( dawW, dawH );
+
+        float masterW = getMasterPanelWidth();
+        float qlinkW  = getQLinkPanelWidth();
+
+        float centerCamX    = -( (float)w - dawW ) * 0.5f;
+        float targetMasterX = -masterW - 16.0f;
+        float targetQLinkX  = dawW + qlinkW - (float)w + 16.0f;
+
+        const float maxOverscroll = 12.0f;
+        auto damp = [maxOverscroll]( float over ) {
+            return std::tanh( over / 35.0f ) * maxOverscroll;
+        };
+
+        switch( state )
+        {
+            case PanelState::DAW:
+            {
+                // In DAW, user can drag down to BottomPads (camY from 0 to dawH)
+                // Cannot drag past top (camY < 0.0f)
+                if( camY < 0.0f )
+                    camY = 0.0f - damp( -camY );
+                else if( camY > dawH )
+                    camY = dawH + damp( camY - dawH );
+
+                // Horizontally, user can drag between MasterStrip (left) and QLinkStrip (right)
+                if( camX < targetMasterX )
+                    camX = targetMasterX - damp( targetMasterX - camX );
+                else if( camX > targetQLinkX )
+                    camX = targetQLinkX + damp( camX - targetQLinkX );
+                break;
+            }
+
+            case PanelState::BottomPads:
+            {
+                // In BottomPads, camY is at dawH. User can drag up to DAW (camY down to 0)
+                // Cannot drag below BottomPads (camY > dawH)
+                if( camY > dawH )
+                    camY = dawH + damp( camY - dawH );
+                else if( camY < 0.0f )
+                    camY = 0.0f - damp( -camY );
+
+                // Horizontally: strictly anchored to centerCamX (pads are only centered under DAW)
+                if( camX < centerCamX )
+                    camX = centerCamX - damp( centerCamX - camX );
+                else if( camX > centerCamX )
+                    camX = centerCamX + damp( camX - centerCamX );
+                break;
+            }
+
+            case PanelState::MasterStrip:
+            {
+                // In MasterStrip, camX is at targetMasterX. User can drag right to DAW (camX to centerCamX)
+                // Cannot drag left of MasterStrip (camX < targetMasterX)
+                if( camX < targetMasterX )
+                    camX = targetMasterX - damp( targetMasterX - camX );
+                else if( camX > centerCamX )
+                    camX = centerCamX + damp( camX - centerCamX );
+
+                // Vertically: strictly anchored to 0.0f
+                if( camY < 0.0f )
+                    camY = 0.0f - damp( -camY );
+                else if( camY > 0.0f )
+                    camY = 0.0f + damp( camY );
+                break;
+            }
+
+            case PanelState::QLinkStrip:
+            {
+                // In QLinkStrip, camX is at targetQLinkX. User can drag left to DAW (camX to centerCamX)
+                // Cannot drag right of QLinkStrip (camX > targetQLinkX)
+                if( camX > targetQLinkX )
+                    camX = targetQLinkX + damp( camX - targetQLinkX );
+                else if( camX < centerCamX )
+                    camX = centerCamX - damp( centerCamX - camX );
+
+                // Vertically: strictly anchored to 0.0f
+                if( camY < 0.0f )
+                    camY = 0.0f - damp( -camY );
+                else if( camY > 0.0f )
+                    camY = 0.0f + damp( camY );
+                break;
+            }
+        }
+    }
+
+    PanelState evaluateSwipeGesture( PanelState fromState, float dx, float dy, float vx, float vy, juce::uint32 durationMs ) const
+    {
+        // Thresholds for swipe:
+        // A fast flick: velocity magnitude > 2.2f, or travel distance > 28px within 450ms
+        // Or standard drag distance > 45px
+        const float distThreshold = ( durationMs < 450 ) ? 28.0f : 45.0f;
+        const float velThreshold  = 2.2f;
+
+        bool isSwipeUp    = ( dy < -distThreshold ) || ( vy < -velThreshold );
+        bool isSwipeDown  = ( dy >  distThreshold ) || ( vy >  velThreshold );
+        bool isSwipeRight = ( dx >  distThreshold ) || ( vx >  velThreshold );
+        bool isSwipeLeft  = ( dx < -distThreshold ) || ( vx < -velThreshold );
+
+        switch( fromState )
+        {
+            case PanelState::DAW:
+            {
+                if( std::abs( dy ) > std::abs( dx ) * 0.8f )
+                {
+                    if( isSwipeUp )
+                        return PanelState::BottomPads;
+                }
+                else
+                {
+                    if( isSwipeRight )
+                        return PanelState::MasterStrip;
+                    if( isSwipeLeft )
+                        return PanelState::QLinkStrip;
+                }
+                break;
+            }
+
+            case PanelState::BottomPads:
+            {
+                if( isSwipeDown )
+                    return PanelState::DAW;
+                break;
+            }
+
+            case PanelState::MasterStrip:
+            {
+                if( isSwipeLeft )
+                    return PanelState::DAW;
+                break;
+            }
+
+            case PanelState::QLinkStrip:
+            {
+                if( isSwipeRight )
+                    return PanelState::DAW;
+                break;
+            }
+        }
+
+        // If no definitive swipe gesture was met, fall back to closest snap state with velocity projection
+        return findClosestSnapState( currentCamX, currentCamY, vx, vy );
+    }
 
     void mouseDown( const juce::MouseEvent& e ) override
     {
         int sourceIdx = e.source.getIndex();
         auto screenP  = e.getScreenPosition().toFloat();
         auto localP   = e.getEventRelativeTo( this ).position;
-        activeTouches[sourceIdx] = { true, screenP, screenP, e.eventComponent };
+        bool isInteractive = isInteractiveTouchControl( e.eventComponent );
+
+        activeTouches[sourceIdx] = { true, screenP, screenP, e.eventComponent, isInteractive, juce::Time::getMillisecondCounter() };
         gestureTriggered = false;
 
-        dragStartCamX = currentCamX;
-        dragStartCamY = currentCamY;
-        lastTouchP    = screenP;
+        dragStartCamX  = currentCamX;
+        dragStartCamY  = currentCamY;
+        dragStartState = targetState;
+        lastTouchP     = screenP;
         dragVx = 0.0f;
         dragVy = 0.0f;
 
@@ -744,7 +944,14 @@ public:
                 setPanelState( PanelState::MasterStrip );
             }
         }
-        // Tapping DAW does not jump back
+        else if( isDawTouch )
+        {
+            // Tapping exposed DAW when Master or QLink strip is peeking docks back to DAW
+            if( targetState == PanelState::MasterStrip || targetState == PanelState::QLinkStrip )
+            {
+                setPanelState( PanelState::DAW );
+            }
+        }
     }
 
     void mouseDrag( const juce::MouseEvent& e ) override
@@ -780,25 +987,35 @@ public:
 
         bool has3Fingers = ( count >= 3 ) || ( e.mods.isShiftDown() && count >= 1 );
 
-        bool startedOnChassis = false;
-        if( it != activeTouches.end() )
+        bool startedOnNonInteractive = false;
+        if( it != activeTouches.end() && !it->second.isInteractive )
         {
-            auto* comp = it->second.startComponent;
-            if( comp == this || comp == masterPanel.get() || comp == qlinkPanel.get() )
-                startedOnChassis = true;
+            startedOnNonInteractive = true;
         }
 
-        // 3 fingers drag ANYWHERE or 1 finger drag on background/chassis
-        if( has3Fingers || ( startedOnChassis && count == 1 ) )
+        // 3 fingers drag ANYWHERE or 1 finger drag on non-interactive surfaces
+        if( has3Fingers || ( startedOnNonInteractive && count == 1 ) )
         {
             float avgDx = totalDx / (float)juce::jmax( 1, count );
             float avgDy = totalDy / (float)juce::jmax( 1, count );
 
-            if( std::abs( avgDx ) > 12.0f || std::abs( avgDy ) > 12.0f )
+            if( !isUserDragging )
             {
-                isUserDragging = true;
-                currentCamX = dragStartCamX - avgDx;
-                currentCamY = dragStartCamY - avgDy;
+                if( std::abs( avgDx ) > 8.0f || std::abs( avgDy ) > 8.0f )
+                {
+                    isUserDragging = true;
+                }
+            }
+
+            if( isUserDragging )
+            {
+                float rawCamX = dragStartCamX - avgDx;
+                float rawCamY = dragStartCamY - avgDy;
+
+                applyDampedCameraBounds( rawCamX, rawCamY, dragStartState );
+
+                currentCamX = rawCamX;
+                currentCamY = rawCamY;
                 updateLayout();
             }
         }
@@ -808,9 +1025,16 @@ public:
     {
         int sourceIdx = e.source.getIndex();
         auto it = activeTouches.find( sourceIdx );
+        float totalDx = 0.0f;
+        float totalDy = 0.0f;
+        juce::uint32 elapsedMs = 0;
+
         if( it != activeTouches.end() )
         {
             it->second.isDown = false;
+            totalDx   = it->second.currentPos.x - it->second.startPos.x;
+            totalDy   = it->second.currentPos.y - it->second.startPos.y;
+            elapsedMs = juce::Time::getMillisecondCounter() - it->second.startTimeMs;
         }
 
         int remaining = 0;
@@ -822,9 +1046,8 @@ public:
             if( isUserDragging )
             {
                 isUserDragging = false;
-                // Magnetize / snap to the closest / most trivial point!
-                PanelState best = findClosestSnapState( currentCamX, currentCamY, dragVx, dragVy );
-                setPanelState( best );
+                PanelState next = evaluateSwipeGesture( dragStartState, totalDx, totalDy, dragVx, dragVy, elapsedMs );
+                setPanelState( next );
             }
             gestureTriggered = false;
         }
@@ -864,6 +1087,7 @@ private:
     std::unique_ptr<MobileQLinkChassisPanel>      qlinkPanel;
 
     PanelState targetState{ PanelState::DAW };
+    PanelState dragStartState{ PanelState::DAW };
 
     float currentCamX{ 0.0f };
     float currentCamY{ 0.0f };
