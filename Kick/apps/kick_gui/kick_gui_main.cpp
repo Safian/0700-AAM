@@ -184,7 +184,8 @@ public:
     void shutdown() override
     {
         // Add your application's shutdown code here ...
-
+        mt::getAudioInterface().closeProject();
+        w.reset();
         dclInterface.reset();
         audioEngineInterface.reset();
         IPCApplication::shutdown();
@@ -206,6 +207,10 @@ public:
     //==============================================================================
     void systemRequestedQuit() override
     {
+        if (ui::RecentProject::isProjectLoading) {
+            juce::Timer::callAfterDelay(100, [this] { systemRequestedQuit(); });
+            return;
+        }
         // This is called when the app is being asked to quit: you can ignore this request and let the app
         // carry on running, or call quit() to allow the app to close.
         auto mgr = juce::ModalComponentManager::getInstance();

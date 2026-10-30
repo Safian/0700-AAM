@@ -138,13 +138,17 @@ namespace mt
 
     MTAudioManager::~MTAudioManager()
     {
-        MTAudioRecorderManager::closeRecorder();
-        internalTimer.stopTimer();
-        _previewer = nullptr;
-
-        MTAudioTransportManager::stop();
+        // No callback may retain recorder/program objects while they are freed.
         engine.stopAudioDevice();
+        internalTimer.stopTimer();
+        // The application's views have already gone away. Destruction must not
+        // publish transport notifications to their signal callbacks.
+        listeners.clear();
+        transportStateChanged = {};
+        MTAudioTransportManager::stop();
         closeProject();
+        MTAudioRecorderManager::closeRecorder();
+        _previewer = nullptr;
     }
 
     ////////////////////////////
@@ -206,6 +210,7 @@ namespace mt
 
     bool MTAudioManager::closeProject()
     {
+        if (!projectLoaded) return true;
         internalTimer.stopTimer();
         projectLoaded = false;
         MTAudioTransportManager::close();
