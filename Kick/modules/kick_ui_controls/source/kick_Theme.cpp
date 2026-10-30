@@ -52,7 +52,15 @@ namespace ui
     {
         if( 0 == colorPalette.size() )
         {
-            Theme::loadTheme( "Default", false );
+#if defined( KICK_DEFAULT_THEME )
+            Theme::loadTheme( KICK_DEFAULT_THEME, false );
+#else
+            const auto envTheme = juce::SystemStats::getEnvironmentVariable( "KICK_THEME", {} );
+            if( envTheme.isNotEmpty() )
+                Theme::loadTheme( envTheme, false );
+            else
+                Theme::loadTheme( "Default", false );
+#endif
         }
     }
 

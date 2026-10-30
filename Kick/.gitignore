@@ -1,6 +1,7 @@
 # Prerequisites
 *.d
 *.patch
+!/patches/*.patch
 
 # Compiled Object files
 *.slo

@@ -1,0 +1,282 @@
+diff --git a/modules/juce_gui_basics/native/juce_UIViewComponentPeer_ios.mm b/modules/juce_gui_basics/native/juce_UIViewComponentPeer_ios.mm
+index bff76fa..05a5be6 100644
+--- a/modules/juce_gui_basics/native/juce_UIViewComponentPeer_ios.mm
++++ b/modules/juce_gui_basics/native/juce_UIViewComponentPeer_ios.mm
+@@ -43,6 +43,54 @@
+ namespace juce
+ {
+ 
++struct WindowSceneTrackerListener
++{
++    virtual ~WindowSceneTrackerListener() = default;
++    virtual void windowSceneChanged() = 0;
++};
++
++struct WindowSceneTracker
++{
++public:
++    WindowSceneTracker() = default;
++
++    void setWindowScene (UIWindowScene* x) API_AVAILABLE (ios (13.0))
++    {
++        windowScene = x;
++        listeners.call ([] (auto& l) { l.windowSceneChanged(); });
++    }
++
++    UIWindowScene* getWindowScene() const API_AVAILABLE (ios (13.0))
++    {
++        return static_cast<UIWindowScene*> (windowScene);
++    }
++
++    void setPrimaryWindow (UIWindow* w)
++    {
++        primaryWindow = w;
++    }
++
++    UIWindow* getPrimaryWindow() const
++    {
++        return static_cast<UIWindow*> (primaryWindow);
++    }
++
++    void addListener (WindowSceneTrackerListener& l)
++    {
++        listeners.add (&l);
++    }
++
++    void removeListener (WindowSceneTrackerListener& l)
++    {
++        listeners.remove (&l);
++    }
++
++private:
++    ListenerList<WindowSceneTrackerListener> listeners;
++    id windowScene = nil;
++    id primaryWindow = nil;
++};
++
+ //==============================================================================
+ static NSArray* getContainerAccessibilityElements (AccessibilityHandler& handler)
+ {
+@@ -388,7 +436,8 @@ - (void) becomeKeyWindow;
+ 
+ //==============================================================================
+ class UIViewComponentPeer final : public ComponentPeer,
+-                                  public UIViewPeerControllerReceiver
++                                  public UIViewPeerControllerReceiver,
++                                  private WindowSceneTrackerListener
+ {
+ public:
+     UIViewComponentPeer (Component&, int windowStyleFlags, UIView* viewToAttachTo);
+@@ -494,6 +543,7 @@ void replaceMarkedRangeWithText (TextInputTarget* target,
+     bool fullScreen = false, insideDrawRect = false;
+     NSUniquePtr<JuceTextView> hiddenTextInput { [[JuceTextView alloc] initWithOwner: this] };
+     NSUniquePtr<JuceTextInputTokenizer> tokenizer { [[JuceTextInputTokenizer alloc] initWithPeer: this] };
++    SharedResourcePointer<WindowSceneTracker> windowSceneTracker;
+ 
+     static int64 getMouseTime (NSTimeInterval timestamp) noexcept
+     {
+@@ -542,6 +592,22 @@ void appStyleChanged() override
+         [controller setNeedsStatusBarAppearanceUpdate];
+     }
+ 
++    void windowSceneChanged() override
++    {
++        if (isSharedWindow)
++            return;
++
++        if (@available (ios 13, *))
++        {
++            window.windowScene = windowSceneTracker->getWindowScene();
++        }
++
++        updateScreenBounds();
++
++        if (component.isVisible())
++            [window makeKeyAndVisible];
++    }
++
+     //==============================================================================
+     class AsyncRepaintMessage final : public CallbackMessage
+     {
+@@ -1767,6 +1833,14 @@ - (UITextRange*) rangeEnclosingPosition: (JuceUITextPosition*) position
+         r.origin.y = [UIScreen mainScreen].bounds.size.height - (r.origin.y + r.size.height);
+ 
+         window = [[JuceUIWindow alloc] initWithFrame: r];
++
++        if (@available (ios 13, *))
++        {
++            window.windowScene = windowSceneTracker->getWindowScene();
++        }
++
++        windowSceneTracker->setPrimaryWindow (window);
++
+         [((JuceUIWindow*) window) setOwner: this];
+ 
+         controller = [[JuceUIViewController alloc] init];
+@@ -1785,10 +1859,17 @@ - (UITextRange*) rangeEnclosingPosition: (JuceUITextPosition*) position
+ 
+     setTitle (component.getName());
+     setVisible (component.isVisible());
++
++    windowSceneTracker->addListener (*this);
+ }
+ 
+ UIViewComponentPeer::~UIViewComponentPeer()
+ {
++    windowSceneTracker->removeListener (*this);
++
++    if (windowSceneTracker->getPrimaryWindow() == window)
++        windowSceneTracker->setPrimaryWindow (nil);
++
+     if (iOSGlobals::currentlyFocusedPeer == this)
+         iOSGlobals::currentlyFocusedPeer = nullptr;
+ 
+@@ -1897,6 +1978,8 @@ - (UITextRange*) rangeEnclosingPosition: (JuceUITextPosition*) position
+         if ((! shouldBeFullScreen) && r.isEmpty())
+             r = getBounds();
+ 
++        fullScreen = shouldBeFullScreen;
++
+         // (can't call the component's setBounds method because that'll reset our fullscreen flag)
+         if (! r.isEmpty())
+             setBounds (detail::ScalingHelpers::scaledScreenPosToUnscaled (component, r), shouldBeFullScreen);
+diff --git a/modules/juce_gui_basics/native/juce_Windowing_ios.mm b/modules/juce_gui_basics/native/juce_Windowing_ios.mm
+index 0d24a4e..1f352c1 100644
+--- a/modules/juce_gui_basics/native/juce_Windowing_ios.mm
++++ b/modules/juce_gui_basics/native/juce_Windowing_ios.mm
+@@ -37,6 +37,78 @@
+     Array<AppInactivityCallback*> appBecomingInactiveCallbacks;
+ } // namespace juce
+ 
++API_AVAILABLE (ios (13.0))
++@interface JuceAppSceneDelegate : NSObject<UIWindowSceneDelegate>
++@property (strong, nonatomic) UIWindow *window;
++@end
++
++@implementation JuceAppSceneDelegate
++SharedResourcePointer<WindowSceneTracker> windowSceneTracker;
++
++- (void)           scene: (UIScene*) scene
++    willConnectToSession: (UISceneSession*) session
++                 options: (UISceneConnectionOptions*) connectionOptions
++{
++    if ([scene isKindOfClass: UIWindowScene.class])
++    {
++        auto* ws = static_cast<UIWindowScene*> (scene);
++        windowSceneTracker->setWindowScene (ws);
++        if (auto* w = windowSceneTracker->getPrimaryWindow())
++        {
++            self.window = w;
++            w.windowScene = ws;
++            [w makeKeyAndVisible];
++        }
++    }
++    else
++    {
++        jassertfalse;
++    }
++}
++
++- (void) sceneDidDisconnect: (UIScene*) scene
++{
++    if (scene == windowSceneTracker->getWindowScene())
++    {
++        windowSceneTracker->setWindowScene (nullptr);
++        self.window = nil;
++    }
++}
++
++- (void) sceneDidBecomeActive: (UIScene*) scene
++{
++    isIOSAppActive = true;
++}
++
++- (void) sceneWillResignActive: (UIScene*) scene
++{
++    isIOSAppActive = false;
++
++    for (int i = appBecomingInactiveCallbacks.size(); --i >= 0;)
++        appBecomingInactiveCallbacks.getReference (i)->appBecomingInactive();
++}
++
++- (void) sceneDidEnterBackground: (UIScene*) scene
++{
++    if (auto* app = JUCEApplicationBase::getInstance())
++        app->suspended();
++}
++
++- (void) sceneWillEnterForeground: (UIScene*) scene
++{
++    if (auto* app = JUCEApplicationBase::getInstance())
++        app->resumed();
++}
++
++- (void)         windowScene: (UIWindowScene*) windowScene
++    didUpdateCoordinateSpace: (id<UICoordinateSpace>) previousCoordinateSpace
++        interfaceOrientation: (UIInterfaceOrientation) previousInterfaceOrientation
++             traitCollection: (UITraitCollection*) previousTraitCollection
++{
++    windowSceneTracker->setWindowScene (windowScene);
++}
++@end
++
+ #if JUCE_PUSH_NOTIFICATIONS
+ @interface JuceAppStartupDelegate : NSObject <UIApplicationDelegate, UNUserNotificationCenterDelegate>
+ #else
+@@ -45,8 +117,6 @@ @interface JuceAppStartupDelegate : NSObject <UIApplicationDelegate>
+ {
+     UIBackgroundTaskIdentifier appSuspendTask;
+ }
+-
+-@property (strong, nonatomic) UIWindow *window;
+ - (id) init;
+ - (void) dealloc;
+ - (void) applicationDidFinishLaunching: (UIApplication*) application;
+@@ -58,6 +128,10 @@ - (void) applicationWillResignActive: (UIApplication*) application;
+ - (void) application: (UIApplication*) application handleEventsForBackgroundURLSession: (NSString*) identifier
+    completionHandler: (void (^)(void)) completionHandler;
+ - (void) applicationDidReceiveMemoryWarning: (UIApplication *) application;
++
++- (UISceneConfiguration*)      application: (UIApplication*) application
++    configurationForConnectingSceneSession: (UISceneSession*) connectingSceneSession
++                                   options: (UISceneConnectionOptions*) options API_AVAILABLE (ios (13.0));
+ #if JUCE_PUSH_NOTIFICATIONS
+ 
+ - (void)                                 application: (UIApplication*) application
+@@ -208,6 +282,17 @@ - (void) applicationDidReceiveMemoryWarning: (UIApplication*) application
+         app->memoryWarningReceived();
+ }
+ 
++- (UISceneConfiguration*)      application: (UIApplication*) application
++    configurationForConnectingSceneSession: (UISceneSession*) connectingSceneSession
++                                   options: (UISceneConnectionOptions*) options
++{
++    auto* result = [UISceneConfiguration configurationWithName: juceStringToNS (TRANS ("Default Configuration"))
++                                                   sessionRole: connectingSceneSession.role];
++    result.delegateClass = JuceAppSceneDelegate.class;
++    result.sceneClass = UIWindowScene.class;
++    return result;
++}
++
+ - (void) setPushNotificationsDelegateToUse: (NSObject*) delegate
+ {
+     _pushNotificationsDelegate = delegate;
+@@ -604,7 +689,17 @@ int juce_iOSMain (int argc, const char* argv[], void* customDelegatePtr)
+ // query its frame.
+ struct TemporaryWindow
+ {
+-    UIWindow* window = [[UIWindow alloc] init];
++    UIWindow* window = std::invoke ([&]
++    {
++        if (@available (ios 13, *))
++        {
++            SharedResourcePointer<WindowSceneTracker> windowSceneTracker;
++            if (auto* ws = windowSceneTracker->getWindowScene())
++                return [[UIWindow alloc] initWithWindowScene: ws];
++        }
++
++        return [[UIWindow alloc] init];
++    });
+     ~TemporaryWindow() noexcept { [window release]; }
+ };
+ 

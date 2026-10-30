@@ -44,10 +44,19 @@ message( "## Version: ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJEC
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
+## iOS: recent SDKs require the UIScene life cycle.
+set(KICK_IOS_PLIST_ARGS "")
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(KICK_IOS_PLIST_ARGS PLIST_TO_MERGE "<plist><dict><key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/><key>UISceneConfigurations</key><dict><key>UIWindowSceneSessionRoleApplication</key><array><dict><key>UISceneConfigurationName</key><string>Default Configuration</string><key>UISceneDelegateClassName</key><string>JuceAppSceneDelegate</string></dict></array></dict></dict></dict></plist>")
+endif()
+
 juce_add_gui_app(${TargetName} 
         PRODUCT_NAME ${TargetName}
         COMPANY_NAME ${TargetCompany}
         REQUIRES_FULL_SCREEN TRUE
+        IPHONE_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        IPAD_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        ${KICK_IOS_PLIST_ARGS}
 )
 
 set_target_properties(${TargetName} PROPERTIES 
@@ -147,6 +156,22 @@ target_link_libraries(${TargetName}
     PRIVATE 
     timestamp
 )
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    add_custom_command(TARGET ${TargetName} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/assets"
+            "$<TARGET_FILE_DIR:${TargetName}>/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/templates"
+            "$<TARGET_FILE_DIR:${TargetName}>/templates"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/demos"
+            "$<TARGET_FILE_DIR:${TargetName}>/demos"
+        COMMAND codesign --force --sign - "$<TARGET_FILE_DIR:${TargetName}>"
+        COMMENT "Copying assets, templates, demos and re-signing iOS app bundle"
+    )
 endif()
 
 ## CPack variables...

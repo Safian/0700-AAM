@@ -27,17 +27,13 @@ namespace kick_ui
 {
     class KickLEDs;
     class AppStatusbar;
+    class MobileHardwareDrawer;
+
     class KickHome : public juce::Component
         , private juce::AsyncUpdater
     {
     public:
-        static KickHome& Instance()
-        {
-            // HomeWindow owns the component; retain only a weak reference here.
-            static juce::Component::SafePointer<KickHome> instance;
-            if (!instance) instance = new KickHome;
-            return *instance;
-        }
+        static KickHome& Instance();
 
         inline Screen getCurrentScreen() const { return currentScreen; }
         inline Screen getPreviousScreen() const { return stack.empty() ? Screen::HomeListView : stack.top(); }
@@ -63,6 +59,7 @@ namespace kick_ui
 
         std::unique_ptr<Component>                 ctrlBar_;
         std::unique_ptr<KickLEDs>                  ledControl_;
+        std::unique_ptr<MobileHardwareDrawer>      hardwareDrawer_;
         juce::Component::SafePointer<AppStatusbar> statusBar_;
         int                                        page{ 0 };
 

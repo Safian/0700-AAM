@@ -131,6 +131,13 @@ namespace kick_ui
         void visibilityChanged() override {}
     };
 
+    KickHome& KickHome::Instance()
+    {
+        static juce::Component::SafePointer<KickHome> instance;
+        if (!instance) instance = new KickHome;
+        return *instance;
+    }
+
     KickHome::KickHome()
         : statusBar_( &AppStatusbar::Instance() )
     {
@@ -186,7 +193,9 @@ namespace kick_ui
 
         // Global components
         ctrlBar_ = std::make_unique<AppTopbar>();
+        hardwareDrawer_ = std::make_unique<MobileHardwareDrawer>();
         mt::utils::addChildComponents( this, ctrlBar_.get(), statusBar_ );
+        addAndMakeVisible( hardwareDrawer_.get() );
         // First launch screen.
         screenAdder( Screen::RecentProject, std::make_unique<ui::RecentProject>() );
 
@@ -324,6 +333,14 @@ namespace kick_ui
             auto b = bounds;
             ctrlBar_->setBounds( b.removeFromTop( ui::layout::header.getHeight() ) );
             statusBar_->setBounds( b.removeFromBottom( ui::layout::statusBar.getHeight() ) );
+        }
+        if( auto p = screens_[currentScreen].get() )
+            if( auto pScr = dynamic_cast<juce::Component*>( p ) )
+                pScr->setBounds( getScreenBounds( p ) );
+        if( hardwareDrawer_ )
+        {
+            hardwareDrawer_->setBounds( getLocalBounds() );
+            hardwareDrawer_->toFront( false );
         }
     }
 

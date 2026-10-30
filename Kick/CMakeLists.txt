@@ -31,6 +31,10 @@ option( KICK_MULTITOUCH "KICK Multitouch demo App" OFF )
 option( DEBUG_TOUCH "Enable mouse cursor" OFF )
 option( USE_ASAN_KICK "enable address sanitizer" OFF )
 option( PERFETTO "Enable tracing using Perfetto" OFF )
+set(KICK_THEME "Default" CACHE STRING "Initial theme for Kick (e.g. Default or Proper)")
+if(NOT KICK_THEME STREQUAL "Default")
+    add_compile_definitions(KICK_DEFAULT_THEME="${KICK_THEME}")
+endif()
 
 #Compile commands, useful for some IDEs like VS-Code
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -78,7 +82,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # If we are using MSVC we want static runtime linkage
-if(APPLE)
+if(APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set (CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE INTERNAL "")
 endif(APPLE)
 

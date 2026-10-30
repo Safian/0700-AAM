@@ -40,7 +40,40 @@ juce::File getAppDirs( DirType T )
         if (T == MTSamples) return root.getChildFile("sounds");
     }
     auto seprator = juce::File::getSeparatorString();
-#if defined( _WIN32 ) || defined( _WIN64 )
+#if defined( JUCE_IOS )
+    auto bundleDir = juce::File::getSpecialLocation( juce::File::currentApplicationFile );
+    auto userDocs  = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Kick" );
+    if( T == MTAssets )
+        return bundleDir.getChildFile( "assets" );
+    else if( T == MTDemos )
+        return bundleDir.getChildFile( "demos" );
+    else if( T == MTTemp )
+        return bundleDir.getChildFile( "templates" );
+    else if( T == MTProjects )
+    {
+        auto dir = userDocs.getChildFile( "projects" );
+        dir.createDirectory();
+        return dir;
+    }
+    else if( T == MTSamples )
+    {
+        auto dir = userDocs.getChildFile( "sounds" );
+        dir.createDirectory();
+        return dir;
+    }
+    else if( T == MTLog )
+    {
+        auto dir = userDocs.getChildFile( "logs" );
+        dir.createDirectory();
+        return dir;
+    }
+    else if( T == MTPrefs )
+    {
+        auto dir = userDocs.getChildFile( "prefs" );
+        dir.createDirectory();
+        return dir;
+    }
+#elif defined( _WIN32 ) || defined( _WIN64 )
     auto rootP = juce::File::getSpecialLocation( juce::File::currentApplicationFile ).getParentDirectory().getFullPathName() + seprator;
     if( T == MTAssets )
         return juce::File( rootP + juce::String( MT_SOURCE_SRCDIR ) + seprator + "assets" );
@@ -96,7 +129,10 @@ juce::File getDefaultPath()
     juce::File rootP;
     auto       seprator = juce::File::getSeparatorString();
 
-#if defined( _WIN32 ) || defined( _WIN64 )
+#if defined( JUCE_IOS )
+    rootP = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Kick" );
+    rootP.createDirectory();
+#elif defined( _WIN32 ) || defined( _WIN64 )
     rootP = juce::File::getSpecialLocation( juce::File::currentApplicationFile ).getParentDirectory().getFullPathName() + seprator;
 
 #elif defined( __APPLE_CPP__ ) || defined( __APPLE_CC__ ) || defined( JUCE_MAC )
