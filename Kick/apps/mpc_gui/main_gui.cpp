@@ -173,6 +173,7 @@ static int g_pad_press_count[16]; // 16 MPC drum pads
 static bool g_is_playing = false;
 static bool g_is_recording = false;
 static int g_knob_vals[4] = { 75, 40, 10, 85 };
+static bool g_knob_touched[4] = { false, false, false, false };
 static pthread_mutex_t g_ui_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static uint32_t g_render_buf[SCREEN_W * SCREEN_H];
@@ -763,24 +764,38 @@ static void render_ui() {
     draw_rect(44, 172, 130, 20, sustain_on ? COLOR_GREEN : COLOR_BORDER);
     draw_string(52, 178, sustain_on ? "PEDAL: SUSTAIN" : "PEDAL: OFF", sustain_on ? COLOR_GREEN : COLOR_TEXT_DIM, 1);
 
-    // 4 Q-Link Knobs Simulation
+    // 4 Q-Link Knobs Simulation (Hardware Encoders + Touch Sensors)
     const char* knob_labels[4] = { "CUTOFF", "RESONANCE", "ATTACK", "DECAY" };
     for (int k = 0; k < 4; ++k) {
         int kx = 50 + (k % 2) * 190;
         int ky = 200 + (k / 2) * 130;
-        fill_rect(kx, ky, 160, 100, COLOR_PANEL_HI);
-        draw_rect(kx, ky, 160, 100, COLOR_BORDER);
-        draw_string(kx + 15, ky + 15, knob_labels[k], COLOR_TEXT_NORM, 1);
+        bool touched = g_knob_touched[k];
+
+        fill_rect(kx, ky, 160, 100, touched ? 0x001B3A4D : COLOR_PANEL_HI);
+        draw_rect(kx, ky, 160, 100, touched ? COLOR_CYAN : COLOR_BORDER);
+        draw_string(kx + 15, ky + 15, knob_labels[k], touched ? COLOR_CYAN : COLOR_TEXT_NORM, 1);
 
         // Knob circle
         int cx = kx + 80, cy = ky + 60, r = 24;
+        uint32_t ring_col = touched ? COLOR_CYAN : COLOR_ORANGE;
         for (int dy = -r; dy <= r; ++dy) {
             for (int dx = -r; dx <= r; ++dx) {
                 if (dx*dx + dy*dy <= r*r) {
-                    draw_pixel(cx + dx, cy + dy, (dx*dx + dy*dy <= (r-4)*(r-4)) ? COLOR_PANEL : COLOR_ORANGE);
+                    draw_pixel(cx + dx, cy + dy, (dx*dx + dy*dy <= (r-4)*(r-4)) ? COLOR_PANEL : ring_col);
                 }
             }
         }
+
+        // Value pointer line from center towards the angle of g_knob_vals[k]
+        float angle = (-135.0f + 270.0f * (float)g_knob_vals[k] / 100.0f) * (PI_F / 180.0f);
+        int ptr_x = cx + (int)(17.0f * sinf(angle));
+        int ptr_y = cy - (int)(17.0f * cosf(angle));
+        for (int pdy = -2; pdy <= 2; ++pdy) {
+            for (int pdx = -2; pdx <= 2; ++pdx) {
+                draw_pixel(ptr_x + pdx, ptr_y + pdy, COLOR_GOLD);
+            }
+        }
+
         // Value text
         char val_str[16];
         snprintf(val_str, sizeof(val_str), "%d%%", g_knob_vals[k]);
@@ -1185,24 +1200,56 @@ typedef struct {
     snd_rawmidi_t *in0, *in1, *in2, *out2;
 } MidiCtx;
 
-static void handle_midi_packet(const uint8_t* buf, ssize_t n) {
+static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port) {
     for (ssize_t i = 0; i < n; ++i) {
         uint8_t b = buf[i];
         if ((b & 0xF0) == 0x90 && (i + 2 < n)) {
             int ch = b & 0x0F;
             int note = buf[i+1], vel = buf[i+2];
-            NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
-            if (vel > 0) synth_note_on(&g_synth, note, vel, src);
-            else synth_note_off(&g_synth, note, src);
+
+            if (port == 1) {
+                // Port 1 (hw:0,0,1 MPC Private): Control surface touch sensors & buttons
+                if (note >= 84 && note <= 87) {
+                    int k = note - 84;
+                    g_knob_touched[k] = (vel > 0);
+                    printf("[Q-LINK] Knob %d Touch: %s\n", k + 1, (vel > 0) ? "TOUCHED" : "RELEASED");
+                }
+                // Do NOT play notes or highlight piano keys from Private control surface!
+            } else {
+                // Port 0 (hw:0,0,0 MPC Public) & Port 2 (DIN IN): Real Musical Keyboard & Pads
+                NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
+                if (vel > 0) synth_note_on(&g_synth, note, vel, src);
+                else synth_note_off(&g_synth, note, src);
+            }
             i += 2;
         } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
             int ch = b & 0x0F;
-            NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
-            synth_note_off(&g_synth, buf[i+1], src);
+            int note = buf[i+1];
+            if (port == 1) {
+                if (note >= 84 && note <= 87) {
+                    int k = note - 84;
+                    g_knob_touched[k] = false;
+                    printf("[Q-LINK] Knob %d Touch: RELEASED\n", k + 1);
+                }
+            } else {
+                NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
+                synth_note_off(&g_synth, note, src);
+            }
             i += 2;
         } else if ((b & 0xF0) == 0xB0 && (i + 2 < n)) {
             int cc_num = buf[i+1], cc_val = buf[i+2];
-            synth_cc(&g_synth, cc_num, cc_val);
+            if (cc_num >= 16 && cc_num <= 19) {
+                // Q-Link 1..4 Rotary Encoders (Relative 2's Complement delta)
+                int k = cc_num - 16;
+                int delta = (cc_val < 64) ? cc_val : (cc_val - 128);
+                int new_val = g_knob_vals[k] + delta * 2;
+                if (new_val < 0) new_val = 0;
+                if (new_val > 100) new_val = 100;
+                g_knob_vals[k] = new_val;
+                printf("[Q-LINK] Knob %d (%s) -> %d%%\n", k + 1, (k==0?"CUTOFF":k==1?"RESONANCE":k==2?"ATTACK":"DECAY"), new_val);
+            } else {
+                synth_cc(&g_synth, cc_num, cc_val);
+            }
             i += 2;
         }
     }
@@ -1217,20 +1264,20 @@ static void* midi_thread_func(void* arg) {
             ssize_t n = snd_rawmidi_read(ctx->in0, buf, sizeof(buf));
             if (n > 0) {
                 if (ctx->out2) snd_rawmidi_write(ctx->out2, buf, n);
-                handle_midi_packet(buf, n);
+                handle_midi_packet(buf, n, 0);
             }
         }
         if (ctx->in1) {
             ssize_t n = snd_rawmidi_read(ctx->in1, buf, sizeof(buf));
             if (n > 0) {
                 if (ctx->out2) snd_rawmidi_write(ctx->out2, buf, n);
-                handle_midi_packet(buf, n);
+                handle_midi_packet(buf, n, 1);
             }
         }
         if (ctx->in2) {
             ssize_t n = snd_rawmidi_read(ctx->in2, buf, sizeof(buf));
             if (n > 0) {
-                handle_midi_packet(buf, n);
+                handle_midi_packet(buf, n, 2);
             }
         }
         usleep(1000);
