@@ -2,4 +2,6 @@ kick_mpc_piano
 kick_mpc_raw
 probe
 alsa_probe
+fb_probe
+touch_probe
 build/
