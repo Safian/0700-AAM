@@ -198,7 +198,7 @@ public:
         if( isJogWheelHit( bp.x, bp.y ) )
         {
             draggingJog = true;
-            jogStartAngle = std::atan2( bp.y - 518.0f, bp.x - 553.0f );
+            jogStartAngle = std::atan2( bp.y - 524.0f, bp.x - 553.0f );
             return;
         }
 
@@ -229,7 +229,7 @@ public:
         if( draggingJog )
         {
             auto bp = toBaseCoords( e.getPosition() );
-            float angle = std::atan2( bp.y - 518.0f, bp.x - 553.0f );
+            float angle = std::atan2( bp.y - 524.0f, bp.x - 553.0f );
             float delta = angle - jogStartAngle;
             if( delta > juce::MathConstants<float>::pi ) delta -= juce::MathConstants<float>::twoPi;
             else if( delta < -juce::MathConstants<float>::pi ) delta += juce::MathConstants<float>::twoPi;
@@ -344,15 +344,17 @@ private:
 
     int getPadAt( float bx, float by ) const
     {
-        const float colX[4] = { 118.0f, 202.0f, 285.0f, 369.0f };
-        const float rowY[4] = { 362.0f, 443.0f, 524.0f, 605.0f };
-        const float padSize = 64.0f;
+        const float colX[4] = { 116.0f, 194.0f, 272.0f, 350.0f };
+        const float padW[4] = { 59.0f,  59.0f,  59.0f,  60.0f };
+
+        const float rowY[4] = { 363.0f, 441.0f, 519.0f, 597.0f };
+        const float padH[4] = { 61.0f,  61.0f,  61.0f,  62.0f };
         const float padMargin = 4.0f;
 
         int foundCol = -1;
         for( int c = 0; c < 4; ++c )
         {
-            if( bx >= colX[c] - padMargin && bx <= colX[c] + padSize + padMargin )
+            if( bx >= colX[c] - padMargin && bx <= colX[c] + padW[c] + padMargin )
             {
                 foundCol = c;
                 break;
@@ -363,7 +365,7 @@ private:
         int foundRow = -1;
         for( int r = 0; r < 4; ++r )
         {
-            if( by >= rowY[r] - padMargin && by <= rowY[r] + padSize + padMargin )
+            if( by >= rowY[r] - padMargin && by <= rowY[r] + padH[r] + padMargin )
             {
                 foundRow = r;
                 break;
@@ -382,29 +384,31 @@ private:
         int row = 3 - ( padIndex / 4 );
         int col = padIndex % 4;
 
-        const float colX[4] = { 118.0f, 202.0f, 285.0f, 369.0f };
-        const float rowY[4] = { 362.0f, 443.0f, 524.0f, 605.0f };
-        const float padSize = 64.0f;
+        const float colX[4] = { 116.0f, 194.0f, 272.0f, 350.0f };
+        const float padW[4] = { 59.0f,  59.0f,  59.0f,  60.0f };
+
+        const float rowY[4] = { 363.0f, 441.0f, 519.0f, 597.0f };
+        const float padH[4] = { 61.0f,  61.0f,  61.0f,  62.0f };
 
         return juce::Rectangle<float>(
             renderedChassisRect.getX() + colX[col] * scale,
             renderedChassisRect.getY() + rowY[row] * scale,
-            padSize * scale,
-            padSize * scale
+            padW[col] * scale,
+            padH[row] * scale
         );
     }
 
     bool isJogWheelHit( float bx, float by ) const
     {
-        return std::hypot( bx - 553.0f, by - 518.0f ) <= 42.0f;
+        return std::hypot( bx - 553.0f, by - 524.0f ) <= 48.0f;
     }
 
     int getKnobAt( float bx, float by ) const
     {
-        const float knobY[4] = { 90.0f, 155.0f, 220.0f, 285.0f };
+        const float knobY[4] = { 114.0f, 178.0f, 244.0f, 308.0f };
         for( int i = 0; i < 4; ++i )
         {
-            if( std::hypot( bx - 635.0f, by - knobY[i] ) <= 24.0f )
+            if( std::hypot( bx - 621.0f, by - knobY[i] ) <= 24.0f )
                 return i;
         }
         return -1;
@@ -414,49 +418,49 @@ private:
     {
         using namespace contracts;
 
-        // Bank A..D: Y in [360, 388]
-        if( by >= 358.0f && by <= 390.0f )
+        // Bank A..D: Y in [348, 380]
+        if( by >= 348.0f && by <= 380.0f )
         {
-            if( bx >= 435.0f && bx <= 478.0f ) return DeviceControlContracts::EN_BANK_A;
-            if( bx >= 495.0f && bx <= 538.0f ) return DeviceControlContracts::EN_BANK_B;
-            if( bx >= 555.0f && bx <= 598.0f ) return DeviceControlContracts::EN_BANK_C;
-            if( bx >= 615.0f && bx <= 658.0f ) return DeviceControlContracts::EN_BANK_D;
+            if( bx >= 438.0f && bx <= 478.0f ) return DeviceControlContracts::EN_BANK_A;
+            if( bx >= 498.0f && bx <= 538.0f ) return DeviceControlContracts::EN_BANK_B;
+            if( bx >= 558.0f && bx <= 598.0f ) return DeviceControlContracts::EN_BANK_C;
+            if( bx >= 618.0f && bx <= 658.0f ) return DeviceControlContracts::EN_BANK_D;
         }
 
-        // Mode row: Y in [415, 445]
-        if( by >= 412.0f && by <= 448.0f )
+        // Mode row: Y in [410, 440]
+        if( by >= 410.0f && by <= 440.0f )
         {
-            if( bx >= 435.0f && bx <= 478.0f ) return DeviceControlContracts::EN_MAINMODE;
-            if( bx >= 480.0f && bx <= 523.0f ) return DeviceControlContracts::EN_BROWSE;
-            if( bx >= 525.0f && bx <= 568.0f ) return DeviceControlContracts::EN_TRACK_MIX;
-            if( bx >= 570.0f && bx <= 613.0f ) return DeviceControlContracts::EN_TRACK_MUTE;
-            if( bx >= 615.0f && bx <= 658.0f ) return DeviceControlContracts::EN_NEXT_SEQ;
+            if( bx >= 435.0f && bx <= 472.0f ) return DeviceControlContracts::EN_MAINMODE;
+            if( bx >= 478.0f && bx <= 515.0f ) return DeviceControlContracts::EN_BROWSE;
+            if( bx >= 524.0f && bx <= 564.0f ) return DeviceControlContracts::EN_TRACK_MIX;
+            if( bx >= 575.0f && bx <= 615.0f ) return DeviceControlContracts::EN_TRACK_MUTE;
+            if( bx >= 621.0f && bx <= 661.0f ) return DeviceControlContracts::EN_NEXT_SEQ;
         }
 
-        // Transport row: Y in [620, 658]
-        if( by >= 618.0f && by <= 660.0f )
+        // Transport row: Y in [620, 665]
+        if( by >= 620.0f && by <= 665.0f )
         {
-            if( bx >= 440.0f && bx <= 478.0f ) return DeviceControlContracts::EN_RECORD;
-            if( bx >= 485.0f && bx <= 523.0f ) return DeviceControlContracts::EN_OVERDUB;
-            if( bx >= 530.0f && bx <= 568.0f ) return DeviceControlContracts::EN_STOP;
-            if( bx >= 575.0f && bx <= 613.0f ) return DeviceControlContracts::EN_PLAY;
-            if( bx >= 620.0f && bx <= 658.0f ) return DeviceControlContracts::EN_PLAYSTART;
+            if( std::hypot( bx - 457.0f, by - 642.0f ) <= 20.0f ) return DeviceControlContracts::EN_RECORD;
+            if( std::hypot( bx - 501.0f, by - 641.0f ) <= 20.0f ) return DeviceControlContracts::EN_OVERDUB;
+            if( std::hypot( bx - 551.0f, by - 642.0f ) <= 20.0f ) return DeviceControlContracts::EN_STOP;
+            if( std::hypot( bx - 596.0f, by - 642.0f ) <= 20.0f ) return DeviceControlContracts::EN_PLAY;
+            if( std::hypot( bx - 640.0f, by - 642.0f ) <= 20.0f ) return DeviceControlContracts::EN_PLAYSTART;
         }
 
-        // Utility column right:
-        if( bx >= 615.0f && bx <= 658.0f )
+        // Left utility column: X in [435, 475]
+        if( bx >= 435.0f && bx <= 475.0f )
         {
-            if( by >= 465.0f && by <= 495.0f ) return DeviceControlContracts::EN_MENU;
-            if( by >= 515.0f && by <= 552.0f ) return DeviceControlContracts::EN_SHIFT;
-            if( by >= 570.0f && by <= 600.0f ) return DeviceControlContracts::EN_PROG_EDIT;
+            if( by >= 452.0f && by <= 483.0f ) return DeviceControlContracts::EN_TAP_TEMPO;
+            if( by >= 508.0f && by <= 538.0f ) return DeviceControlContracts::EN_NOTE_REPEAT;
+            if( by >= 563.0f && by <= 594.0f ) return DeviceControlContracts::EN_STEP_SEQ;
         }
 
-        // Left utility column:
-        if( bx >= 435.0f && bx <= 478.0f )
+        // Right utility column: X in [618, 658]
+        if( bx >= 618.0f && bx <= 658.0f )
         {
-            if( by >= 465.0f && by <= 495.0f ) return DeviceControlContracts::EN_TAP_TEMPO;
-            if( by >= 515.0f && by <= 545.0f ) return DeviceControlContracts::EN_NOTE_REPEAT;
-            if( by >= 570.0f && by <= 600.0f ) return DeviceControlContracts::EN_STEP_SEQ;
+            if( by >= 452.0f && by <= 483.0f ) return DeviceControlContracts::EN_MENU;
+            if( by >= 505.0f && by <= 538.0f ) return DeviceControlContracts::EN_SHIFT;
+            if( by >= 563.0f && by <= 594.0f ) return DeviceControlContracts::EN_PROG_EDIT;
         }
 
         return -1;
@@ -479,22 +483,30 @@ private:
         using namespace contracts;
         switch( buttonCode )
         {
-            case DeviceControlContracts::EN_BANK_A: return makeRect( 438, 362, 40, 24 );
-            case DeviceControlContracts::EN_BANK_B: return makeRect( 498, 362, 40, 24 );
-            case DeviceControlContracts::EN_BANK_C: return makeRect( 558, 362, 40, 24 );
-            case DeviceControlContracts::EN_BANK_D: return makeRect( 618, 362, 40, 24 );
-            case DeviceControlContracts::EN_MAINMODE: return makeRect( 438, 418, 40, 26 );
-            case DeviceControlContracts::EN_BROWSE: return makeRect( 483, 418, 40, 26 );
-            case DeviceControlContracts::EN_TRACK_MIX: return makeRect( 528, 418, 40, 26 );
-            case DeviceControlContracts::EN_TRACK_MUTE: return makeRect( 573, 418, 40, 26 );
-            case DeviceControlContracts::EN_NEXT_SEQ: return makeRect( 618, 418, 40, 26 );
-            case DeviceControlContracts::EN_RECORD: return makeRect( 445, 625, 34, 30 );
-            case DeviceControlContracts::EN_OVERDUB: return makeRect( 490, 625, 34, 30 );
-            case DeviceControlContracts::EN_STOP: return makeRect( 535, 625, 34, 30 );
-            case DeviceControlContracts::EN_PLAY: return makeRect( 580, 625, 34, 30 );
-            case DeviceControlContracts::EN_PLAYSTART: return makeRect( 625, 625, 34, 30 );
-            case DeviceControlContracts::EN_MENU: return makeRect( 618, 468, 40, 26 );
-            case DeviceControlContracts::EN_SHIFT: return makeRect( 618, 518, 40, 32 );
+            case DeviceControlContracts::EN_BANK_A: return makeRect( 440, 350, 38, 28 );
+            case DeviceControlContracts::EN_BANK_B: return makeRect( 500, 350, 38, 28 );
+            case DeviceControlContracts::EN_BANK_C: return makeRect( 560, 350, 38, 28 );
+            case DeviceControlContracts::EN_BANK_D: return makeRect( 620, 350, 38, 28 );
+
+            case DeviceControlContracts::EN_MAINMODE: return makeRect( 435, 412, 38, 26 );
+            case DeviceControlContracts::EN_BROWSE:   return makeRect( 478, 412, 38, 26 );
+            case DeviceControlContracts::EN_TRACK_MIX: return makeRect( 524, 412, 40, 26 );
+            case DeviceControlContracts::EN_TRACK_MUTE: return makeRect( 575, 412, 40, 26 );
+            case DeviceControlContracts::EN_NEXT_SEQ: return makeRect( 621, 412, 40, 26 );
+
+            case DeviceControlContracts::EN_RECORD:    return makeRect( 440, 625, 34, 34 );
+            case DeviceControlContracts::EN_OVERDUB:   return makeRect( 484, 625, 34, 34 );
+            case DeviceControlContracts::EN_STOP:      return makeRect( 534, 625, 34, 34 );
+            case DeviceControlContracts::EN_PLAY:      return makeRect( 579, 625, 34, 34 );
+            case DeviceControlContracts::EN_PLAYSTART: return makeRect( 623, 625, 34, 34 );
+
+            case DeviceControlContracts::EN_TAP_TEMPO:   return makeRect( 435, 454, 38, 26 );
+            case DeviceControlContracts::EN_NOTE_REPEAT: return makeRect( 435, 510, 38, 26 );
+            case DeviceControlContracts::EN_STEP_SEQ:    return makeRect( 435, 565, 38, 26 );
+
+            case DeviceControlContracts::EN_MENU:      return makeRect( 620, 454, 38, 26 );
+            case DeviceControlContracts::EN_SHIFT:     return makeRect( 620, 508, 38, 30 );
+            case DeviceControlContracts::EN_PROG_EDIT: return makeRect( 620, 565, 38, 26 );
             default: return {};
         }
     }
