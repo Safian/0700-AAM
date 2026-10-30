@@ -28,6 +28,7 @@
 #include "contracts/dcl/dcl_signals.h"
 #include "PktMgr/PktMgr.hpp"
 #include "common/common.h"
+#include "kick_hardware_controls.h"
 #include "kick_mobile_t_layout.h"
 
 #if JUCE_MAC
@@ -56,6 +57,56 @@ public:
         kickHome = &kick_ui::KickHome::Instance();
         addAndMakeVisible( kickHome );
         loadImage();
+
+        // 1. Reusable Pads
+        for( int i = 0; i < 16; ++i )
+        {
+            pads[i] = std::make_unique<kick_hw_ui::HardwarePad>( i );
+            addChildComponent( pads[i].get() );
+        }
+
+        // 2. Reusable Q-Links
+        for( int i = 0; i < 4; ++i )
+        {
+            qlinks[i] = std::make_unique<kick_hw_ui::HardwareRotaryKnob>( contracts::DeviceControlContracts::EN_KNOB_1 + i, true );
+            addChildComponent( qlinks[i].get() );
+        }
+
+        // 3. Reusable Master & Rec knobs
+        masterKnob = std::make_unique<kick_hw_ui::HardwareRotaryKnob>( contracts::DeviceControlContracts::EN_KNOB_5, false, 0.85f );
+        addChildComponent( masterKnob.get() );
+
+        recKnob = std::make_unique<kick_hw_ui::HardwareRotaryKnob>( contracts::DeviceControlContracts::EN_KNOB_6, false, 0.5f );
+        addChildComponent( recKnob.get() );
+
+        // 4. Reusable Jog Wheel
+        jogWheel = std::make_unique<kick_hw_ui::HardwareJogWheel>();
+        addChildComponent( jogWheel.get() );
+
+        // 5. Reusable Ribbon
+        ribbon = std::make_unique<kick_hw_ui::HardwareRibbon>();
+        addChildComponent( ribbon.get() );
+
+        // 6. Reusable Bank A..D buttons
+        const int bankCodes[4] = { contracts::DeviceControlContracts::EN_BANK_A, contracts::DeviceControlContracts::EN_BANK_B, contracts::DeviceControlContracts::EN_BANK_C, contracts::DeviceControlContracts::EN_BANK_D };
+        for( int b = 0; b < 4; ++b )
+        {
+            bankButtons[b] = std::make_unique<kick_hw_ui::HardwareButton>( bankCodes[b], false, juce::Colour( 0xffff9900 ) );
+            if( b == 0 ) bankButtons[b]->setLit( true );
+            addChildComponent( bankButtons[b].get() );
+        }
+
+        // 7. Reusable Transport buttons
+        const int transCodes[5] = { contracts::DeviceControlContracts::EN_RECORD, contracts::DeviceControlContracts::EN_OVERDUB, contracts::DeviceControlContracts::EN_STOP, contracts::DeviceControlContracts::EN_PLAY, contracts::DeviceControlContracts::EN_PLAYSTART };
+        const juce::Colour transCols[5] = {
+            juce::Colour( 0xffff3b30 ), juce::Colour( 0xffff9500 ), juce::Colour( 0xffffcc00 ),
+            juce::Colour( 0xff34c759 ), juce::Colour( 0xff00d4ff )
+        };
+        for( int t = 0; t < 5; ++t )
+        {
+            transButtons[t] = std::make_unique<kick_hw_ui::HardwareButton>( transCodes[t], true, transCols[t] );
+            addChildComponent( transButtons[t].get() );
+        }
     }
 
     ~KickHardwareChassis() override
@@ -156,6 +207,7 @@ public:
     {
         if( currentMode == ViewMode::MobileTLayout )
         {
+            hideHardwareControls();
             screenCutoutRect = {};
             renderedChassisRect = {};
             if( mobileLayout != nullptr )
@@ -167,6 +219,7 @@ public:
 
         if( currentMode == ViewMode::DisplayOnly )
         {
+            hideHardwareControls();
             screenCutoutRect = {};
             renderedChassisRect = {};
             if( kickHome != nullptr )
@@ -208,6 +261,89 @@ public:
             {
                 kickHome->setBounds( 0, 0, 1024, 600 );
                 kickHome->setTransform( juce::AffineTransform::scale( sw / 1024.0f, sh / 600.0f ).translated( sx, sy ) );
+            }
+
+            auto toScreen = [&]( float bx, float by, float bw, float bh ) {
+                return juce::Rectangle<int>(
+                    (int)std::round( chassisRect.getX() + bx * scale ),
+                    (int)std::round( chassisRect.getY() + by * scale ),
+                    (int)std::round( bw * scale ),
+                    (int)std::round( bh * scale )
+                );
+            };
+
+            // Pads
+            const float colX[4] = { 116.0f, 194.0f, 272.0f, 350.0f };
+            const float rowY[4] = { 363.0f, 441.0f, 519.0f, 597.0f };
+            for( int r = 0; r < 4; ++r )
+            {
+                for( int c = 0; c < 4; ++c )
+                {
+                    int padIdx = ( 3 - r ) * 4 + c;
+                    if( pads[padIdx] )
+                    {
+                        pads[padIdx]->setVisible( true );
+                        pads[padIdx]->setBounds( toScreen( colX[c], rowY[r], 59.0f, 61.0f ) );
+                    }
+                }
+            }
+
+            // Q-Links
+            const float knobY[4] = { 114.0f, 178.0f, 244.0f, 308.0f };
+            for( int i = 0; i < 4; ++i )
+            {
+                if( qlinks[i] )
+                {
+                    qlinks[i]->setVisible( true );
+                    qlinks[i]->setBounds( toScreen( 621.0f - 24.0f, knobY[i] - 24.0f, 48.0f, 48.0f ) );
+                }
+            }
+
+            // Master & Rec
+            if( masterKnob )
+            {
+                masterKnob->setVisible( true );
+                masterKnob->setBounds( toScreen( 76.0f - 24.0f, 114.0f - 24.0f, 48.0f, 48.0f ) );
+            }
+            if( recKnob )
+            {
+                recKnob->setVisible( true );
+                recKnob->setBounds( toScreen( 76.0f - 24.0f, 178.0f - 24.0f, 48.0f, 48.0f ) );
+            }
+
+            // Jog Wheel
+            if( jogWheel )
+            {
+                jogWheel->setVisible( true );
+                jogWheel->setBounds( toScreen( 553.0f - 48.0f, 524.0f - 48.0f, 96.0f, 96.0f ) );
+            }
+
+            // Ribbon
+            if( ribbon )
+            {
+                ribbon->setVisible( true );
+                ribbon->setBounds( toScreen( 35.0f, 363.0f, 55.0f, 150.0f ) );
+            }
+
+            // Banks
+            for( int b = 0; b < 4; ++b )
+            {
+                if( bankButtons[b] )
+                {
+                    bankButtons[b]->setVisible( true );
+                    bankButtons[b]->setBounds( toScreen( 440.0f + b * 60.0f, 350.0f, 38.0f, 28.0f ) );
+                }
+            }
+
+            // Transport
+            const float transX[5] = { 440.0f, 484.0f, 534.0f, 579.0f, 623.0f };
+            for( int t = 0; t < 5; ++t )
+            {
+                if( transButtons[t] )
+                {
+                    transButtons[t]->setVisible( true );
+                    transButtons[t]->setBounds( toScreen( transX[t], 625.0f, 34.0f, 34.0f ) );
+                }
             }
         }
     }
@@ -581,12 +717,34 @@ public:
         contracts::DclSignals::hardwareInputTriggered( msg );
     }
 
+    void hideHardwareControls()
+    {
+        for( auto& p : pads ) if( p ) p->setVisible( false );
+        for( auto& q : qlinks ) if( q ) q->setVisible( false );
+        if( masterKnob ) masterKnob->setVisible( false );
+        if( recKnob ) recKnob->setVisible( false );
+        if( jogWheel ) jogWheel->setVisible( false );
+        if( ribbon ) ribbon->setVisible( false );
+        for( auto& b : bankButtons ) if( b ) b->setVisible( false );
+        for( auto& t : transButtons ) if( t ) t->setVisible( false );
+    }
+
     kick_ui::KickHome*     kickHome{ nullptr };
     std::unique_ptr<kick_mobile::KickMobileTLayout> mobileLayout;
     juce::Image            chassisImage;
     ViewMode               currentMode{ ViewMode::HardwareChassis };
     juce::Rectangle<float> renderedChassisRect;
     juce::Rectangle<float> screenCutoutRect;
+
+    // Reusable kick_hw_ui components
+    std::unique_ptr<kick_hw_ui::HardwarePad>        pads[16];
+    std::unique_ptr<kick_hw_ui::HardwareRotaryKnob> qlinks[4];
+    std::unique_ptr<kick_hw_ui::HardwareRotaryKnob> masterKnob;
+    std::unique_ptr<kick_hw_ui::HardwareRotaryKnob> recKnob;
+    std::unique_ptr<kick_hw_ui::HardwareJogWheel>   jogWheel;
+    std::unique_ptr<kick_hw_ui::HardwareRibbon>     ribbon;
+    std::unique_ptr<kick_hw_ui::HardwareButton>     bankButtons[4];
+    std::unique_ptr<kick_hw_ui::HardwareButton>     transButtons[5];
 
     int   activePadIndex{ -1 };
     int   activeButtonCode{ -1 };

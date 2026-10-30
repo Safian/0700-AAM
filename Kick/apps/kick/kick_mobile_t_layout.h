@@ -27,8 +27,10 @@
 #include "PktMgr/PktMgr.hpp"
 #include "common/common.h"
 #include "kick_ui/kick_ui.h"
+#include "kick_hardware_controls.h"
 #include <map>
-#include <set>
+#include <vector>
+#include <memory>
 #include <cmath>
 
 namespace kick_mobile
@@ -66,7 +68,7 @@ inline juce::Image loadChassisAsset( const juce::String& filename )
 //==============================================================================
 /**
  * Bottom Hardware Chassis Panel (Pads, Bank A..D, Jog Wheel, Transport bar, Ribbon).
- * Renders the authentic Behringer Kick lower hardware surface (746x402 base coords).
+ * Composed 100% from reusable kick_hw_ui controls over authentic hardware graphics.
  */
 class MobileBottomChassisPanel : public juce::Component
 {
@@ -75,72 +77,78 @@ public:
     {
         bgImage = loadChassisAsset( "mobile_hw_bottom.png" );
         setOpaque( true );
+
+        // 1. Create 16 reusable HardwarePad components
+        for( int i = 0; i < 16; ++i )
+        {
+            pads[i] = std::make_unique<kick_hw_ui::HardwarePad>( i );
+            addAndMakeVisible( pads[i].get() );
+        }
+
+        // 2. Create reusable HardwareJogWheel component
+        jogWheel = std::make_unique<kick_hw_ui::HardwareJogWheel>();
+        addAndMakeVisible( jogWheel.get() );
+
+        // 3. Create reusable HardwareRibbon component
+        ribbon = std::make_unique<kick_hw_ui::HardwareRibbon>();
+        addAndMakeVisible( ribbon.get() );
+
+        // 4. Create reusable Bank A..D buttons
+        const int bankCodes[4] = { DCC::EN_BANK_A, DCC::EN_BANK_B, DCC::EN_BANK_C, DCC::EN_BANK_D };
+        for( int b = 0; b < 4; ++b )
+        {
+            bankButtons[b] = std::make_unique<kick_hw_ui::HardwareButton>( bankCodes[b], false, juce::Colour( 0xffff9900 ) );
+            if( b == 0 ) bankButtons[b]->setLit( true ); // Bank A active by default
+            addAndMakeVisible( bankButtons[b].get() );
+        }
+
+        // 5. Create reusable Transport buttons (REC, OVR, STOP, PLAY, PAUSE)
+        const int transCodes[5] = { DCC::EN_RECORD, DCC::EN_OVERDUB, DCC::EN_STOP, DCC::EN_PLAY, DCC::EN_PLAYSTART };
+        const juce::Colour transCols[5] = {
+            juce::Colour( 0xffff3b30 ), // REC: Red
+            juce::Colour( 0xffff9500 ), // OVR: Amber
+            juce::Colour( 0xffffcc00 ), // STOP: Yellow
+            juce::Colour( 0xff34c759 ), // PLAY: Green
+            juce::Colour( 0xff00d4ff )  // PAUSE: Cyan
+        };
+        for( int t = 0; t < 5; ++t )
+        {
+            transButtons[t] = std::make_unique<kick_hw_ui::HardwareButton>( transCodes[t], true, transCols[t] );
+            addAndMakeVisible( transButtons[t].get() );
+        }
+
+        // 6. Create reusable Utility buttons (FULL LEVEL, 16 LEVELS, ERASE)
+        const int utilCodes[3] = { DCC::EN_FULL_LEVEL, DCC::EN_16LEVELS, DCC::EN_ERASE };
+        for( int u = 0; u < 3; ++u )
+        {
+            utilButtons[u] = std::make_unique<kick_hw_ui::HardwareButton>( utilCodes[u], false, juce::Colour( 0xffffcc00 ) );
+            addAndMakeVisible( utilButtons[u].get() );
+        }
+
+        // 7. Create reusable Mode buttons (Row 1: MAIN, BROWSE, TRACK MIX, TRACK MUTE, NEXT SEC)
+        const int modeCodesTop[5] = { DCC::EN_MAINMODE, DCC::EN_BROWSE, DCC::EN_TRACK_MIX, DCC::EN_TRACK_MUTE, DCC::EN_NEXT_SEQ };
+        for( int m = 0; m < 5; ++m )
+        {
+            modeButtonsTop[m] = std::make_unique<kick_hw_ui::HardwareButton>( modeCodesTop[m], false, juce::Colour( 0xff30d158 ) );
+            addAndMakeVisible( modeButtonsTop[m].get() );
+        }
+
+        // 8. Create reusable Mode buttons (Row 2: STEP SEQ, TC, SAMPLER, SAMPLE EDIT, PROG EDIT)
+        const int modeCodesBtm[5] = { DCC::EN_STEP_SEQ, DCC::EN_TC, DCC::EN_SAMPLER, DCC::EN_SAMPLE_EDIT, DCC::EN_PROG_EDIT };
+        for( int m = 0; m < 5; ++m )
+        {
+            modeButtonsBtm[m] = std::make_unique<kick_hw_ui::HardwareButton>( modeCodesBtm[m], false, juce::Colour( 0xff30d158 ) );
+            addAndMakeVisible( modeButtonsBtm[m].get() );
+        }
     }
 
     void paint( juce::Graphics& g ) override
     {
         g.fillAll( juce::Colour( 0xff121215 ) );
 
-        if( !bgImage.isValid() || renderedRect.isEmpty() )
-            return;
-
-        g.drawImage( bgImage, renderedRect, juce::RectanglePlacement::centred );
-
-        const float scale = renderedRect.getWidth() / 746.0f;
-        const float ox    = renderedRect.getX();
-        const float oy    = renderedRect.getY();
-
-        // 1. Draw glowing cyan frames on active pads
-        for( int pad : activePads )
+        if( bgImage.isValid() && !renderedRect.isEmpty() )
         {
-            auto pr = getPadRect( pad );
-            if( !pr.isEmpty() )
-            {
-                g.setColour( juce::Colour( 0x5500d4ff ) );
-                g.fillRoundedRectangle( pr, 6.0f * scale );
-                g.setColour( juce::Colour( 0xff00d4ff ) );
-                g.drawRoundedRectangle( pr, 6.0f * scale, 3.0f * scale );
-            }
-        }
-
-        // 2. Active Bank highlight
-        if( activeBank >= 0 && activeBank < 4 )
-        {
-            const float bankCx[4] = { 493.0f, 561.0f, 629.0f, 697.0f };
-            juce::Rectangle<float> br(
-                ox + ( bankCx[activeBank] - 18.0f ) * scale,
-                oy + ( 50.0f - 12.0f ) * scale,
-                36.0f * scale,
-                24.0f * scale
-            );
-            g.setColour( juce::Colour( 0x44ff9900 ) );
-            g.fillRoundedRectangle( br, 4.0f * scale );
-            g.setColour( juce::Colour( 0xffff9900 ) );
-            g.drawRoundedRectangle( br, 4.0f * scale, 2.0f * scale );
-        }
-
-        // 3. Jog Wheel indicator
-        const float jogCx = ox + 590.0f * scale;
-        const float jogCy = oy + 184.0f * scale;
-        const float jogR  = 40.0f * scale;
-        const float indX  = jogCx + std::cos( jogAngle ) * ( jogR * 0.72f );
-        const float indY  = jogCy + std::sin( jogAngle ) * ( jogR * 0.72f );
-        g.setColour( juce::Colour( 0xffff3b30 ) );
-        g.fillEllipse( indX - 4.0f * scale, indY - 4.0f * scale, 8.0f * scale, 8.0f * scale );
-
-        // 4. Ribbon touch strip LED ladder
-        if( ribbonTouching )
-        {
-            float rx = ox + 25.0f * scale;
-            float ry = oy + 35.0f * scale;
-            float rw = 67.0f * scale;
-            float rh = 150.0f * scale;
-
-            float ty = ry + rh * ( 1.0f - ribbonValue );
-            g.setColour( juce::Colour( 0x44ff2d55 ) );
-            g.fillRect( rx, ty, rw, ( ry + rh ) - ty );
-            g.setColour( juce::Colour( 0xffff2d55 ) );
-            g.fillRect( rx, ty - 2.0f * scale, rw, 4.0f * scale );
+            g.drawImage( bgImage, renderedRect, juce::RectanglePlacement::centred );
         }
     }
 
@@ -160,304 +168,94 @@ public:
             float h = bounds.getWidth() / targetAspect;
             renderedRect = juce::Rectangle<float>( 0.0f, ( bounds.getHeight() - h ) * 0.5f, bounds.getWidth(), h );
         }
-    }
 
-    juce::Point<float> toBaseCoords( juce::Point<float> p ) const
-    {
-        if( renderedRect.isEmpty() ) return { -1.0f, -1.0f };
-        float scale = renderedRect.getWidth() / 746.0f;
-        if( scale <= 0.0f ) return { -1.0f, -1.0f };
-        return { ( p.x - renderedRect.getX() ) / scale, ( p.y - renderedRect.getY() ) / scale };
-    }
+        if( renderedRect.isEmpty() ) return;
 
-    int getPadAt( float bx, float by ) const
-    {
+        const float scale = renderedRect.getWidth() / 746.0f;
+        const float ox    = renderedRect.getX();
+        const float oy    = renderedRect.getY();
+
+        auto toScreen = [&]( float bx, float by, float bw, float bh ) {
+            return juce::Rectangle<int>(
+                (int)std::round( ox + bx * scale ),
+                (int)std::round( oy + by * scale ),
+                (int)std::round( bw * scale ),
+                (int)std::round( bh * scale )
+            );
+        };
+
+        // 1. Position 16 Pads
         const float colX[4] = { 118.0f, 203.0f, 289.0f, 375.0f };
-        const float padW = 67.0f;
         const float rowY[4] = { 31.0f, 116.0f, 203.0f, 288.0f };
-        const float padH = 67.0f;
-        const float padMargin = 6.0f;
-
-        int foundCol = -1;
-        for( int c = 0; c < 4; ++c )
-        {
-            if( bx >= colX[c] - padMargin && bx <= colX[c] + padW + padMargin )
-            {
-                foundCol = c;
-                break;
-            }
-        }
-        if( foundCol < 0 ) return -1;
-
-        int foundRow = -1;
         for( int r = 0; r < 4; ++r )
         {
-            if( by >= rowY[r] - padMargin && by <= rowY[r] + padH + padMargin )
+            for( int c = 0; c < 4; ++c )
             {
-                foundRow = r;
-                break;
+                int padIdx = ( 3 - r ) * 4 + c;
+                pads[padIdx]->setBounds( toScreen( colX[c], rowY[r], 67.0f, 67.0f ) );
             }
         }
-        if( foundRow < 0 ) return -1;
 
-        return ( 3 - foundRow ) * 4 + foundCol;
-    }
+        // 2. Position Jog Wheel
+        jogWheel->setBounds( toScreen( 590.0f - 52.0f, 184.0f - 52.0f, 104.0f, 104.0f ) );
 
-    juce::Rectangle<float> getPadRect( int padIndex ) const
-    {
-        if( renderedRect.isEmpty() || padIndex < 0 || padIndex >= 16 ) return {};
-        const float scale = renderedRect.getWidth() / 746.0f;
-        int row = 3 - ( padIndex / 4 );
-        int col = padIndex % 4;
+        // 3. Position Ribbon
+        ribbon->setBounds( toScreen( 25.0f, 35.0f, 67.0f, 150.0f ) );
 
-        const float colX[4] = { 118.0f, 203.0f, 289.0f, 375.0f };
-        const float rowY[4] = { 31.0f, 116.0f, 203.0f, 288.0f };
-
-        return juce::Rectangle<float>(
-            renderedRect.getX() + colX[col] * scale,
-            renderedRect.getY() + rowY[row] * scale,
-            67.0f * scale,
-            67.0f * scale
-        );
-    }
-
-    void mouseDown( const juce::MouseEvent& e ) override
-    {
-        auto bp = toBaseCoords( e.position );
-        if( bp.x < 0.0f ) return;
-
-        int sourceIdx = e.source.getIndex();
-
-        // 1. Check 16 MPC Pads
-        int pad = getPadAt( bp.x, bp.y );
-        if( pad >= 0 )
-        {
-            touchPadMap[sourceIdx] = pad;
-            activePads.insert( pad );
-            sendPadMessage( pad, true, 127 );
-            repaint();
-            return;
-        }
-
-        // 2. Check Jog Wheel
-        float jDist = std::hypot( bp.x - 590.0f, bp.y - 184.0f );
-        if( jDist <= 52.0f )
-        {
-            if( jDist <= 20.0f )
-            {
-                // Enter button center
-                sendButtonMessage( DCC::EN_KNOB_CENTER, true );
-            }
-            else
-            {
-                draggingJog = true;
-                jogLastAngle = std::atan2( bp.y - 184.0f, bp.x - 590.0f );
-            }
-            return;
-        }
-
-        // 3. Check Bank A..D
+        // 4. Position Bank A..D buttons
+        const float bankCx[4] = { 493.0f, 561.0f, 629.0f, 697.0f };
         for( int b = 0; b < 4; ++b )
         {
-            const float bankCx[4] = { 493.0f, 561.0f, 629.0f, 697.0f };
-            if( std::abs( bp.x - bankCx[b] ) <= 22.0f && std::abs( bp.y - 50.0f ) <= 16.0f )
-            {
-                activeBank = b;
-                sendButtonMessage( DCC::EN_BANK_A + b, true );
-                repaint();
-                return;
-            }
+            bankButtons[b]->setBounds( toScreen( bankCx[b] - 18.0f, 50.0f - 12.0f, 36.0f, 24.0f ) );
         }
 
-        // 4. Check Transport row: REC, OVR, STOP, PLAY, PAUSE
+        // 5. Position Transport buttons (REC, OVR, STOP, PLAY, PAUSE)
         const float transCx[5] = { 490.0f, 543.0f, 593.0f, 645.0f, 695.0f };
-        const int transBtns[5] = { DCC::EN_RECORD, DCC::EN_OVERDUB, DCC::EN_STOP, DCC::EN_PLAY, DCC::EN_PLAYSTART };
         for( int t = 0; t < 5; ++t )
         {
-            if( std::hypot( bp.x - transCx[t], bp.y - 355.0f ) <= 20.0f )
-            {
-                activeTransBtn = transBtns[t];
-                sendButtonMessage( activeTransBtn, true );
-                repaint();
-                return;
-            }
+            transButtons[t]->setBounds( toScreen( transCx[t] - 17.0f, 355.0f - 17.0f, 34.0f, 34.0f ) );
         }
 
-        // 5. Check Ribbon
-        if( bp.x >= 25.0f && bp.x <= 92.0f && bp.y >= 35.0f && bp.y <= 185.0f )
+        // 6. Position Utility buttons (FULL LEVEL, 16 LEVELS, ERASE)
+        const float utilY[3] = { 234.0f, 285.0f, 340.0f };
+        for( int u = 0; u < 3; ++u )
         {
-            ribbonTouching = true;
-            ribbonValue = juce::jlimit( 0.0f, 1.0f, 1.0f - ( bp.y - 35.0f ) / 150.0f );
-            sendRibbonMessage( ribbonValue );
-            repaint();
-            return;
+            utilButtons[u]->setBounds( toScreen( 35.0f, utilY[u] - 14.0f, 50.0f, 28.0f ) );
         }
 
-        // 6. Check Left utility buttons: FULL LEVEL, 16 LEVELS, ERASE
-        if( bp.x >= 25.0f && bp.x <= 95.0f )
-        {
-            if( std::abs( bp.y - 234.0f ) <= 18.0f ) { sendButtonMessage( DCC::EN_FULL_LEVEL, true ); return; }
-            if( std::abs( bp.y - 285.0f ) <= 18.0f ) { sendButtonMessage( DCC::EN_16LEVELS, true ); return; }
-            if( std::abs( bp.y - 340.0f ) <= 18.0f ) { sendButtonMessage( DCC::EN_ERASE, true ); return; }
-        }
-
-        // 7. Check Mode Buttons: MAIN, BROWSE, TRACK MIX, TRACK MUTE, NEXT SEC
+        // 7. Position Mode Buttons Top
         const float modeCx[5] = { 482.0f, 532.0f, 584.0f, 638.0f, 692.0f };
-        if( std::abs( bp.y - 108.0f ) <= 15.0f )
+        for( int m = 0; m < 5; ++m )
         {
-            const int modeBtns[5] = { DCC::EN_MAINMODE, DCC::EN_BROWSE, DCC::EN_TRACK_MIX, DCC::EN_TRACK_MUTE, DCC::EN_NEXT_SEQ };
-            for( int m = 0; m < 5; ++m )
-            {
-                if( std::abs( bp.x - modeCx[m] ) <= 22.0f ) { sendButtonMessage( modeBtns[m], true ); return; }
-            }
+            modeButtonsTop[m]->setBounds( toScreen( modeCx[m] - 20.0f, 108.0f - 12.0f, 40.0f, 24.0f ) );
         }
 
-        // 8. Check Bottom Mode Buttons: STEP SEQ, TC, SAMPLER, SAMPLE EDIT, PROG EDIT
-        if( std::abs( bp.y - 292.0f ) <= 15.0f )
+        // 8. Position Mode Buttons Bottom
+        for( int m = 0; m < 5; ++m )
         {
-            const int btmBtns[5] = { DCC::EN_STEP_SEQ, DCC::EN_TC, DCC::EN_SAMPLER, DCC::EN_SAMPLE_EDIT, DCC::EN_PROG_EDIT };
-            for( int m = 0; m < 5; ++m )
-            {
-                if( std::abs( bp.x - modeCx[m] ) <= 22.0f ) { sendButtonMessage( btmBtns[m], true ); return; }
-            }
+            modeButtonsBtm[m]->setBounds( toScreen( modeCx[m] - 20.0f, 292.0f - 12.0f, 40.0f, 24.0f ) );
         }
-    }
-
-    void mouseDrag( const juce::MouseEvent& e ) override
-    {
-        auto bp = toBaseCoords( e.position );
-        if( bp.x < 0.0f ) return;
-
-        if( draggingJog )
-        {
-            float curAngle = std::atan2( bp.y - 184.0f, bp.x - 590.0f );
-            float delta = curAngle - jogLastAngle;
-            if( delta > juce::MathConstants<float>::pi )  delta -= juce::MathConstants<float>::twoPi;
-            if( delta < -juce::MathConstants<float>::pi ) delta += juce::MathConstants<float>::twoPi;
-
-            jogAngle += delta;
-            jogAccum += delta;
-            jogLastAngle = curAngle;
-
-            const float step = juce::MathConstants<float>::twoPi / 24.0f;
-            if( std::abs( jogAccum ) >= step )
-            {
-                int ticks = (int)( jogAccum / step );
-                jogAccum -= ticks * step;
-                sendWheelMessage( ticks );
-            }
-            repaint();
-            return;
-        }
-
-        if( ribbonTouching && bp.x >= 20.0f && bp.x <= 97.0f )
-        {
-            ribbonValue = juce::jlimit( 0.0f, 1.0f, 1.0f - ( bp.y - 35.0f ) / 150.0f );
-            sendRibbonMessage( ribbonValue );
-            repaint();
-        }
-    }
-
-    void mouseUp( const juce::MouseEvent& e ) override
-    {
-        int sourceIdx = e.source.getIndex();
-        auto it = touchPadMap.find( sourceIdx );
-        if( it != touchPadMap.end() )
-        {
-            int pad = it->second;
-            sendPadMessage( pad, false, 0 );
-            activePads.erase( pad );
-            touchPadMap.erase( it );
-            repaint();
-        }
-
-        if( draggingJog )
-        {
-            draggingJog = false;
-        }
-
-        if( activeTransBtn >= 0 )
-        {
-            sendButtonMessage( activeTransBtn, false );
-            activeTransBtn = -1;
-            repaint();
-        }
-
-        if( ribbonTouching )
-        {
-            ribbonTouching = false;
-            repaint();
-        }
-    }
-
-    void sendPadMessage( int padIndex, bool pressed, int velocity )
-    {
-        CPktMgr::HWMsg_t msg;
-        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_PAD;
-        msg.pktCmd  = DCC::PadCmd::EN_PAD_STATE;
-        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-        msg.data    = { padIndex, pressed ? (int)DCC::BTN_PRESSED : (int)DCC::BTN_RELEASED, velocity, 0 };
-        contracts::DclSignals::hardwareInputTriggered( msg );
-    }
-
-    void sendButtonMessage( int buttonCode, bool pressed )
-    {
-        CPktMgr::HWMsg_t msg;
-        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_BUTTON;
-        msg.pktCmd  = DCC::BtnCmd::EN_BTN_STATUS;
-        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-        msg.data    = { buttonCode, pressed ? (int)DCC::BTN_PRESSED : (int)DCC::BTN_RELEASED };
-        contracts::DclSignals::hardwareInputTriggered( msg );
-    }
-
-    void sendWheelMessage( int ticks )
-    {
-        int dir = ( ticks > 0 ) ? (int)DCC::EN_KNOB_CLOCKWISE : (int)DCC::EN_KNOB_ANTICLOCKWISE;
-        sendKnobMessage( DCC::EN_KNOB_CENTER, dir, std::max( 1, std::abs( ticks ) ), false );
-    }
-
-    void sendKnobMessage( int knobCode, int direction, int ticks, bool isQlink )
-    {
-        CPktMgr::HWMsg_t msg;
-        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_KNOBS;
-        msg.pktCmd  = isQlink ? (int)DCC::KnobCmd::EN_KNOB_QLINK
-                              : (int)DCC::KnobCmd::EN_KNOB_ROTARY;
-        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-        msg.data    = { knobCode, direction, ticks };
-        contracts::DclSignals::hardwareInputTriggered( msg );
-    }
-
-    void sendRibbonMessage( float val )
-    {
-        CPktMgr::HWMsg_t msg;
-        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_SLIDER;
-        msg.pktCmd  = DCC::SliderCmd::EN_SLIDER_TOUCH_INPUT;
-        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-        msg.data    = { (int)( val * 100.0f ) };
-        contracts::DclSignals::hardwareInputTriggered( msg );
     }
 
 private:
-    juce::Image            bgImage;
+    juce::Image bgImage;
     juce::Rectangle<float> renderedRect;
-    std::map<int, int>     touchPadMap;
-    std::set<int>          activePads;
-    int                    activeBank{ 0 };
-    int                    activeTransBtn{ -1 };
 
-    bool                   draggingJog{ false };
-    float                  jogAngle{ 0.0f };
-    float                  jogLastAngle{ 0.0f };
-    float                  jogAccum{ 0.0f };
-
-    bool                   ribbonTouching{ false };
-    float                  ribbonValue{ 0.0f };
+    // Reusable kick_hw_ui components
+    std::unique_ptr<kick_hw_ui::HardwarePad>        pads[16];
+    std::unique_ptr<kick_hw_ui::HardwareJogWheel>   jogWheel;
+    std::unique_ptr<kick_hw_ui::HardwareRibbon>     ribbon;
+    std::unique_ptr<kick_hw_ui::HardwareButton>     bankButtons[4];
+    std::unique_ptr<kick_hw_ui::HardwareButton>     transButtons[5];
+    std::unique_ptr<kick_hw_ui::HardwareButton>     utilButtons[3];
+    std::unique_ptr<kick_hw_ui::HardwareButton>     modeButtonsTop[5];
+    std::unique_ptr<kick_hw_ui::HardwareButton>     modeButtonsBtm[5];
 };
 
 //==============================================================================
 /**
  * Master Panel (Left edge: Power, Master Volume knob, Rec Gain knob, Link button).
- * Base dimensions: 106 x 334.
+ * Composed from reusable HardwareRotaryKnob and HardwareButton components.
  */
 class MobileMasterChassisPanel : public juce::Component
 {
@@ -466,46 +264,29 @@ public:
     {
         bgImage = loadChassisAsset( "mobile_hw_master.png" );
         setOpaque( true );
+
+        masterKnob = std::make_unique<kick_hw_ui::HardwareRotaryKnob>( DCC::EN_KNOB_5, false, 0.85f );
+        addAndMakeVisible( masterKnob.get() );
+
+        recKnob = std::make_unique<kick_hw_ui::HardwareRotaryKnob>( DCC::EN_KNOB_6, false, 0.5f );
+        addAndMakeVisible( recKnob.get() );
+
+        linkBtn = std::make_unique<kick_hw_ui::HardwareButton>( DCC::EN_LINK, false, juce::Colour( 0xff00d4ff ) );
+        addAndMakeVisible( linkBtn.get() );
     }
 
     void paint( juce::Graphics& g ) override
     {
         g.fillAll( juce::Colour( 0xff16161a ) );
 
-        if( !bgImage.isValid() || renderedRect.isEmpty() )
-            return;
-
-        g.drawImage( bgImage, renderedRect, juce::RectanglePlacement::centred );
-
-        const float scale = renderedRect.getHeight() / 334.0f;
-        const float ox    = renderedRect.getX();
-        const float oy    = renderedRect.getY();
-
-        // Draw indicator arc for Master Volume knob (53, 112)
-        if( activeKnob == 0 )
+        if( bgImage.isValid() && !renderedRect.isEmpty() )
         {
-            drawKnobArc( g, ox + 53.0f * scale, oy + 112.0f * scale, 24.0f * scale, masterVal );
-        }
-
-        // Draw indicator arc for Rec Gain knob (53, 202)
-        if( activeKnob == 1 )
-        {
-            drawKnobArc( g, ox + 53.0f * scale, oy + 202.0f * scale, 24.0f * scale, recVal );
+            g.drawImage( bgImage, renderedRect, juce::RectanglePlacement::centred );
         }
 
         // Draw glowing border on right edge
         g.setColour( juce::Colour( 0x4400d4ff ) );
         g.drawLine( getWidth() - 1.0f, 0.0f, getWidth() - 1.0f, (float)getHeight(), 2.0f );
-    }
-
-    void drawKnobArc( juce::Graphics& g, float cx, float cy, float r, float val )
-    {
-        juce::Path p;
-        float startA = juce::MathConstants<float>::pi * 0.75f;
-        float endA   = startA + juce::MathConstants<float>::pi * 1.5f * val;
-        p.addCentredArc( cx, cy, r + 4.0f, r + 4.0f, 0.0f, startA, endA, true );
-        g.setColour( juce::Colour( 0xff00d4ff ) );
-        g.strokePath( p, juce::PathStrokeType( 3.0f ) );
     }
 
     void resized() override
@@ -514,109 +295,45 @@ public:
         const float targetAspect = 106.0f / 334.0f;
         float w = bounds.getHeight() * targetAspect;
         renderedRect = juce::Rectangle<float>( ( bounds.getWidth() - w ) * 0.5f, 0.0f, w, bounds.getHeight() );
-    }
 
-    juce::Point<float> toBaseCoords( juce::Point<float> p ) const
-    {
-        if( renderedRect.isEmpty() ) return { -1.0f, -1.0f };
-        float scale = renderedRect.getHeight() / 334.0f;
-        if( scale <= 0.0f ) return { -1.0f, -1.0f };
-        return { ( p.x - renderedRect.getX() ) / scale, ( p.y - renderedRect.getY() ) / scale };
-    }
+        if( renderedRect.isEmpty() ) return;
 
-    void mouseDown( const juce::MouseEvent& e ) override
-    {
-        auto bp = toBaseCoords( e.position );
-        if( bp.x < 0.0f ) return;
+        const float scale = renderedRect.getHeight() / 334.0f;
+        const float ox    = renderedRect.getX();
+        const float oy    = renderedRect.getY();
 
-        // Master knob: (53, 112)
-        if( std::hypot( bp.x - 53.0f, bp.y - 112.0f ) <= 28.0f )
-        {
-            activeKnob = 0;
-            dragStartY = e.position.y;
-            startVal   = masterVal;
-            return;
-        }
+        auto toScreen = [&]( float bx, float by, float bw, float bh ) {
+            return juce::Rectangle<int>(
+                (int)std::round( ox + bx * scale ),
+                (int)std::round( oy + by * scale ),
+                (int)std::round( bw * scale ),
+                (int)std::round( bh * scale )
+            );
+        };
 
-        // Rec knob: (53, 202)
-        if( std::hypot( bp.x - 53.0f, bp.y - 202.0f ) <= 28.0f )
-        {
-            activeKnob = 1;
-            dragStartY = e.position.y;
-            startVal   = recVal;
-            return;
-        }
+        // Master knob at (53, 112), radius ~26
+        masterKnob->setBounds( toScreen( 53.0f - 26.0f, 112.0f - 26.0f, 52.0f, 52.0f ) );
 
-        // Link button: (25..85, 268..305)
-        if( bp.x >= 25.0f && bp.x <= 85.0f && bp.y >= 268.0f && bp.y <= 305.0f )
-        {
-            sendButtonMessage( DCC::EN_LINK, true );
-        }
-    }
+        // Rec knob at (53, 202), radius ~26
+        recKnob->setBounds( toScreen( 53.0f - 26.0f, 202.0f - 26.0f, 52.0f, 52.0f ) );
 
-    void mouseDrag( const juce::MouseEvent& e ) override
-    {
-        if( activeKnob >= 0 )
-        {
-            float dy = dragStartY - e.position.y;
-            float newVal = juce::jlimit( 0.0f, 1.0f, startVal + dy / 150.0f );
-            if( activeKnob == 0 )
-            {
-                masterVal = newVal;
-                int dir = ( dy > 0 ) ? (int)DCC::EN_KNOB_CLOCKWISE : (int)DCC::EN_KNOB_ANTICLOCKWISE;
-                sendKnobMessage( DCC::EN_KNOB_5, dir, 1, false );
-            }
-            else
-            {
-                recVal = newVal;
-                int dir = ( dy > 0 ) ? (int)DCC::EN_KNOB_CLOCKWISE : (int)DCC::EN_KNOB_ANTICLOCKWISE;
-                sendKnobMessage( DCC::EN_KNOB_6, dir, 1, false );
-            }
-            repaint();
-        }
-    }
-
-    void mouseUp( const juce::MouseEvent& ) override
-    {
-        activeKnob = -1;
-        repaint();
-    }
-
-    void sendButtonMessage( int buttonCode, bool pressed )
-    {
-        CPktMgr::HWMsg_t msg;
-        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_BUTTON;
-        msg.pktCmd  = DCC::BtnCmd::EN_BTN_STATUS;
-        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-        msg.data    = { buttonCode, pressed ? (int)DCC::BTN_PRESSED : (int)DCC::BTN_RELEASED };
-        contracts::DclSignals::hardwareInputTriggered( msg );
-    }
-
-    void sendKnobMessage( int knobCode, int direction, int ticks, bool isQlink )
-    {
-        CPktMgr::HWMsg_t msg;
-        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_KNOBS;
-        msg.pktCmd  = isQlink ? (int)DCC::KnobCmd::EN_KNOB_QLINK
-                              : (int)DCC::KnobCmd::EN_KNOB_ROTARY;
-        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-        msg.data    = { knobCode, direction, ticks };
-        contracts::DclSignals::hardwareInputTriggered( msg );
+        // Link button at (25..85, 268..305)
+        linkBtn->setBounds( toScreen( 25.0f, 268.0f, 60.0f, 37.0f ) );
     }
 
 private:
-    juce::Image            bgImage;
+    juce::Image bgImage;
     juce::Rectangle<float> renderedRect;
-    int                    activeKnob{ -1 };
-    float                  dragStartY{ 0.0f };
-    float                  startVal{ 0.8f };
-    float                  masterVal{ 0.85f };
-    float                  recVal{ 0.5f };
+
+    std::unique_ptr<kick_hw_ui::HardwareRotaryKnob> masterKnob;
+    std::unique_ptr<kick_hw_ui::HardwareRotaryKnob> recKnob;
+    std::unique_ptr<kick_hw_ui::HardwareButton>     linkBtn;
 };
 
 //==============================================================================
 /**
  * Q-Link Potentiometer Panel (Right edge: P1, P2, P3, P4 knobs).
- * Base dimensions: 74 x 302.
+ * Composed from 4 reusable HardwareRotaryKnob components.
  */
 class MobileQLinkChassisPanel : public juce::Component
 {
@@ -625,43 +342,26 @@ public:
     {
         bgImage = loadChassisAsset( "mobile_hw_qlinks.png" );
         setOpaque( true );
+
+        for( int i = 0; i < 4; ++i )
+        {
+            qlinkKnobs[i] = std::make_unique<kick_hw_ui::HardwareRotaryKnob>( DCC::EN_KNOB_1 + i, true, 0.5f );
+            addAndMakeVisible( qlinkKnobs[i].get() );
+        }
     }
 
     void paint( juce::Graphics& g ) override
     {
         g.fillAll( juce::Colour( 0xff16161a ) );
 
-        if( !bgImage.isValid() || renderedRect.isEmpty() )
-            return;
-
-        g.drawImage( bgImage, renderedRect, juce::RectanglePlacement::centred );
-
-        const float scale = renderedRect.getHeight() / 302.0f;
-        const float ox    = renderedRect.getX();
-        const float oy    = renderedRect.getY();
-
-        const float knobY[4] = { 36.0f, 105.0f, 174.0f, 243.0f };
-        for( int i = 0; i < 4; ++i )
+        if( bgImage.isValid() && !renderedRect.isEmpty() )
         {
-            if( activeKnob == i )
-            {
-                drawKnobArc( g, ox + 37.0f * scale, oy + knobY[i] * scale, 22.0f * scale, knobVals[i] );
-            }
+            g.drawImage( bgImage, renderedRect, juce::RectanglePlacement::centred );
         }
 
         // Draw glowing border on left edge
         g.setColour( juce::Colour( 0x4400d4ff ) );
         g.drawLine( 0.0f, 0.0f, 0.0f, (float)getHeight(), 2.0f );
-    }
-
-    void drawKnobArc( juce::Graphics& g, float cx, float cy, float r, float val )
-    {
-        juce::Path p;
-        float startA = juce::MathConstants<float>::pi * 0.75f;
-        float endA   = startA + juce::MathConstants<float>::pi * 1.5f * val;
-        p.addCentredArc( cx, cy, r + 4.0f, r + 4.0f, 0.0f, startA, endA, true );
-        g.setColour( juce::Colour( 0xff00d4ff ) );
-        g.strokePath( p, juce::PathStrokeType( 3.0f ) );
     }
 
     void resized() override
@@ -670,72 +370,30 @@ public:
         const float targetAspect = 74.0f / 302.0f;
         float w = bounds.getHeight() * targetAspect;
         renderedRect = juce::Rectangle<float>( ( bounds.getWidth() - w ) * 0.5f, 0.0f, w, bounds.getHeight() );
-    }
 
-    juce::Point<float> toBaseCoords( juce::Point<float> p ) const
-    {
-        if( renderedRect.isEmpty() ) return { -1.0f, -1.0f };
-        float scale = renderedRect.getHeight() / 302.0f;
-        if( scale <= 0.0f ) return { -1.0f, -1.0f };
-        return { ( p.x - renderedRect.getX() ) / scale, ( p.y - renderedRect.getY() ) / scale };
-    }
+        if( renderedRect.isEmpty() ) return;
 
-    void mouseDown( const juce::MouseEvent& e ) override
-    {
-        auto bp = toBaseCoords( e.position );
-        if( bp.x < 0.0f ) return;
+        const float scale = renderedRect.getHeight() / 302.0f;
+        const float ox    = renderedRect.getX();
+        const float oy    = renderedRect.getY();
 
         const float knobY[4] = { 36.0f, 105.0f, 174.0f, 243.0f };
         for( int i = 0; i < 4; ++i )
         {
-            if( std::hypot( bp.x - 37.0f, bp.y - knobY[i] ) <= 24.0f )
-            {
-                activeKnob = i;
-                dragStartY = e.position.y;
-                startVal   = knobVals[i];
-                repaint();
-                return;
-            }
+            qlinkKnobs[i]->setBounds(
+                (int)std::round( ox + ( 37.0f - 24.0f ) * scale ),
+                (int)std::round( oy + ( knobY[i] - 24.0f ) * scale ),
+                (int)std::round( 48.0f * scale ),
+                (int)std::round( 48.0f * scale )
+            );
         }
-    }
-
-    void mouseDrag( const juce::MouseEvent& e ) override
-    {
-        if( activeKnob >= 0 && activeKnob < 4 )
-        {
-            float dy = dragStartY - e.position.y;
-            float newVal = juce::jlimit( 0.0f, 1.0f, startVal + dy / 150.0f );
-            knobVals[activeKnob] = newVal;
-            int dir = ( dy > 0 ) ? (int)DCC::EN_KNOB_CLOCKWISE : (int)DCC::EN_KNOB_ANTICLOCKWISE;
-            sendKnobMessage( DCC::EN_KNOB_1 + activeKnob, dir, 1, true );
-            repaint();
-        }
-    }
-
-    void mouseUp( const juce::MouseEvent& ) override
-    {
-        activeKnob = -1;
-        repaint();
-    }
-
-    void sendKnobMessage( int knobCode, int direction, int ticks, bool isQlink )
-    {
-        CPktMgr::HWMsg_t msg;
-        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_KNOBS;
-        msg.pktCmd  = isQlink ? (int)DCC::KnobCmd::EN_KNOB_QLINK
-                              : (int)DCC::KnobCmd::EN_KNOB_ROTARY;
-        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-        msg.data    = { knobCode, direction, ticks };
-        contracts::DclSignals::hardwareInputTriggered( msg );
     }
 
 private:
-    juce::Image            bgImage;
+    juce::Image bgImage;
     juce::Rectangle<float> renderedRect;
-    int                    activeKnob{ -1 };
-    float                  dragStartY{ 0.0f };
-    float                  startVal{ 0.5f };
-    float                  knobVals[4]{ 0.5f, 0.5f, 0.5f, 0.5f };
+
+    std::unique_ptr<kick_hw_ui::HardwareRotaryKnob> qlinkKnobs[4];
 };
 
 //==============================================================================
@@ -996,7 +654,6 @@ public:
 
         if( gestureTriggered ) return;
 
-        // Count active fingers
         int count = 0;
         float totalDx = 0.0f;
         float totalDy = 0.0f;
@@ -1011,7 +668,6 @@ public:
             }
         }
 
-        // 3-Finger Gesture Detection (or Shift+drag on desktop)
         bool has3Fingers = ( count >= 3 ) || ( e.mods.isShiftDown() && count >= 1 );
 
         if( has3Fingers )
@@ -1021,17 +677,15 @@ public:
 
             const float threshold = 38.0f;
 
-            if( std::abs( avgDy) > threshold && std::abs( avgDy ) > std::abs( avgDx ) * 1.3f )
+            if( std::abs( avgDy ) > threshold && std::abs( avgDy ) > std::abs( avgDx ) * 1.3f )
             {
                 gestureTriggered = true;
                 if( avgDy < 0.0f )
                 {
-                    // 3-finger swipe UP -> Show Bottom Hardware Panel
                     setPanelState( PanelState::BottomPads );
                 }
                 else
                 {
-                    // 3-finger swipe DOWN -> Return to DAW
                     setPanelState( PanelState::DAW );
                 }
             }
@@ -1040,7 +694,6 @@ public:
                 gestureTriggered = true;
                 if( avgDx > 0.0f )
                 {
-                    // 3-finger swipe RIGHT
                     if( targetState == PanelState::DAW )
                         setPanelState( PanelState::MasterStrip );
                     else if( targetState == PanelState::QLinkStrip )
@@ -1048,7 +701,6 @@ public:
                 }
                 else
                 {
-                    // 3-finger swipe LEFT
                     if( targetState == PanelState::DAW )
                         setPanelState( PanelState::QLinkStrip );
                     else if( targetState == PanelState::MasterStrip )
@@ -1077,7 +729,6 @@ public:
         }
     }
 
-    // Keyboard navigation helper for desktop testing
     bool handleKeyboardNav( const juce::KeyPress& key )
     {
         if( key == juce::KeyPress::upKey )
