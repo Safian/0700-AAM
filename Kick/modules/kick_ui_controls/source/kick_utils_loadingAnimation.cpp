@@ -63,7 +63,18 @@ namespace mt
             id          = 0;
             isAnimating = true;
 
-            popup = showPopup( this, { 0, 0, 80, 80 }, []( int R ) {} );
+            if( hostComponent != nullptr )
+            {
+                hostComponent->addChildComponent( this );
+                setBounds( hostComponent->getLocalBounds() );
+                setInterceptsMouseClicks( true, true );
+                setVisible( true );
+                toFront( true );
+            }
+            else
+            {
+                popup = showPopup( this, { 0, 0, 80, 80 }, []( int R ) {} );
+            }
 
             startTimerHz( 22 );
         }
@@ -84,7 +95,31 @@ namespace mt
         void LoadAnimation::paint( juce::Graphics& g )
         {
             if( isAnimating )
-                g.drawImage( frames->images[id], getLocalBounds().toFloat() );
+            {
+                if( hostComponent != nullptr )
+                {
+                    // Dark translucent shade over DAW screen only
+                    g.fillAll( juce::Colour( 0xcc121216 ) );
+
+                    if( !frames->images.empty() && juce::isPositiveAndBelow( (int)id, (int)frames->images.size() ) )
+                    {
+                        auto& img = frames->images[id];
+                        if( img.isValid() )
+                        {
+                            auto b = getLocalBounds();
+                            const int size = 80;
+                            int x = ( b.getWidth() - size ) / 2;
+                            int y = ( b.getHeight() - size ) / 2;
+                            g.drawImage( img, (float)x, (float)y, (float)size, (float)size, 0.0f, 0.0f, (float)img.getWidth(), (float)img.getHeight() );
+                        }
+                    }
+                }
+                else
+                {
+                    if( !frames->images.empty() && juce::isPositiveAndBelow( (int)id, (int)frames->images.size() ) )
+                        g.drawImage( frames->images[id], getLocalBounds().toFloat() );
+                }
+            }
         }
 
         void LoadAnimation::timerCallback()
@@ -99,6 +134,11 @@ namespace mt
         void LoadAnimation::close()
         {
             stopTimer();
+            isAnimating = false;
+            setVisible( false );
+            if( auto* p = getParentComponent() )
+                p->removeChildComponent( this );
+
             if( popup )
             {
                 popup->close();

@@ -712,16 +712,19 @@ public:
         dragVx = 0.0f;
         dragVy = 0.0f;
 
+        // Check if touch occurred inside DAW screen or any of its controls (e.g. Back button, header)
+        bool isDawTouch = ( kickHome != nullptr && ( e.eventComponent == kickHome || kickHome->isParentOf( e.eventComponent ) ) );
+
         // Check if touch occurred on Q-Link strip or any of its knobs
-        bool isQLinkTouch = ( qlinkPanel != nullptr && ( e.eventComponent == qlinkPanel.get() || qlinkPanel->isParentOf( e.eventComponent ) ) );
-        if( !isQLinkTouch && qlinkPanel != nullptr && qlinkPanel->isVisible() )
+        bool isQLinkTouch = !isDawTouch && ( qlinkPanel != nullptr && ( e.eventComponent == qlinkPanel.get() || qlinkPanel->isParentOf( e.eventComponent ) ) );
+        if( !isDawTouch && !isQLinkTouch && qlinkPanel != nullptr && qlinkPanel->isVisible() )
         {
             isQLinkTouch = qlinkPanel->getBounds().toFloat().contains( localP );
         }
 
         // Check if touch occurred on Master strip or any of its knobs
-        bool isMasterTouch = ( masterPanel != nullptr && ( e.eventComponent == masterPanel.get() || masterPanel->isParentOf( e.eventComponent ) ) );
-        if( !isMasterTouch && masterPanel != nullptr && masterPanel->isVisible() )
+        bool isMasterTouch = !isDawTouch && ( masterPanel != nullptr && ( e.eventComponent == masterPanel.get() || masterPanel->isParentOf( e.eventComponent ) ) );
+        if( !isDawTouch && !isMasterTouch && masterPanel != nullptr && masterPanel->isVisible() )
         {
             isMasterTouch = masterPanel->getBounds().toFloat().contains( localP );
         }

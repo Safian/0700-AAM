@@ -162,12 +162,21 @@ namespace kick_ui
         // Close existing screen and open screen as passed in argument.
         signals::sigScreenClose.connect( [&]( Screen NewScrn ) {
             Screen loadScreen = NewScrn;
+            while( !stack.empty() && ( stack.top() == currentScreen || stack.top() == Screen::Invalid ) )
+            {
+                stack.pop();
+            }
             if( !stack.empty() )
             {
                 if( NewScrn == Screen::Invalid )
+                {
                     loadScreen = stack.top();
-
-                stack.pop();
+                    stack.pop();
+                }
+            }
+            else if( loadScreen == Screen::Invalid )
+            {
+                loadScreen = Screen::HomeListView;
             }
 
             juce::MessageManager::callAsync( [loadScreen, this]() {
@@ -211,6 +220,9 @@ namespace kick_ui
         setBufferedToImage( true );
         setPaintingIsUnclipped( true );
         setSize( ui::appWidth, ui::appHeight );
+
+        // Host loading animation on KickHome screen only (prevents full-screen white flash)
+        mt::utils::LoadAnimation::setHost( this );
 
         // Load default startup screen.
         //signals::sigScreenOpen( Screen::Temp );

@@ -234,9 +234,9 @@ namespace kick_ui
         }
         else
         {
-            back.setBoundsRelative( 0.00f, 0.0f, 0.040f, 1.0f );
-            icon.setBoundsRelative( 0.049f, 0.1842f, 0.040f, 0.6316f );
-            headerLabel.setBoundsRelative( .097f, .21f, .217f, .578f );
+            back.setBoundsRelative( 0.00f, 0.0f, 0.055f, 1.0f );
+            icon.setBoundsRelative( 0.058f, 0.1842f, 0.040f, 0.6316f );
+            headerLabel.setBoundsRelative( .106f, .21f, .217f, .578f );
         }
         resources.setBoundsRelative( 0.96f, 0.0f, 0.040f, 1.0f );
 

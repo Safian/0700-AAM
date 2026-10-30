@@ -1,0 +1,11 @@
+# Build directories
+build/
+build-*/
+DerivedData/
+.proper-build/
+.kotlin/
+.dart_tool/
+
+# OS files
+.DS_Store
+Thumbs.db

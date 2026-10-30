@@ -103,7 +103,9 @@ namespace mt
 
         virtual void paint( juce::Graphics& g )
         {
-            g.drawImageAt( image, 0, 0 );
+            g.fillAll( juce::Colour( 0xdd121215 ) );
+            if( image.isValid() )
+                g.drawImageAt( image, 0, 0 );
         }
 
     public:
