@@ -90,20 +90,35 @@ juce::File getAppDirs( DirType T )
     else if( T == MTPrefs )
         return juce::File( rootP + juce::String( MT_SOURCE_SRCDIR ) + seprator + "prefs" + seprator );
 #elif defined( __APPLE_CPP__ ) || defined( __APPLE_CC__ ) || defined( JUCE_MAC )
+    auto appParent = juce::File::getSpecialLocation( juce::File::currentApplicationFile ).getParentDirectory();
+    auto resolveMacPath = [&] (const juce::String& rel) -> juce::File
+    {
+        juce::File local (rel);
+        if (local.exists())
+            return local;
+        auto relClean = rel.startsWith ("./") ? rel.substring (2) : rel;
+        auto fromApp = appParent.getChildFile (relClean);
+        if (fromApp.exists())
+            return fromApp;
+        auto fromKick = appParent.getParentDirectory().getChildFile ("Kick").getChildFile (relClean);
+        if (fromKick.exists())
+            return fromKick;
+        return local;
+    };
     if( T == MTAssets )
-        return juce::File( "./assets" );
+        return resolveMacPath( "./assets" );
     else if( T == MTSamples )
-        return juce::File( "./data/samplesKick/" );
+        return resolveMacPath( "./data/samplesKick/" );
     else if( T == MTDemos )
-        return juce::File( "./demos" );
+        return resolveMacPath( "./demos" );
     else if( T == MTTemp )
-        return juce::File( "./templates" );
+        return resolveMacPath( "./templates" );
     else if( T == MTProjects )
-        return juce::File( "./projects" );
+        return resolveMacPath( "./projects" );
     else if( T == MTLog )
-        return juce::File( "./logs/" );
+        return resolveMacPath( "./logs/" );
     else if( T == MTPrefs )
-        return juce::File( "./prefs" );
+        return resolveMacPath( "./prefs" );
 #elif defined( LINUX ) || defined( __linux__ )
     if( T == MTAssets )
         return juce::File( "/app/assets" );
