@@ -25,1367 +25,1099 @@
 #include "contracts/dcl/dcl_contracts.h"
 #include "contracts/dcl/dcl_signals.h"
 #include "PktMgr/PktMgr.hpp"
+#include "common/common.h"
 #include "kick_ui/kick_ui.h"
-#include "kick_ui_controls/source/kick_Theme.h"
 #include <map>
+#include <set>
 #include <cmath>
-#include <functional>
 
 namespace kick_mobile
 {
 
+using DCC = contracts::DeviceControlContracts;
+
 //==============================================================================
-// DCL Message Helpers
-//==============================================================================
-inline void sendPadMessage( int padIndex, bool pressed, int velocity )
+/**
+ * Loads authentic hardware graphic assets from the app bundle or source directory.
+ */
+inline juce::Image loadChassisAsset( const juce::String& filename )
 {
-    CPktMgr::HWMsg_t msg;
-    msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_PAD;
-    msg.pktCmd  = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
-    msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-    msg.data    = { padIndex, pressed ? (int)contracts::DeviceControlContracts::BTN_PRESSED
-                                      : (int)contracts::DeviceControlContracts::BTN_RELEASED,
-                    velocity, 0 };
-    contracts::DclSignals::hardwareInputTriggered( msg );
-}
+    auto assetsDir = getAppDirs( MTAssets );
+    auto imgFile = assetsDir.getChildFile( filename );
+    if( imgFile.exists() )
+        return juce::ImageFileFormat::loadFrom( imgFile );
 
-inline void sendButtonMessage( int buttonCode, bool pressed )
-{
-    CPktMgr::HWMsg_t msg;
-    msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_BUTTON;
-    msg.pktCmd  = contracts::DeviceControlContracts::BtnCmd::EN_BTN_STATUS;
-    msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-    msg.data    = { buttonCode, pressed ? (int)contracts::DeviceControlContracts::BTN_PRESSED
-                                        : (int)contracts::DeviceControlContracts::BTN_RELEASED };
-    contracts::DclSignals::hardwareInputTriggered( msg );
-}
+    auto appBundle = juce::File::getSpecialLocation( juce::File::currentApplicationFile );
+    auto resFile = appBundle.getChildFile( "Contents/Resources/" + filename );
+    if( resFile.exists() )
+        return juce::ImageFileFormat::loadFrom( resFile );
 
-inline void sendKnobMessage( int knobCode, int direction, int ticks, bool isQlink )
-{
-    CPktMgr::HWMsg_t msg;
-    msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_KNOBS;
-    msg.pktCmd  = isQlink ? (int)contracts::DeviceControlContracts::KnobCmd::EN_KNOB_QLINK
-                          : (int)contracts::DeviceControlContracts::KnobCmd::EN_KNOB_ROTARY;
-    msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-    msg.data    = { knobCode, direction, ticks };
-    contracts::DclSignals::hardwareInputTriggered( msg );
-}
+    auto resFile2 = appBundle.getChildFile( "assets/" + filename );
+    if( resFile2.exists() )
+        return juce::ImageFileFormat::loadFrom( resFile2 );
 
-inline void sendSliderMessage( int percent )
-{
-    CPktMgr::HWMsg_t msg;
-    msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_SLIDER;
-    msg.pktCmd  = contracts::DeviceControlContracts::SliderCmd::EN_SLIDER_TOUCH_INPUT;
-    msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
-    msg.data    = { percent };
-    contracts::DclSignals::hardwareInputTriggered( msg );
+    auto cwdFile = juce::File::getCurrentWorkingDirectory().getChildFile( "Kick/assets/" + filename );
+    if( cwdFile.exists() )
+        return juce::ImageFileFormat::loadFrom( cwdFile );
+
+    return {};
 }
 
 //==============================================================================
-// View Enumeration in Spatial T-Formation
-//==============================================================================
-enum class TView
-{
-    DAW = 0,    // Center (0, 0)
-    Pads,       // Right (+1, 0)
-    Banks,      // Left (-1, 0)
-    Controls    // Top (0, -1)
-};
-
-// Forward declaration
-class KickMobileTLayout;
-
-//==============================================================================
-// Dedicated Interactive Navigation Pill Component
-//==============================================================================
-class NavPillButton : public juce::Component
+/**
+ * Bottom Hardware Chassis Panel (Pads, Bank A..D, Jog Wheel, Transport bar, Ribbon).
+ * Renders the authentic Behringer Kick lower hardware surface (746x402 base coords).
+ */
+class MobileBottomChassisPanel : public juce::Component
 {
 public:
-    enum ArrowDir { Left, Right, Up, Down, None };
-
-    NavPillButton( const juce::String& text, ArrowDir arrow, juce::Colour glowColour, std::function<void()> onClick )
-        : text_( text ), arrow_( arrow ), glowColour_( glowColour ), onClick_( std::move( onClick ) )
+    MobileBottomChassisPanel()
     {
-        setInterceptsMouseClicks( true, false );
+        bgImage = loadChassisAsset( "mobile_hw_bottom.png" );
+        setOpaque( true );
     }
 
     void paint( juce::Graphics& g ) override
     {
-        auto r = getLocalBounds().toFloat().reduced( 1.0f );
-        g.setColour( isDown_ ? juce::Colour( 0xFF2A364F ) : juce::Colour( 0xFA141926 ) );
-        g.fillRoundedRectangle( r, 8.0f );
+        g.fillAll( juce::Colour( 0xff121215 ) );
 
-        g.setColour( isDown_ ? juce::Colours::white : glowColour_ );
-        g.drawRoundedRectangle( r, 8.0f, isDown_ ? 2.5f : 1.5f );
+        if( !bgImage.isValid() || renderedRect.isEmpty() )
+            return;
 
-        // Draw vector arrow
-        g.setColour( isDown_ ? juce::Colours::white : glowColour_ );
-        float cx = r.getCentreX();
-        float cy = r.getCentreY();
-        juce::Path p;
-        if( arrow_ == Left )
+        g.drawImage( bgImage, renderedRect, juce::RectanglePlacement::centred );
+
+        const float scale = renderedRect.getWidth() / 746.0f;
+        const float ox    = renderedRect.getX();
+        const float oy    = renderedRect.getY();
+
+        // 1. Draw glowing cyan frames on active pads
+        for( int pad : activePads )
         {
-            p.addTriangle( r.getX() + 12.0f, cy, r.getX() + 20.0f, cy - 6.0f, r.getX() + 20.0f, cy + 6.0f );
-            g.fillPath( p );
-        }
-        else if( arrow_ == Right )
-        {
-            p.addTriangle( r.getRight() - 12.0f, cy, r.getRight() - 20.0f, cy - 6.0f, r.getRight() - 20.0f, cy + 6.0f );
-            g.fillPath( p );
-        }
-        else if( arrow_ == Up )
-        {
-            p.addTriangle( cx, r.getY() + 6.0f, cx - 6.0f, r.getY() + 14.0f, cx + 6.0f, r.getY() + 14.0f );
-            g.fillPath( p );
-        }
-        else if( arrow_ == Down )
-        {
-            p.addTriangle( cx, r.getBottom() - 6.0f, cx - 6.0f, r.getBottom() - 14.0f, cx + 6.0f, r.getBottom() - 14.0f );
-            g.fillPath( p );
+            auto pr = getPadRect( pad );
+            if( !pr.isEmpty() )
+            {
+                g.setColour( juce::Colour( 0x5500d4ff ) );
+                g.fillRoundedRectangle( pr, 6.0f * scale );
+                g.setColour( juce::Colour( 0xff00d4ff ) );
+                g.drawRoundedRectangle( pr, 6.0f * scale, 3.0f * scale );
+            }
         }
 
-        // Draw text
-        g.setColour( juce::Colours::white );
-        g.setFont( juce::Font( 12.0f, juce::Font::bold ) );
-        auto textRect = r;
-        if( arrow_ == Left ) textRect.removeFromLeft( 18.0f );
-        else if( arrow_ == Right ) textRect.removeFromRight( 18.0f );
-        else if( arrow_ == Up ) textRect.removeFromTop( 8.0f );
-        else if( arrow_ == Down ) textRect.removeFromBottom( 8.0f );
-        g.drawText( text_, textRect, juce::Justification::centred, false );
+        // 2. Active Bank highlight
+        if( activeBank >= 0 && activeBank < 4 )
+        {
+            const float bankCx[4] = { 493.0f, 561.0f, 629.0f, 697.0f };
+            juce::Rectangle<float> br(
+                ox + ( bankCx[activeBank] - 18.0f ) * scale,
+                oy + ( 50.0f - 12.0f ) * scale,
+                36.0f * scale,
+                24.0f * scale
+            );
+            g.setColour( juce::Colour( 0x44ff9900 ) );
+            g.fillRoundedRectangle( br, 4.0f * scale );
+            g.setColour( juce::Colour( 0xffff9900 ) );
+            g.drawRoundedRectangle( br, 4.0f * scale, 2.0f * scale );
+        }
+
+        // 3. Jog Wheel indicator
+        const float jogCx = ox + 590.0f * scale;
+        const float jogCy = oy + 184.0f * scale;
+        const float jogR  = 40.0f * scale;
+        const float indX  = jogCx + std::cos( jogAngle ) * ( jogR * 0.72f );
+        const float indY  = jogCy + std::sin( jogAngle ) * ( jogR * 0.72f );
+        g.setColour( juce::Colour( 0xffff3b30 ) );
+        g.fillEllipse( indX - 4.0f * scale, indY - 4.0f * scale, 8.0f * scale, 8.0f * scale );
+
+        // 4. Ribbon touch strip LED ladder
+        if( ribbonTouching )
+        {
+            float rx = ox + 25.0f * scale;
+            float ry = oy + 35.0f * scale;
+            float rw = 67.0f * scale;
+            float rh = 150.0f * scale;
+
+            float ty = ry + rh * ( 1.0f - ribbonValue );
+            g.setColour( juce::Colour( 0x44ff2d55 ) );
+            g.fillRect( rx, ty, rw, ( ry + rh ) - ty );
+            g.setColour( juce::Colour( 0xffff2d55 ) );
+            g.fillRect( rx, ty - 2.0f * scale, rw, 4.0f * scale );
+        }
     }
 
-    void mouseDown( const juce::MouseEvent& ) override
+    void resized() override
     {
-        isDown_ = true;
-        repaint();
+        auto bounds = getLocalBounds().toFloat();
+        const float targetAspect = 746.0f / 402.0f;
+        const float currentAspect = bounds.getHeight() > 0 ? ( bounds.getWidth() / bounds.getHeight() ) : targetAspect;
+
+        if( currentAspect > targetAspect )
+        {
+            float w = bounds.getHeight() * targetAspect;
+            renderedRect = juce::Rectangle<float>( ( bounds.getWidth() - w ) * 0.5f, 0.0f, w, bounds.getHeight() );
+        }
+        else
+        {
+            float h = bounds.getWidth() / targetAspect;
+            renderedRect = juce::Rectangle<float>( 0.0f, ( bounds.getHeight() - h ) * 0.5f, bounds.getWidth(), h );
+        }
+    }
+
+    juce::Point<float> toBaseCoords( juce::Point<float> p ) const
+    {
+        if( renderedRect.isEmpty() ) return { -1.0f, -1.0f };
+        float scale = renderedRect.getWidth() / 746.0f;
+        if( scale <= 0.0f ) return { -1.0f, -1.0f };
+        return { ( p.x - renderedRect.getX() ) / scale, ( p.y - renderedRect.getY() ) / scale };
+    }
+
+    int getPadAt( float bx, float by ) const
+    {
+        const float colX[4] = { 118.0f, 203.0f, 289.0f, 375.0f };
+        const float padW = 67.0f;
+        const float rowY[4] = { 31.0f, 116.0f, 203.0f, 288.0f };
+        const float padH = 67.0f;
+        const float padMargin = 6.0f;
+
+        int foundCol = -1;
+        for( int c = 0; c < 4; ++c )
+        {
+            if( bx >= colX[c] - padMargin && bx <= colX[c] + padW + padMargin )
+            {
+                foundCol = c;
+                break;
+            }
+        }
+        if( foundCol < 0 ) return -1;
+
+        int foundRow = -1;
+        for( int r = 0; r < 4; ++r )
+        {
+            if( by >= rowY[r] - padMargin && by <= rowY[r] + padH + padMargin )
+            {
+                foundRow = r;
+                break;
+            }
+        }
+        if( foundRow < 0 ) return -1;
+
+        return ( 3 - foundRow ) * 4 + foundCol;
+    }
+
+    juce::Rectangle<float> getPadRect( int padIndex ) const
+    {
+        if( renderedRect.isEmpty() || padIndex < 0 || padIndex >= 16 ) return {};
+        const float scale = renderedRect.getWidth() / 746.0f;
+        int row = 3 - ( padIndex / 4 );
+        int col = padIndex % 4;
+
+        const float colX[4] = { 118.0f, 203.0f, 289.0f, 375.0f };
+        const float rowY[4] = { 31.0f, 116.0f, 203.0f, 288.0f };
+
+        return juce::Rectangle<float>(
+            renderedRect.getX() + colX[col] * scale,
+            renderedRect.getY() + rowY[row] * scale,
+            67.0f * scale,
+            67.0f * scale
+        );
+    }
+
+    void mouseDown( const juce::MouseEvent& e ) override
+    {
+        auto bp = toBaseCoords( e.position );
+        if( bp.x < 0.0f ) return;
+
+        int sourceIdx = e.source.getIndex();
+
+        // 1. Check 16 MPC Pads
+        int pad = getPadAt( bp.x, bp.y );
+        if( pad >= 0 )
+        {
+            touchPadMap[sourceIdx] = pad;
+            activePads.insert( pad );
+            sendPadMessage( pad, true, 127 );
+            repaint();
+            return;
+        }
+
+        // 2. Check Jog Wheel
+        float jDist = std::hypot( bp.x - 590.0f, bp.y - 184.0f );
+        if( jDist <= 52.0f )
+        {
+            if( jDist <= 20.0f )
+            {
+                // Enter button center
+                sendButtonMessage( DCC::EN_KNOB_CENTER, true );
+            }
+            else
+            {
+                draggingJog = true;
+                jogLastAngle = std::atan2( bp.y - 184.0f, bp.x - 590.0f );
+            }
+            return;
+        }
+
+        // 3. Check Bank A..D
+        for( int b = 0; b < 4; ++b )
+        {
+            const float bankCx[4] = { 493.0f, 561.0f, 629.0f, 697.0f };
+            if( std::abs( bp.x - bankCx[b] ) <= 22.0f && std::abs( bp.y - 50.0f ) <= 16.0f )
+            {
+                activeBank = b;
+                sendButtonMessage( DCC::EN_BANK_A + b, true );
+                repaint();
+                return;
+            }
+        }
+
+        // 4. Check Transport row: REC, OVR, STOP, PLAY, PAUSE
+        const float transCx[5] = { 490.0f, 543.0f, 593.0f, 645.0f, 695.0f };
+        const int transBtns[5] = { DCC::EN_RECORD, DCC::EN_OVERDUB, DCC::EN_STOP, DCC::EN_PLAY, DCC::EN_PLAYSTART };
+        for( int t = 0; t < 5; ++t )
+        {
+            if( std::hypot( bp.x - transCx[t], bp.y - 355.0f ) <= 20.0f )
+            {
+                activeTransBtn = transBtns[t];
+                sendButtonMessage( activeTransBtn, true );
+                repaint();
+                return;
+            }
+        }
+
+        // 5. Check Ribbon
+        if( bp.x >= 25.0f && bp.x <= 92.0f && bp.y >= 35.0f && bp.y <= 185.0f )
+        {
+            ribbonTouching = true;
+            ribbonValue = juce::jlimit( 0.0f, 1.0f, 1.0f - ( bp.y - 35.0f ) / 150.0f );
+            sendRibbonMessage( ribbonValue );
+            repaint();
+            return;
+        }
+
+        // 6. Check Left utility buttons: FULL LEVEL, 16 LEVELS, ERASE
+        if( bp.x >= 25.0f && bp.x <= 95.0f )
+        {
+            if( std::abs( bp.y - 234.0f ) <= 18.0f ) { sendButtonMessage( DCC::EN_FULL_LEVEL, true ); return; }
+            if( std::abs( bp.y - 285.0f ) <= 18.0f ) { sendButtonMessage( DCC::EN_16LEVELS, true ); return; }
+            if( std::abs( bp.y - 340.0f ) <= 18.0f ) { sendButtonMessage( DCC::EN_ERASE, true ); return; }
+        }
+
+        // 7. Check Mode Buttons: MAIN, BROWSE, TRACK MIX, TRACK MUTE, NEXT SEC
+        const float modeCx[5] = { 482.0f, 532.0f, 584.0f, 638.0f, 692.0f };
+        if( std::abs( bp.y - 108.0f ) <= 15.0f )
+        {
+            const int modeBtns[5] = { DCC::EN_MAINMODE, DCC::EN_BROWSE, DCC::EN_TRACK_MIX, DCC::EN_TRACK_MUTE, DCC::EN_NEXT_SEQ };
+            for( int m = 0; m < 5; ++m )
+            {
+                if( std::abs( bp.x - modeCx[m] ) <= 22.0f ) { sendButtonMessage( modeBtns[m], true ); return; }
+            }
+        }
+
+        // 8. Check Bottom Mode Buttons: STEP SEQ, TC, SAMPLER, SAMPLE EDIT, PROG EDIT
+        if( std::abs( bp.y - 292.0f ) <= 15.0f )
+        {
+            const int btmBtns[5] = { DCC::EN_STEP_SEQ, DCC::EN_TC, DCC::EN_SAMPLER, DCC::EN_SAMPLE_EDIT, DCC::EN_PROG_EDIT };
+            for( int m = 0; m < 5; ++m )
+            {
+                if( std::abs( bp.x - modeCx[m] ) <= 22.0f ) { sendButtonMessage( btmBtns[m], true ); return; }
+            }
+        }
+    }
+
+    void mouseDrag( const juce::MouseEvent& e ) override
+    {
+        auto bp = toBaseCoords( e.position );
+        if( bp.x < 0.0f ) return;
+
+        if( draggingJog )
+        {
+            float curAngle = std::atan2( bp.y - 184.0f, bp.x - 590.0f );
+            float delta = curAngle - jogLastAngle;
+            if( delta > juce::MathConstants<float>::pi )  delta -= juce::MathConstants<float>::twoPi;
+            if( delta < -juce::MathConstants<float>::pi ) delta += juce::MathConstants<float>::twoPi;
+
+            jogAngle += delta;
+            jogAccum += delta;
+            jogLastAngle = curAngle;
+
+            const float step = juce::MathConstants<float>::twoPi / 24.0f;
+            if( std::abs( jogAccum ) >= step )
+            {
+                int ticks = (int)( jogAccum / step );
+                jogAccum -= ticks * step;
+                sendWheelMessage( ticks );
+            }
+            repaint();
+            return;
+        }
+
+        if( ribbonTouching && bp.x >= 20.0f && bp.x <= 97.0f )
+        {
+            ribbonValue = juce::jlimit( 0.0f, 1.0f, 1.0f - ( bp.y - 35.0f ) / 150.0f );
+            sendRibbonMessage( ribbonValue );
+            repaint();
+        }
+    }
+
+    void mouseUp( const juce::MouseEvent& e ) override
+    {
+        int sourceIdx = e.source.getIndex();
+        auto it = touchPadMap.find( sourceIdx );
+        if( it != touchPadMap.end() )
+        {
+            int pad = it->second;
+            sendPadMessage( pad, false, 0 );
+            activePads.erase( pad );
+            touchPadMap.erase( it );
+            repaint();
+        }
+
+        if( draggingJog )
+        {
+            draggingJog = false;
+        }
+
+        if( activeTransBtn >= 0 )
+        {
+            sendButtonMessage( activeTransBtn, false );
+            activeTransBtn = -1;
+            repaint();
+        }
+
+        if( ribbonTouching )
+        {
+            ribbonTouching = false;
+            repaint();
+        }
+    }
+
+    void sendPadMessage( int padIndex, bool pressed, int velocity )
+    {
+        CPktMgr::HWMsg_t msg;
+        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_PAD;
+        msg.pktCmd  = DCC::PadCmd::EN_PAD_STATE;
+        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
+        msg.data    = { padIndex, pressed ? (int)DCC::BTN_PRESSED : (int)DCC::BTN_RELEASED, velocity, 0 };
+        contracts::DclSignals::hardwareInputTriggered( msg );
+    }
+
+    void sendButtonMessage( int buttonCode, bool pressed )
+    {
+        CPktMgr::HWMsg_t msg;
+        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_BUTTON;
+        msg.pktCmd  = DCC::BtnCmd::EN_BTN_STATUS;
+        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
+        msg.data    = { buttonCode, pressed ? (int)DCC::BTN_PRESSED : (int)DCC::BTN_RELEASED };
+        contracts::DclSignals::hardwareInputTriggered( msg );
+    }
+
+    void sendWheelMessage( int ticks )
+    {
+        int dir = ( ticks > 0 ) ? (int)DCC::EN_KNOB_CLOCKWISE : (int)DCC::EN_KNOB_ANTICLOCKWISE;
+        sendKnobMessage( DCC::EN_KNOB_CENTER, dir, std::max( 1, std::abs( ticks ) ), false );
+    }
+
+    void sendKnobMessage( int knobCode, int direction, int ticks, bool isQlink )
+    {
+        CPktMgr::HWMsg_t msg;
+        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_KNOBS;
+        msg.pktCmd  = isQlink ? (int)DCC::KnobCmd::EN_KNOB_QLINK
+                              : (int)DCC::KnobCmd::EN_KNOB_ROTARY;
+        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
+        msg.data    = { knobCode, direction, ticks };
+        contracts::DclSignals::hardwareInputTriggered( msg );
+    }
+
+    void sendRibbonMessage( float val )
+    {
+        CPktMgr::HWMsg_t msg;
+        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_SLIDER;
+        msg.pktCmd  = DCC::SliderCmd::EN_SLIDER_TOUCH_INPUT;
+        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
+        msg.data    = { (int)( val * 100.0f ) };
+        contracts::DclSignals::hardwareInputTriggered( msg );
+    }
+
+private:
+    juce::Image            bgImage;
+    juce::Rectangle<float> renderedRect;
+    std::map<int, int>     touchPadMap;
+    std::set<int>          activePads;
+    int                    activeBank{ 0 };
+    int                    activeTransBtn{ -1 };
+
+    bool                   draggingJog{ false };
+    float                  jogAngle{ 0.0f };
+    float                  jogLastAngle{ 0.0f };
+    float                  jogAccum{ 0.0f };
+
+    bool                   ribbonTouching{ false };
+    float                  ribbonValue{ 0.0f };
+};
+
+//==============================================================================
+/**
+ * Master Panel (Left edge: Power, Master Volume knob, Rec Gain knob, Link button).
+ * Base dimensions: 106 x 334.
+ */
+class MobileMasterChassisPanel : public juce::Component
+{
+public:
+    MobileMasterChassisPanel()
+    {
+        bgImage = loadChassisAsset( "mobile_hw_master.png" );
+        setOpaque( true );
+    }
+
+    void paint( juce::Graphics& g ) override
+    {
+        g.fillAll( juce::Colour( 0xff16161a ) );
+
+        if( !bgImage.isValid() || renderedRect.isEmpty() )
+            return;
+
+        g.drawImage( bgImage, renderedRect, juce::RectanglePlacement::centred );
+
+        const float scale = renderedRect.getHeight() / 334.0f;
+        const float ox    = renderedRect.getX();
+        const float oy    = renderedRect.getY();
+
+        // Draw indicator arc for Master Volume knob (53, 112)
+        if( activeKnob == 0 )
+        {
+            drawKnobArc( g, ox + 53.0f * scale, oy + 112.0f * scale, 24.0f * scale, masterVal );
+        }
+
+        // Draw indicator arc for Rec Gain knob (53, 202)
+        if( activeKnob == 1 )
+        {
+            drawKnobArc( g, ox + 53.0f * scale, oy + 202.0f * scale, 24.0f * scale, recVal );
+        }
+
+        // Draw glowing border on right edge
+        g.setColour( juce::Colour( 0x4400d4ff ) );
+        g.drawLine( getWidth() - 1.0f, 0.0f, getWidth() - 1.0f, (float)getHeight(), 2.0f );
+    }
+
+    void drawKnobArc( juce::Graphics& g, float cx, float cy, float r, float val )
+    {
+        juce::Path p;
+        float startA = juce::MathConstants<float>::pi * 0.75f;
+        float endA   = startA + juce::MathConstants<float>::pi * 1.5f * val;
+        p.addCentredArc( cx, cy, r + 4.0f, r + 4.0f, 0.0f, startA, endA, true );
+        g.setColour( juce::Colour( 0xff00d4ff ) );
+        g.strokePath( p, juce::PathStrokeType( 3.0f ) );
+    }
+
+    void resized() override
+    {
+        auto bounds = getLocalBounds().toFloat();
+        const float targetAspect = 106.0f / 334.0f;
+        float w = bounds.getHeight() * targetAspect;
+        renderedRect = juce::Rectangle<float>( ( bounds.getWidth() - w ) * 0.5f, 0.0f, w, bounds.getHeight() );
+    }
+
+    juce::Point<float> toBaseCoords( juce::Point<float> p ) const
+    {
+        if( renderedRect.isEmpty() ) return { -1.0f, -1.0f };
+        float scale = renderedRect.getHeight() / 334.0f;
+        if( scale <= 0.0f ) return { -1.0f, -1.0f };
+        return { ( p.x - renderedRect.getX() ) / scale, ( p.y - renderedRect.getY() ) / scale };
+    }
+
+    void mouseDown( const juce::MouseEvent& e ) override
+    {
+        auto bp = toBaseCoords( e.position );
+        if( bp.x < 0.0f ) return;
+
+        // Master knob: (53, 112)
+        if( std::hypot( bp.x - 53.0f, bp.y - 112.0f ) <= 28.0f )
+        {
+            activeKnob = 0;
+            dragStartY = e.position.y;
+            startVal   = masterVal;
+            return;
+        }
+
+        // Rec knob: (53, 202)
+        if( std::hypot( bp.x - 53.0f, bp.y - 202.0f ) <= 28.0f )
+        {
+            activeKnob = 1;
+            dragStartY = e.position.y;
+            startVal   = recVal;
+            return;
+        }
+
+        // Link button: (25..85, 268..305)
+        if( bp.x >= 25.0f && bp.x <= 85.0f && bp.y >= 268.0f && bp.y <= 305.0f )
+        {
+            sendButtonMessage( DCC::EN_LINK, true );
+        }
+    }
+
+    void mouseDrag( const juce::MouseEvent& e ) override
+    {
+        if( activeKnob >= 0 )
+        {
+            float dy = dragStartY - e.position.y;
+            float newVal = juce::jlimit( 0.0f, 1.0f, startVal + dy / 150.0f );
+            if( activeKnob == 0 )
+            {
+                masterVal = newVal;
+                int dir = ( dy > 0 ) ? (int)DCC::EN_KNOB_CLOCKWISE : (int)DCC::EN_KNOB_ANTICLOCKWISE;
+                sendKnobMessage( DCC::EN_KNOB_5, dir, 1, false );
+            }
+            else
+            {
+                recVal = newVal;
+                int dir = ( dy > 0 ) ? (int)DCC::EN_KNOB_CLOCKWISE : (int)DCC::EN_KNOB_ANTICLOCKWISE;
+                sendKnobMessage( DCC::EN_KNOB_6, dir, 1, false );
+            }
+            repaint();
+        }
     }
 
     void mouseUp( const juce::MouseEvent& ) override
     {
-        isDown_ = false;
-        repaint();
-        if( onClick_ ) onClick_();
-    }
-
-private:
-    juce::String text_;
-    ArrowDir arrow_{ None };
-    juce::Colour glowColour_;
-    std::function<void()> onClick_;
-    bool isDown_{ false };
-};
-
-//==============================================================================
-// 1. MobilePadsView: Full Screen 16 MPC Velocity Pads + Bank Bar
-//==============================================================================
-class MobilePadsView : public juce::Component
-{
-public:
-    explicit MobilePadsView( KickMobileTLayout& layout );
-
-    void paint( juce::Graphics& g ) override;
-    void resized() override;
-
-    void mouseDown( const juce::MouseEvent& e ) override;
-    void mouseDrag( const juce::MouseEvent& e ) override;
-    void mouseUp( const juce::MouseEvent& e ) override;
-
-    void setBank( int bankIndex );
-    int getBank() const noexcept { return currentBank_; }
-
-    void setFullLevel( bool enabled );
-    bool isFullLevel() const noexcept { return fullLevel_; }
-
-private:
-    int getPadAt( int x, int y ) const;
-    int getBankTabAt( int x, int y ) const;
-    juce::Rectangle<float> getPadBounds( int padIndex ) const;
-
-    KickMobileTLayout& layout_;
-    int currentBank_{ 0 };
-    bool fullLevel_{ false };
-
-    // Multi-touch tracking: touch index -> pad index
-    std::map<int, int> activeTouches_;
-    bool padActive_[16]{};
-    juce::Colour padColours_[16];
-    std::unique_ptr<NavPillButton> toDawBtn_;
-};
-
-//==============================================================================
-// 2. MobileBanksView: Banks A..H, Ribbon Touch Strip, Performance Buttons
-//==============================================================================
-class MobileBanksView : public juce::Component
-{
-public:
-    explicit MobileBanksView( KickMobileTLayout& layout );
-
-    void paint( juce::Graphics& g ) override;
-    void resized() override;
-
-    void mouseDown( const juce::MouseEvent& e ) override;
-    void mouseDrag( const juce::MouseEvent& e ) override;
-    void mouseUp( const juce::MouseEvent& e ) override;
-
-    void setBank( int bankIndex ) { currentBank_ = juce::jlimit( 0, 7, bankIndex ); repaint(); }
-    int getBank() const noexcept { return currentBank_; }
-
-private:
-    void updateTouchStrip( int y );
-    int getBankButtonAt( int x, int y ) const;
-    int getPerfButtonAt( int x, int y ) const;
-
-    KickMobileTLayout& layout_;
-    int currentBank_{ 0 };
-    int ribbonValue_{ 50 };
-    bool ribbonTouching_{ false };
-    int activePerfButton_{ -1 };
-    std::unique_ptr<NavPillButton> toDawBtn_;
-};
-
-//==============================================================================
-// 3. MobileControlsView: Q-Links, Jog Wheel, Transport, Hardware Buttons
-//==============================================================================
-class MobileControlsView : public juce::Component
-{
-public:
-    explicit MobileControlsView( KickMobileTLayout& layout );
-
-    void paint( juce::Graphics& g ) override;
-    void resized() override;
-
-    void mouseDown( const juce::MouseEvent& e ) override;
-    void mouseDrag( const juce::MouseEvent& e ) override;
-    void mouseUp( const juce::MouseEvent& e ) override;
-
-private:
-    void drawEncoder( juce::Graphics& g, juce::Rectangle<float> r, const juce::String& name, int val, bool active );
-    void drawButton( juce::Graphics& g, juce::Rectangle<float> r, const juce::String& text, juce::Colour bg = juce::Colour( 0xFF242C3D ) );
-    int hitTestControl( int x, int y ) const;
-    float getJogAngle( int x, int y ) const;
-
-    KickMobileTLayout& layout_;
-    int qlinkValues_[4]{ 64, 64, 64, 64 };
-    int activeControl_{ -1 };
-    int dragStartY_{ 0 };
-    float lastJogAngle_{ 0.0f };
-    juce::Rectangle<float> jogBounds_;
-    std::unique_ptr<NavPillButton> toDawBtn_;
-};
-
-//==============================================================================
-// KickMobileTLayout: Spatial T-Layout Container & Navigator
-//==============================================================================
-class KickMobileTLayout : public juce::Component, private juce::Timer
-{
-public:
-    KickMobileTLayout();
-    ~KickMobileTLayout() override;
-
-    void paint( juce::Graphics& g ) override;
-    void resized() override;
-
-    void mouseDown( const juce::MouseEvent& e ) override;
-    void mouseDrag( const juce::MouseEvent& e ) override;
-    void mouseUp( const juce::MouseEvent& e ) override;
-
-    void navigateTo( TView view );
-    TView getCurrentView() const noexcept { return targetView_; }
-
-    void setBank( int bankIndex );
-    int getBank() const noexcept { return currentBank_; }
-
-    void setFullLevel( bool enabled );
-    bool isFullLevel() const noexcept { return fullLevel_; }
-
-private:
-    void timerCallback() override;
-    void updateViewPositions();
-
-    kick_ui::KickHome* kickHome_{ nullptr };
-    std::unique_ptr<MobilePadsView>     padsView_;
-    std::unique_ptr<MobileBanksView>    banksView_;
-    std::unique_ptr<MobileControlsView> controlsView_;
-
-    // Edge navigation pill buttons
-    std::unique_ptr<NavPillButton> toBanksPill_;
-    std::unique_ptr<NavPillButton> toPadsPill_;
-    std::unique_ptr<NavPillButton> toControlsPill_;
-
-    TView currentView_{ TView::DAW };
-    TView targetView_{ TView::DAW };
-
-    float currentX_{ 0.0f };
-    float currentY_{ 0.0f };
-    float targetX_{ 0.0f };
-    float targetY_{ 0.0f };
-
-    int currentBank_{ 0 };
-    bool fullLevel_{ false };
-
-    // Gesture tracking
-    int dragStartX_{ 0 };
-    int dragStartY_{ 0 };
-    bool isSwiping_{ false };
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( KickMobileTLayout )
-};
-
-//==============================================================================
-// Implementations: MobilePadsView
-//==============================================================================
-inline MobilePadsView::MobilePadsView( KickMobileTLayout& layout ) : layout_( layout )
-{
-    setInterceptsMouseClicks( true, true );
-
-    toDawBtn_ = std::make_unique<NavPillButton>( "DAW", NavPillButton::Left, juce::Colour( 0xFF00E5FF ), [this] {
-        layout_.navigateTo( TView::DAW );
-    } );
-    addAndMakeVisible( toDawBtn_.get() );
-
-    for( int i = 0; i < 16; ++i )
-    {
-        padActive_[i] = false;
-        padColours_[i] = juce::Colour( 0xFF00E5FF ); // Electric Cyan
-    }
-}
-
-inline void MobilePadsView::paint( juce::Graphics& g )
-{
-    auto bounds = getLocalBounds().toFloat();
-    g.fillAll( juce::Colour( 0xFF10141E ) );
-
-    // Top Bar
-    auto topBar = bounds.removeFromTop( 38.0f );
-    g.setColour( juce::Colour( 0xFF171D2B ) );
-    g.fillRect( topBar );
-
-    // Left area reserved for toDawBtn_ component
-    topBar.removeFromLeft( 100.0f );
-
-    // Full Level toggle on Right of Top Bar
-    auto fullLvlBtn = topBar.removeFromRight( 90.0f ).reduced( 4.0f );
-    g.setColour( fullLevel_ ? ui::Theme::titleColour( 1 ) : juce::Colour( 0xFF222938 ) );
-    g.fillRoundedRectangle( fullLvlBtn, 6.0f );
-    g.setColour( fullLevel_ ? juce::Colours::black : juce::Colours::white );
-    g.setFont( juce::Font( 11.0f, juce::Font::bold ) );
-    g.drawText( "FULL LVL", fullLvlBtn, juce::Justification::centred, false );
-
-    // Bank Tabs A..H in Center of Top Bar
-    auto bankArea = topBar.reduced( 10.0f, 4.0f );
-    float tabW = bankArea.getWidth() / 8.0f;
-    for( int i = 0; i < 8; ++i )
-    {
-        auto tabRect = juce::Rectangle<float>( bankArea.getX() + i * tabW, bankArea.getY(), tabW - 3.0f, bankArea.getHeight() );
-        bool isCurrent = ( i == currentBank_ );
-
-        g.setColour( isCurrent ? ui::Theme::titleColour( 1 ) : juce::Colour( 0xFF1F2636 ) );
-        g.fillRoundedRectangle( tabRect, 4.0f );
-
-        g.setColour( isCurrent ? juce::Colours::black : juce::Colour( 0xFF90A4AE ) );
-        g.setFont( juce::Font( 11.0f, juce::Font::bold ) );
-        const char c = (char)( 'A' + i );
-        g.drawText( juce::String::charToString( c ), tabRect, juce::Justification::centred, false );
-    }
-
-    // 16 MPC Pads Grid
-    for( int i = 0; i < 16; ++i )
-    {
-        auto r = getPadBounds( i );
-        bool active = padActive_[i];
-
-        // Pad body
-        juce::Colour baseColour = active ? juce::Colour( 0xFF4A6572 ) : juce::Colour( 0xFF1E2433 );
-        g.setColour( baseColour );
-        g.fillRoundedRectangle( r, 8.0f );
-
-        // Glowing border
-        juce::Colour borderColour = active ? juce::Colours::white : padColours_[i].withAlpha( 0.85f );
-        g.setColour( borderColour );
-        g.drawRoundedRectangle( r, 8.0f, active ? 3.5f : 1.5f );
-
-        // Corner indicator
-        auto corner = juce::Rectangle<float>( r.getX() + 4, r.getY() + 4, 10, 10 );
-        g.setColour( active ? juce::Colours::white : padColours_[i] );
-        g.fillRoundedRectangle( corner, 2.0f );
-
-        // Pad Number
-        g.setColour( active ? juce::Colours::white : juce::Colour( 0xFFECEFF1 ) );
-        g.setFont( juce::Font( 18.0f, juce::Font::bold ) );
-        g.drawText( juce::String( i + 1 ), r.reduced( 10.0f ), juce::Justification::bottomRight, false );
-    }
-}
-
-inline void MobilePadsView::resized()
-{
-    if( toDawBtn_ != nullptr )
-        toDawBtn_->setBounds( 6, 4, 88, 30 );
-}
-
-inline juce::Rectangle<float> MobilePadsView::getPadBounds( int padIndex ) const
-{
-    if( padIndex < 0 || padIndex >= 16 ) return {};
-    auto gridArea = getLocalBounds().toFloat();
-    gridArea.removeFromTop( 42.0f );
-    gridArea = gridArea.reduced( 10.0f, 6.0f );
-
-    float gap = 6.0f;
-    float padW = ( gridArea.getWidth() - 3.0f * gap ) / 4.0f;
-    float padH = ( gridArea.getHeight() - 3.0f * gap ) / 4.0f;
-
-    // MPC layout: pad 13..16 on top row, 1..4 on bottom row
-    int row = 3 - ( padIndex / 4 );
-    int col = padIndex % 4;
-
-    return juce::Rectangle<float>(
-        gridArea.getX() + col * ( padW + gap ),
-        gridArea.getY() + row * ( padH + gap ),
-        padW, padH
-    );
-}
-
-inline int MobilePadsView::getPadAt( int x, int y ) const
-{
-    for( int i = 0; i < 16; ++i )
-    {
-        if( getPadBounds( i ).contains( (float)x, (float)y ) )
-            return i;
-    }
-    return -1;
-}
-
-inline int MobilePadsView::getBankTabAt( int x, int y ) const
-{
-    if( y > 38 ) return -1;
-    auto topBar = getLocalBounds().toFloat().removeFromTop( 38.0f );
-    topBar.removeFromLeft( 100.0f );
-    topBar.removeFromRight( 90.0f );
-    auto bankArea = topBar.reduced( 10.0f, 4.0f );
-    if( !bankArea.contains( (float)x, (float)y ) ) return -1;
-
-    float tabW = bankArea.getWidth() / 8.0f;
-    if( tabW <= 0.0f ) return -1;
-    int idx = (int)std::floor( ( (float)x - bankArea.getX() ) / tabW );
-    return juce::jlimit( 0, 7, idx );
-}
-
-inline void MobilePadsView::mouseDown( const juce::MouseEvent& e )
-{
-    // Back to DAW button
-    if( e.y <= 38 && e.x <= 100 )
-    {
-        layout_.navigateTo( TView::DAW );
-        return;
-    }
-
-    // Full Level toggle
-    if( e.y <= 38 && e.x >= getWidth() - 90 )
-    {
-        setFullLevel( !fullLevel_ );
-        return;
-    }
-
-    // Bank tabs
-    int bank = getBankTabAt( e.x, e.y );
-    if( bank >= 0 )
-    {
-        setBank( bank );
-        return;
-    }
-
-    // Pad hit (multi-touch supported)
-    int pad = getPadAt( e.x, e.y );
-    if( pad >= 0 && pad < 16 )
-    {
-        int touchId = e.source.getIndex();
-        activeTouches_[touchId] = pad;
-        padActive_[pad] = true;
-
-        int velocity = fullLevel_ ? 127 : 110;
-        sendPadMessage( pad, true, velocity );
+        activeKnob = -1;
         repaint();
     }
-}
 
-inline void MobilePadsView::mouseDrag( const juce::MouseEvent& e )
-{
-    int touchId = e.source.getIndex();
-    auto it = activeTouches_.find( touchId );
-    if( it != activeTouches_.end() )
+    void sendButtonMessage( int buttonCode, bool pressed )
     {
-        int currentPad = it->second;
-        int newPad = getPadAt( e.x, e.y );
-        if( newPad >= 0 && newPad != currentPad )
+        CPktMgr::HWMsg_t msg;
+        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_BUTTON;
+        msg.pktCmd  = DCC::BtnCmd::EN_BTN_STATUS;
+        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
+        msg.data    = { buttonCode, pressed ? (int)DCC::BTN_PRESSED : (int)DCC::BTN_RELEASED };
+        contracts::DclSignals::hardwareInputTriggered( msg );
+    }
+
+    void sendKnobMessage( int knobCode, int direction, int ticks, bool isQlink )
+    {
+        CPktMgr::HWMsg_t msg;
+        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_KNOBS;
+        msg.pktCmd  = isQlink ? (int)DCC::KnobCmd::EN_KNOB_QLINK
+                              : (int)DCC::KnobCmd::EN_KNOB_ROTARY;
+        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
+        msg.data    = { knobCode, direction, ticks };
+        contracts::DclSignals::hardwareInputTriggered( msg );
+    }
+
+private:
+    juce::Image            bgImage;
+    juce::Rectangle<float> renderedRect;
+    int                    activeKnob{ -1 };
+    float                  dragStartY{ 0.0f };
+    float                  startVal{ 0.8f };
+    float                  masterVal{ 0.85f };
+    float                  recVal{ 0.5f };
+};
+
+//==============================================================================
+/**
+ * Q-Link Potentiometer Panel (Right edge: P1, P2, P3, P4 knobs).
+ * Base dimensions: 74 x 302.
+ */
+class MobileQLinkChassisPanel : public juce::Component
+{
+public:
+    MobileQLinkChassisPanel()
+    {
+        bgImage = loadChassisAsset( "mobile_hw_qlinks.png" );
+        setOpaque( true );
+    }
+
+    void paint( juce::Graphics& g ) override
+    {
+        g.fillAll( juce::Colour( 0xff16161a ) );
+
+        if( !bgImage.isValid() || renderedRect.isEmpty() )
+            return;
+
+        g.drawImage( bgImage, renderedRect, juce::RectanglePlacement::centred );
+
+        const float scale = renderedRect.getHeight() / 302.0f;
+        const float ox    = renderedRect.getX();
+        const float oy    = renderedRect.getY();
+
+        const float knobY[4] = { 36.0f, 105.0f, 174.0f, 243.0f };
+        for( int i = 0; i < 4; ++i )
         {
-            // Released old pad
-            padActive_[currentPad] = false;
-            sendPadMessage( currentPad, false, 0 );
-
-            // Hit new pad
-            it->second = newPad;
-            padActive_[newPad] = true;
-            int velocity = fullLevel_ ? 127 : 110;
-            sendPadMessage( newPad, true, velocity );
-            repaint();
-        }
-    }
-}
-
-inline void MobilePadsView::mouseUp( const juce::MouseEvent& e )
-{
-    int touchId = e.source.getIndex();
-    auto it = activeTouches_.find( touchId );
-    if( it != activeTouches_.end() )
-    {
-        int pad = it->second;
-        padActive_[pad] = false;
-        sendPadMessage( pad, false, 0 );
-        activeTouches_.erase( it );
-        repaint();
-    }
-    else
-    {
-        // Safety: release any lingering active pads if no touches active
-        if( activeTouches_.empty() )
-        {
-            for( int i = 0; i < 16; ++i )
+            if( activeKnob == i )
             {
-                if( padActive_[i] )
-                {
-                    padActive_[i] = false;
-                    sendPadMessage( i, false, 0 );
-                }
+                drawKnobArc( g, ox + 37.0f * scale, oy + knobY[i] * scale, 22.0f * scale, knobVals[i] );
             }
-            repaint();
-        }
-    }
-}
-
-inline void MobilePadsView::setBank( int bankIndex )
-{
-    currentBank_ = juce::jlimit( 0, 7, bankIndex );
-    sendButtonMessage( contracts::DeviceControlContracts::EN_BANK_A + currentBank_, true );
-    layout_.setBank( currentBank_ );
-    repaint();
-}
-
-inline void MobilePadsView::setFullLevel( bool enabled )
-{
-    fullLevel_ = enabled;
-    sendButtonMessage( contracts::DeviceControlContracts::EN_FULL_LEVEL, fullLevel_ );
-    layout_.setFullLevel( fullLevel_ );
-    repaint();
-}
-
-//==============================================================================
-// Implementations: MobileBanksView
-//==============================================================================
-inline MobileBanksView::MobileBanksView( KickMobileTLayout& layout ) : layout_( layout )
-{
-    setInterceptsMouseClicks( true, true );
-
-    toDawBtn_ = std::make_unique<NavPillButton>( "DAW", NavPillButton::Right, ui::Theme::titleColour( 1 ), [this] {
-        layout_.navigateTo( TView::DAW );
-    } );
-    addAndMakeVisible( toDawBtn_.get() );
-}
-
-inline void MobileBanksView::paint( juce::Graphics& g )
-{
-    auto bounds = getLocalBounds().toFloat();
-    g.fillAll( juce::Colour( 0xFF10141E ) );
-
-    // Top Bar
-    auto topBar = bounds.removeFromTop( 38.0f );
-    g.setColour( juce::Colour( 0xFF171D2B ) );
-    g.fillRect( topBar );
-
-    // Title
-    g.setColour( juce::Colours::white );
-    g.setFont( juce::Font( 13.0f, juce::Font::bold ) );
-    g.drawText( "BANKS & EXPRESSION", topBar.reduced( 12.0f, 0.0f ), juce::Justification::centredLeft, false );
-
-    // Area reserved on Right for toDawBtn_
-    topBar.removeFromRight( 100.0f );
-
-    auto mainArea = bounds.reduced( 10.0f, 8.0f );
-
-    // Column 1: Ribbon Touch Strip
-    auto stripArea = mainArea.removeFromLeft( 60.0f );
-    mainArea.removeFromLeft( 12.0f );
-
-    g.setColour( juce::Colour( 0xFF181C28 ) );
-    g.fillRoundedRectangle( stripArea, 6.0f );
-    g.setColour( juce::Colour( 0xFF303B52 ) );
-    g.drawRoundedRectangle( stripArea, 6.0f, 1.5f );
-
-    // LED Ladder inside Ribbon
-    int numLeds = 20;
-    float ledGap = 3.0f;
-    float ledH = ( stripArea.getHeight() - 28.0f - ( numLeds - 1 ) * ledGap ) / numLeds;
-    int litLeds = juce::roundToInt( ( (float)ribbonValue_ / 100.0f ) * numLeds );
-
-    for( int i = 0; i < numLeds; ++i )
-    {
-        // LED 0 is bottom, numLeds-1 is top
-        int idx = ( numLeds - 1 ) - i;
-        auto ledRect = juce::Rectangle<float>(
-            stripArea.getX() + 8.0f,
-            stripArea.getY() + 8.0f + idx * ( ledH + ledGap ),
-            stripArea.getWidth() - 16.0f,
-            ledH
-        );
-
-        bool isLit = i < litLeds;
-        juce::Colour ledColor;
-        if( i > 16 ) ledColor = juce::Colour( 0xFFE53935 );     // Red top
-        else if( i > 12 ) ledColor = juce::Colour( 0xFFFFA000 ); // Amber mid
-        else ledColor = juce::Colour( 0xFF00E676 );              // Green base
-
-        g.setColour( isLit ? ledColor : ledColor.withAlpha( 0.2f ) );
-        g.fillRoundedRectangle( ledRect, 2.0f );
-    }
-
-    g.setColour( juce::Colour( 0xFF78909C ) );
-    g.setFont( juce::Font( 10.0f, juce::Font::bold ) );
-    g.drawText( "RIBBON", stripArea.removeFromBottom( 20.0f ), juce::Justification::centred, false );
-
-    // Column 2: Banks A..H (2 columns x 4 rows)
-    auto bankCol = mainArea.removeFromLeft( mainArea.getWidth() * 0.52f );
-    mainArea.removeFromLeft( 12.0f );
-
-    float bGap = 6.0f;
-    float bw = ( bankCol.getWidth() - bGap ) / 2.0f;
-    float bh = ( bankCol.getHeight() - 3.0f * bGap ) / 4.0f;
-
-    for( int i = 0; i < 8; ++i )
-    {
-        int col = i % 2;
-        int row = i / 2;
-        auto br = juce::Rectangle<float>( bankCol.getX() + col * ( bw + bGap ), bankCol.getY() + row * ( bh + bGap ), bw, bh );
-        bool isCurrent = ( i == currentBank_ );
-
-        g.setColour( isCurrent ? ui::Theme::titleColour( 1 ) : juce::Colour( 0xFF222938 ) );
-        g.fillRoundedRectangle( br, 6.0f );
-
-        g.setColour( isCurrent ? juce::Colours::black : juce::Colours::white );
-        g.setFont( juce::Font( 14.0f, juce::Font::bold ) );
-        const char c = (char)( 'A' + i );
-        g.drawText( "BANK " + juce::String::charToString( c ), br, juce::Justification::centred, false );
-    }
-
-    // Column 3: Performance buttons (2 columns x 4 rows)
-    auto perfCol = mainArea;
-    float pw = ( perfCol.getWidth() - bGap ) / 2.0f;
-    float ph = ( perfCol.getHeight() - 3.0f * bGap ) / 4.0f;
-
-    const char* perfLabels[8] = {
-        "FULL LVL", "16 LVL",
-        "HALF LVL", "NOTES",
-        "TRK MUTE", "PAD MUTE",
-        "STEP SEQ", "ERASE"
-    };
-
-    for( int i = 0; i < 8; ++i )
-    {
-        int col = i % 2;
-        int row = i / 2;
-        auto pr = juce::Rectangle<float>( perfCol.getX() + col * ( pw + bGap ), perfCol.getY() + row * ( ph + bGap ), pw, ph );
-        bool active = ( activePerfButton_ == i );
-
-        juce::Colour btnBg = active ? juce::Colour( 0xFF00E5FF ) : juce::Colour( 0xFF202738 );
-        if( i == 7 && !active ) btnBg = juce::Colour( 0xFF4A1A1A ); // ERASE is reddish
-
-        g.setColour( btnBg );
-        g.fillRoundedRectangle( pr, 6.0f );
-
-        g.setColour( active ? juce::Colours::black : juce::Colours::white );
-        g.setFont( juce::Font( 12.0f, juce::Font::bold ) );
-        g.drawText( perfLabels[i], pr, juce::Justification::centred, false );
-    }
-}
-
-inline void MobileBanksView::resized()
-{
-    if( toDawBtn_ != nullptr )
-        toDawBtn_->setBounds( getWidth() - 94, 4, 88, 30 );
-}
-
-inline void MobileBanksView::updateTouchStrip( int y )
-{
-    ribbonTouching_ = true;
-    auto stripArea = getLocalBounds().toFloat().reduced( 10.0f, 8.0f );
-    stripArea.removeFromTop( 38.0f );
-    float h = stripArea.getHeight();
-    if( h <= 0.0f ) return;
-
-    float norm = 1.0f - juce::jlimit( 0.0f, 1.0f, ( (float)y - stripArea.getY() ) / h );
-    ribbonValue_ = juce::roundToInt( norm * 100.0f );
-    sendSliderMessage( ribbonValue_ );
-    repaint();
-}
-
-inline int MobileBanksView::getBankButtonAt( int x, int y ) const
-{
-    auto mainArea = getLocalBounds().toFloat().reduced( 10.0f, 8.0f );
-    mainArea.removeFromTop( 38.0f );
-    mainArea.removeFromLeft( 72.0f ); // Skip strip + gap
-    auto bankCol = mainArea.removeFromLeft( mainArea.getWidth() * 0.52f );
-
-    if( !bankCol.contains( (float)x, (float)y ) ) return -1;
-
-    float bGap = 6.0f;
-    float bw = ( bankCol.getWidth() - bGap ) / 2.0f;
-    float bh = ( bankCol.getHeight() - 3.0f * bGap ) / 4.0f;
-    if( bw <= 0.0f || bh <= 0.0f ) return -1;
-
-    int col = juce::roundToInt( std::floor( ( (float)x - bankCol.getX() ) / ( bw + bGap ) ) );
-    int row = juce::roundToInt( std::floor( ( (float)y - bankCol.getY() ) / ( bh + bGap ) ) );
-
-    if( col >= 0 && col < 2 && row >= 0 && row < 4 )
-    {
-        return row * 2 + col;
-    }
-    return -1;
-}
-
-inline int MobileBanksView::getPerfButtonAt( int x, int y ) const
-{
-    auto mainArea = getLocalBounds().toFloat().reduced( 10.0f, 8.0f );
-    mainArea.removeFromTop( 38.0f );
-    mainArea.removeFromLeft( 72.0f );
-    mainArea.removeFromLeft( mainArea.getWidth() * 0.52f + 12.0f );
-    auto perfCol = mainArea;
-
-    if( !perfCol.contains( (float)x, (float)y ) ) return -1;
-
-    float bGap = 6.0f;
-    float pw = ( perfCol.getWidth() - bGap ) / 2.0f;
-    float ph = ( perfCol.getHeight() - 3.0f * bGap ) / 4.0f;
-    if( pw <= 0.0f || ph <= 0.0f ) return -1;
-
-    int col = juce::roundToInt( std::floor( ( (float)x - perfCol.getX() ) / ( pw + bGap ) ) );
-    int row = juce::roundToInt( std::floor( ( (float)y - perfCol.getY() ) / ( ph + bGap ) ) );
-
-    if( col >= 0 && col < 2 && row >= 0 && row < 4 )
-    {
-        return row * 2 + col;
-    }
-    return -1;
-}
-
-inline void MobileBanksView::mouseDown( const juce::MouseEvent& e )
-{
-    // Return to DAW button
-    if( e.y <= 38 && e.x >= getWidth() - 100 )
-    {
-        layout_.navigateTo( TView::DAW );
-        return;
-    }
-
-    // Touch Strip
-    if( e.x >= 10 && e.x <= 70 && e.y > 38 )
-    {
-        updateTouchStrip( e.y );
-        return;
-    }
-
-    // Bank buttons
-    int bank = getBankButtonAt( e.x, e.y );
-    if( bank >= 0 )
-    {
-        setBank( bank );
-        sendButtonMessage( contracts::DeviceControlContracts::EN_BANK_A + bank, true );
-        layout_.setBank( bank );
-        return;
-    }
-
-    // Performance buttons
-    int perf = getPerfButtonAt( e.x, e.y );
-    if( perf >= 0 )
-    {
-        activePerfButton_ = perf;
-        using DCC = contracts::DeviceControlContracts;
-        int code = -1;
-        switch( perf )
-        {
-            case 0: code = DCC::EN_FULL_LEVEL; break;
-            case 1: code = DCC::EN_16LEVELS; break;
-            case 2: code = DCC::EN_HALF_LEVEL; break;
-            case 3: code = DCC::EN_NOTES; break;
-            case 4: code = DCC::EN_TRACK_MUTE; break;
-            case 5: code = DCC::EN_PAD_MUTE; break;
-            case 6: code = DCC::EN_STEP_SEQ; break;
-            case 7: code = DCC::EN_ERASE; break;
-            default: break;
-        }
-        if( code >= 0 ) sendButtonMessage( code, true );
-        repaint();
-    }
-}
-
-inline void MobileBanksView::mouseDrag( const juce::MouseEvent& e )
-{
-    if( ribbonTouching_ )
-    {
-        updateTouchStrip( e.y );
-    }
-}
-
-inline void MobileBanksView::mouseUp( const juce::MouseEvent& )
-{
-    ribbonTouching_ = false;
-    if( activePerfButton_ >= 0 )
-    {
-        activePerfButton_ = -1;
-        repaint();
-    }
-}
-
-//==============================================================================
-// Implementations: MobileControlsView
-//==============================================================================
-inline MobileControlsView::MobileControlsView( KickMobileTLayout& layout ) : layout_( layout )
-{
-    setInterceptsMouseClicks( true, true );
-
-    toDawBtn_ = std::make_unique<NavPillButton>( "DAW", NavPillButton::Down, juce::Colour( 0xFFFFAB00 ), [this] {
-        layout_.navigateTo( TView::DAW );
-    } );
-    addAndMakeVisible( toDawBtn_.get() );
-}
-
-inline void MobileControlsView::paint( juce::Graphics& g )
-{
-    auto bounds = getLocalBounds().toFloat();
-    g.fillAll( juce::Colour( 0xFF10141E ) );
-
-    // Top Bar (Center area reserved for toDawBtn_)
-    auto topBar = bounds.removeFromTop( 38.0f );
-    g.setColour( juce::Colour( 0xFF171D2B ) );
-    g.fillRect( topBar );
-
-    auto mainArea = bounds.reduced( 10.0f, 6.0f );
-
-    // Section 1 (Left): 4 Q-Link Encoders (2x2 grid)
-    auto qlinkArea = mainArea.removeFromLeft( mainArea.getWidth() * 0.36f );
-    mainArea.removeFromLeft( 12.0f );
-
-    float qw = ( qlinkArea.getWidth() - 6.0f ) / 2.0f;
-    float qh = ( qlinkArea.getHeight() - 6.0f ) / 2.0f;
-    for( int i = 0; i < 4; ++i )
-    {
-        int col = i % 2;
-        int row = i / 2;
-        auto qr = juce::Rectangle<float>( qlinkArea.getX() + col * ( qw + 6.0f ), qlinkArea.getY() + row * ( qh + 6.0f ), qw, qh );
-        drawEncoder( g, qr, "Q" + juce::String( i + 1 ), qlinkValues_[i], activeControl_ == i );
-    }
-
-    // Section 2 (Center): Mode buttons (2 columns x 4 rows)
-    auto modeArea = mainArea.removeFromLeft( mainArea.getWidth() * 0.44f );
-    mainArea.removeFromLeft( 12.0f );
-
-    float mw = ( modeArea.getWidth() - 6.0f ) / 2.0f;
-    float mh = ( modeArea.getHeight() - 3.0f * 6.0f ) / 4.0f;
-    const char* modeLabels[8] = {
-        "MAIN", "BROWSE",
-        "TRACK MIX", "PAD MIX",
-        "GRID", "SAVE",
-        "MENU", "SHIFT"
-    };
-
-    for( int i = 0; i < 8; ++i )
-    {
-        int col = i % 2;
-        int row = i / 2;
-        auto mr = juce::Rectangle<float>( modeArea.getX() + col * ( mw + 6.0f ), modeArea.getY() + row * ( mh + 6.0f ), mw, mh );
-        drawButton( g, mr, modeLabels[i], ( activeControl_ == 10 + i ) ? juce::Colour( 0xFF00E5FF ) : juce::Colour( 0xFF222938 ) );
-    }
-
-    // Section 3 (Right): Jog Wheel, ENTER/BACK, and Transport
-    auto rightArea = mainArea;
-    auto transportArea = rightArea.removeFromBottom( 36.0f );
-    rightArea.removeFromBottom( 6.0f );
-
-    // Transport Bar
-    float tw = ( transportArea.getWidth() - 4.0f * 6.0f ) / 5.0f;
-    const char* tNames[5] = { "REC", "OVR", "STOP", "PLAY", "TAP" };
-    juce::Colour tColors[5] = {
-        juce::Colour( 0xFFD32F2F ), // REC
-        juce::Colour( 0xFFF57C00 ), // OVR
-        juce::Colour( 0xFF455A64 ), // STOP
-        juce::Colour( 0xFF388E3C ), // PLAY
-        juce::Colour( 0xFF1976D2 )  // TAP
-    };
-    for( int i = 0; i < 5; ++i )
-    {
-        auto tr = juce::Rectangle<float>( transportArea.getX() + i * ( tw + 6.0f ), transportArea.getY(), tw, transportArea.getHeight() );
-        drawButton( g, tr, tNames[i], tColors[i] );
-    }
-
-    // Jog Wheel & Side Buttons
-    float jogSize = std::min( rightArea.getWidth() * 0.62f, rightArea.getHeight() );
-    jogBounds_ = rightArea.removeFromLeft( jogSize ).withSizeKeepingCentre( jogSize, jogSize );
-
-    g.setColour( juce::Colour( 0xFF1C2230 ) );
-    g.fillEllipse( jogBounds_ );
-    g.setColour( ( activeControl_ == 4 ) ? ui::Theme::titleColour( 1 ) : juce::Colour( 0xFF3E4A62 ) );
-    g.drawEllipse( jogBounds_, 3.0f );
-
-    // Center ENTER
-    auto enterBounds = jogBounds_.withSizeKeepingCentre( jogSize * 0.45f, jogSize * 0.45f );
-    g.setColour( ( activeControl_ == 5 ) ? ui::Theme::titleColour( 1 ) : juce::Colour( 0xFF2A344A ) );
-    g.fillEllipse( enterBounds );
-    g.setColour( ( activeControl_ == 5 ) ? juce::Colours::black : juce::Colours::white );
-    g.setFont( juce::Font( 11.0f, juce::Font::bold ) );
-    g.drawText( "ENTER", enterBounds, juce::Justification::centred, false );
-
-    // BACK, -, + on side of jog
-    auto sideBtns = rightArea;
-    float sbH = ( sideBtns.getHeight() - 2.0f * 6.0f ) / 3.0f;
-    drawButton( g, juce::Rectangle<float>( sideBtns.getX(), sideBtns.getY() + 0 * ( sbH + 6.0f ), sideBtns.getWidth(), sbH ), "BACK" );
-    drawButton( g, juce::Rectangle<float>( sideBtns.getX(), sideBtns.getY() + 1 * ( sbH + 6.0f ), sideBtns.getWidth(), sbH ), "-" );
-    drawButton( g, juce::Rectangle<float>( sideBtns.getX(), sideBtns.getY() + 2 * ( sbH + 6.0f ), sideBtns.getWidth(), sbH ), "+" );
-}
-
-inline void MobileControlsView::resized()
-{
-    if( toDawBtn_ != nullptr )
-        toDawBtn_->setBounds( ( getWidth() - 120 ) / 2, 4, 120, 30 );
-}
-
-inline void MobileControlsView::drawEncoder( juce::Graphics& g, juce::Rectangle<float> r, const juce::String& name, int val, bool active )
-{
-    g.setColour( juce::Colour( 0xFF1A202C ) );
-    g.fillRoundedRectangle( r, 6.0f );
-
-    auto dialArea = r.reduced( 4.0f ).removeFromTop( r.getHeight() * 0.72f );
-    float radius = std::min( dialArea.getWidth(), dialArea.getHeight() ) * 0.42f;
-    auto centre = dialArea.getCentre();
-
-    float startAngle = juce::MathConstants<float>::pi * 0.75f;
-    float endAngle = juce::MathConstants<float>::pi * 2.25f;
-    float curAngle = startAngle + ( (float)val / 127.0f ) * ( endAngle - startAngle );
-
-    juce::Path track;
-    track.addCentredArc( centre.x, centre.y, radius, radius, 0.0f, startAngle, endAngle, true );
-    g.setColour( juce::Colour( 0xFF2A344A ) );
-    g.strokePath( track, juce::PathStrokeType( 3.5f ) );
-
-    juce::Path valPath;
-    valPath.addCentredArc( centre.x, centre.y, radius, radius, 0.0f, startAngle, curAngle, true );
-    g.setColour( active ? juce::Colours::white : ui::Theme::titleColour( 1 ) );
-    g.strokePath( valPath, juce::PathStrokeType( 3.5f ) );
-
-    g.setColour( juce::Colours::white );
-    g.setFont( juce::Font( 11.0f, juce::Font::bold ) );
-    g.drawText( name + " " + juce::String( val ), r.removeFromBottom( 16.0f ), juce::Justification::centred, false );
-}
-
-inline void MobileControlsView::drawButton( juce::Graphics& g, juce::Rectangle<float> r, const juce::String& text, juce::Colour bg )
-{
-    g.setColour( bg );
-    g.fillRoundedRectangle( r, 5.0f );
-    g.setColour( juce::Colours::white );
-    g.setFont( juce::Font( 11.0f, juce::Font::bold ) );
-    g.drawText( text, r, juce::Justification::centred, false );
-}
-
-inline float MobileControlsView::getJogAngle( int x, int y ) const
-{
-    auto centre = jogBounds_.getCentre();
-    return std::atan2( (float)y - centre.y, (float)x - centre.x );
-}
-
-inline int MobileControlsView::hitTestControl( int x, int y ) const
-{
-    // Return DAW button at top
-    if( y <= 38 )
-    {
-        auto dawBtn = getLocalBounds().toFloat().removeFromTop( 38.0f ).withSizeKeepingCentre( 130.0f, 28.0f );
-        if( dawBtn.contains( (float)x, (float)y ) ) return 999;
-    }
-
-    auto mainArea = getLocalBounds().toFloat().reduced( 10.0f, 6.0f );
-    mainArea.removeFromTop( 38.0f );
-
-    // Q-Links
-    auto qlinkArea = mainArea.removeFromLeft( mainArea.getWidth() * 0.36f );
-    mainArea.removeFromLeft( 12.0f );
-    if( qlinkArea.contains( (float)x, (float)y ) )
-    {
-        float qw = ( qlinkArea.getWidth() - 6.0f ) / 2.0f;
-        float qh = ( qlinkArea.getHeight() - 6.0f ) / 2.0f;
-        int col = juce::roundToInt( std::floor( ( (float)x - qlinkArea.getX() ) / ( qw + 6.0f ) ) );
-        int row = juce::roundToInt( std::floor( ( (float)y - qlinkArea.getY() ) / ( qh + 6.0f ) ) );
-        if( col >= 0 && col < 2 && row >= 0 && row < 2 ) return row * 2 + col;
-    }
-
-    // Mode buttons
-    auto modeArea = mainArea.removeFromLeft( mainArea.getWidth() * 0.44f );
-    mainArea.removeFromLeft( 12.0f );
-    if( modeArea.contains( (float)x, (float)y ) )
-    {
-        float mw = ( modeArea.getWidth() - 6.0f ) / 2.0f;
-        float mh = ( modeArea.getHeight() - 3.0f * 6.0f ) / 4.0f;
-        int col = juce::roundToInt( std::floor( ( (float)x - modeArea.getX() ) / ( mw + 6.0f ) ) );
-        int row = juce::roundToInt( std::floor( ( (float)y - modeArea.getY() ) / ( mh + 6.0f ) ) );
-        if( col >= 0 && col < 2 && row >= 0 && row < 4 ) return 10 + row * 2 + col;
-    }
-
-    // Transport buttons
-    auto rightArea = mainArea;
-    auto transportArea = rightArea.removeFromBottom( 36.0f );
-    if( transportArea.contains( (float)x, (float)y ) )
-    {
-        float tw = ( transportArea.getWidth() - 4.0f * 6.0f ) / 5.0f;
-        int idx = juce::roundToInt( std::floor( ( (float)x - transportArea.getX() ) / ( tw + 6.0f ) ) );
-        if( idx >= 0 && idx < 5 ) return 20 + idx;
-    }
-
-    // Center ENTER & Jog Wheel
-    auto enterBounds = jogBounds_.withSizeKeepingCentre( jogBounds_.getWidth() * 0.45f, jogBounds_.getHeight() * 0.45f );
-    if( enterBounds.contains( (float)x, (float)y ) ) return 5;
-    if( jogBounds_.contains( (float)x, (float)y ) ) return 4;
-
-    // Side buttons: BACK (6), - (7), + (8)
-    auto sideBtns = rightArea;
-    if( sideBtns.contains( (float)x, (float)y ) )
-    {
-        float sbH = ( sideBtns.getHeight() - 2.0f * 6.0f ) / 3.0f;
-        int idx = juce::roundToInt( std::floor( ( (float)y - sideBtns.getY() ) / ( sbH + 6.0f ) ) );
-        if( idx >= 0 && idx < 3 ) return 6 + idx;
-    }
-
-    return -1;
-}
-
-inline void MobileControlsView::mouseDown( const juce::MouseEvent& e )
-{
-    activeControl_ = hitTestControl( e.x, e.y );
-    dragStartY_ = e.y;
-    lastJogAngle_ = getJogAngle( e.x, e.y );
-
-    if( activeControl_ == 999 ) // DAW Return
-    {
-        layout_.navigateTo( TView::DAW );
-        return;
-    }
-
-    using DCC = contracts::DeviceControlContracts;
-    if( activeControl_ == 5 ) // ENTER
-    {
-        sendButtonMessage( DCC::EN_KNOB_ENTER, true );
-    }
-    else if( activeControl_ == 6 ) // BACK
-    {
-        sendButtonMessage( DCC::EN_BACK, true );
-    }
-    else if( activeControl_ == 7 ) // -
-    {
-        sendButtonMessage( DCC::EN_MINUS, true );
-    }
-    else if( activeControl_ == 8 ) // +
-    {
-        sendButtonMessage( DCC::EN_PLUS, true );
-    }
-    else if( activeControl_ >= 10 && activeControl_ < 18 ) // Mode buttons
-    {
-        int code = -1;
-        switch( activeControl_ - 10 )
-        {
-            case 0: code = DCC::EN_MAINMODE; break;
-            case 1: code = DCC::EN_BROWSE; break;
-            case 2: code = DCC::EN_TRACK_MIX; break;
-            case 3: code = DCC::EN_PAD_MIX; break;
-            case 4: code = DCC::EN_GRID; break;
-            case 5: code = DCC::EN_SAVE; break;
-            case 6: code = DCC::EN_MENU; break;
-            case 7: code = DCC::EN_SHIFT; break;
-            default: break;
-        }
-        if( code >= 0 ) sendButtonMessage( code, true );
-    }
-    else if( activeControl_ >= 20 && activeControl_ < 25 ) // Transport
-    {
-        int code = -1;
-        switch( activeControl_ - 20 )
-        {
-            case 0: code = DCC::EN_RECORD; break;
-            case 1: code = DCC::EN_OVERDUB; break;
-            case 2: code = DCC::EN_STOP; break;
-            case 3: code = DCC::EN_PLAY; break;
-            case 4: code = DCC::EN_TAP_TEMPO; break;
-            default: break;
-        }
-        if( code >= 0 ) sendButtonMessage( code, true );
-    }
-    repaint();
-}
-
-inline void MobileControlsView::mouseDrag( const juce::MouseEvent& e )
-{
-    if( activeControl_ >= 0 && activeControl_ < 4 )
-    {
-        int dy = dragStartY_ - e.y;
-        if( dy != 0 )
-        {
-            int dir = ( dy > 0 ) ? (int)contracts::DeviceControlContracts::EN_KNOB_CLOCKWISE
-                                 : (int)contracts::DeviceControlContracts::EN_KNOB_ANTICLOCKWISE;
-            int ticks = std::abs( dy );
-            qlinkValues_[activeControl_] = juce::jlimit( 0, 127, qlinkValues_[activeControl_] + ( dy > 0 ? 1 : -1 ) );
-            sendKnobMessage( activeControl_ + 1, dir, ticks, true );
-            dragStartY_ = e.y;
-            repaint();
-        }
-    }
-    else if( activeControl_ == 4 ) // Jog wheel
-    {
-        float angle = getJogAngle( e.x, e.y );
-        float diff = angle - lastJogAngle_;
-        if( diff > juce::MathConstants<float>::pi ) diff -= juce::MathConstants<float>::twoPi;
-        else if( diff < -juce::MathConstants<float>::pi ) diff += juce::MathConstants<float>::twoPi;
-
-        if( std::abs( diff ) > 0.08f )
-        {
-            int dir = ( diff > 0 ) ? (int)contracts::DeviceControlContracts::EN_KNOB_CLOCKWISE
-                                   : (int)contracts::DeviceControlContracts::EN_KNOB_ANTICLOCKWISE;
-            sendKnobMessage( contracts::DeviceControlContracts::EN_KNOB_CENTER, dir, 1, false );
-            lastJogAngle_ = angle;
-            repaint();
-        }
-    }
-}
-
-inline void MobileControlsView::mouseUp( const juce::MouseEvent& )
-{
-    activeControl_ = -1;
-    repaint();
-}
-
-//==============================================================================
-// Implementations: KickMobileTLayout Container
-//==============================================================================
-inline KickMobileTLayout::KickMobileTLayout()
-{
-    setInterceptsMouseClicks( false, true );
-
-    kickHome_ = &kick_ui::KickHome::Instance();
-    addChildComponent( kickHome_ );
-    kickHome_->setVisible( true );
-
-    padsView_ = std::make_unique<MobilePadsView>( *this );
-    addAndMakeVisible( padsView_.get() );
-
-    banksView_ = std::make_unique<MobileBanksView>( *this );
-    addAndMakeVisible( banksView_.get() );
-
-    controlsView_ = std::make_unique<MobileControlsView>( *this );
-    addAndMakeVisible( controlsView_.get() );
-
-    // Dedicated Edge Navigation Pill Buttons
-    toBanksPill_ = std::make_unique<NavPillButton>( "BANKS", NavPillButton::Left, ui::Theme::titleColour( 1 ), [this] {
-        navigateTo( TView::Banks );
-    } );
-    addAndMakeVisible( toBanksPill_.get() );
-
-    toPadsPill_ = std::make_unique<NavPillButton>( "16 PADS", NavPillButton::Right, juce::Colour( 0xFF00E5FF ), [this] {
-        navigateTo( TView::Pads );
-    } );
-    addAndMakeVisible( toPadsPill_.get() );
-
-    toControlsPill_ = std::make_unique<NavPillButton>( "CONTROLS", NavPillButton::Up, juce::Colour( 0xFFFFAB00 ), [this] {
-        navigateTo( TView::Controls );
-    } );
-    addAndMakeVisible( toControlsPill_.get() );
-
-    navigateTo( TView::DAW );
-}
-
-inline KickMobileTLayout::~KickMobileTLayout()
-{
-    stopTimer();
-    if( kickHome_ != nullptr )
-    {
-        kickHome_->setTransform( juce::AffineTransform() );
-        removeChildComponent( kickHome_ );
-    }
-}
-
-inline void KickMobileTLayout::navigateTo( TView view )
-{
-    targetView_ = view;
-    switch( view )
-    {
-        case TView::DAW:      targetX_ = 0.0f;  targetY_ = 0.0f;  break;
-        case TView::Pads:     targetX_ = 1.0f;  targetY_ = 0.0f;  break;
-        case TView::Banks:    targetX_ = -1.0f; targetY_ = 0.0f;  break;
-        case TView::Controls: targetX_ = 0.0f;  targetY_ = -1.0f; break;
-    }
-    startTimerHz( 60 );
-}
-
-inline void KickMobileTLayout::setBank( int bankIndex )
-{
-    currentBank_ = juce::jlimit( 0, 7, bankIndex );
-    if( padsView_ ) padsView_->setBank( currentBank_ );
-    if( banksView_ ) banksView_->setBank( currentBank_ );
-}
-
-inline void KickMobileTLayout::setFullLevel( bool enabled )
-{
-    fullLevel_ = enabled;
-    if( padsView_ ) padsView_->setFullLevel( fullLevel_ );
-}
-
-inline void KickMobileTLayout::timerCallback()
-{
-    float dx = targetX_ - currentX_;
-    float dy = targetY_ - currentY_;
-
-    if( std::abs( dx ) < 0.002f && std::abs( dy ) < 0.002f )
-    {
-        currentX_ = targetX_;
-        currentY_ = targetY_;
-        currentView_ = targetView_;
-        stopTimer();
-    }
-    else
-    {
-        currentX_ += dx * 0.28f;
-        currentY_ += dy * 0.28f;
-    }
-
-    updateViewPositions();
-    repaint();
-}
-
-inline void KickMobileTLayout::updateViewPositions()
-{
-    int w = getWidth();
-    int h = getHeight();
-    if( w <= 0 || h <= 0 ) return;
-
-    float offsetX = -currentX_ * (float)w;
-    float offsetY = -currentY_ * (float)h;
-
-    // 1. DAW View at Center (0, 0)
-    if( kickHome_ != nullptr )
-    {
-        const float targetAspect = 1024.0f / 600.0f;
-        int dawH = h;
-        int dawW = juce::roundToInt( (float)dawH * targetAspect );
-        if( dawW > w )
-        {
-            dawW = w;
-            dawH = juce::roundToInt( (float)dawW / targetAspect );
         }
 
-        float dawX = offsetX + ( (float)w - (float)dawW ) * 0.5f;
-        float dawY = offsetY + ( (float)h - (float)dawH ) * 0.5f;
-
-        kickHome_->setBounds( 0, 0, 1024, 600 );
-        kickHome_->setTransform( juce::AffineTransform::scale( (float)dawW / 1024.0f, (float)dawH / 600.0f ).translated( dawX, dawY ) );
+        // Draw glowing border on left edge
+        g.setColour( juce::Colour( 0x4400d4ff ) );
+        g.drawLine( 0.0f, 0.0f, 0.0f, (float)getHeight(), 2.0f );
     }
 
-    // 2. Pads View at Right (+1, 0)
-    if( padsView_ != nullptr )
+    void drawKnobArc( juce::Graphics& g, float cx, float cy, float r, float val )
     {
-        padsView_->setBounds( juce::roundToInt( offsetX + (float)w ), juce::roundToInt( offsetY ), w, h );
+        juce::Path p;
+        float startA = juce::MathConstants<float>::pi * 0.75f;
+        float endA   = startA + juce::MathConstants<float>::pi * 1.5f * val;
+        p.addCentredArc( cx, cy, r + 4.0f, r + 4.0f, 0.0f, startA, endA, true );
+        g.setColour( juce::Colour( 0xff00d4ff ) );
+        g.strokePath( p, juce::PathStrokeType( 3.0f ) );
     }
 
-    // 3. Banks View at Left (-1, 0)
-    if( banksView_ != nullptr )
+    void resized() override
     {
-        banksView_->setBounds( juce::roundToInt( offsetX - (float)w ), juce::roundToInt( offsetY ), w, h );
+        auto bounds = getLocalBounds().toFloat();
+        const float targetAspect = 74.0f / 302.0f;
+        float w = bounds.getHeight() * targetAspect;
+        renderedRect = juce::Rectangle<float>( ( bounds.getWidth() - w ) * 0.5f, 0.0f, w, bounds.getHeight() );
     }
 
-    // 4. Controls View at Top (0, -1)
-    if( controlsView_ != nullptr )
+    juce::Point<float> toBaseCoords( juce::Point<float> p ) const
     {
-        controlsView_->setBounds( juce::roundToInt( offsetX ), juce::roundToInt( offsetY - (float)h ), w, h );
+        if( renderedRect.isEmpty() ) return { -1.0f, -1.0f };
+        float scale = renderedRect.getHeight() / 302.0f;
+        if( scale <= 0.0f ) return { -1.0f, -1.0f };
+        return { ( p.x - renderedRect.getX() ) / scale, ( p.y - renderedRect.getY() ) / scale };
     }
 
-    // Edge Navigation Pills
-    if( toBanksPill_ != nullptr && toPadsPill_ != nullptr && toControlsPill_ != nullptr )
+    void mouseDown( const juce::MouseEvent& e ) override
     {
-        toBanksPill_->setBounds( 8, juce::roundToInt( ( (float)h - 42.0f ) * 0.5f ), 96, 42 );
-        toPadsPill_->setBounds( w - 104, juce::roundToInt( ( (float)h - 42.0f ) * 0.5f ), 96, 42 );
-        toControlsPill_->setBounds( juce::roundToInt( ( (float)w - 140.0f ) * 0.5f ), 8, 140, 32 );
+        auto bp = toBaseCoords( e.position );
+        if( bp.x < 0.0f ) return;
 
-        bool showPills = ( targetView_ == TView::DAW );
-        toBanksPill_->setVisible( showPills );
-        toPadsPill_->setVisible( showPills );
-        toControlsPill_->setVisible( showPills );
-
-        if( showPills )
+        const float knobY[4] = { 36.0f, 105.0f, 174.0f, 243.0f };
+        for( int i = 0; i < 4; ++i )
         {
-            toBanksPill_->toFront( false );
-            toPadsPill_->toFront( false );
-            toControlsPill_->toFront( false );
-        }
-    }
-}
-
-inline void KickMobileTLayout::resized()
-{
-    updateViewPositions();
-}
-
-inline void KickMobileTLayout::paint( juce::Graphics& g )
-{
-    g.fillAll( juce::Colours::black );
-}
-
-inline void KickMobileTLayout::mouseDown( const juce::MouseEvent& e )
-{
-    dragStartX_ = e.x;
-    dragStartY_ = e.y;
-    isSwiping_ = true;
-}
-
-inline void KickMobileTLayout::mouseDrag( const juce::MouseEvent& )
-{
-}
-
-inline void KickMobileTLayout::mouseUp( const juce::MouseEvent& e )
-{
-    if( isSwiping_ )
-    {
-        isSwiping_ = false;
-        int dx = e.x - dragStartX_;
-        int dy = e.y - dragStartY_;
-
-        // Swipe threshold
-        if( std::abs( dx ) > 60 || std::abs( dy ) > 60 )
-        {
-            if( currentView_ == TView::DAW )
+            if( std::hypot( bp.x - 37.0f, bp.y - knobY[i] ) <= 24.0f )
             {
-                if( std::abs( dx ) > std::abs( dy ) )
+                activeKnob = i;
+                dragStartY = e.position.y;
+                startVal   = knobVals[i];
+                repaint();
+                return;
+            }
+        }
+    }
+
+    void mouseDrag( const juce::MouseEvent& e ) override
+    {
+        if( activeKnob >= 0 && activeKnob < 4 )
+        {
+            float dy = dragStartY - e.position.y;
+            float newVal = juce::jlimit( 0.0f, 1.0f, startVal + dy / 150.0f );
+            knobVals[activeKnob] = newVal;
+            int dir = ( dy > 0 ) ? (int)DCC::EN_KNOB_CLOCKWISE : (int)DCC::EN_KNOB_ANTICLOCKWISE;
+            sendKnobMessage( DCC::EN_KNOB_1 + activeKnob, dir, 1, true );
+            repaint();
+        }
+    }
+
+    void mouseUp( const juce::MouseEvent& ) override
+    {
+        activeKnob = -1;
+        repaint();
+    }
+
+    void sendKnobMessage( int knobCode, int direction, int ticks, bool isQlink )
+    {
+        CPktMgr::HWMsg_t msg;
+        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_KNOBS;
+        msg.pktCmd  = isQlink ? (int)DCC::KnobCmd::EN_KNOB_QLINK
+                              : (int)DCC::KnobCmd::EN_KNOB_ROTARY;
+        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
+        msg.data    = { knobCode, direction, ticks };
+        contracts::DclSignals::hardwareInputTriggered( msg );
+    }
+
+private:
+    juce::Image            bgImage;
+    juce::Rectangle<float> renderedRect;
+    int                    activeKnob{ -1 };
+    float                  dragStartY{ 0.0f };
+    float                  startVal{ 0.5f };
+    float                  knobVals[4]{ 0.5f, 0.5f, 0.5f, 0.5f };
+};
+
+//==============================================================================
+/**
+ * Root Mobile Container: Native Hardware Design with 3-Finger Gesture Navigation.
+ * - Center: Clean DAW full screen (no edge buttons).
+ * - 3-finger swipe UP: Bottom Hardware Panel (Pads, Bank, Jog, Transport) slides up.
+ * - 3-finger swipe DOWN: Slides back down to DAW.
+ * - 3-finger swipe RIGHT: Master strip slides in from left, DAW shifts right.
+ * - 3-finger swipe LEFT: Q-Link strip slides in from right, DAW shifts left.
+ * - Tap exposed DAW: Immediately docks back to full-screen DAW.
+ */
+class KickMobileTLayout : public juce::Component,
+                          public juce::Timer
+{
+public:
+    enum class PanelState
+    {
+        DAW = 0,
+        BottomPads,
+        MasterStrip,
+        QLinkStrip
+    };
+
+    KickMobileTLayout()
+    {
+        setOpaque( true );
+
+        kickHome = &kick_ui::KickHome::Instance();
+        addAndMakeVisible( kickHome );
+
+        bottomPanel = std::make_unique<MobileBottomChassisPanel>();
+        addChildComponent( bottomPanel.get() );
+
+        masterPanel = std::make_unique<MobileMasterChassisPanel>();
+        addChildComponent( masterPanel.get() );
+
+        qlinkPanel = std::make_unique<MobileQLinkChassisPanel>();
+        addChildComponent( qlinkPanel.get() );
+
+        // Listen for multi-touch gestures across all children
+        addMouseListener( this, true );
+
+        startTimerHz( 60 );
+    }
+
+    ~KickMobileTLayout() override
+    {
+        stopTimer();
+        removeMouseListener( this );
+
+        bottomPanel.reset();
+        masterPanel.reset();
+        qlinkPanel.reset();
+
+        if( kickHome != nullptr )
+        {
+            kickHome->setTransform( juce::AffineTransform() );
+            removeChildComponent( kickHome );
+        }
+    }
+
+    void setPanelState( PanelState newState )
+    {
+        if( targetState != newState )
+        {
+            targetState = newState;
+
+            if( targetState == PanelState::BottomPads )
+            {
+                bottomPanel->setVisible( true );
+                bottomPanel->toFront( true );
+            }
+            else if( targetState == PanelState::MasterStrip )
+            {
+                masterPanel->setVisible( true );
+                masterPanel->toFront( true );
+            }
+            else if( targetState == PanelState::QLinkStrip )
+            {
+                qlinkPanel->setVisible( true );
+                qlinkPanel->toFront( true );
+            }
+
+            repaint();
+        }
+    }
+
+    PanelState getPanelState() const noexcept { return targetState; }
+
+    void paint( juce::Graphics& g ) override
+    {
+        g.fillAll( juce::Colours::black );
+    }
+
+    void resized() override
+    {
+        updateLayout();
+    }
+
+    void timerCallback() override
+    {
+        const float snap = 0.28f;
+        bool needUpdate = false;
+
+        float targetDawY = ( targetState == PanelState::BottomPads ) ? -(float)getHeight() : 0.0f;
+        float targetDawX = 0.0f;
+        if( targetState == PanelState::MasterStrip ) targetDawX = getMasterPanelWidth();
+        if( targetState == PanelState::QLinkStrip )  targetDawX = -getQLinkPanelWidth();
+
+        if( std::abs( currentDawY - targetDawY ) > 0.5f )
+        {
+            currentDawY += ( targetDawY - currentDawY ) * snap;
+            needUpdate = true;
+        }
+        else
+        {
+            currentDawY = targetDawY;
+        }
+
+        if( std::abs( currentDawX - targetDawX ) > 0.5f )
+        {
+            currentDawX += ( targetDawX - currentDawX ) * snap;
+            needUpdate = true;
+        }
+        else
+        {
+            currentDawX = targetDawX;
+        }
+
+        if( needUpdate )
+        {
+            updateLayout();
+        }
+        else
+        {
+            // Animation finished: hide invisible panels
+            if( targetState == PanelState::DAW )
+            {
+                if( bottomPanel != nullptr && bottomPanel->isVisible() ) bottomPanel->setVisible( false );
+                if( masterPanel != nullptr && masterPanel->isVisible() ) masterPanel->setVisible( false );
+                if( qlinkPanel != nullptr && qlinkPanel->isVisible() )  qlinkPanel->setVisible( false );
+            }
+            else if( targetState == PanelState::BottomPads )
+            {
+                if( masterPanel != nullptr && masterPanel->isVisible() ) masterPanel->setVisible( false );
+                if( qlinkPanel != nullptr && qlinkPanel->isVisible() )  qlinkPanel->setVisible( false );
+            }
+        }
+    }
+
+    float getMasterPanelWidth() const
+    {
+        return (float)getHeight() * ( 106.0f / 334.0f );
+    }
+
+    float getQLinkPanelWidth() const
+    {
+        return (float)getHeight() * ( 74.0f / 302.0f );
+    }
+
+    void updateLayout()
+    {
+        int w = getWidth();
+        int h = getHeight();
+        if( w <= 0 || h <= 0 ) return;
+
+        // Position DAW with translation (currentDawX, currentDawY)
+        if( kickHome != nullptr )
+        {
+            const float targetAspect = 1024.0f / 600.0f;
+            const float currentAspect = (float)w / (float)h;
+
+            float dawW = (float)w;
+            float dawH = (float)h;
+            float dawX = 0.0f;
+            float dawY = 0.0f;
+
+            if( currentAspect > targetAspect )
+            {
+                dawW = (float)h * targetAspect;
+                dawX = ( (float)w - dawW ) * 0.5f;
+            }
+            else
+            {
+                dawH = (float)w / targetAspect;
+                dawY = ( (float)h - dawH ) * 0.5f;
+            }
+
+            kickHome->setBounds( 0, 0, 1024, 600 );
+            kickHome->setTransform(
+                juce::AffineTransform::scale( dawW / 1024.0f, dawH / 600.0f )
+                                     .translated( dawX + currentDawX, dawY + currentDawY )
+            );
+        }
+
+        // Position Bottom Hardware Panel (slides from y = h to y = 0)
+        if( bottomPanel != nullptr )
+        {
+            bottomPanel->setBounds( 0, (int)( currentDawY + (float)h ), w, h );
+        }
+
+        // Position Master Panel (slides from x = -masterW to x = 0)
+        float masterW = getMasterPanelWidth();
+        if( masterPanel != nullptr )
+        {
+            float mX = currentDawX - masterW;
+            masterPanel->setBounds( (int)mX, 0, (int)masterW, h );
+        }
+
+        // Position Q-Link Panel (slides from x = w to x = w - qlinkW)
+        float qlinkW = getQLinkPanelWidth();
+        if( qlinkPanel != nullptr )
+        {
+            float qX = (float)w + currentDawX;
+            qlinkPanel->setBounds( (int)qX, 0, (int)qlinkW, h );
+        }
+    }
+
+    //==========================================================================
+    // Multi-touch 3-finger gesture recognition
+    //==========================================================================
+    struct TouchPoint
+    {
+        bool               isDown{ false };
+        juce::Point<float> startPos;
+        juce::Point<float> currentPos;
+    };
+
+    void mouseDown( const juce::MouseEvent& e ) override
+    {
+        int sourceIdx = e.source.getIndex();
+        auto screenP  = e.getScreenPosition().toFloat();
+        activeTouches[sourceIdx] = { true, screenP, screenP };
+        gestureTriggered = false;
+
+        // If a side drawer is open, tapping anywhere outside the drawer closes it
+        if( targetState == PanelState::MasterStrip && e.position.x > getMasterPanelWidth() )
+        {
+            setPanelState( PanelState::DAW );
+        }
+        else if( targetState == PanelState::QLinkStrip && e.position.x < (float)getWidth() - getQLinkPanelWidth() )
+        {
+            setPanelState( PanelState::DAW );
+        }
+    }
+
+    void mouseDrag( const juce::MouseEvent& e ) override
+    {
+        int sourceIdx = e.source.getIndex();
+        auto screenP  = e.getScreenPosition().toFloat();
+
+        auto it = activeTouches.find( sourceIdx );
+        if( it != activeTouches.end() && it->second.isDown )
+        {
+            it->second.currentPos = screenP;
+        }
+
+        if( gestureTriggered ) return;
+
+        // Count active fingers
+        int count = 0;
+        float totalDx = 0.0f;
+        float totalDy = 0.0f;
+
+        for( auto& kv : activeTouches )
+        {
+            if( kv.second.isDown )
+            {
+                count++;
+                totalDx += ( kv.second.currentPos.x - kv.second.startPos.x );
+                totalDy += ( kv.second.currentPos.y - kv.second.startPos.y );
+            }
+        }
+
+        // 3-Finger Gesture Detection (or Shift+drag on desktop)
+        bool has3Fingers = ( count >= 3 ) || ( e.mods.isShiftDown() && count >= 1 );
+
+        if( has3Fingers )
+        {
+            float avgDx = totalDx / (float)juce::jmax( 1, count );
+            float avgDy = totalDy / (float)juce::jmax( 1, count );
+
+            const float threshold = 38.0f;
+
+            if( std::abs( avgDy) > threshold && std::abs( avgDy ) > std::abs( avgDx ) * 1.3f )
+            {
+                gestureTriggered = true;
+                if( avgDy < 0.0f )
                 {
-                    if( dx < -60 ) navigateTo( TView::Pads );
-                    else if( dx > 60 ) navigateTo( TView::Banks );
+                    // 3-finger swipe UP -> Show Bottom Hardware Panel
+                    setPanelState( PanelState::BottomPads );
                 }
                 else
                 {
-                    if( dy > 60 ) navigateTo( TView::Controls );
+                    // 3-finger swipe DOWN -> Return to DAW
+                    setPanelState( PanelState::DAW );
                 }
             }
-            else if( currentView_ == TView::Pads && dx > 60 )
+            else if( std::abs( avgDx ) > threshold && std::abs( avgDx ) > std::abs( avgDy ) * 1.3f )
             {
-                navigateTo( TView::DAW );
-            }
-            else if( currentView_ == TView::Banks && dx < -60 )
-            {
-                navigateTo( TView::DAW );
-            }
-            else if( currentView_ == TView::Controls && dy < -60 )
-            {
-                navigateTo( TView::DAW );
+                gestureTriggered = true;
+                if( avgDx > 0.0f )
+                {
+                    // 3-finger swipe RIGHT
+                    if( targetState == PanelState::DAW )
+                        setPanelState( PanelState::MasterStrip );
+                    else if( targetState == PanelState::QLinkStrip )
+                        setPanelState( PanelState::DAW );
+                }
+                else
+                {
+                    // 3-finger swipe LEFT
+                    if( targetState == PanelState::DAW )
+                        setPanelState( PanelState::QLinkStrip );
+                    else if( targetState == PanelState::MasterStrip )
+                        setPanelState( PanelState::DAW );
+                }
             }
         }
     }
-}
+
+    void mouseUp( const juce::MouseEvent& e ) override
+    {
+        int sourceIdx = e.source.getIndex();
+        auto it = activeTouches.find( sourceIdx );
+        if( it != activeTouches.end() )
+        {
+            it->second.isDown = false;
+        }
+
+        int remaining = 0;
+        for( auto& kv : activeTouches )
+            if( kv.second.isDown ) remaining++;
+
+        if( remaining == 0 )
+        {
+            gestureTriggered = false;
+        }
+    }
+
+    // Keyboard navigation helper for desktop testing
+    bool handleKeyboardNav( const juce::KeyPress& key )
+    {
+        if( key == juce::KeyPress::upKey )
+        {
+            setPanelState( PanelState::BottomPads );
+            return true;
+        }
+        if( key == juce::KeyPress::downKey || key == juce::KeyPress::escapeKey )
+        {
+            setPanelState( PanelState::DAW );
+            return true;
+        }
+        if( key == juce::KeyPress::rightKey )
+        {
+            if( targetState == PanelState::DAW ) setPanelState( PanelState::MasterStrip );
+            else if( targetState == PanelState::QLinkStrip ) setPanelState( PanelState::DAW );
+            return true;
+        }
+        if( key == juce::KeyPress::leftKey )
+        {
+            if( targetState == PanelState::DAW ) setPanelState( PanelState::QLinkStrip );
+            else if( targetState == PanelState::MasterStrip ) setPanelState( PanelState::DAW );
+            return true;
+        }
+        return false;
+    }
+
+private:
+    kick_ui::KickHome*                            kickHome{ nullptr };
+    std::unique_ptr<MobileBottomChassisPanel>     bottomPanel;
+    std::unique_ptr<MobileMasterChassisPanel>     masterPanel;
+    std::unique_ptr<MobileQLinkChassisPanel>      qlinkPanel;
+
+    PanelState targetState{ PanelState::DAW };
+
+    float currentDawY{ 0.0f };
+    float currentDawX{ 0.0f };
+
+    std::map<int, TouchPoint> activeTouches;
+    bool                      gestureTriggered{ false };
+};
 
 } // namespace kick_mobile

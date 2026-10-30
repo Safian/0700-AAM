@@ -610,6 +610,10 @@ public:
         idHardwareView = 1001,
         idDisplayOnlyView = 1002,
         idMobileView = 1005,
+        idMobileBottomPads = 1006,
+        idMobileMasterStrip = 1007,
+        idMobileQLinkStrip = 1008,
+        idMobileReturnDaw = 1009,
         idToggleView = 1003,
         idToggleDrawer = 1004,
         idScale100 = 1010,
@@ -655,10 +659,17 @@ public:
 
             juce::PopupMenu::Item itemMob;
             itemMob.itemID = idMobileView;
-            itemMob.text = juce::String::fromUTF8( "Mobil T-Elrendezés (Mobile T-Layout)" );
+            itemMob.text = juce::String::fromUTF8( "Mobil hardver nézet (iPhone Mobile View)" );
             itemMob.shortcutKeyDescription = "Cmd+3 / F3";
             itemMob.isTicked = ( activeViewMode == 2 );
             menu.addItem( itemMob );
+
+            juce::PopupMenu mobileGesturesMenu;
+            mobileGesturesMenu.addItem( idMobileBottomPads, juce::String::fromUTF8( "Padok & Kontrolok felcsúsztatása (3 ujjal fel / ↑)" ) );
+            mobileGesturesMenu.addItem( idMobileMasterStrip, juce::String::fromUTF8( "Master & Rec sáv (3 ujjal jobbra / →)" ) );
+            mobileGesturesMenu.addItem( idMobileQLinkStrip, juce::String::fromUTF8( "Q-Link potméterek (3 ujjal balra / ←)" ) );
+            mobileGesturesMenu.addItem( idMobileReturnDaw, juce::String::fromUTF8( "Vissza a DAW-hoz (3 ujjal le / ↓ / Esc)" ) );
+            menu.addSubMenu( juce::String::fromUTF8( "Mobil gesztusok (Mobile Gestures)" ), mobileGesturesMenu );
 
             menu.addSeparator();
 

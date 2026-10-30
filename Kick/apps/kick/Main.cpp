@@ -320,6 +320,22 @@ public:
                 case kick_mac::KickMacMenuModel::idMobileView:
                     setViewMode( kick_mac::KickHardwareChassis::ViewMode::MobileTLayout );
                     break;
+                case kick_mac::KickMacMenuModel::idMobileBottomPads:
+                    if( chassisComponent != nullptr && chassisComponent->getMobileLayout() != nullptr )
+                        chassisComponent->getMobileLayout()->setPanelState( kick_mobile::KickMobileTLayout::PanelState::BottomPads );
+                    break;
+                case kick_mac::KickMacMenuModel::idMobileMasterStrip:
+                    if( chassisComponent != nullptr && chassisComponent->getMobileLayout() != nullptr )
+                        chassisComponent->getMobileLayout()->setPanelState( kick_mobile::KickMobileTLayout::PanelState::MasterStrip );
+                    break;
+                case kick_mac::KickMacMenuModel::idMobileQLinkStrip:
+                    if( chassisComponent != nullptr && chassisComponent->getMobileLayout() != nullptr )
+                        chassisComponent->getMobileLayout()->setPanelState( kick_mobile::KickMobileTLayout::PanelState::QLinkStrip );
+                    break;
+                case kick_mac::KickMacMenuModel::idMobileReturnDaw:
+                    if( chassisComponent != nullptr && chassisComponent->getMobileLayout() != nullptr )
+                        chassisComponent->getMobileLayout()->setPanelState( kick_mobile::KickMobileTLayout::PanelState::DAW );
+                    break;
                 case kick_mac::KickMacMenuModel::idToggleView:
                     toggleViewMode();
                     break;
@@ -420,7 +436,7 @@ public:
 
                 setContentComponentSize( 852, 393 );
                 centreWithSize( getWidth(), getHeight() );
-                setName( juce::String::fromUTF8( "Behringer Kick - Mobil T-Elrendezés (iPhone)" ) );
+                setName( juce::String::fromUTF8( "Behringer Kick - Mobil nézet (iPhone)" ) );
             }
 
             if( menuModel != nullptr )
@@ -499,15 +515,12 @@ public:
                 return true;
             }
 
-            // Arrow Keys in Mobile T-Layout mode
+            // Arrow Keys in Mobile mode (Up = Bottom Pads, Down = DAW, Right = Master, Left = Q-Links)
             if( chassisComponent != nullptr && chassisComponent->getViewMode() == kick_mac::KickHardwareChassis::ViewMode::MobileTLayout )
             {
                 if( auto* ml = chassisComponent->getMobileLayout() )
                 {
-                    if( key == juce::KeyPress::leftKey ) { ml->navigateTo( kick_mobile::TView::Banks ); return true; }
-                    if( key == juce::KeyPress::rightKey ) { ml->navigateTo( kick_mobile::TView::Pads ); return true; }
-                    if( key == juce::KeyPress::upKey ) { ml->navigateTo( kick_mobile::TView::Controls ); return true; }
-                    if( key == juce::KeyPress::downKey || key == juce::KeyPress::escapeKey ) { ml->navigateTo( kick_mobile::TView::DAW ); return true; }
+                    if( ml->handleKeyboardNav( key ) ) return true;
                 }
             }
 
