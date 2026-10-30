@@ -101,7 +101,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # If we are using MSVC we want static runtime linkage
 if(APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set (CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE INTERNAL "")
-endif(APPLE)
+endif()
 
 # Compile with werror in release builds
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
