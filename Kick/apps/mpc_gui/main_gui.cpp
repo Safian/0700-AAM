@@ -64,6 +64,7 @@ typedef struct {
     float gain;
     float release_env;
     bool active;
+    bool key_down;
     bool releasing;
 } PianoVoice;
 
@@ -135,6 +136,7 @@ static const char* g_sample_paths[16] = {
 
 typedef struct {
     PianoVoice piano_voices[MAX_VOICES];
+    bool sustain_pedal;
     pthread_mutex_t lock;
 } SynthEngine;
 
@@ -335,7 +337,12 @@ static int find_closest_piano_root(int note) {
 
 static void synth_init(SynthEngine* s) {
     pthread_mutex_init(&s->lock, NULL);
-    for (int i = 0; i < MAX_VOICES; ++i) s->piano_voices[i].active = false;
+    s->sustain_pedal = false;
+    for (int i = 0; i < MAX_VOICES; ++i) {
+        s->piano_voices[i].active = false;
+        s->piano_voices[i].key_down = false;
+        s->piano_voices[i].releasing = false;
+    }
     for (int i = 0; i < MAX_SAMPLER_VOICES; ++i) g_sampler_voices[i].active = false;
     for (int i = 0; i < 61; ++i) g_key_press_count[i] = 0;
     for (int i = 0; i < 16; ++i) g_pad_press_count[i] = 0;
@@ -400,6 +407,7 @@ static void synth_note_on(SynthEngine* s, int note, int vel, NoteSource src = NO
         pv->pitch_ratio = pitch_ratio;
         pv->gain = ((float)vel / 127.0f) * 0.95f;
         pv->release_env = 1.0f;
+        pv->key_down = true;
         pv->releasing = false;
         pv->active = true;
         pthread_mutex_unlock(&s->lock);
@@ -422,8 +430,12 @@ static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_K
     if (src != NOTE_SRC_PAD) {
         pthread_mutex_lock(&s->lock);
         for (int i = 0; i < MAX_VOICES; ++i) {
-            if (s->piano_voices[i].active && s->piano_voices[i].note == note && !s->piano_voices[i].releasing) {
-                s->piano_voices[i].releasing = true;
+            if (s->piano_voices[i].active && s->piano_voices[i].note == note) {
+                s->piano_voices[i].key_down = false;
+                // If sustain pedal is NOT pressed, damp the string now
+                if (!s->sustain_pedal && !s->piano_voices[i].releasing) {
+                    s->piano_voices[i].releasing = true;
+                }
             }
         }
         pthread_mutex_unlock(&s->lock);
@@ -444,6 +456,27 @@ static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_K
         }
     }
     pthread_mutex_unlock(&g_ui_lock);
+}
+
+static void synth_cc(SynthEngine* s, int cc, int val) {
+    if (cc == 64) { // Damper / Sustain Pedal
+        bool pedal_down = (val >= 64);
+        pthread_mutex_lock(&s->lock);
+        s->sustain_pedal = pedal_down;
+        if (!pedal_down) {
+            // Damper pedal released: damp all strings where key was already released
+            for (int i = 0; i < MAX_VOICES; ++i) {
+                PianoVoice* pv = &s->piano_voices[i];
+                if (pv->active && !pv->key_down && !pv->releasing) {
+                    pv->releasing = true;
+                }
+            }
+        }
+        pthread_mutex_unlock(&s->lock);
+        printf("[MIDI] CC64 Sustain Pedal: %d -> %s\n", val, pedal_down ? "ACTIVE (SUSTAIN)" : "OFF (DAMP)");
+    } else {
+        printf("[MIDI] CC %d = %d\n", cc, val);
+    }
 }
 
 static void synth_render(SynthEngine* s, int32_t* out, size_t nframes) {
@@ -720,6 +753,15 @@ static void render_ui() {
     draw_string(44, 100, "TRACK 1: ACOUSTIC GRAND", COLOR_TEXT_BOLD, 2);
     draw_string(44, 130, "ENGINE: F9 CONCERT GRAND (MULTI-SAMPLED)", COLOR_TEXT_DIM, 1);
     draw_string(44, 155, "MIDI IN: KEYBED 61 + PADS  |  OUT: DIN A", COLOR_CYAN, 1);
+
+    bool sustain_on = false;
+    pthread_mutex_lock(&g_synth.lock);
+    sustain_on = g_synth.sustain_pedal;
+    pthread_mutex_unlock(&g_synth.lock);
+
+    fill_rect(44, 172, 130, 20, sustain_on ? 0x001B4D2E : COLOR_PANEL_HI);
+    draw_rect(44, 172, 130, 20, sustain_on ? COLOR_GREEN : COLOR_BORDER);
+    draw_string(52, 178, sustain_on ? "PEDAL: SUSTAIN" : "PEDAL: OFF", sustain_on ? COLOR_GREEN : COLOR_TEXT_DIM, 1);
 
     // 4 Q-Link Knobs Simulation
     const char* knob_labels[4] = { "CUTOFF", "RESONANCE", "ATTACK", "DECAY" };
@@ -1137,11 +1179,34 @@ static void* touch_thread_func(void* arg) {
 }
 
 // -------------------------------------------------------------
-// Hardware RawMIDI Thread (reads hw:0,0,0 & hw:0,0,1, writes hw:0,0,2)
+// Hardware RawMIDI Thread (reads hw:0,0,0, hw:0,0,1, hw:0,0,2)
 // -------------------------------------------------------------
 typedef struct {
-    snd_rawmidi_t *in0, *in1, *out2;
+    snd_rawmidi_t *in0, *in1, *in2, *out2;
 } MidiCtx;
+
+static void handle_midi_packet(const uint8_t* buf, ssize_t n) {
+    for (ssize_t i = 0; i < n; ++i) {
+        uint8_t b = buf[i];
+        if ((b & 0xF0) == 0x90 && (i + 2 < n)) {
+            int ch = b & 0x0F;
+            int note = buf[i+1], vel = buf[i+2];
+            NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
+            if (vel > 0) synth_note_on(&g_synth, note, vel, src);
+            else synth_note_off(&g_synth, note, src);
+            i += 2;
+        } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
+            int ch = b & 0x0F;
+            NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
+            synth_note_off(&g_synth, buf[i+1], src);
+            i += 2;
+        } else if ((b & 0xF0) == 0xB0 && (i + 2 < n)) {
+            int cc_num = buf[i+1], cc_val = buf[i+2];
+            synth_cc(&g_synth, cc_num, cc_val);
+            i += 2;
+        }
+    }
+}
 
 static void* midi_thread_func(void* arg) {
     MidiCtx* ctx = (MidiCtx*)arg;
@@ -1152,44 +1217,20 @@ static void* midi_thread_func(void* arg) {
             ssize_t n = snd_rawmidi_read(ctx->in0, buf, sizeof(buf));
             if (n > 0) {
                 if (ctx->out2) snd_rawmidi_write(ctx->out2, buf, n);
-                for (ssize_t i = 0; i < n; ++i) {
-                    uint8_t b = buf[i];
-                    if ((b & 0xF0) == 0x90 && (i + 2 < n)) {
-                        int ch = b & 0x0F;
-                        int note = buf[i+1], vel = buf[i+2];
-                        NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
-                        if (vel > 0) synth_note_on(&g_synth, note, vel, src);
-                        else synth_note_off(&g_synth, note, src);
-                        i += 2;
-                    } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
-                        int ch = b & 0x0F;
-                        NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
-                        synth_note_off(&g_synth, buf[i+1], src);
-                        i += 2;
-                    }
-                }
+                handle_midi_packet(buf, n);
             }
         }
         if (ctx->in1) {
             ssize_t n = snd_rawmidi_read(ctx->in1, buf, sizeof(buf));
             if (n > 0) {
                 if (ctx->out2) snd_rawmidi_write(ctx->out2, buf, n);
-                for (ssize_t i = 0; i < n; ++i) {
-                    uint8_t b = buf[i];
-                    if ((b & 0xF0) == 0x90 && (i + 2 < n)) {
-                        int ch = b & 0x0F;
-                        int note = buf[i+1], vel = buf[i+2];
-                        NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
-                        if (vel > 0) synth_note_on(&g_synth, note, vel, src);
-                        else synth_note_off(&g_synth, note, src);
-                        i += 2;
-                    } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
-                        int ch = b & 0x0F;
-                        NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
-                        synth_note_off(&g_synth, buf[i+1], src);
-                        i += 2;
-                    }
-                }
+                handle_midi_packet(buf, n);
+            }
+        }
+        if (ctx->in2) {
+            ssize_t n = snd_rawmidi_read(ctx->in2, buf, sizeof(buf));
+            if (n > 0) {
+                handle_midi_packet(buf, n);
             }
         }
         usleep(1000);
@@ -1265,7 +1306,7 @@ int main(int argc, char* argv[]) {
     }
 
     pthread_t m_thread;
-    MidiCtx mctx = { midi_in0, midi_in1, midi_out2 };
+    MidiCtx mctx = { midi_in0, midi_in1, midi_in2, midi_out2 };
     pthread_create(&m_thread, NULL, midi_thread_func, &mctx);
 
     // 4. Open Touchscreen Thread
