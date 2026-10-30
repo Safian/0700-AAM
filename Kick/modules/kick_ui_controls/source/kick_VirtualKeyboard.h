@@ -34,7 +34,7 @@ namespace ui
 
         explicit KickVirtualKeyBoard( const juce::String& initialKeyvalue );
 
-        inline void         setInputText( const juce::String& Text ) { inputTextLabel.setText( Text ); }
+        inline void         setInputText( const juce::String& Text ) { inputTextLabel.setText( Text, juce::dontSendNotification ); inputTextLabel.selectAll(); }
         inline juce::String getInputText() { return inputTextLabel.getText(); }
 
         void showKeyboard( Type type );

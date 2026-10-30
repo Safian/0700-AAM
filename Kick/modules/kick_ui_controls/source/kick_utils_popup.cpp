@@ -271,7 +271,12 @@ namespace mt
         void resized() override
         {
             auto b = dialogArea.constrainedWithin( getLocalBounds() );
+#if JUCE_IOS || JUCE_ANDROID
+            // Keep modal dialogs in the top portion of the screen on mobile so native keyboard doesn't occlude them
+            b.setCentre( ui::layout::screen.getCentre().getX(), juce::jmax( b.getHeight() / 2 + 10, 115 ) );
+#else
             b.setCentre( ui::layout::screen.getCentre() );
+#endif
             dialogArea = b;
 
             b = b.reduced( 4 );
