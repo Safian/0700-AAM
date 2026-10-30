@@ -17,6 +17,13 @@ target_compile_definitions(kick-serial-tests PRIVATE JUCE_USE_CURL=0)
 add_test(NAME kick-serial COMMAND kick-serial-tests)
 set_tests_properties(kick-serial PROPERTIES TIMEOUT 10)
 
+add_executable(kick-keyboard-tests KeyboardDetectorTests.cpp)
+target_include_directories(kick-keyboard-tests PRIVATE ../../modules ../../modules/3rdParty ../../../ComProtocol)
+target_link_libraries(kick-keyboard-tests PRIVATE contracts ipc juce::juce_gui_basics "-framework Carbon")
+target_compile_definitions(kick-keyboard-tests PRIVATE KICK_DESKTOP_KEYBOARD=1 KICK_KEYBOARD_PANEL=1)
+add_test(NAME kick-keyboard COMMAND kick-keyboard-tests)
+set_tests_properties(kick-keyboard PROPERTIES TIMEOUT 10)
+
 if(NOT TARGET AudIO_juce)
     include("${CMAKE_CURRENT_SOURCE_DIR}/../../../AudIO/juce_modules.cmake")
 endif()
