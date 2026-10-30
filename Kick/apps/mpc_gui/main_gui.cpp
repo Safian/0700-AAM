@@ -461,7 +461,7 @@ static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_K
 }
 
 static void synth_cc(SynthEngine* s, int cc, int val) {
-    if (cc == 64 || cc == 117) { // Damper / Sustain Pedal (Standard CC 64 or MPC Key 61 Footswitch CC 117)
+    if (cc == 64) { // Damper / Sustain Pedal (Standard CC 64)
         bool pedal_down = (val >= 64);
         pthread_mutex_lock(&s->lock);
         s->sustain_pedal = pedal_down;
@@ -475,7 +475,29 @@ static void synth_cc(SynthEngine* s, int cc, int val) {
             }
         }
         pthread_mutex_unlock(&s->lock);
-        printf("[PEDAL] CC %d Sustain: %d -> %s\n", cc, val, pedal_down ? "ACTIVE (SUSTAIN)" : "OFF (DAMP)");
+        printf("[PEDAL] CC 64 Sustain: %d -> %s\n", val, pedal_down ? "ACTIVE (SUSTAIN)" : "OFF (DAMP)");
+    } else if (cc == 117) { // Hardware STOP Button (CC 117)
+        if (val > 0) {
+            g_is_playing = false;
+            g_is_recording = false;
+        }
+        printf("[HARDWARE-CC] STOP (CC 117 = %d)\n", val);
+    } else if (cc == 118) { // Hardware PLAY Button (CC 118)
+        if (val > 0) {
+            g_is_playing = true;
+        }
+        printf("[HARDWARE-CC] PLAY (CC 118 = %d)\n", val);
+    } else if (cc == 119) { // Hardware REC Button (CC 119)
+        if (val > 0) {
+            g_is_recording = !g_is_recording;
+            if (g_is_recording) g_is_playing = true;
+        }
+        printf("[HARDWARE-CC] REC (CC 119 = %d) -> %s\n", val, g_is_recording ? "ON" : "OFF");
+    } else if (cc == 116) { // Hardware OVERDUB Button (CC 116)
+        if (val > 0) {
+            g_is_recording = !g_is_recording;
+        }
+        printf("[HARDWARE-CC] OVERDUB (CC 116 = %d)\n", val);
     } else if (cc == 7 || cc == 11) { // MIDI Volume / Expression
         g_master_volume = (float)val / 127.0f;
         printf("[MIDI] Master Volume CC%d -> %.0f%%\n", cc, g_master_volume * 100.0f);
@@ -1288,8 +1310,8 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port) {
             int ch = b & 0x0F;
             int note = buf[i+1], vel = buf[i+2];
 
-            // 1. Q-Link capacitive touch tops on Port 1 (notes 84..87, ch != 9)
-            if (port == 1 && ch != 9 && (note >= 84 && note <= 87)) {
+            // 1. Q-Link capacitive touch tops on Port 1 (notes 84..87 on Control Ch 16, ch == 15)
+            if (port == 1 && ch == 15 && (note >= 84 && note <= 87)) {
                 int k = note - 84;
                 g_knob_touched[k] = (vel > 0);
                 printf("[Q-LINK] Knob %d Touch: %s (ch=%d vel=%d)\n", k + 1, (vel > 0) ? "TOUCHED" : "RELEASED", ch, vel);
@@ -1323,7 +1345,7 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port) {
             int ch = b & 0x0F;
             int note = buf[i+1];
 
-            if (port == 1 && ch != 9 && (note >= 84 && note <= 87)) {
+            if (port == 1 && ch == 15 && (note >= 84 && note <= 87)) {
                 int k = note - 84;
                 g_knob_touched[k] = false;
                 printf("[Q-LINK] Knob %d Touch: RELEASED (ch=%d)\n", k + 1, ch);
