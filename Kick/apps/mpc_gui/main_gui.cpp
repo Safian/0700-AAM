@@ -69,6 +69,12 @@ static SynthEngine g_synth;
 // UI State
 static bool g_pad_active[16];
 static bool g_key_active[61]; // 61 keys (MIDI 36 to 96, C2 to C7)
+static bool g_is_playing = false;
+static bool g_is_recording = false;
+static int g_knob_vals[4] = { 75, 40, 10, 85 };
+static bool g_touch_active = false;
+static int g_touch_x = -1;
+static int g_touch_y = -1;
 static pthread_mutex_t g_ui_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static uint32_t g_render_buf[SCREEN_W * SCREEN_H];
@@ -97,7 +103,7 @@ static void synth_init(SynthEngine* s) {
     for (int i = 0; i < MAX_VOICES; ++i) s->voices[i].active = false;
 }
 
-static void synth_note_on(SynthEngine* s, int note, int vel) {
+static void synth_note_on(SynthEngine* s, int note, int vel, bool is_pad = false) {
     if (vel <= 0) return;
     pthread_mutex_lock(&s->lock);
     int target = -1;
@@ -124,8 +130,10 @@ static void synth_note_on(SynthEngine* s, int note, int vel) {
     pthread_mutex_lock(&g_ui_lock);
     int key_idx = note - 36;
     if (key_idx >= 0 && key_idx < 61) g_key_active[key_idx] = true;
-    int pad_idx = note - 36;
-    if (pad_idx >= 0 && pad_idx < 16) g_pad_active[pad_idx] = true;
+    if (is_pad) {
+        int pad_idx = note - 36;
+        if (pad_idx >= 0 && pad_idx < 16) g_pad_active[pad_idx] = true;
+    }
     pthread_mutex_unlock(&g_ui_lock);
 }
 
@@ -368,17 +376,21 @@ static void render_ui() {
     draw_string(855, 22, "ACVM 4-CH 2.9ms", COLOR_GREEN, 2);
 
     // Transport buttons
-    fill_rect(1060, 14, 60, 32, COLOR_PANEL_HI);
-    draw_rect(1060, 14, 60, 32, COLOR_BORDER);
-    draw_string(1075, 22, "PLAY", COLOR_GREEN, 2);
+    uint32_t play_bg = g_is_playing ? 0x001B4D2E : COLOR_PANEL_HI;
+    uint32_t play_fg = g_is_playing ? 0x0055FF55 : COLOR_GREEN;
+    fill_rect(1060, 14, 60, 32, play_bg);
+    draw_rect(1060, 14, 60, 32, g_is_playing ? COLOR_GREEN : COLOR_BORDER);
+    draw_string(1075, 22, "PLAY", play_fg, 2);
 
-    fill_rect(1130, 14, 60, 32, COLOR_PANEL_HI);
-    draw_rect(1130, 14, 60, 32, COLOR_BORDER);
-    draw_string(1145, 22, "STOP", COLOR_TEXT_NORM, 2);
+    uint32_t stop_bg = (!g_is_playing && !g_is_recording) ? 0x003A404D : COLOR_PANEL_HI;
+    fill_rect(1130, 14, 60, 32, stop_bg);
+    draw_rect(1130, 14, 60, 32, (!g_is_playing && !g_is_recording) ? COLOR_CYAN : COLOR_BORDER);
+    draw_string(1145, 22, "STOP", (!g_is_playing && !g_is_recording) ? COLOR_TEXT_BOLD : COLOR_TEXT_NORM, 2);
 
-    fill_rect(1200, 14, 60, 32, COLOR_PANEL_HI);
-    draw_rect(1200, 14, 60, 32, COLOR_BORDER);
-    draw_string(1218, 22, "REC", COLOR_RED, 2);
+    uint32_t rec_bg = g_is_recording ? 0x005E1A1A : COLOR_PANEL_HI;
+    fill_rect(1200, 14, 60, 32, rec_bg);
+    draw_rect(1200, 14, 60, 32, g_is_recording ? COLOR_RED : COLOR_BORDER);
+    draw_string(1218, 22, "REC", g_is_recording ? 0x00FF4444 : COLOR_RED, 2);
 
     // 3. Left Inspector Panel (Width = 420, Height = 480)
     fill_rect(24, 80, 420, 480, COLOR_PANEL);
@@ -390,7 +402,6 @@ static void render_ui() {
 
     // 4 Q-Link Knobs Simulation
     const char* knob_labels[4] = { "CUTOFF", "RESONANCE", "ATTACK", "DECAY" };
-    int knob_vals[4] = { 75, 40, 10, 85 };
     for (int k = 0; k < 4; ++k) {
         int kx = 50 + (k % 2) * 190;
         int ky = 200 + (k / 2) * 130;
@@ -409,7 +420,7 @@ static void render_ui() {
         }
         // Value text
         char val_str[16];
-        snprintf(val_str, sizeof(val_str), "%d%%", knob_vals[k]);
+        snprintf(val_str, sizeof(val_str), "%d%%", g_knob_vals[k]);
         draw_string(kx + 115, ky + 55, val_str, COLOR_GOLD, 1);
     }
 
@@ -502,6 +513,23 @@ static void render_ui() {
             draw_rect(kx, ky, w, h, 0x00000000);
         }
     }
+    // 6. Touch Visual Feedback Indicator
+    if (g_touch_active && g_touch_x >= 0 && g_touch_x < SCREEN_W && g_touch_y >= 0 && g_touch_y < SCREEN_H) {
+        int tr = 14;
+        for (int dy = -tr; dy <= tr; ++dy) {
+            for (int dx = -tr; dx <= tr; ++dx) {
+                int dist2 = dx*dx + dy*dy;
+                if (dist2 <= tr*tr && dist2 >= (tr-3)*(tr-3)) {
+                    draw_pixel(g_touch_x + dx, g_touch_y + dy, COLOR_CYAN);
+                }
+            }
+        }
+        for (int dy = -2; dy <= 2; ++dy) {
+            for (int dx = -2; dx <= 2; ++dx) {
+                draw_pixel(g_touch_x + dx, g_touch_y + dy, COLOR_GOLD);
+            }
+        }
+    }
     pthread_mutex_unlock(&g_ui_lock);
 }
 
@@ -546,6 +574,85 @@ static void save_screenshot(const char* path) {
 }
 
 // -------------------------------------------------------------
+// Touchscreen Coordinate & Hit-Test Helpers
+// Physical screen: 800x1280 (portrait). Rotated to 1280x800 landscape.
+// ILI2117 digitizer range: 0..2048 x 0..2048.
+// -------------------------------------------------------------
+static inline void raw_touch_to_ui(int rx, int ry, int* out_x, int* out_y) {
+    if (rx < 0) rx = 0;
+    if (rx > 2048) rx = 2048;
+    if (ry < 0) ry = 0;
+    if (ry > 2048) ry = 2048;
+
+    // Mathematical inversion for 90-degree panel rotation:
+    // x_phys = y_ui       => y_ui = x_phys
+    // y_phys = 1279 - x_ui => x_ui = 1279 - y_phys
+    *out_x = ((2048 - ry) * (SCREEN_W - 1)) / 2048;
+    *out_y = (rx * (SCREEN_H - 1)) / 2048;
+}
+
+static int get_keyboard_note_at(int x, int y) {
+    if (x < 32 || x >= 1248 || y < 590 || y >= 770) return -1;
+
+    const int num_white = 36;
+    const float kw = (float)(1232 - 16) / (float)num_white;
+
+    // Check black keys first if touching upper part of keybed (y < 700)
+    if (y < 700) {
+        int white_idx = 0;
+        for (int i = 0; i < 61; ++i) {
+            int note = 36 + i;
+            int note_in_oct = note % 12;
+            bool is_black = (note_in_oct == 1 || note_in_oct == 3 || note_in_oct == 6 ||
+                             note_in_oct == 8 || note_in_oct == 10);
+            if (!is_black) {
+                white_idx++;
+            } else {
+                int kx = 32 + (int)((white_idx - 1) * kw) + (int)(kw * 0.65f);
+                int w = (int)(kw * 0.70f);
+                if (x >= kx && x < kx + w) {
+                    return note;
+                }
+            }
+        }
+    }
+
+    // Otherwise white key
+    int white_idx = (int)((x - 32) / kw);
+    if (white_idx < 0) white_idx = 0;
+    if (white_idx >= num_white) white_idx = num_white - 1;
+
+    int curr_white = 0;
+    for (int i = 0; i < 61; ++i) {
+        int note = 36 + i;
+        int note_in_oct = note % 12;
+        bool is_black = (note_in_oct == 1 || note_in_oct == 3 || note_in_oct == 6 ||
+                         note_in_oct == 8 || note_in_oct == 10);
+        if (!is_black) {
+            if (curr_white == white_idx) return note;
+            curr_white++;
+        }
+    }
+    return -1;
+}
+
+static int get_pad_note_at(int x, int y) {
+    for (int r = 0; r < 4; ++r) {
+        for (int c = 0; c < 4; ++c) {
+            int px = 500 + c * 180;
+            int py = 135 + r * 100;
+            int pw = 165;
+            int ph = 88;
+            if (x >= px && x < px + pw && y >= py && y < py + ph) {
+                int pad_num = (3 - r) * 4 + c; // Pad 0..15 (MPC layout)
+                return 36 + pad_num;
+            }
+        }
+    }
+    return -1;
+}
+
+// -------------------------------------------------------------
 // Touchscreen Thread (reads /dev/input/event0 with poll)
 // -------------------------------------------------------------
 static void* touch_thread_func(void* arg) {
@@ -573,34 +680,82 @@ static void* touch_thread_func(void* arg) {
         if (ev.type == EV_ABS) {
             if (ev.code == ABS_MT_POSITION_X || ev.code == ABS_X) raw_x = ev.value;
             if (ev.code == ABS_MT_POSITION_Y || ev.code == ABS_Y) raw_y = ev.value;
+            if (ev.code == ABS_MT_TRACKING_ID) {
+                if (ev.value == -1) {
+                    touching = false;
+                    if (last_touched_note != -1) {
+                        synth_note_off(&g_synth, last_touched_note);
+                        last_touched_note = -1;
+                    }
+                    g_touch_active = false;
+                } else {
+                    touching = true;
+                }
+            }
         } else if (ev.type == EV_KEY && ev.code == BTN_TOUCH) {
             touching = (ev.value > 0);
-            if (!touching && last_touched_note != -1) {
-                synth_note_off(&g_synth, last_touched_note);
-                last_touched_note = -1;
+            if (!touching) {
+                if (last_touched_note != -1) {
+                    synth_note_off(&g_synth, last_touched_note);
+                    last_touched_note = -1;
+                }
+                g_touch_active = false;
             }
         } else if (ev.type == EV_SYN && ev.code == SYN_REPORT && touching) {
-            int ui_x = (raw_x * SCREEN_W) / 2048;
-            int ui_y = (raw_y * SCREEN_H) / 2048;
+            int ui_x = 0, ui_y = 0;
+            raw_touch_to_ui(raw_x, raw_y, &ui_x, &ui_y);
 
-            if (ui_x >= 500 && ui_x < 1220 && ui_y >= 135 && ui_y < 535) {
-                int c = (ui_x - 500) / 180;
-                int r = (ui_y - 135) / 100;
-                if (c >= 0 && c < 4 && r >= 0 && r < 4) {
-                    int pad_num = (3 - r) * 4 + c;
-                    int note = 36 + pad_num;
-                    if (note != last_touched_note) {
-                        if (last_touched_note != -1) synth_note_off(&g_synth, last_touched_note);
-                        synth_note_on(&g_synth, note, 110);
-                        last_touched_note = note;
-                    }
+            g_touch_active = true;
+            g_touch_x = ui_x;
+            g_touch_y = ui_y;
+
+            // 1. Transport Buttons
+            if (ui_y >= 14 && ui_y < 46) {
+                if (ui_x >= 1060 && ui_x < 1120) {
+                    g_is_playing = true;
+                } else if (ui_x >= 1130 && ui_x < 1190) {
+                    g_is_playing = false;
+                    g_is_recording = false;
+                } else if (ui_x >= 1200 && ui_x < 1260) {
+                    g_is_recording = !g_is_recording;
+                    if (g_is_recording) g_is_playing = true;
                 }
-            } else if (ui_x >= 32 && ui_x < 1250 && ui_y >= 590 && ui_y < 770) {
-                int note = 36 + (ui_x - 32) * 61 / (1250 - 32);
-                if (note >= 36 && note <= 96 && note != last_touched_note) {
+            }
+
+            // 2. Q-Link Knobs (Vertical Drag or Tap)
+            for (int k = 0; k < 4; ++k) {
+                int kx = 50 + (k % 2) * 190;
+                int ky = 200 + (k / 2) * 130;
+                if (ui_x >= kx && ui_x < kx + 160 && ui_y >= ky && ui_y < ky + 100) {
+                    int val = 100 - ((ui_y - ky - 10) * 100 / 80);
+                    if (val < 0) val = 0;
+                    if (val > 100) val = 100;
+                    g_knob_vals[k] = val;
+                }
+            }
+
+            // 3. MPC 16 Drum Pads
+            int pad_note = get_pad_note_at(ui_x, ui_y);
+            if (pad_note != -1) {
+                if (pad_note != last_touched_note) {
                     if (last_touched_note != -1) synth_note_off(&g_synth, last_touched_note);
-                    synth_note_on(&g_synth, note, 100);
-                    last_touched_note = note;
+                    synth_note_on(&g_synth, pad_note, 115, true /* is_pad */);
+                    last_touched_note = pad_note;
+                }
+            } else {
+                // 4. 61-Key Keyboard Piano
+                int kb_note = get_keyboard_note_at(ui_x, ui_y);
+                if (kb_note != -1) {
+                    if (kb_note != last_touched_note) {
+                        if (last_touched_note != -1) synth_note_off(&g_synth, last_touched_note);
+                        synth_note_on(&g_synth, kb_note, 105, false /* is_pad */);
+                        last_touched_note = kb_note;
+                    }
+                } else {
+                    if (last_touched_note != -1) {
+                        synth_note_off(&g_synth, last_touched_note);
+                        last_touched_note = -1;
+                    }
                 }
             }
         }
