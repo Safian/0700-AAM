@@ -200,6 +200,32 @@ static float g_bpm = 120.0f;
 static uint64_t g_last_tap_time_ms = 0;
 static int g_tap_tempo_flash = 0;
 
+enum SelectedParam {
+    SEL_PARAM_TEMPO = 0,
+    SEL_PARAM_MASTER_VOL = 1,
+    SEL_PARAM_OCTAVE = 2,
+    SEL_PARAM_CUTOFF = 3,
+    SEL_PARAM_RESONANCE = 4,
+    SEL_PARAM_ATTACK = 5,
+    SEL_PARAM_DECAY = 6,
+    NUM_SEL_PARAMS = 7
+};
+
+static SelectedParam g_selected_param = SEL_PARAM_TEMPO; // Default selected to TEMPO for Jog Wheel / Data Wheel!
+
+static const char* get_selected_param_name(SelectedParam p) {
+    switch (p) {
+        case SEL_PARAM_TEMPO: return "TEMPO (BPM)";
+        case SEL_PARAM_MASTER_VOL: return "MASTER VOL";
+        case SEL_PARAM_OCTAVE: return "OCTAVE SHIFT";
+        case SEL_PARAM_CUTOFF: return "Q-LINK 1 (CUTOFF)";
+        case SEL_PARAM_RESONANCE: return "Q-LINK 2 (RESONANCE)";
+        case SEL_PARAM_ATTACK: return "Q-LINK 3 (ATTACK)";
+        case SEL_PARAM_DECAY: return "Q-LINK 4 (DECAY)";
+        default: return "NONE";
+    }
+}
+
 static int g_octave_shift = 0; // -3 to +3 octaves transposition
 static bool g_octave_down_held = false;
 static bool g_octave_up_held = false;
@@ -210,6 +236,43 @@ static bool g_full_level = false;
 static bool g_16_levels = false;
 static bool g_note_repeat = false;
 static bool g_is_overdub = false;
+
+static void adjust_selected_param(int delta) {
+    switch (g_selected_param) {
+        case SEL_PARAM_TEMPO:
+            g_bpm = fminf(300.0f, fmaxf(30.0f, g_bpm + (float)delta * 0.5f));
+            g_tap_tempo_flash = 4;
+            printf("[PARAM] TEMPO adjusted by %+d -> %.1f BPM\n", delta, g_bpm);
+            break;
+        case SEL_PARAM_MASTER_VOL:
+            g_master_volume = fminf(1.0f, fmaxf(0.0f, g_master_volume + (float)delta * 0.02f));
+            printf("[PARAM] MASTER VOL adjusted by %+d -> %.0f%%\n", delta, g_master_volume * 100.0f);
+            break;
+        case SEL_PARAM_OCTAVE:
+            if (delta > 0 && g_octave_shift < 3) g_octave_shift++;
+            else if (delta < 0 && g_octave_shift > -3) g_octave_shift--;
+            printf("[PARAM] OCTAVE adjusted by %+d -> %+d\n", delta, g_octave_shift);
+            break;
+        case SEL_PARAM_CUTOFF:
+            g_knob_vals[0] = fminf(100, fmaxf(0, g_knob_vals[0] + delta * 2));
+            printf("[PARAM] CUTOFF adjusted by %+d -> %d%%\n", delta, g_knob_vals[0]);
+            break;
+        case SEL_PARAM_RESONANCE:
+            g_knob_vals[1] = fminf(100, fmaxf(0, g_knob_vals[1] + delta * 2));
+            printf("[PARAM] RESONANCE adjusted by %+d -> %d%%\n", delta, g_knob_vals[1]);
+            break;
+        case SEL_PARAM_ATTACK:
+            g_knob_vals[2] = fminf(100, fmaxf(0, g_knob_vals[2] + delta * 2));
+            printf("[PARAM] ATTACK adjusted by %+d -> %d%%\n", delta, g_knob_vals[2]);
+            break;
+        case SEL_PARAM_DECAY:
+            g_knob_vals[3] = fminf(100, fmaxf(0, g_knob_vals[3] + delta * 2));
+            printf("[PARAM] DECAY adjusted by %+d -> %d%%\n", delta, g_knob_vals[3]);
+            break;
+        default:
+            break;
+    }
+}
 
 static void detect_hardware() {
     // 1. Check Device Tree model
@@ -411,9 +474,18 @@ static void trigger_pad_sample(int pad_num, int vel) {
     if (!g_pad_samples[pad_num].data_l) return;
 
     pthread_mutex_lock(&g_synth.lock);
+    // If this pad is already playing (e.g. a drum loop), restart cleanly from frame 0
     int target = -1;
     for (int i = 0; i < MAX_SAMPLER_VOICES; ++i) {
-        if (!g_sampler_voices[i].active) { target = i; break; }
+        if (g_sampler_voices[i].active && g_sampler_voices[i].pad_num == pad_num) {
+            target = i;
+            break;
+        }
+    }
+    if (target == -1) {
+        for (int i = 0; i < MAX_SAMPLER_VOICES; ++i) {
+            if (!g_sampler_voices[i].active) { target = i; break; }
+        }
     }
     if (target == -1) target = 0; // steal voice 0
 
@@ -423,6 +495,32 @@ static void trigger_pad_sample(int pad_num, int vel) {
     sv->gain = ((float)vel / 127.0f) * 0.65f;
     sv->active = true;
     pthread_mutex_unlock(&g_synth.lock);
+}
+
+static void stop_all_audio() {
+    pthread_mutex_lock(&g_synth.lock);
+    // 1. Immediately silence and reset all 16 drum sampler voices
+    for (int v = 0; v < MAX_SAMPLER_VOICES; ++v) {
+        g_sampler_voices[v].active = false;
+        g_sampler_voices[v].pos = 0;
+    }
+    // 2. Immediately damp / mute all acoustic piano voices
+    for (int i = 0; i < MAX_VOICES; ++i) {
+        if (g_synth.piano_voices[i].active) {
+            g_synth.piano_voices[i].releasing = true;
+            g_synth.piano_voices[i].release_env = 0.0f;
+            g_synth.piano_voices[i].active = false;
+        }
+    }
+    pthread_mutex_unlock(&g_synth.lock);
+
+    // 3. Reset all UI press counters so keys and pads stop glowing
+    pthread_mutex_lock(&g_ui_lock);
+    for (int p = 0; p < 16; ++p) g_pad_press_count[p] = 0;
+    for (int k = 0; k < 61; ++k) g_key_press_count[k] = 0;
+    pthread_mutex_unlock(&g_ui_lock);
+
+    printf("[AUDIO] STOP: All sampler and piano voices silenced immediately.\n");
 }
 
 static inline float master_limit(float x) {
@@ -595,8 +693,9 @@ static void synth_cc(SynthEngine* s, int cc, int val) {
         if (val > 0) {
             g_is_playing = false;
             g_is_recording = false;
+            stop_all_audio();
         }
-        printf("[HARDWARE-CC] STOP (CC 117 = %d)\n", val);
+        printf("[HARDWARE-CC] STOP (CC 117 = %d) -> All audio stopped\n", val);
     } else if (cc == 118) { // Hardware PLAY Button (CC 118)
         if (val > 0) {
             g_is_playing = true;
@@ -621,10 +720,7 @@ static void synth_cc(SynthEngine* s, int cc, int val) {
         printf("[TOUCH-STRIP] Position: %d -> Cutoff: %d%%\n", val, g_knob_vals[0]);
     } else if (cc == 60) { // Akai Data Wheel (Relative Rotary Jog)
         int delta = (val < 64) ? val : (val - 128);
-        g_master_volume += (float)delta * 0.02f;
-        if (g_master_volume < 0.0f) g_master_volume = 0.0f;
-        if (g_master_volume > 1.0f) g_master_volume = 1.0f;
-        printf("[DATA-DIAL] Jog Wheel Delta: %d -> Master Vol: %.0f%%\n", delta, g_master_volume * 100.0f);
+        adjust_selected_param(delta);
     } else {
         printf("[MIDI] CC %d = %d\n", cc, val);
     }
@@ -879,9 +975,11 @@ static void render_ui() {
     }
 
     // Master Volume Control (Touch Buttons & Slider)
-    fill_rect(440, 14, 260, 32, COLOR_PANEL_HI);
-    draw_rect(440, 14, 260, 32, COLOR_BORDER);
-    draw_string(450, 24, "VOL", COLOR_TEXT_BOLD, 1);
+    bool vol_sel = (g_selected_param == SEL_PARAM_MASTER_VOL);
+    fill_rect(440, 14, 260, 32, vol_sel ? 0x002B3444 : COLOR_PANEL_HI);
+    draw_rect(440, 14, 260, 32, vol_sel ? COLOR_GOLD : COLOR_BORDER);
+    if (vol_sel) draw_rect(441, 15, 258, 30, COLOR_GOLD);
+    draw_string(450, 24, "VOL", vol_sel ? COLOR_GOLD : COLOR_TEXT_BOLD, 1);
 
     // [-] button
     fill_rect(478, 18, 26, 24, 0x002A303D);
@@ -907,11 +1005,13 @@ static void render_ui() {
     snprintf(vol_pct_str, sizeof(vol_pct_str), "%3d%%", (int)(g_master_volume * 100.0f + 0.5f));
     draw_string(648, 24, vol_pct_str, COLOR_TEXT_BOLD, 1);
 
-    // BPM & Latency badge (Pulsing gold flash on Tap Tempo!)
-    uint32_t bpm_bg = (g_tap_tempo_flash > 0) ? 0x005E4410 : COLOR_PANEL_HI;
-    uint32_t bpm_fg = (g_tap_tempo_flash > 0) ? COLOR_TEXT_BOLD : COLOR_GOLD;
+    // BPM & Latency badge (Pulsing gold flash on Tap Tempo! Glowing border if selected)
+    bool bpm_sel = (g_selected_param == SEL_PARAM_TEMPO);
+    uint32_t bpm_bg = (g_tap_tempo_flash > 0) ? 0x005E4410 : (bpm_sel ? 0x003A2E10 : COLOR_PANEL_HI);
+    uint32_t bpm_fg = (g_tap_tempo_flash > 0 || bpm_sel) ? COLOR_GOLD : COLOR_TEXT_BOLD;
     fill_rect(720, 14, 110, 32, bpm_bg);
-    draw_rect(720, 14, 110, 32, (g_tap_tempo_flash > 0) ? COLOR_GOLD : COLOR_BORDER);
+    draw_rect(720, 14, 110, 32, (g_tap_tempo_flash > 0 || bpm_sel) ? COLOR_GOLD : COLOR_BORDER);
+    if (bpm_sel) draw_rect(721, 15, 108, 30, COLOR_GOLD);
     char bpm_str[32];
     snprintf(bpm_str, sizeof(bpm_str), "%.1f BPM", g_bpm);
     draw_string(728, 22, bpm_str, bpm_fg, 2);
@@ -976,10 +1076,13 @@ static void render_ui() {
         int kx = 50 + (k % 2) * 190;
         int ky = 200 + (k / 2) * 130;
         bool touched = g_knob_touched[k];
+        bool knob_sel = (g_selected_param == (SelectedParam)(SEL_PARAM_CUTOFF + k));
 
-        fill_rect(kx, ky, 160, 100, touched ? 0x001B3A4D : COLOR_PANEL_HI);
-        draw_rect(kx, ky, 160, 100, touched ? COLOR_CYAN : COLOR_BORDER);
-        draw_string(kx + 15, ky + 15, knob_labels[k], touched ? COLOR_CYAN : COLOR_TEXT_NORM, 1);
+        fill_rect(kx, ky, 160, 100, touched ? 0x001B3A4D : (knob_sel ? 0x002B3444 : COLOR_PANEL_HI));
+        uint32_t b_col = touched ? COLOR_CYAN : (knob_sel ? COLOR_GOLD : COLOR_BORDER);
+        draw_rect(kx, ky, 160, 100, b_col);
+        if (knob_sel) draw_rect(kx + 1, ky + 1, 158, 98, COLOR_GOLD);
+        draw_string(kx + 15, ky + 15, knob_labels[k], touched ? COLOR_CYAN : (knob_sel ? COLOR_GOLD : COLOR_TEXT_NORM), 1);
 
         // Knob circle
         int cx = kx + 80, cy = ky + 60, r = 24;
@@ -1071,12 +1174,10 @@ static void render_ui() {
     draw_rect(oct_btn_x + 72, 563, 24, 20, (g_octave_shift > 0) ? COLOR_GOLD : COLOR_BORDER);
     draw_string(oct_btn_x + 80, 568, "+", COLOR_CYAN, 1);
 
-    // Right Side Status
-    if (g_hardware_model == HW_AKAI_MPC_KEY_61) {
-        draw_string(880, 568, "AKAI MPC KEY 61: HARDWARE CONTROLS ACTIVE", COLOR_GREEN, 1);
-    } else {
-        draw_string(940, 568, "STANDARD MIDI MAPPING ACTIVE", COLOR_TEXT_DIM, 1);
-    }
+    // Right Side Status: Active Parameter for Data Wheel / Jog Dial
+    char jog_hint[64];
+    snprintf(jog_hint, sizeof(jog_hint), "JOG DIAL: [%s]", get_selected_param_name(g_selected_param));
+    draw_string(870, 568, jog_hint, COLOR_GOLD, 1);
 
     // 5b. Bottom 61-Key Keyboard Piano (Height = 195, Y = 588 to 783)
     fill_rect(24, 588, 1232, 195, COLOR_PANEL);
@@ -1382,7 +1483,7 @@ static void* touch_thread_func(void* arg) {
                 slot->ui_y = ui_y;
                 printf("[TOUCH-RAW] Slot %d raw=(%d, %d) -> UI=(%d, %d)\n", s, slot->raw_x, slot->raw_y, ui_x, ui_y);
 
-                // 1. Header Bar Controls (Transport & Master Volume) - Generous 0..75px hitbox!
+                // 1. Header Bar Controls (Transport & Master Volume & BPM Tap) - Generous 0..75px hitbox!
                 if (ui_y >= 0 && ui_y < 75) {
                     if (ui_x >= 1040 && ui_x < 1120) {
                         g_is_playing = true;
@@ -1390,23 +1491,43 @@ static void* touch_thread_func(void* arg) {
                     } else if (ui_x >= 1120 && ui_x < 1195) {
                         g_is_playing = false;
                         g_is_recording = false;
-                        printf("[UI] STOP Pressed\n");
+                        stop_all_audio();
+                        printf("[UI] STOP Pressed -> Silencing all audio\n");
                     } else if (ui_x >= 1195 && ui_x < 1270) {
                         g_is_recording = !g_is_recording;
                         if (g_is_recording) g_is_playing = true;
                         printf("[UI] REC Pressed: %s\n", g_is_recording ? "ON" : "OFF");
-                    } else if (ui_x >= 445 && ui_x < 510) {
+                    } else if (ui_x >= 715 && ui_x < 840) {
+                        // BPM / TAP TEMPO badge touched!
+                        g_selected_param = SEL_PARAM_TEMPO;
+                        struct timespec ts;
+                        clock_gettime(CLOCK_MONOTONIC, &ts);
+                        uint64_t now_ms = (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+                        if (g_last_tap_time_ms > 0) {
+                            uint64_t dt = now_ms - g_last_tap_time_ms;
+                            if (dt >= 200 && dt <= 2500) {
+                                float new_bpm = 60000.0f / (float)dt;
+                                if (new_bpm >= 30.0f && new_bpm <= 300.0f) g_bpm = new_bpm;
+                            }
+                        }
+                        g_last_tap_time_ms = now_ms;
+                        g_tap_tempo_flash = 8;
+                        printf("[UI] BPM Badge Tapped -> Selected TEMPO, BPM: %.1f\n", g_bpm);
+                    } else if (ui_x >= 440 && ui_x < 510) {
                         // Volume [-] button
+                        g_selected_param = SEL_PARAM_MASTER_VOL;
                         g_master_volume -= 0.05f;
                         if (g_master_volume < 0.0f) g_master_volume = 0.0f;
                         printf("[VOL] Master Volume: %.0f%%\n", g_master_volume * 100.0f);
                     } else if (ui_x >= 610 && ui_x < 685) {
                         // Volume [+] button
+                        g_selected_param = SEL_PARAM_MASTER_VOL;
                         g_master_volume += 0.05f;
                         if (g_master_volume > 1.0f) g_master_volume = 1.0f;
                         printf("[VOL] Master Volume: %.0f%%\n", g_master_volume * 100.0f);
                     } else if (ui_x >= 510 && ui_x < 610) {
                         // Volume slider bar direct touch/drag
+                        g_selected_param = SEL_PARAM_MASTER_VOL;
                         float new_vol = (float)(ui_x - 512) / 95.0f;
                         if (new_vol < 0.0f) new_vol = 0.0f;
                         if (new_vol > 1.0f) new_vol = 1.0f;
@@ -1415,7 +1536,8 @@ static void* touch_thread_func(void* arg) {
                 }
 
                 // 1b. Left Inspector Panel Volume Badge Touch
-                if (ui_x >= 160 && ui_x < 300 && ui_y >= 150 && ui_y < 190) {
+                if (ui_x >= 160 && ui_x < 300 && ui_y >= 150 && ui_y < 195) {
+                    g_selected_param = SEL_PARAM_MASTER_VOL;
                     if (ui_x < 230) {
                         g_master_volume -= 0.05f;
                         if (g_master_volume < 0.0f) g_master_volume = 0.0f;
@@ -1428,6 +1550,7 @@ static void* touch_thread_func(void* arg) {
 
                 // 1c. Keybed Octave Transposition Bar Touch Hitboxes (y: 550..588)
                 if (ui_y >= 550 && ui_y < 588) {
+                    g_selected_param = SEL_PARAM_OCTAVE;
                     if (ui_x >= 520 && ui_x < 566) {
                         // [-] button
                         if (g_octave_shift > -3) g_octave_shift--;
@@ -1448,6 +1571,7 @@ static void* touch_thread_func(void* arg) {
                     int kx = 50 + (k % 2) * 190;
                     int ky = 190 + (k / 2) * 130;
                     if (ui_x >= kx && ui_x < kx + 160 && ui_y >= ky && ui_y < ky + 100) {
+                        g_selected_param = (SelectedParam)(SEL_PARAM_CUTOFF + k);
                         int val = 100 - ((ui_y - ky - 10) * 100 / 80);
                         if (val < 0) val = 0;
                         if (val > 100) val = 100;
@@ -1533,10 +1657,11 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port, MidiCtx*
             if (port == 1 && ch == 15 && (note >= 84 && note <= 87)) {
                 int k = note - 84;
                 g_knob_touched[k] = (vel > 0);
+                if (vel > 0) g_selected_param = (SelectedParam)(SEL_PARAM_CUTOFF + k);
                 printf("[Q-LINK] Knob %d Touch: %s (ch=%d vel=%d)\n", k + 1, (vel > 0) ? "TOUCHED" : "RELEASED", ch, vel);
             }
             // 2. Hardware Octave Buttons on Akai MPC Key 61 (Note 7 = Down, Note 10 = Up)
-            else if (port == 1 && ch == 0 && note == 7) {
+            else if (note == 7) {
                 if (vel > 0) {
                     g_octave_down_held = true;
                     if (g_octave_up_held) {
@@ -1544,12 +1669,13 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port, MidiCtx*
                     } else if (g_octave_shift > -3) {
                         g_octave_shift--;
                     }
+                    g_selected_param = SEL_PARAM_OCTAVE;
                     printf("[KEYBED] OCTAVE DOWN (Note 7) -> Shift: %+d octaves\n", g_octave_shift);
                     update_hardware_leds(ctx);
                 } else {
                     g_octave_down_held = false;
                 }
-            } else if (port == 1 && ch == 0 && note == 10) {
+            } else if (note == 10) {
                 if (vel > 0) {
                     g_octave_up_held = true;
                     if (g_octave_down_held) {
@@ -1557,6 +1683,7 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port, MidiCtx*
                     } else if (g_octave_shift < 3) {
                         g_octave_shift++;
                     }
+                    g_selected_param = SEL_PARAM_OCTAVE;
                     printf("[KEYBED] OCTAVE UP (Note 10) -> Shift: %+d octaves\n", g_octave_shift);
                     update_hardware_leds(ctx);
                 } else {
@@ -1564,40 +1691,41 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port, MidiCtx*
                 }
             }
             // 3. Transport Buttons
-            else if (port == 1 && (note == 81 || note == 117)) { // STOP
+            else if (note == 81 || note == 117) { // STOP
                 if (vel > 0) {
                     g_is_playing = false;
                     g_is_recording = false;
-                    printf("[HARDWARE-BUTTON] STOP (Note %d)\n", note);
+                    stop_all_audio();
+                    printf("[HARDWARE-BUTTON] STOP (Note %d) -> Silencing all audio\n", note);
                     update_hardware_leds(ctx);
                 }
-            } else if (port == 1 && (note == 82 || note == 118)) { // PLAY
+            } else if (note == 82 || note == 118) { // PLAY
                 if (vel > 0) {
                     g_is_playing = true;
                     printf("[HARDWARE-BUTTON] PLAY (Note %d)\n", note);
                     update_hardware_leds(ctx);
                 }
-            } else if (port == 1 && note == 83) { // PLAY START
+            } else if (note == 83) { // PLAY START
                 if (vel > 0) {
                     g_is_playing = true;
                     printf("[HARDWARE-BUTTON] PLAY START (Note %d)\n", note);
                     update_hardware_leds(ctx);
                 }
-            } else if (port == 1 && (note == 73 || note == 119)) { // REC
+            } else if (note == 73 || note == 119) { // REC
                 if (vel > 0) {
                     g_is_recording = !g_is_recording;
                     if (g_is_recording) g_is_playing = true;
                     printf("[HARDWARE-BUTTON] REC (Note %d) -> %s\n", note, g_is_recording ? "ON" : "OFF");
                     update_hardware_leds(ctx);
                 }
-            } else if (port == 1 && (note == 80 || note == 116)) { // OVERDUB
+            } else if (note == 80 || note == 116) { // OVERDUB
                 if (vel > 0) {
                     g_is_overdub = !g_is_overdub;
                     printf("[HARDWARE-BUTTON] OVERDUB (Note %d) -> %s\n", note, g_is_overdub ? "ON" : "OFF");
                 }
             }
             // 4. Tap Tempo
-            else if (port == 1 && (note == 53 || note == 35) && (ch == 15 || ch == 0)) {
+            else if ((note == 53 || note == 35) && (ch == 15 || ch == 0)) {
                 if (vel > 0) {
                     struct timespec ts;
                     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -1610,56 +1738,75 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port, MidiCtx*
                         }
                     }
                     g_last_tap_time_ms = now_ms;
+                    g_selected_param = SEL_PARAM_TEMPO;
                     g_tap_tempo_flash = 10;
                     printf("[HARDWARE-BUTTON] TAP TEMPO (Note %d) -> BPM: %.1f\n", note, g_bpm);
                 }
             }
-            // 5. Volume +/- Buttons (Notes 54 & 55)
-            else if (port == 1 && note == 54) { // PLUS (+)
+            // 5. Volume +/- Buttons (Notes 54 & 55) -> Adjust Selected Parameter!
+            else if (note == 54) { // PLUS (+)
                 if (vel > 0) {
-                    g_master_volume = fminf(1.0f, g_master_volume + 0.05f);
-                    printf("[HARDWARE-BUTTON] PLUS (+) -> Vol: %.0f%%\n", g_master_volume * 100.0f);
+                    adjust_selected_param(+1);
                 }
-            } else if (port == 1 && note == 55) { // MINUS (-)
+            } else if (note == 55) { // MINUS (-)
                 if (vel > 0) {
-                    g_master_volume = fmaxf(0.0f, g_master_volume - 0.05f);
-                    printf("[HARDWARE-BUTTON] MINUS (-) -> Vol: %.0f%%\n", g_master_volume * 100.0f);
+                    adjust_selected_param(-1);
                 }
             }
-            // 6. Undo / Erase
-            else if (port == 1 && (note == 67 || note == 20)) {
+            // 6. Data Wheel Click (ENTER) & Cursor Navigation
+            else if (note == 111 || note == 60) {
+                if (vel > 0) {
+                    g_selected_param = (SelectedParam)((g_selected_param + 1) % NUM_SEL_PARAMS);
+                    printf("[HARDWARE-BUTTON] ENTER -> Selected: %s\n", get_selected_param_name(g_selected_param));
+                }
+            } else if (note == 56 || note == 65) { // UP / LEFT cursor
+                if (vel > 0) {
+                    g_selected_param = (SelectedParam)((g_selected_param + NUM_SEL_PARAMS - 1) % NUM_SEL_PARAMS);
+                    printf("[HARDWARE-BUTTON] CURSOR UP/LEFT -> Selected: %s\n", get_selected_param_name(g_selected_param));
+                }
+            } else if (note == 57 || note == 66) { // DOWN / RIGHT cursor
+                if (vel > 0) {
+                    g_selected_param = (SelectedParam)((g_selected_param + 1) % NUM_SEL_PARAMS);
+                    printf("[HARDWARE-BUTTON] CURSOR DOWN/RIGHT -> Selected: %s\n", get_selected_param_name(g_selected_param));
+                }
+            }
+            // 7. Undo / Erase
+            else if (note == 67 || note == 20) {
                 if (vel > 0) printf("[HARDWARE-BUTTON] UNDO (Note %d)\n", note);
-            } else if (port == 1 && (note == 9 || note == 21)) {
+            } else if (note == 9 || note == 21) {
                 if (vel > 0) printf("[HARDWARE-BUTTON] ERASE (Note %d)\n", note);
             }
-            // 7. Full Level / 16 Levels / Note Repeat
-            else if (port == 1 && note == 39) {
+            // 8. Full Level / 16 Levels / Note Repeat
+            else if (note == 39) {
                 if (vel > 0) {
                     g_full_level = !g_full_level;
                     printf("[HARDWARE-BUTTON] FULL LEVEL -> %s\n", g_full_level ? "ON" : "OFF");
                     update_hardware_leds(ctx);
                 }
-            } else if (port == 1 && (note == 40 || note == 59)) {
+            } else if (note == 40 || note == 59) {
                 if (vel > 0) {
                     g_16_levels = !g_16_levels;
                     printf("[HARDWARE-BUTTON] 16 LEVELS -> %s\n", g_16_levels ? "ON" : "OFF");
                     update_hardware_leds(ctx);
                 }
-            } else if (port == 1 && note == 11) {
+            } else if (note == 11) {
                 if (vel > 0) {
                     g_note_repeat = !g_note_repeat;
                     printf("[HARDWARE-BUTTON] NOTE REPEAT -> %s\n", g_note_repeat ? "ON" : "OFF");
                     update_hardware_leds(ctx);
                 }
             }
-            // 8. Shift Button
-            else if (port == 1 && note == 49) {
+            // 9. Shift Button
+            else if (note == 49) {
                 g_shift_down = (vel > 0);
                 printf("[HARDWARE-BUTTON] SHIFT: %s\n", g_shift_down ? "DOWN" : "UP");
             }
-            // 9. Data Wheel Click (ENTER, Note 111 / 0x6F)
-            else if (port == 1 && note == 111) {
-                if (vel > 0) printf("[HARDWARE-BUTTON] DATA WHEEL CLICK (ENTER)\n");
+            // 10. Other Hardware Control Buttons (Main, Browse, Pads, Seq)
+            else if (note == 50 || note == 51 || note == 41 || note == 42 ||
+                     note == 43 || note == 44 || note == 45 || note == 46 ||
+                     note == 47 || note == 48 || note == 38 || note == 123 ||
+                     note == 68 || note == 36 || note == 37) {
+                if (vel > 0) printf("[HARDWARE-BUTTON] Function Note %d\n", note);
             }
             // 10. Musical Keys and Pads
             else {
@@ -1700,18 +1847,23 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port, MidiCtx*
                 printf("[Q-LINK] Knob %d Touch: RELEASED (ch=%d)\n", k + 1, ch);
             }
             // 2. Hardware Octave buttons release
-            else if (port == 1 && ch == 0 && note == 7) {
+            else if (note == 7) {
                 g_octave_down_held = false;
-            } else if (port == 1 && ch == 0 && note == 10) {
+            } else if (note == 10) {
                 g_octave_up_held = false;
             }
             // 3. Hardware control buttons release (ignore)
-            else if (port == 1 && (note == 81 || note == 82 || note == 83 || note == 73 || note == 80 ||
-                                   note == 117 || note == 118 || note == 119 || note == 116 ||
-                                   note == 53 || note == 35 || note == 54 || note == 55 ||
-                                   note == 67 || note == 20 || note == 9 || note == 21 ||
-                                   note == 39 || note == 40 || note == 59 || note == 11 ||
-                                   note == 49 || note == 111)) {
+            else if (note == 81 || note == 82 || note == 83 || note == 73 || note == 80 ||
+                     note == 117 || note == 118 || note == 119 || note == 116 ||
+                     note == 53 || note == 35 || note == 54 || note == 55 ||
+                     note == 56 || note == 57 || note == 65 || note == 66 ||
+                     note == 111 || note == 60 ||
+                     note == 67 || note == 20 || note == 9 || note == 21 ||
+                     note == 39 || note == 40 || note == 59 || note == 11 ||
+                     note == 49 || note == 50 || note == 51 || note == 41 ||
+                     note == 42 || note == 43 || note == 44 || note == 45 ||
+                     note == 46 || note == 47 || note == 48 || note == 38 ||
+                     note == 123 || note == 68 || note == 36 || note == 37) {
                 // Control button release - no musical note-off
                 if (note == 49) g_shift_down = false;
             }
@@ -1738,12 +1890,12 @@ static void handle_midi_packet(const uint8_t* buf, ssize_t n, int port, MidiCtx*
                 if (new_val < 0) new_val = 0;
                 if (new_val > 100) new_val = 100;
                 g_knob_vals[k] = new_val;
+                g_selected_param = (SelectedParam)(SEL_PARAM_CUTOFF + k);
                 printf("[Q-LINK] Knob %d (%s) -> %d%%\n", k + 1, (k==0?"CUTOFF":k==1?"RESONANCE":k==2?"ATTACK":"DECAY"), new_val);
             } else if (cc_num == 60) {
                 // Data Wheel Rotary Jog (Relative 2's Complement delta)
                 int delta = (cc_val < 64) ? cc_val : (cc_val - 128);
-                g_master_volume = fminf(1.0f, fmaxf(0.0f, g_master_volume + (float)delta * 0.02f));
-                printf("[DATA-WHEEL] Delta %+d -> Master Volume: %.0f%%\n", delta, g_master_volume * 100.0f);
+                adjust_selected_param(delta);
             } else if (cc_num == 69) {
                 // Touch Strip (Continuous 0..127) -> Modulates Cutoff
                 g_knob_vals[0] = (cc_val * 100) / 127;
