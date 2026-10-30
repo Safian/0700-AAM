@@ -26,8 +26,9 @@
 #define FB_PHYS_H        1280
 #define SAMPLE_RATE      44100
 #define NUM_CHANNELS     4
-#define BUFFER_FRAMES    128
+#define BUFFER_FRAMES    256
 #define MAX_VOICES       32
+#define MAX_SAMPLER_VOICES 16
 #define PI_F             3.14159265358979323846f
 
 // Color definitions (0x00RRGGBB)
@@ -49,14 +50,62 @@
 typedef struct {
     int note;
     float velocity;
-    float phase;
+    float phase1;
+    float phase2;
+    float phase3;
+    float phase4;
     float freq;
     float env;
+    float attack_env;
+    float hammer_env;
     float decay_rate;
     float filter_state;
     bool active;
     bool releasing;
 } Voice;
+
+typedef struct {
+    float* data_l;
+    float* data_r;
+    size_t num_frames;
+    char name[24];
+} WavSample;
+
+typedef struct {
+    bool active;
+    int pad_num;
+    size_t pos;
+    float gain;
+} SamplerVoice;
+
+static WavSample g_pad_samples[16];
+static SamplerVoice g_sampler_voices[MAX_SAMPLER_VOICES];
+
+static const char* g_pad_names[16] = {
+    "KICK DNB",  "KICK 2",    "SNARE",     "RIMSHOT",
+    "HAT CLSD",  "HAT OPEN",  "PERC RIM",  "CRASH",
+    "BS PLUCK",  "BASS HIT",  "SYNTH STB", "SUB BASS",
+    "LEAD SYN",  "VOX HOOK",  "FX RISER",  "DRUM LOOP"
+};
+
+static const char* g_sample_paths[16] = {
+    "/data/samples/FL_DNB_KICK.wav",
+    "/data/samples/Drums_-_Kick_2.wav",
+    "/data/samples/Drums_-_Snare.wav",
+    "/data/samples/TSP_OVERVIEW_YAANO_snare_fast_rim.wav",
+    "/data/samples/14_DNB_Hats.wav",
+    "/data/samples/TEDDY_KILLERZ_hihat_06.wav",
+    "/data/samples/TSP_OVERVIEW_WINGZ_rim_bigpink_D#.wav",
+    "/data/samples/BOS_DTTE_Crash_One_Shot_Seventies_Organic.wav",
+    "/data/samples/MORE_GIRAFFES_bass_plait_pluck_C.wav",
+    "/data/samples/TEDDY_KILLERZ_bass_short_bass_hit_02_F#.wav",
+    "/data/samples/TEDDY_KILLERZ_synth_fear.wav",
+    "/data/samples/BOS_NFXL_Bass_One_Shot_Bringing_F.wav",
+    "/data/samples/BOS_HHB_152_Synth_Pluck_Loop_Lighter_Dm.wav",
+    "/data/samples/DS_HT2_180_vocal_hook_female_life_middle_dry_Dmin.wav",
+    "/data/samples/BOS_NFXL_174_FX_Riser_One_Shot_Complete.wav",
+    "/data/samples/TEDDY_KILLERZ_172_drum_loop_kit_basics_01.wav"
+};
 
 typedef struct {
     Voice voices[MAX_VOICES];
@@ -119,9 +168,135 @@ static const char* note_name(int note) {
     return buf;
 }
 
+// -------------------------------------------------------------
+// WAV Sample Loader (16-bit and 24-bit PCM)
+// -------------------------------------------------------------
+static bool load_wav_file(const char* path, WavSample* sample, const char* label) {
+    sample->data_l = NULL;
+    sample->data_r = NULL;
+    sample->num_frames = 0;
+    snprintf(sample->name, sizeof(sample->name), "%s", label);
+
+    FILE* f = fopen(path, "rb");
+    if (!f) return false;
+
+    char chunk_id[4];
+    uint32_t chunk_size = 0;
+    char format[4];
+    if (fread(chunk_id, 1, 4, f) != 4 || memcmp(chunk_id, "RIFF", 4) != 0) { fclose(f); return false; }
+    if (fread(&chunk_size, 4, 1, f) != 1) { fclose(f); return false; }
+    if (fread(format, 1, 4, f) != 4 || memcmp(format, "WAVE", 4) != 0) { fclose(f); return false; }
+
+    uint16_t audio_fmt = 0, num_ch = 0, bits_per_sample = 0;
+    uint32_t sample_rate = 0;
+    uint32_t data_size = 0;
+    long data_pos = 0;
+
+    while (fread(chunk_id, 1, 4, f) == 4 && fread(&chunk_size, 4, 1, f) == 1) {
+        if (memcmp(chunk_id, "fmt ", 4) == 0) {
+            fread(&audio_fmt, 2, 1, f);
+            fread(&num_ch, 2, 1, f);
+            fread(&sample_rate, 4, 1, f);
+            fseek(f, 6, SEEK_CUR); // skip byte_rate, block_align
+            fread(&bits_per_sample, 2, 1, f);
+            int remaining = chunk_size - 16;
+            if (remaining > 0) fseek(f, remaining, SEEK_CUR);
+        } else if (memcmp(chunk_id, "data", 4) == 0) {
+            data_size = chunk_size;
+            data_pos = ftell(f);
+            break;
+        } else {
+            fseek(f, chunk_size, SEEK_CUR);
+        }
+    }
+
+    if (data_pos == 0 || audio_fmt != 1 || num_ch == 0 || data_size == 0) {
+        fclose(f);
+        return false;
+    }
+
+    fseek(f, data_pos, SEEK_SET);
+    int bytes_per_sample = bits_per_sample / 8;
+    if (bytes_per_sample < 2 || bytes_per_sample > 3) { fclose(f); return false; }
+
+    size_t total_samples = data_size / bytes_per_sample;
+    size_t num_frames = total_samples / num_ch;
+
+    sample->data_l = (float*)malloc(num_frames * sizeof(float));
+    sample->data_r = (float*)malloc(num_frames * sizeof(float));
+    sample->num_frames = num_frames;
+
+    uint8_t* raw_buf = (uint8_t*)malloc(data_size);
+    if (!raw_buf) {
+        free(sample->data_l); free(sample->data_r);
+        fclose(f); return false;
+    }
+    fread(raw_buf, 1, data_size, f);
+    fclose(f);
+
+    uint8_t* p = raw_buf;
+    for (size_t i = 0; i < num_frames; ++i) {
+        float sl = 0.0f, sr = 0.0f;
+        if (bits_per_sample == 16) {
+            int16_t val_l = (int16_t)(p[0] | (p[1] << 8));
+            sl = (float)val_l / 32768.0f;
+            p += 2;
+            if (num_ch > 1) {
+                int16_t val_r = (int16_t)(p[0] | (p[1] << 8));
+                sr = (float)val_r / 32768.0f;
+                p += 2;
+            } else {
+                sr = sl;
+            }
+        } else if (bits_per_sample == 24) {
+            int32_t val_l = (int32_t)((p[0] << 8) | (p[1] << 16) | (p[2] << 24)) >> 8;
+            sl = (float)val_l / 8388608.0f;
+            p += 3;
+            if (num_ch > 1) {
+                int32_t val_r = (int32_t)((p[0] << 8) | (p[1] << 16) | (p[2] << 24)) >> 8;
+                sr = (float)val_r / 8388608.0f;
+                p += 3;
+            } else {
+                sr = sl;
+            }
+        }
+        sample->data_l[i] = sl;
+        sample->data_r[i] = sr;
+    }
+    free(raw_buf);
+    printf("[SAMPLER] Loaded '%s': %zu frames (%d-bit, %d-ch)\n", label, num_frames, bits_per_sample, num_ch);
+    return true;
+}
+
+static void trigger_pad_sample(int pad_num, int vel) {
+    if (pad_num < 0 || pad_num >= 16) return;
+    if (!g_pad_samples[pad_num].data_l) return;
+
+    pthread_mutex_lock(&g_synth.lock);
+    int target = -1;
+    for (int i = 0; i < MAX_SAMPLER_VOICES; ++i) {
+        if (!g_sampler_voices[i].active) { target = i; break; }
+    }
+    if (target == -1) target = 0; // steal voice 0
+
+    SamplerVoice* sv = &g_sampler_voices[target];
+    sv->pad_num = pad_num;
+    sv->pos = 0;
+    sv->gain = ((float)vel / 127.0f) * 0.95f;
+    sv->active = true;
+    pthread_mutex_unlock(&g_synth.lock);
+}
+
+static inline float master_limit(float x) {
+    if (x > 1.30f) return 0.99f;
+    if (x < -1.30f) return -0.99f;
+    return tanhf(x * 0.85f);
+}
+
 static void synth_init(SynthEngine* s) {
     pthread_mutex_init(&s->lock, NULL);
     for (int i = 0; i < MAX_VOICES; ++i) s->voices[i].active = false;
+    for (int i = 0; i < MAX_SAMPLER_VOICES; ++i) g_sampler_voices[i].active = false;
     for (int i = 0; i < 61; ++i) g_key_press_count[i] = 0;
     for (int i = 0; i < 16; ++i) g_pad_press_count[i] = 0;
     for (int i = 0; i < MAX_TOUCH_SLOTS; ++i) {
@@ -134,30 +309,51 @@ static void synth_init(SynthEngine* s) {
         g_slots[i].ui_x = -1;
         g_slots[i].ui_y = -1;
     }
+
+    // Load 16 MPC Drum Samples
+    printf("[SAMPLER] Initializing 16 Studio Drum Samples...\n");
+    for (int i = 0; i < 16; ++i) {
+        load_wav_file(g_sample_paths[i], &g_pad_samples[i], g_pad_names[i]);
+    }
 }
 
 static void synth_note_on(SynthEngine* s, int note, int vel, NoteSource src = NOTE_SRC_KEYBED) {
     if (vel <= 0) return;
-    pthread_mutex_lock(&s->lock);
-    int target = -1;
-    for (int i = 0; i < MAX_VOICES; ++i) {
-        if (!s->voices[i].active) { target = i; break; }
-    }
-    if (target == -1) target = 0;
 
-    Voice* v = &s->voices[target];
-    v->note = note;
-    v->velocity = (float)vel / 127.0f;
-    v->phase = 0.0f;
-    v->freq = midi_to_freq(note);
-    v->env = v->velocity;
-    float decay_sec = 3.5f - ((float)(note - 21) / 88.0f * 2.5f);
-    if (decay_sec < 0.5f) decay_sec = 0.5f;
-    v->decay_rate = powf(0.001f, 1.0f / (decay_sec * (float)SAMPLE_RATE));
-    v->filter_state = 0.0f;
-    v->active = true;
-    v->releasing = false;
-    pthread_mutex_unlock(&s->lock);
+    if (src == NOTE_SRC_PAD) {
+        int pad_num = note - 36;
+        if (pad_num >= 0 && pad_num < 16) {
+            trigger_pad_sample(pad_num, vel);
+        }
+    } else {
+        // Acoustic Grand Piano Voice
+        pthread_mutex_lock(&s->lock);
+        int target = -1;
+        for (int i = 0; i < MAX_VOICES; ++i) {
+            if (!s->voices[i].active) { target = i; break; }
+        }
+        if (target == -1) target = 0;
+
+        Voice* v = &s->voices[target];
+        v->note = note;
+        v->velocity = (float)vel / 127.0f;
+        v->phase1 = 0.0f;
+        v->phase2 = 0.0f;
+        v->phase3 = 0.0f;
+        v->phase4 = 0.0f;
+        v->freq = midi_to_freq(note);
+        v->env = v->velocity;
+        v->attack_env = 0.0f; // Smooth attack ramp (zero clicks!)
+        v->hammer_env = v->velocity * 0.35f; // Felt hammer transient
+
+        float decay_sec = 4.2f - ((float)(note - 21) / 88.0f * 2.8f);
+        if (decay_sec < 0.6f) decay_sec = 0.6f;
+        v->decay_rate = powf(0.001f, 1.0f / (decay_sec * (float)SAMPLE_RATE));
+        v->filter_state = 0.0f;
+        v->active = true;
+        v->releasing = false;
+        pthread_mutex_unlock(&s->lock);
+    }
 
     // Update UI Key State - completely independent!
     pthread_mutex_lock(&g_ui_lock);
@@ -173,13 +369,15 @@ static void synth_note_on(SynthEngine* s, int note, int vel, NoteSource src = NO
 }
 
 static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_KEYBED) {
-    pthread_mutex_lock(&s->lock);
-    for (int i = 0; i < MAX_VOICES; ++i) {
-        if (s->voices[i].active && s->voices[i].note == note) {
-            s->voices[i].releasing = true;
+    if (src != NOTE_SRC_PAD) {
+        pthread_mutex_lock(&s->lock);
+        for (int i = 0; i < MAX_VOICES; ++i) {
+            if (s->voices[i].active && s->voices[i].note == note) {
+                s->voices[i].releasing = true;
+            }
         }
+        pthread_mutex_unlock(&s->lock);
     }
-    pthread_mutex_unlock(&s->lock);
 
     // Update UI Key State
     pthread_mutex_lock(&g_ui_lock);
@@ -200,28 +398,63 @@ static void synth_note_off(SynthEngine* s, int note, NoteSource src = NOTE_SRC_K
 
 static void synth_render(SynthEngine* s, int32_t* out, size_t nframes) {
     pthread_mutex_lock(&s->lock);
-    const float rel_rate = powf(0.001f, 1.0f / (0.05f * (float)SAMPLE_RATE));
+    const float rel_rate = powf(0.001f, 1.0f / (0.06f * (float)SAMPLE_RATE));
+    const float attack_step = 1.0f / (0.003f * (float)SAMPLE_RATE); // 3ms smooth attack
+    const float hammer_decay = powf(0.001f, 1.0f / (0.015f * (float)SAMPLE_RATE)); // 15ms hammer
 
     for (size_t f = 0; f < nframes; ++f) {
         float mix_l = 0.0f, mix_r = 0.0f;
+
+        // 1. Acoustic Concert Grand Piano Voices
         for (int i = 0; i < MAX_VOICES; ++i) {
             Voice* v = &s->voices[i];
             if (!v->active) continue;
 
-            float osc = sinf(v->phase) + 0.45f * sinf(v->phase * 2.002f) + 0.20f * sinf(v->phase * 3.004f);
-            float cutoff = 0.10f + (v->velocity * 0.40f) * (v->env / (v->velocity + 0.001f));
+            // Smooth attack ramp to prevent pop/click
+            if (v->attack_env < 1.0f) {
+                v->attack_env += attack_step;
+                if (v->attack_env > 1.0f) v->attack_env = 1.0f;
+            }
+
+            // Rich multi-harmonic piano timbre
+            float osc = sinf(v->phase1)
+                      + 0.45f * sinf(v->phase2)
+                      + 0.22f * sinf(v->phase3)
+                      + 0.10f * sinf(v->phase4);
+
+            // Subtle acoustic felt hammer noise
+            if (v->hammer_env > 0.001f) {
+                float noise = ((float)(rand() % 2000) / 1000.0f - 1.0f);
+                osc += noise * v->hammer_env;
+                v->hammer_env *= hammer_decay;
+            }
+
+            // Dynamic resonant filter (soft touch = mellow, hard touch = bright)
+            float cutoff = 0.12f + (v->velocity * 0.50f) * (v->env / (v->velocity + 0.001f));
             if (cutoff > 0.85f) cutoff = 0.85f;
             v->filter_state += cutoff * (osc - v->filter_state);
 
-            float voice = v->filter_state * v->env;
-            float pan = (float)(v->note - 21) / 88.0f;
-            if (pan < 0.1f) pan = 0.1f; if (pan > 0.9f) pan = 0.9f;
+            float voice = v->filter_state * v->env * v->attack_env;
+
+            // Stereo soundboard panning across 61 keys
+            float pan = (float)(v->note - 36) / 60.0f;
+            if (pan < 0.15f) pan = 0.15f; if (pan > 0.85f) pan = 0.85f;
 
             mix_l += voice * (1.0f - pan * 0.5f);
             mix_r += voice * (0.5f + pan * 0.5f);
 
-            v->phase += 2.0f * PI_F * v->freq / (float)SAMPLE_RATE;
-            if (v->phase >= 2.0f * PI_F) v->phase -= 2.0f * PI_F;
+            // Natural harmonic phases
+            v->phase1 += 2.0f * PI_F * v->freq / (float)SAMPLE_RATE;
+            if (v->phase1 >= 2.0f * PI_F) v->phase1 -= 2.0f * PI_F;
+
+            v->phase2 += 2.0f * PI_F * (v->freq * 2.001f) / (float)SAMPLE_RATE;
+            if (v->phase2 >= 2.0f * PI_F) v->phase2 -= 2.0f * PI_F;
+
+            v->phase3 += 2.0f * PI_F * (v->freq * 3.003f) / (float)SAMPLE_RATE;
+            if (v->phase3 >= 2.0f * PI_F) v->phase3 -= 2.0f * PI_F;
+
+            v->phase4 += 2.0f * PI_F * (v->freq * 4.005f) / (float)SAMPLE_RATE;
+            if (v->phase4 >= 2.0f * PI_F) v->phase4 -= 2.0f * PI_F;
 
             if (v->releasing) {
                 v->env *= rel_rate;
@@ -231,11 +464,28 @@ static void synth_render(SynthEngine* s, int32_t* out, size_t nframes) {
                 if (v->env < 0.0001f) v->active = false;
             }
         }
-        if (mix_l > 1.0f) mix_l = 1.0f; else if (mix_l < -1.0f) mix_l = -1.0f;
-        if (mix_r > 1.0f) mix_r = 1.0f; else if (mix_r < -1.0f) mix_r = -1.0f;
 
-        int32_t sl = (int32_t)(mix_l * 1073741824.0f);
-        int32_t sr = (int32_t)(mix_r * 1073741824.0f);
+        // 2. WAV Studio Drum Sampler Voices (16 MPC Pads)
+        for (int v = 0; v < MAX_SAMPLER_VOICES; ++v) {
+            SamplerVoice* sv = &g_sampler_voices[v];
+            if (!sv->active) continue;
+            WavSample* ws = &g_pad_samples[sv->pad_num];
+            if (!ws->data_l || sv->pos >= ws->num_frames) {
+                sv->active = false;
+                continue;
+            }
+
+            mix_l += ws->data_l[sv->pos] * sv->gain;
+            mix_r += ws->data_r[sv->pos] * sv->gain;
+            sv->pos++;
+        }
+
+        // 3. Master Soft-Knee Limiter (Zero Clipping)
+        float out_l = master_limit(mix_l * 0.70f);
+        float out_r = master_limit(mix_r * 0.70f);
+
+        int32_t sl = (int32_t)(out_l * 2147483647.0f);
+        int32_t sr = (int32_t)(out_r * 2147483647.0f);
 
         out[f * NUM_CHANNELS + 0] = sl;
         out[f * NUM_CHANNELS + 1] = sr;
@@ -306,6 +556,8 @@ static void init_font() {
 
     set_glyph(' ', 0x00, 0x00, 0x00, 0x00, 0x00);
     set_glyph('!', 0x00, 0x00, 0x5F, 0x00, 0x00);
+    set_glyph('#', 0x24, 0x7F, 0x24, 0x7F, 0x24);
+    set_glyph('&', 0x36, 0x49, 0x55, 0x22, 0x50);
     set_glyph('-', 0x08, 0x08, 0x08, 0x08, 0x08);
     set_glyph('+', 0x08, 0x08, 0x3E, 0x08, 0x08);
     set_glyph(':', 0x00, 0x36, 0x36, 0x00, 0x00);
@@ -416,7 +668,7 @@ static void render_ui() {
 
     fill_rect(845, 14, 190, 32, COLOR_PANEL_HI);
     draw_rect(845, 14, 190, 32, COLOR_BORDER);
-    draw_string(855, 22, "ACVM 4-CH 2.9ms", COLOR_GREEN, 2);
+    draw_string(855, 22, "ACVM 4-CH 5.8ms", COLOR_GREEN, 2);
 
     // Transport buttons
     uint32_t play_bg = g_is_playing ? 0x001B4D2E : COLOR_PANEL_HI;
@@ -488,10 +740,10 @@ static void render_ui() {
             fill_rect(px, py, pw, ph, pad_color);
             draw_rect(px, py, pw, ph, border_col);
 
-            // Pad label
-            char pad_lbl[16];
-            snprintf(pad_lbl, sizeof(pad_lbl), "PAD %02d", pad_num + 1);
-            draw_string(px + 12, py + 12, pad_lbl, active ? COLOR_TEXT_BOLD : COLOR_TEXT_NORM, 1);
+            // Pad label with sample name
+            char pad_lbl[32];
+            snprintf(pad_lbl, sizeof(pad_lbl), "P%02d: %s", pad_num + 1, g_pad_names[pad_num]);
+            draw_string(px + 10, py + 12, pad_lbl, active ? COLOR_TEXT_BOLD : COLOR_TEXT_NORM, 1);
 
             int midi_note = 36 + pad_num;
             draw_string(px + 12, py + 55, note_name(midi_note), active ? COLOR_TEXT_BOLD : COLOR_GOLD, 2);
@@ -877,12 +1129,16 @@ static void* midi_thread_func(void* arg) {
                 for (ssize_t i = 0; i < n; ++i) {
                     uint8_t b = buf[i];
                     if ((b & 0xF0) == 0x90 && (i + 2 < n)) {
+                        int ch = b & 0x0F;
                         int note = buf[i+1], vel = buf[i+2];
-                        if (vel > 0) synth_note_on(&g_synth, note, vel, NOTE_SRC_KEYBED);
-                        else synth_note_off(&g_synth, note, NOTE_SRC_KEYBED);
+                        NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
+                        if (vel > 0) synth_note_on(&g_synth, note, vel, src);
+                        else synth_note_off(&g_synth, note, src);
                         i += 2;
                     } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
-                        synth_note_off(&g_synth, buf[i+1], NOTE_SRC_KEYBED);
+                        int ch = b & 0x0F;
+                        NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
+                        synth_note_off(&g_synth, buf[i+1], src);
                         i += 2;
                     }
                 }
@@ -895,12 +1151,16 @@ static void* midi_thread_func(void* arg) {
                 for (ssize_t i = 0; i < n; ++i) {
                     uint8_t b = buf[i];
                     if ((b & 0xF0) == 0x90 && (i + 2 < n)) {
+                        int ch = b & 0x0F;
                         int note = buf[i+1], vel = buf[i+2];
-                        if (vel > 0) synth_note_on(&g_synth, note, vel, NOTE_SRC_KEYBED);
-                        else synth_note_off(&g_synth, note, NOTE_SRC_KEYBED);
+                        NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
+                        if (vel > 0) synth_note_on(&g_synth, note, vel, src);
+                        else synth_note_off(&g_synth, note, src);
                         i += 2;
                     } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
-                        synth_note_off(&g_synth, buf[i+1], NOTE_SRC_KEYBED);
+                        int ch = b & 0x0F;
+                        NoteSource src = (ch == 9) ? NOTE_SRC_PAD : NOTE_SRC_KEYBED;
+                        synth_note_off(&g_synth, buf[i+1], src);
                         i += 2;
                     }
                 }
@@ -951,8 +1211,8 @@ int main(int argc, char* argv[]) {
     int err = snd_pcm_open(&pcm, "plughw:1,0", SND_PCM_STREAM_PLAYBACK, 0);
     if (err >= 0) {
         snd_pcm_set_params(pcm, SND_PCM_FORMAT_S32_LE, SND_PCM_ACCESS_RW_INTERLEAVED,
-                           NUM_CHANNELS, SAMPLE_RATE, 1, 10000);
-        printf("[AUDIO] ACVM 4-Channel Quad (Main + Headphones) -> READY\n");
+                           NUM_CHANNELS, SAMPLE_RATE, 1, 30000);
+        printf("[AUDIO] ACVM 4-Channel Quad (Main + Headphones) -> READY (5.8ms blocks, 30ms ringbuffer, zero xruns)\n");
     }
 
     pthread_t a_thread;
