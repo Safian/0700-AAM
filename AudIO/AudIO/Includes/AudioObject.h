@@ -1,11 +1,15 @@
 #pragma once
 
+#include <atomic>
 #include "IProcessable.h"
 #include "RampedParameter.h"
 #include "ObjectFactory.h"
 
 namespace AudIO
 {
+    // One counter for the whole program. As a namespace-scope `static` every source file got its
+    // own copy, so objects created in different files shared ids; a project's program could then
+    // take the id of the audio input port and route the microphone straight to the main output.
     inline std::atomic<uint32_t> audioObjectId{ 1 };
 
     class Object : public IProcessable
