@@ -491,9 +491,15 @@ private:
                 } else if (type == 0xE0) {
                     int lsb = d0, msb = d1;
                     m_listener->on_pitch_bend((msb << 7) | lsb);
+                } else if (type == 0xD0) {
+                    m_listener->on_aftertouch(d0);
                 } else if (type == 0xB0) {
                     int cc_num = d0, cc_val = d1;
-                    if (cc_num == 64) {
+                    if (cc_num == 1) {
+                        m_listener->on_mod_wheel(cc_val);
+                    } else if (cc_num == 11) {
+                        m_listener->on_expression_pedal(cc_val);
+                    } else if (cc_num == 64) {
                         m_listener->on_sustain_pedal(cc_val >= 64);
                     }
                 }
@@ -520,9 +526,15 @@ private:
                 } else if (type == 0xE0) {
                     int lsb = d0, msb = d1;
                     m_listener->on_pitch_bend((msb << 7) | lsb);
+                } else if (type == 0xD0) {
+                    m_listener->on_aftertouch(d0);
                 } else if (type == 0xB0) {
                     int cc_num = d0, cc_val = d1;
-                    if (cc_num == 64) {
+                    if (cc_num == 1) {
+                        m_listener->on_mod_wheel(cc_val);
+                    } else if (cc_num == 11) {
+                        m_listener->on_expression_pedal(cc_val);
+                    } else if (cc_num == 64) {
                         m_listener->on_sustain_pedal(cc_val >= 64);
                     }
                 }
@@ -588,7 +600,6 @@ public:
     }
 
     void set_led(HardwareLed led, bool on, uint32_t rgb = 0) override {
-        (void)rgb;
         if (!m_out1) return;
         int note = -1;
         switch (led) {
@@ -608,7 +619,8 @@ public:
             default: break;
         }
         if (note != -1) {
-            uint8_t msg[3] = { (uint8_t)0x90, (uint8_t)note, (uint8_t)(on ? 127 : 0) };
+            uint8_t level = (rgb > 0) ? (uint8_t)(rgb & 0x7F) : (on ? 127 : 0);
+            uint8_t msg[3] = { (uint8_t)0x90, (uint8_t)note, level };
             snd_rawmidi_write(m_out1, msg, 3);
         }
     }

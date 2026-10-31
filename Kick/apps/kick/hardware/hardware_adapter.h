@@ -108,6 +108,9 @@ public:
     virtual void on_encoder_touch(int encoder_idx, bool touched) = 0;
     virtual void on_touch_strip(int val) = 0;
     virtual void on_pitch_bend(int val) = 0;
+    virtual void on_mod_wheel(int /*val*/) {}
+    virtual void on_expression_pedal(int /*val*/) {}
+    virtual void on_aftertouch(int /*val*/) {}
     virtual void on_sustain_pedal(bool down) = 0;
 
     // Musical performance inputs
