@@ -45,22 +45,17 @@ private:
         }
 
         juce::MessageManager::callAsync([this, slot, x, y, is_down, is_up]() {
-            if (!m_root) return;
+            auto* root = (m_window != nullptr) ? (juce::Component*)m_window : m_root;
+            if (!root) return;
 
             int ix = x;
             int iy = y;
 
-            auto* target = m_root->getComponentAt(ix, iy);
-            if (!target) target = m_root;
+            auto* target = root->getComponentAt(ix, iy);
+            if (!target) target = root;
 
             auto* peer = m_window ? m_window->getPeer() : nullptr;
             juce::ModifierKeys mods = is_up ? juce::ModifierKeys() : juce::ModifierKeys::leftButtonModifier;
-
-            printf("[TOUCH] slot=%d pos=(%d,%d) target='%s' [%s] peer=%p\n",
-                   slot, ix, iy, target->getName().toRawUTF8(),
-                   is_down ? "DOWN" : (is_up ? "UP" : "DRAG"),
-                   peer);
-            fflush(stdout);
 
             if (peer)
             {
@@ -74,7 +69,7 @@ private:
                                        slot);
             }
 
-            auto localPt = target->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
+            auto localPt = target->getLocalPoint(root, juce::Point<int>(ix, iy)).toFloat();
             juce::MouseEvent e(juce::Desktop::getInstance().getMainMouseSource(),
                                localPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                target, target,
@@ -86,14 +81,14 @@ private:
             if (is_down)
             {
                 if (slot >= 0 && slot < 10) m_touch_targets[slot] = target;
-                if (!peer) target->mouseDown(e);
+                target->mouseDown(e);
             }
             else if (is_up)
             {
                 auto* downTarget = (slot >= 0 && slot < 10) ? m_touch_targets[slot].getComponent() : nullptr;
                 auto* effectiveTarget = downTarget ? downTarget : target;
-                if (!peer && effectiveTarget) {
-                    auto downLocalPt = effectiveTarget->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
+                if (effectiveTarget) {
+                    auto downLocalPt = effectiveTarget->getLocalPoint(root, juce::Point<int>(ix, iy)).toFloat();
                     juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                            effectiveTarget, effectiveTarget,
@@ -104,15 +99,12 @@ private:
                     effectiveTarget->mouseUp(downE);
                 }
 
-                // If target or ancestor is a button, ensure it clicks even in headless/direct mode
                 auto* btn = dynamic_cast<juce::Button*>(effectiveTarget);
                 if (!btn && effectiveTarget) btn = effectiveTarget->findParentComponentOfClass<juce::Button>();
-                if (!btn) btn = dynamic_cast<juce::Button*>(target);
-                if (!btn && target) btn = target->findParentComponentOfClass<juce::Button>();
                 if (btn) {
-                    printf("[TOUCH] Button triggered: '%s' (pos %d,%d)\n", btn->getName().toRawUTF8(), ix, iy);
+                    printf("[TOUCH] Button released: '%s' (pos %d,%d, toggle=%d)\n",
+                           btn->getName().toRawUTF8(), ix, iy, (int)btn->getToggleState());
                     fflush(stdout);
-                    btn->triggerClick();
                 }
 
                 if (slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
@@ -120,20 +112,18 @@ private:
             else
             {
                 auto* downTarget = (slot >= 0 && slot < 10) ? m_touch_targets[slot].getComponent() : nullptr;
-                if (!peer) {
-                    if (downTarget) {
-                        auto downLocalPt = downTarget->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
-                        juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
-                                               downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                               downTarget, downTarget,
-                                               juce::Time::getCurrentTime(),
-                                               downLocalPt,
-                                               juce::Time::getCurrentTime(),
-                                               1, false);
-                        downTarget->mouseDrag(downE);
-                    } else {
-                        target->mouseDrag(e);
-                    }
+                if (downTarget) {
+                    auto downLocalPt = downTarget->getLocalPoint(root, juce::Point<int>(ix, iy)).toFloat();
+                    juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
+                                           downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                           downTarget, downTarget,
+                                           juce::Time::getCurrentTime(),
+                                           downLocalPt,
+                                           juce::Time::getCurrentTime(),
+                                           1, false);
+                    downTarget->mouseDrag(downE);
+                } else {
+                    target->mouseDrag(e);
                 }
             }
         });
@@ -171,7 +161,7 @@ private:
 
         if (!m_hw || !m_root || !m_hw->display()) return;
 
-        auto* targetComp = m_root;
+        auto* targetComp = (m_window != nullptr) ? (juce::Component*)m_window : m_root;
         int compW = targetComp->getWidth();
         int compH = targetComp->getHeight();
         if (compW <= 0 || compH <= 0) return;
@@ -276,7 +266,18 @@ public:
             }
             if (m_hw->control_surface()) {
                 m_hw->control_surface()->start(this);
+                m_hw->control_surface()->set_led(HW_LED_STOP, true);
+                m_hw->control_surface()->set_led(HW_LED_PLAY, false);
+                m_hw->control_surface()->set_led(HW_LED_BANK_A, true);
             }
+
+            mt::signals::playStateChanged.connect([this](mt::TransportState state) {
+                bool isPlaying = (state == mt::TransportState::Playing);
+                if (m_hw && m_hw->control_surface()) {
+                    m_hw->control_surface()->set_led(HW_LED_PLAY, isPlaying);
+                    m_hw->control_surface()->set_led(HW_LED_STOP, !isPlaying);
+                }
+            });
 
             // Start 30 FPS framebuffer render loop
             startTimerHz(30);
@@ -335,20 +336,93 @@ public:
                     ae.addLiveMidiMsg(sel, juce::MidiMessage::allNotesOff(ch));
                 }
                 m_tempo_edit_active = false;
+                if (m_hw && m_hw->control_surface()) {
+                    m_hw->control_surface()->set_led(HW_LED_STOP, true);
+                    m_hw->control_surface()->set_led(HW_LED_PLAY, false);
+                }
                 break;
             }
             case HW_BTN_PLAY:
             {
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLAY, contracts::DeviceControlContracts::BTN_PRESSED);
                 ae.setSequencePlay(ae.getSelectedSequence(), false, true);
+                if (m_hw && m_hw->control_surface()) {
+                    m_hw->control_surface()->set_led(HW_LED_PLAY, true);
+                    m_hw->control_surface()->set_led(HW_LED_STOP, false);
+                }
                 break;
             }
             case HW_BTN_PLAY_START:
             {
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLAYSTART, contracts::DeviceControlContracts::BTN_PRESSED);
                 ae.setSequencePlay(ae.getSelectedSequence(), true, true);
+                if (m_hw && m_hw->control_surface()) {
+                    m_hw->control_surface()->set_led(HW_LED_PLAY, true);
+                    m_hw->control_surface()->set_led(HW_LED_STOP, false);
+                }
                 break;
             }
+            case HW_BTN_GRID:
+            {
+                kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeGridView);
+                break;
+            }
+            case HW_BTN_BANK_A:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A, contracts::DeviceControlContracts::BTN_PRESSED);
+                if (m_hw && m_hw->control_surface()) {
+                    m_hw->control_surface()->set_led(HW_LED_BANK_A, true);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_B, false);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_C, false);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_D, false);
+                }
+                break;
+            }
+            case HW_BTN_BANK_B:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_B, contracts::DeviceControlContracts::BTN_PRESSED);
+                if (m_hw && m_hw->control_surface()) {
+                    m_hw->control_surface()->set_led(HW_LED_BANK_A, false);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_B, true);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_C, false);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_D, false);
+                }
+                break;
+            }
+            case HW_BTN_BANK_C:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_C, contracts::DeviceControlContracts::BTN_PRESSED);
+                if (m_hw && m_hw->control_surface()) {
+                    m_hw->control_surface()->set_led(HW_LED_BANK_A, false);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_B, false);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_C, true);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_D, false);
+                }
+                break;
+            }
+            case HW_BTN_BANK_D:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_D, contracts::DeviceControlContracts::BTN_PRESSED);
+                if (m_hw && m_hw->control_surface()) {
+                    m_hw->control_surface()->set_led(HW_LED_BANK_A, false);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_B, false);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_C, false);
+                    m_hw->control_surface()->set_led(HW_LED_BANK_D, true);
+                }
+                break;
+            }
+            case HW_BTN_CURSOR_UP:
+                on_jog_dial(1);
+                break;
+            case HW_BTN_CURSOR_DOWN:
+                on_jog_dial(-1);
+                break;
+            case HW_BTN_CURSOR_LEFT:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_PRESSED);
+                break;
+            case HW_BTN_CURSOR_RIGHT:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_PRESSED);
+                break;
             case HW_BTN_REC:
             {
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD, contracts::DeviceControlContracts::BTN_PRESSED);
@@ -520,6 +594,24 @@ public:
             case HW_BTN_ENTER:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
+            case HW_BTN_BANK_A:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_BANK_B:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_B, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_BANK_C:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_C, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_BANK_D:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_D, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_CURSOR_LEFT:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_CURSOR_RIGHT:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
             default:
                 break;
         }
@@ -682,16 +774,31 @@ public:
                 else if (strcmp(sval, "OVERDUB") == 0) b = HW_BTN_OVERDUB;
                 else if (strcmp(sval, "MAIN") == 0) b = HW_BTN_MAIN;
                 else if (strcmp(sval, "BROWSE") == 0) b = HW_BTN_BROWSE;
+                else if (strcmp(sval, "GRID") == 0) b = HW_BTN_GRID;
                 else if (strcmp(sval, "STEP_SEQ") == 0) b = HW_BTN_STEP_SEQ;
                 else if (strcmp(sval, "PAD_MIX") == 0) b = HW_BTN_PAD_MIX;
                 else if (strcmp(sval, "TRACK_MIX") == 0) b = HW_BTN_TRACK_MIX;
                 else if (strcmp(sval, "SAMPLER") == 0) b = HW_BTN_SAMPLER;
+                else if (strcmp(sval, "SAMPLE_EDIT") == 0) b = HW_BTN_SAMPLE_EDIT;
+                else if (strcmp(sval, "PROG_EDIT") == 0) b = HW_BTN_PROG_EDIT;
                 else if (strcmp(sval, "PAD_MUTE") == 0) b = HW_BTN_PAD_MUTE;
                 else if (strcmp(sval, "TRACK_MUTE") == 0) b = HW_BTN_TRACK_MUTE;
                 else if (strcmp(sval, "NEXT_SEQ") == 0) b = HW_BTN_NEXT_SEQ;
                 else if (strcmp(sval, "MENU") == 0) b = HW_BTN_MENU;
+                else if (strcmp(sval, "BANK_A") == 0) b = HW_BTN_BANK_A;
+                else if (strcmp(sval, "BANK_B") == 0) b = HW_BTN_BANK_B;
+                else if (strcmp(sval, "BANK_C") == 0) b = HW_BTN_BANK_C;
+                else if (strcmp(sval, "BANK_D") == 0) b = HW_BTN_BANK_D;
                 else if (strcmp(sval, "TAP_TEMPO") == 0) b = HW_BTN_TAP_TEMPO;
+                else if (strcmp(sval, "FULL_LEVEL") == 0) b = HW_BTN_FULL_LEVEL;
+                else if (strcmp(sval, "16_LEVELS") == 0) b = HW_BTN_16_LEVELS;
+                else if (strcmp(sval, "NOTE_REPEAT") == 0) b = HW_BTN_NOTE_REPEAT;
+                else if (strcmp(sval, "ERASE") == 0) b = HW_BTN_ERASE;
                 else if (strcmp(sval, "UNDO") == 0) b = HW_BTN_UNDO;
+                else if (strcmp(sval, "CURSOR_UP") == 0) b = HW_BTN_CURSOR_UP;
+                else if (strcmp(sval, "CURSOR_DOWN") == 0) b = HW_BTN_CURSOR_DOWN;
+                else if (strcmp(sval, "CURSOR_LEFT") == 0) b = HW_BTN_CURSOR_LEFT;
+                else if (strcmp(sval, "CURSOR_RIGHT") == 0) b = HW_BTN_CURSOR_RIGHT;
                 if (b != HW_BTN_NONE) {
                     on_button_press(b);
                     on_button_release(b);
