@@ -107,7 +107,7 @@
     <PROGRAM name="DnB Kit" type="0" id="DxIfBT3g">
       <INSERTS/>
       <CLIPS>
-        <CLIP keyNote="36" minNote="36" maxNote="36" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="0" minNote="0" maxNote="0" samplePlay="0" layerPlay="0"
               gain="1.00" pan="0.00">
           <LAYERS>
             <LAYER source="samples/FL_DNB_KICK.wav"
@@ -120,7 +120,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="37" minNote="37" maxNote="37" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="1" minNote="1" maxNote="1" samplePlay="0" layerPlay="0"
               gain="0.70" pan="-0.10">
           <LAYERS>
             <LAYER source="samples/TSP_OVERVIEW_YAANO_snare_fast_rim.wav"
@@ -133,7 +133,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="38" minNote="38" maxNote="38" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="2" minNote="2" maxNote="2" samplePlay="0" layerPlay="0"
               gain="0.95" pan="0.00">
           <LAYERS>
             <LAYER source="samples/Drums_-_Snare.wav"
@@ -146,7 +146,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="39" minNote="39" maxNote="39" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="3" minNote="3" maxNote="3" samplePlay="0" layerPlay="0"
               gain="0.75" pan="0.20">
           <LAYERS>
             <LAYER source="samples/TSP_OVERVIEW_WINGZ_rim_bigpink_D#.wav"
@@ -159,7 +159,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="40" minNote="40" maxNote="40" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="4" minNote="4" maxNote="4" samplePlay="0" layerPlay="0"
               gain="0.65" pan="-0.20">
           <LAYERS>
             <LAYER source="samples/TEDDY_KILLERZ_hihat_06.wav"
@@ -172,7 +172,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="41" minNote="41" maxNote="41" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="5" minNote="5" maxNote="5" samplePlay="0" layerPlay="0"
               gain="0.60" pan="0.25">
           <LAYERS>
             <LAYER source="samples/14_DNB_Hats.wav"
@@ -185,7 +185,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="42" minNote="42" maxNote="42" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="6" minNote="6" maxNote="6" samplePlay="0" layerPlay="0"
               gain="0.80" pan="-0.15">
           <LAYERS>
             <LAYER source="samples/BOS_DTTE_Crash_One_Shot_Seventies_Organic.wav"
@@ -198,7 +198,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="43" minNote="43" maxNote="43" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="7" minNote="7" maxNote="7" samplePlay="0" layerPlay="0"
               gain="0.85" pan="0.00">
           <LAYERS>
             <LAYER source="samples/BOS_NFXL_174_FX_Riser_One_Shot_Complete.wav"
@@ -211,7 +211,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="44" minNote="44" maxNote="44" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="8" minNote="8" maxNote="8" samplePlay="0" layerPlay="0"
               gain="0.90" pan="0.00">
           <LAYERS>
             <LAYER source="samples/TEDDY_KILLERZ_172_bass_reece_short_13_D.wav"
@@ -224,7 +224,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="45" minNote="45" maxNote="45" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="9" minNote="9" maxNote="9" samplePlay="0" layerPlay="0"
               gain="0.95" pan="-0.05">
           <LAYERS>
             <LAYER source="samples/BOS_NFXL_Bass_One_Shot_Bringing_F.wav"
@@ -237,7 +237,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="46" minNote="46" maxNote="46" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="10" minNote="10" maxNote="10" samplePlay="0" layerPlay="0"
               gain="0.95" pan="0.05">
           <LAYERS>
             <LAYER source="samples/BOS_NFXL_Bass_One_Shot_Him_G#.wav"
@@ -250,7 +250,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="47" minNote="47" maxNote="47" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="11" minNote="11" maxNote="11" samplePlay="0" layerPlay="0"
               gain="0.85" pan="0.00">
           <LAYERS>
             <LAYER source="samples/TEDDY_KILLERZ_bass_short_bass_hit_02_F#.wav"
@@ -263,7 +263,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="48" minNote="48" maxNote="48" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="12" minNote="12" maxNote="12" samplePlay="0" layerPlay="0"
               gain="0.80" pan="0.30">
           <LAYERS>
             <LAYER source="samples/MORE_GIRAFFES_bass_plait_pluck_C.wav"
@@ -276,7 +276,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="49" minNote="49" maxNote="49" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="13" minNote="13" maxNote="13" samplePlay="0" layerPlay="0"
               gain="0.85" pan="-0.25">
           <LAYERS>
             <LAYER source="samples/TSP_REDPILL_172_bass_synth_diplo_D.wav"
@@ -289,7 +289,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="50" minNote="50" maxNote="50" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="14" minNote="14" maxNote="14" samplePlay="0" layerPlay="0"
               gain="0.90" pan="0.00">
           <LAYERS>
             <LAYER source="samples/TSP_HTM_175_vocal_wet_mc_multiplex_itsa_boom_box_hook_Gmin.wav"
@@ -302,7 +302,7 @@
           <FILTERENV/>
           <AMPENV/>
         </CLIP>
-        <CLIP keyNote="51" minNote="51" maxNote="51" samplePlay="0" layerPlay="0"
+        <CLIP keyNote="15" minNote="15" maxNote="15" samplePlay="0" layerPlay="0"
               gain="0.55" pan="0.00">
           <LAYERS>
             <LAYER source="samples/tp_mdbe_174_pad_loop_bright_saws_Amin.wav"
@@ -330,133 +330,133 @@
         <TRACK id="TRK_01" name="Drums" program="DxIfBT3g" length="8" isSeqLength="1"
                level="100" pan="0" mute="0" solo="0">
           <NOTELIST>
-            <NOTE id="1" no="36" velocity="115" start="0" length="480" probability="100" ratchet="0"/>
-            <NOTE id="2" no="36" velocity="110" start="2400" length="480" probability="100" ratchet="0"/>
-            <NOTE id="3" no="38" velocity="115" start="960" length="480" probability="100" ratchet="0"/>
-            <NOTE id="4" no="38" velocity="120" start="2880" length="480" probability="100" ratchet="0"/>
-            <NOTE id="5" no="40" velocity="95" start="0" length="240" probability="100" ratchet="0"/>
-            <NOTE id="6" no="40" velocity="80" start="480" length="240" probability="100" ratchet="0"/>
-            <NOTE id="7" no="40" velocity="95" start="960" length="240" probability="100" ratchet="0"/>
-            <NOTE id="8" no="40" velocity="80" start="1440" length="240" probability="100" ratchet="0"/>
-            <NOTE id="9" no="40" velocity="95" start="1920" length="240" probability="100" ratchet="0"/>
-            <NOTE id="10" no="40" velocity="80" start="2400" length="240" probability="100" ratchet="0"/>
-            <NOTE id="11" no="40" velocity="95" start="2880" length="240" probability="100" ratchet="0"/>
-            <NOTE id="12" no="40" velocity="80" start="3360" length="240" probability="100" ratchet="0"/>
-            <NOTE id="13" no="36" velocity="115" start="3840" length="480" probability="100" ratchet="0"/>
-            <NOTE id="14" no="36" velocity="110" start="6240" length="480" probability="100" ratchet="0"/>
-            <NOTE id="15" no="38" velocity="115" start="4800" length="480" probability="100" ratchet="0"/>
-            <NOTE id="16" no="38" velocity="120" start="6720" length="480" probability="100" ratchet="0"/>
-            <NOTE id="17" no="40" velocity="95" start="3840" length="240" probability="100" ratchet="0"/>
-            <NOTE id="18" no="40" velocity="80" start="4320" length="240" probability="100" ratchet="0"/>
-            <NOTE id="19" no="40" velocity="95" start="4800" length="240" probability="100" ratchet="0"/>
-            <NOTE id="20" no="40" velocity="80" start="5280" length="240" probability="100" ratchet="0"/>
-            <NOTE id="21" no="40" velocity="95" start="5760" length="240" probability="100" ratchet="0"/>
-            <NOTE id="22" no="40" velocity="80" start="6240" length="240" probability="100" ratchet="0"/>
-            <NOTE id="23" no="40" velocity="95" start="6720" length="240" probability="100" ratchet="0"/>
-            <NOTE id="24" no="40" velocity="80" start="7200" length="240" probability="100" ratchet="0"/>
-            <NOTE id="25" no="36" velocity="115" start="7680" length="480" probability="100" ratchet="0"/>
-            <NOTE id="26" no="36" velocity="110" start="10080" length="480" probability="100" ratchet="0"/>
-            <NOTE id="27" no="38" velocity="115" start="8640" length="480" probability="100" ratchet="0"/>
-            <NOTE id="28" no="38" velocity="120" start="10560" length="480" probability="100" ratchet="0"/>
-            <NOTE id="29" no="40" velocity="95" start="7680" length="240" probability="100" ratchet="0"/>
-            <NOTE id="30" no="40" velocity="80" start="8160" length="240" probability="100" ratchet="0"/>
-            <NOTE id="31" no="40" velocity="95" start="8640" length="240" probability="100" ratchet="0"/>
-            <NOTE id="32" no="40" velocity="80" start="9120" length="240" probability="100" ratchet="0"/>
-            <NOTE id="33" no="40" velocity="95" start="9600" length="240" probability="100" ratchet="0"/>
-            <NOTE id="34" no="40" velocity="80" start="10080" length="240" probability="100" ratchet="0"/>
-            <NOTE id="35" no="40" velocity="95" start="10560" length="240" probability="100" ratchet="0"/>
-            <NOTE id="36" no="40" velocity="80" start="11040" length="240" probability="100" ratchet="0"/>
-            <NOTE id="37" no="36" velocity="115" start="11520" length="480" probability="100" ratchet="0"/>
-            <NOTE id="38" no="36" velocity="110" start="13920" length="480" probability="100" ratchet="0"/>
-            <NOTE id="39" no="38" velocity="115" start="12480" length="480" probability="100" ratchet="0"/>
-            <NOTE id="40" no="38" velocity="120" start="14400" length="480" probability="100" ratchet="0"/>
-            <NOTE id="41" no="40" velocity="95" start="11520" length="240" probability="100" ratchet="0"/>
-            <NOTE id="42" no="40" velocity="80" start="12000" length="240" probability="100" ratchet="0"/>
-            <NOTE id="43" no="40" velocity="95" start="12480" length="240" probability="100" ratchet="0"/>
-            <NOTE id="44" no="40" velocity="80" start="12960" length="240" probability="100" ratchet="0"/>
-            <NOTE id="45" no="40" velocity="95" start="13440" length="240" probability="100" ratchet="0"/>
-            <NOTE id="46" no="40" velocity="80" start="13920" length="240" probability="100" ratchet="0"/>
-            <NOTE id="47" no="40" velocity="95" start="14400" length="240" probability="100" ratchet="0"/>
-            <NOTE id="48" no="40" velocity="80" start="14880" length="240" probability="100" ratchet="0"/>
-            <NOTE id="49" no="36" velocity="115" start="15360" length="480" probability="100" ratchet="0"/>
-            <NOTE id="50" no="36" velocity="110" start="17760" length="480" probability="100" ratchet="0"/>
-            <NOTE id="51" no="38" velocity="115" start="16320" length="480" probability="100" ratchet="0"/>
-            <NOTE id="52" no="38" velocity="120" start="18240" length="480" probability="100" ratchet="0"/>
-            <NOTE id="53" no="40" velocity="95" start="15360" length="240" probability="100" ratchet="0"/>
-            <NOTE id="54" no="40" velocity="80" start="15840" length="240" probability="100" ratchet="0"/>
-            <NOTE id="55" no="40" velocity="95" start="16320" length="240" probability="100" ratchet="0"/>
-            <NOTE id="56" no="40" velocity="80" start="16800" length="240" probability="100" ratchet="0"/>
-            <NOTE id="57" no="40" velocity="95" start="17280" length="240" probability="100" ratchet="0"/>
-            <NOTE id="58" no="40" velocity="80" start="17760" length="240" probability="100" ratchet="0"/>
-            <NOTE id="59" no="40" velocity="95" start="18240" length="240" probability="100" ratchet="0"/>
-            <NOTE id="60" no="40" velocity="80" start="18720" length="240" probability="100" ratchet="0"/>
-            <NOTE id="61" no="36" velocity="115" start="19200" length="480" probability="100" ratchet="0"/>
-            <NOTE id="62" no="36" velocity="110" start="21600" length="480" probability="100" ratchet="0"/>
-            <NOTE id="63" no="38" velocity="115" start="20160" length="480" probability="100" ratchet="0"/>
-            <NOTE id="64" no="38" velocity="120" start="22080" length="480" probability="100" ratchet="0"/>
-            <NOTE id="65" no="40" velocity="95" start="19200" length="240" probability="100" ratchet="0"/>
-            <NOTE id="66" no="40" velocity="80" start="19680" length="240" probability="100" ratchet="0"/>
-            <NOTE id="67" no="40" velocity="95" start="20160" length="240" probability="100" ratchet="0"/>
-            <NOTE id="68" no="40" velocity="80" start="20640" length="240" probability="100" ratchet="0"/>
-            <NOTE id="69" no="40" velocity="95" start="21120" length="240" probability="100" ratchet="0"/>
-            <NOTE id="70" no="40" velocity="80" start="21600" length="240" probability="100" ratchet="0"/>
-            <NOTE id="71" no="40" velocity="95" start="22080" length="240" probability="100" ratchet="0"/>
-            <NOTE id="72" no="40" velocity="80" start="22560" length="240" probability="100" ratchet="0"/>
-            <NOTE id="73" no="36" velocity="115" start="23040" length="480" probability="100" ratchet="0"/>
-            <NOTE id="74" no="36" velocity="110" start="25440" length="480" probability="100" ratchet="0"/>
-            <NOTE id="75" no="38" velocity="115" start="24000" length="480" probability="100" ratchet="0"/>
-            <NOTE id="76" no="38" velocity="120" start="25920" length="480" probability="100" ratchet="0"/>
-            <NOTE id="77" no="40" velocity="95" start="23040" length="240" probability="100" ratchet="0"/>
-            <NOTE id="78" no="40" velocity="80" start="23520" length="240" probability="100" ratchet="0"/>
-            <NOTE id="79" no="40" velocity="95" start="24000" length="240" probability="100" ratchet="0"/>
-            <NOTE id="80" no="40" velocity="80" start="24480" length="240" probability="100" ratchet="0"/>
-            <NOTE id="81" no="40" velocity="95" start="24960" length="240" probability="100" ratchet="0"/>
-            <NOTE id="82" no="40" velocity="80" start="25440" length="240" probability="100" ratchet="0"/>
-            <NOTE id="83" no="40" velocity="95" start="25920" length="240" probability="100" ratchet="0"/>
-            <NOTE id="84" no="40" velocity="80" start="26400" length="240" probability="100" ratchet="0"/>
-            <NOTE id="85" no="36" velocity="115" start="26880" length="480" probability="100" ratchet="0"/>
-            <NOTE id="86" no="36" velocity="110" start="29280" length="480" probability="100" ratchet="0"/>
-            <NOTE id="87" no="38" velocity="115" start="27840" length="480" probability="100" ratchet="0"/>
-            <NOTE id="88" no="38" velocity="120" start="29760" length="480" probability="100" ratchet="0"/>
-            <NOTE id="89" no="40" velocity="95" start="26880" length="240" probability="100" ratchet="0"/>
-            <NOTE id="90" no="40" velocity="80" start="27360" length="240" probability="100" ratchet="0"/>
-            <NOTE id="91" no="40" velocity="95" start="27840" length="240" probability="100" ratchet="0"/>
-            <NOTE id="92" no="40" velocity="80" start="28320" length="240" probability="100" ratchet="0"/>
-            <NOTE id="93" no="40" velocity="95" start="28800" length="240" probability="100" ratchet="0"/>
-            <NOTE id="94" no="40" velocity="80" start="29280" length="240" probability="100" ratchet="0"/>
-            <NOTE id="95" no="40" velocity="95" start="29760" length="240" probability="100" ratchet="0"/>
-            <NOTE id="96" no="40" velocity="80" start="30240" length="240" probability="100" ratchet="0"/>
+            <NOTE id="1" no="0" velocity="115" start="0" length="480" probability="100" ratchet="0"/>
+            <NOTE id="2" no="0" velocity="110" start="2400" length="480" probability="100" ratchet="0"/>
+            <NOTE id="3" no="2" velocity="115" start="960" length="480" probability="100" ratchet="0"/>
+            <NOTE id="4" no="2" velocity="120" start="2880" length="480" probability="100" ratchet="0"/>
+            <NOTE id="5" no="4" velocity="95" start="0" length="240" probability="100" ratchet="0"/>
+            <NOTE id="6" no="4" velocity="80" start="480" length="240" probability="100" ratchet="0"/>
+            <NOTE id="7" no="4" velocity="95" start="960" length="240" probability="100" ratchet="0"/>
+            <NOTE id="8" no="4" velocity="80" start="1440" length="240" probability="100" ratchet="0"/>
+            <NOTE id="9" no="4" velocity="95" start="1920" length="240" probability="100" ratchet="0"/>
+            <NOTE id="10" no="4" velocity="80" start="2400" length="240" probability="100" ratchet="0"/>
+            <NOTE id="11" no="4" velocity="95" start="2880" length="240" probability="100" ratchet="0"/>
+            <NOTE id="12" no="4" velocity="80" start="3360" length="240" probability="100" ratchet="0"/>
+            <NOTE id="13" no="0" velocity="115" start="3840" length="480" probability="100" ratchet="0"/>
+            <NOTE id="14" no="0" velocity="110" start="6240" length="480" probability="100" ratchet="0"/>
+            <NOTE id="15" no="2" velocity="115" start="4800" length="480" probability="100" ratchet="0"/>
+            <NOTE id="16" no="2" velocity="120" start="6720" length="480" probability="100" ratchet="0"/>
+            <NOTE id="17" no="4" velocity="95" start="3840" length="240" probability="100" ratchet="0"/>
+            <NOTE id="18" no="4" velocity="80" start="4320" length="240" probability="100" ratchet="0"/>
+            <NOTE id="19" no="4" velocity="95" start="4800" length="240" probability="100" ratchet="0"/>
+            <NOTE id="20" no="4" velocity="80" start="5280" length="240" probability="100" ratchet="0"/>
+            <NOTE id="21" no="4" velocity="95" start="5760" length="240" probability="100" ratchet="0"/>
+            <NOTE id="22" no="4" velocity="80" start="6240" length="240" probability="100" ratchet="0"/>
+            <NOTE id="23" no="4" velocity="95" start="6720" length="240" probability="100" ratchet="0"/>
+            <NOTE id="24" no="4" velocity="80" start="7200" length="240" probability="100" ratchet="0"/>
+            <NOTE id="25" no="0" velocity="115" start="7680" length="480" probability="100" ratchet="0"/>
+            <NOTE id="26" no="0" velocity="110" start="10080" length="480" probability="100" ratchet="0"/>
+            <NOTE id="27" no="2" velocity="115" start="8640" length="480" probability="100" ratchet="0"/>
+            <NOTE id="28" no="2" velocity="120" start="10560" length="480" probability="100" ratchet="0"/>
+            <NOTE id="29" no="4" velocity="95" start="7680" length="240" probability="100" ratchet="0"/>
+            <NOTE id="30" no="4" velocity="80" start="8160" length="240" probability="100" ratchet="0"/>
+            <NOTE id="31" no="4" velocity="95" start="8640" length="240" probability="100" ratchet="0"/>
+            <NOTE id="32" no="4" velocity="80" start="9120" length="240" probability="100" ratchet="0"/>
+            <NOTE id="33" no="4" velocity="95" start="9600" length="240" probability="100" ratchet="0"/>
+            <NOTE id="34" no="4" velocity="80" start="10080" length="240" probability="100" ratchet="0"/>
+            <NOTE id="35" no="4" velocity="95" start="10560" length="240" probability="100" ratchet="0"/>
+            <NOTE id="36" no="4" velocity="80" start="11040" length="240" probability="100" ratchet="0"/>
+            <NOTE id="37" no="0" velocity="115" start="11520" length="480" probability="100" ratchet="0"/>
+            <NOTE id="38" no="0" velocity="110" start="13920" length="480" probability="100" ratchet="0"/>
+            <NOTE id="39" no="2" velocity="115" start="12480" length="480" probability="100" ratchet="0"/>
+            <NOTE id="40" no="2" velocity="120" start="14400" length="480" probability="100" ratchet="0"/>
+            <NOTE id="41" no="4" velocity="95" start="11520" length="240" probability="100" ratchet="0"/>
+            <NOTE id="42" no="4" velocity="80" start="12000" length="240" probability="100" ratchet="0"/>
+            <NOTE id="43" no="4" velocity="95" start="12480" length="240" probability="100" ratchet="0"/>
+            <NOTE id="44" no="4" velocity="80" start="12960" length="240" probability="100" ratchet="0"/>
+            <NOTE id="45" no="4" velocity="95" start="13440" length="240" probability="100" ratchet="0"/>
+            <NOTE id="46" no="4" velocity="80" start="13920" length="240" probability="100" ratchet="0"/>
+            <NOTE id="47" no="4" velocity="95" start="14400" length="240" probability="100" ratchet="0"/>
+            <NOTE id="48" no="4" velocity="80" start="14880" length="240" probability="100" ratchet="0"/>
+            <NOTE id="49" no="0" velocity="115" start="15360" length="480" probability="100" ratchet="0"/>
+            <NOTE id="50" no="0" velocity="110" start="17760" length="480" probability="100" ratchet="0"/>
+            <NOTE id="51" no="2" velocity="115" start="16320" length="480" probability="100" ratchet="0"/>
+            <NOTE id="52" no="2" velocity="120" start="18240" length="480" probability="100" ratchet="0"/>
+            <NOTE id="53" no="4" velocity="95" start="15360" length="240" probability="100" ratchet="0"/>
+            <NOTE id="54" no="4" velocity="80" start="15840" length="240" probability="100" ratchet="0"/>
+            <NOTE id="55" no="4" velocity="95" start="16320" length="240" probability="100" ratchet="0"/>
+            <NOTE id="56" no="4" velocity="80" start="16800" length="240" probability="100" ratchet="0"/>
+            <NOTE id="57" no="4" velocity="95" start="17280" length="240" probability="100" ratchet="0"/>
+            <NOTE id="58" no="4" velocity="80" start="17760" length="240" probability="100" ratchet="0"/>
+            <NOTE id="59" no="4" velocity="95" start="18240" length="240" probability="100" ratchet="0"/>
+            <NOTE id="60" no="4" velocity="80" start="18720" length="240" probability="100" ratchet="0"/>
+            <NOTE id="61" no="0" velocity="115" start="19200" length="480" probability="100" ratchet="0"/>
+            <NOTE id="62" no="0" velocity="110" start="21600" length="480" probability="100" ratchet="0"/>
+            <NOTE id="63" no="2" velocity="115" start="20160" length="480" probability="100" ratchet="0"/>
+            <NOTE id="64" no="2" velocity="120" start="22080" length="480" probability="100" ratchet="0"/>
+            <NOTE id="65" no="4" velocity="95" start="19200" length="240" probability="100" ratchet="0"/>
+            <NOTE id="66" no="4" velocity="80" start="19680" length="240" probability="100" ratchet="0"/>
+            <NOTE id="67" no="4" velocity="95" start="20160" length="240" probability="100" ratchet="0"/>
+            <NOTE id="68" no="4" velocity="80" start="20640" length="240" probability="100" ratchet="0"/>
+            <NOTE id="69" no="4" velocity="95" start="21120" length="240" probability="100" ratchet="0"/>
+            <NOTE id="70" no="4" velocity="80" start="21600" length="240" probability="100" ratchet="0"/>
+            <NOTE id="71" no="4" velocity="95" start="22080" length="240" probability="100" ratchet="0"/>
+            <NOTE id="72" no="4" velocity="80" start="22560" length="240" probability="100" ratchet="0"/>
+            <NOTE id="73" no="0" velocity="115" start="23040" length="480" probability="100" ratchet="0"/>
+            <NOTE id="74" no="0" velocity="110" start="25440" length="480" probability="100" ratchet="0"/>
+            <NOTE id="75" no="2" velocity="115" start="24000" length="480" probability="100" ratchet="0"/>
+            <NOTE id="76" no="2" velocity="120" start="25920" length="480" probability="100" ratchet="0"/>
+            <NOTE id="77" no="4" velocity="95" start="23040" length="240" probability="100" ratchet="0"/>
+            <NOTE id="78" no="4" velocity="80" start="23520" length="240" probability="100" ratchet="0"/>
+            <NOTE id="79" no="4" velocity="95" start="24000" length="240" probability="100" ratchet="0"/>
+            <NOTE id="80" no="4" velocity="80" start="24480" length="240" probability="100" ratchet="0"/>
+            <NOTE id="81" no="4" velocity="95" start="24960" length="240" probability="100" ratchet="0"/>
+            <NOTE id="82" no="4" velocity="80" start="25440" length="240" probability="100" ratchet="0"/>
+            <NOTE id="83" no="4" velocity="95" start="25920" length="240" probability="100" ratchet="0"/>
+            <NOTE id="84" no="4" velocity="80" start="26400" length="240" probability="100" ratchet="0"/>
+            <NOTE id="85" no="0" velocity="115" start="26880" length="480" probability="100" ratchet="0"/>
+            <NOTE id="86" no="0" velocity="110" start="29280" length="480" probability="100" ratchet="0"/>
+            <NOTE id="87" no="2" velocity="115" start="27840" length="480" probability="100" ratchet="0"/>
+            <NOTE id="88" no="2" velocity="120" start="29760" length="480" probability="100" ratchet="0"/>
+            <NOTE id="89" no="4" velocity="95" start="26880" length="240" probability="100" ratchet="0"/>
+            <NOTE id="90" no="4" velocity="80" start="27360" length="240" probability="100" ratchet="0"/>
+            <NOTE id="91" no="4" velocity="95" start="27840" length="240" probability="100" ratchet="0"/>
+            <NOTE id="92" no="4" velocity="80" start="28320" length="240" probability="100" ratchet="0"/>
+            <NOTE id="93" no="4" velocity="95" start="28800" length="240" probability="100" ratchet="0"/>
+            <NOTE id="94" no="4" velocity="80" start="29280" length="240" probability="100" ratchet="0"/>
+            <NOTE id="95" no="4" velocity="95" start="29760" length="240" probability="100" ratchet="0"/>
+            <NOTE id="96" no="4" velocity="80" start="30240" length="240" probability="100" ratchet="0"/>
 
           </NOTELIST>
         </TRACK>
         <TRACK id="TRK_02" name="Bass" program="DxIfBT3g" length="8" isSeqLength="1"
                level="110" pan="0" mute="0" solo="0">
           <NOTELIST>
-            <NOTE id="101" no="44" velocity="120" start="0" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="102" no="45" velocity="115" start="1920" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="103" no="44" velocity="120" start="3840" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="104" no="45" velocity="115" start="5760" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="105" no="44" velocity="120" start="7680" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="106" no="45" velocity="115" start="9600" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="107" no="44" velocity="120" start="11520" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="108" no="45" velocity="115" start="13440" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="109" no="44" velocity="120" start="15360" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="110" no="45" velocity="115" start="17280" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="111" no="44" velocity="120" start="19200" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="112" no="45" velocity="115" start="21120" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="113" no="44" velocity="120" start="23040" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="114" no="45" velocity="115" start="24960" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="115" no="44" velocity="120" start="26880" length="1920" probability="100" ratchet="0"/>
-            <NOTE id="116" no="45" velocity="115" start="28800" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="101" no="8" velocity="120" start="0" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="102" no="9" velocity="115" start="1920" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="103" no="8" velocity="120" start="3840" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="104" no="9" velocity="115" start="5760" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="105" no="8" velocity="120" start="7680" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="106" no="9" velocity="115" start="9600" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="107" no="8" velocity="120" start="11520" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="108" no="9" velocity="115" start="13440" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="109" no="8" velocity="120" start="15360" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="110" no="9" velocity="115" start="17280" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="111" no="8" velocity="120" start="19200" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="112" no="9" velocity="115" start="21120" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="113" no="8" velocity="120" start="23040" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="114" no="9" velocity="115" start="24960" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="115" no="8" velocity="120" start="26880" length="1920" probability="100" ratchet="0"/>
+            <NOTE id="116" no="9" velocity="115" start="28800" length="1920" probability="100" ratchet="0"/>
           </NOTELIST>
         </TRACK>
         <TRACK id="TRK_03" name="Lead &amp; FX" program="DxIfBT3g" length="8"
                isSeqLength="1" level="105" pan="5" mute="0" solo="0">
           <NOTELIST>
-            <NOTE id="201" no="50" velocity="120" start="0" length="7680" probability="100" ratchet="0"/>
-            <NOTE id="202" no="51" velocity="115" start="7680" length="7680" probability="100" ratchet="0"/>
-            <NOTE id="203" no="50" velocity="120" start="15360" length="7680" probability="100" ratchet="0"/>
-            <NOTE id="204" no="51" velocity="115" start="23040" length="7680" probability="100" ratchet="0"/>
+            <NOTE id="201" no="14" velocity="120" start="0" length="7680" probability="100" ratchet="0"/>
+            <NOTE id="202" no="15" velocity="115" start="7680" length="7680" probability="100" ratchet="0"/>
+            <NOTE id="203" no="14" velocity="120" start="15360" length="7680" probability="100" ratchet="0"/>
+            <NOTE id="204" no="15" velocity="115" start="23040" length="7680" probability="100" ratchet="0"/>
           </NOTELIST>
         </TRACK>
       </TRACKS>

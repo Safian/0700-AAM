@@ -6,8 +6,9 @@ public:
     ADSR() { setEnabled(true); setSampleRate(48000); setParameters(0, 0, 0, 0, 127); }
     void setParameters(double attackSamples, double holdSamples, double decaySamples, double releaseSamples, double sustainMidi) noexcept {
         const auto rate = std::max(1., sampleRate());
+        double normSustain = (sustainMidi > 1.0) ? (sustainMidi / 127.) : sustainMidi;
         AudIO::ADSR<double>::setParameters({std::max(0., attackSamples) / rate, std::max(0., holdSamples) / rate,
-            std::max(0., decaySamples) / rate, juce::jlimit(0., 1., sustainMidi / 127.), std::max(0., releaseSamples) / rate});
+            std::max(0., decaySamples) / rate, juce::jlimit(0., 1., normSustain), std::max(0., releaseSamples) / rate});
     }
 };
 enum class FilterType { LOW_PASS, HIGH_PASS, BAND_PASS };
