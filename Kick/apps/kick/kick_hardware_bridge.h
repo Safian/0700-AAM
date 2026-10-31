@@ -29,6 +29,8 @@ private:
     std::string m_cmd_buf;
     bool m_shift_pressed = false;
     bool m_locate_pressed = false;
+    bool m_octave_down_down = false;
+    bool m_octave_up_down = false;
     int m_current_bank = 0;
     int m_octave_offset = 0;
     int m_key_pitch_map[128];
@@ -511,22 +513,32 @@ public:
             }
             case HW_BTN_OCTAVE_DOWN:
             {
-                if (m_octave_offset > -3) {
+                m_octave_down_down = true;
+                if (m_octave_up_down) {
+                    m_octave_offset = 0;
+                    updateOctaveLeds();
+                    printf("[BRIDGE] Octave reset to 0 (both OCT- and OCT+ pressed)\n");
+                } else if (m_octave_offset > -3) {
                     m_octave_offset--;
                     updateOctaveLeds();
                     printf("[BRIDGE] Octave transposed to %d\n", m_octave_offset);
-                    fflush(stdout);
                 }
+                fflush(stdout);
                 break;
             }
             case HW_BTN_OCTAVE_UP:
             {
-                if (m_octave_offset < 3) {
+                m_octave_up_down = true;
+                if (m_octave_down_down) {
+                    m_octave_offset = 0;
+                    updateOctaveLeds();
+                    printf("[BRIDGE] Octave reset to 0 (both OCT- and OCT+ pressed)\n");
+                } else if (m_octave_offset < 3) {
                     m_octave_offset++;
                     updateOctaveLeds();
                     printf("[BRIDGE] Octave transposed to %d\n", m_octave_offset);
-                    fflush(stdout);
                 }
+                fflush(stdout);
                 break;
             }
             case HW_BTN_BANK_A:
@@ -772,21 +784,29 @@ public:
             }
             case HW_BTN_STEP_PREV:
             {
+                ae.setBBT(1, -1);
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
             }
             case HW_BTN_STEP_NEXT:
             {
+                ae.setBBT(1, 1);
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
             }
             case HW_BTN_BAR_PREV:
             {
+                if (isLocateDown() || isShiftDown()) {
+                    ae.seek(0);
+                } else {
+                    ae.setBBT(0, -1);
+                }
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BACK, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
             }
             case HW_BTN_BAR_NEXT:
             {
+                ae.setBBT(0, 1);
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
             }
@@ -840,6 +860,12 @@ public:
                 break;
             case HW_BTN_ENTER:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_OCTAVE_DOWN:
+                m_octave_down_down = false;
+                break;
+            case HW_BTN_OCTAVE_UP:
+                m_octave_up_down = false;
                 break;
             case HW_BTN_BANK_A:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A, contracts::DeviceControlContracts::BTN_RELEASED);
@@ -956,6 +982,21 @@ public:
     {
         mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
                                                juce::MidiMessage::pitchWheel(1, val));
+    }
+    void on_mod_wheel(int val) override
+    {
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::controllerEvent(1, 1, val));
+    }
+    void on_expression_pedal(int val) override
+    {
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::controllerEvent(1, 11, val));
+    }
+    void on_aftertouch(int val) override
+    {
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::channelPressureChange(1, val));
     }
     void on_sustain_pedal(bool down) override
     {
