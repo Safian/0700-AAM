@@ -30,8 +30,27 @@ namespace mt
     public:
         using Ptr = juce::ReferenceCountedObjectPtr<AVoice>;
 
-        explicit AVoice( MTIAtomicProgramMaster& Master, ASoundSlice* Slice = nullptr )
+        explicit AVoice( const MTIAtomicProgramMaster& Master, ASoundSlice* Slice = nullptr )
             : ISynthVoice( Master, Slice ) {}
+
+        void setPitchRatio( double ratio ) { pitchRatio = ratio; }
+
+        void process( juce::AudioBuffer<float>& Buffer ) override
+        {
+            if( isRunning() )
+            {
+                const auto numSamples = Buffer.getNumSamples();
+                ASliceRenderer::getNextBlock( tempBuffer, master.pitchRatio.load() * pitchRatio );
+                gain.applyGain( tempBuffer, numSamples );
+                Buffer.addFrom( 0, 0, tempBuffer, 0, 0, numSamples );
+                Buffer.addFrom( 1, 0, tempBuffer, 1, 0, numSamples );
+                if( hasFinished() )
+                    makeFree();
+            }
+        }
+
+    private:
+        double pitchRatio{ 1.0 };
     };
 
 } // namespace mt

@@ -62,99 +62,42 @@ namespace mt
 
         if( pKeys->isNoteEffectivelyMuted( Note ) ) return;
 
-        //if( !pKeys->isSourceAssigned( Note ) ) return;
-
-        return;
-        /*
-        //DBG( "AA" << Note << " " << Velocity );
-        auto vt = pKeys->getSampleVT( Note );
-        if( vt.isValid() )
+        MTIKeys* pNote = pKeys->getKeysClip( Note );
+        int root = Note;
+        if( pNote )
         {
-            // No polyphony on the same note number...
-            auto voice = isNotePlaying( Note );
-            if( nullptr == voice )
-                voice = findFreeVoice( Note );
-
-            if( nullptr != voice )
+            root = pNote->keyNote.get();
+            if( root < 0 || root > 127 ) root = Note;
+        }
+        else
+        {
+            // Fallback to first assigned keygroup sample for chromatic keybed playback
+            auto assigned = pKeys->getAssignedNotes();
+            if( !assigned.empty() )
             {
-                auto noteData = pKeys->getSampleForNote( Note );
-
-                std::vector<AFile::Ptr> sounds;
-                std::vector<int>        validLayers;
-                for( auto i = 0; i < MAX_LAYERS; ++i )
+                pNote = pKeys->getKeysClip( assigned[0] );
+                if( pNote )
                 {
-                    auto vPtr = AudioFileManager::Instance().GetOrLoad( noteData.layer[i].source );
-                    sounds.push_back( vPtr );
-                    if( vPtr )
-                    {
-                        validLayers.push_back( i );
-                    }
-                } // for
-
-                switch( noteData.layerPlay )
-                {
-                    break;
-                    case LayerPlayType::RANDOM:
-                        noteData.idx = AudIO::utils::random<int>( 0, ( (int)validLayers.size() - 1 ) );
-                        break;
-                    case LayerPlayType::CYCLE:
-                    {
-                        auto loc = std::find( begin( validLayers ), end( validLayers ), noteData.idx );
-                        if( ++loc != validLayers.end() ) noteData.idx = *loc;
-                        else noteData.idx = validLayers[0];
-                    }
-                    break;
-                    case LayerPlayType::VELOCITY:
-                    {
-                        noteData.idx = -1;
-                        for( auto i = 0; i < validLayers.size(); ++i )
-                        {
-                            auto l = validLayers[i];
-                            if( noteData.layer[l].velocityStart <= Velocity && Velocity < noteData.layer[l].velocityEnd )
-                            {
-                                noteData.idx = l;
-                                break;
-                            }
-                        }
-                    }
-                }; // switch
-
-                if( ( -1 < noteData.idx && noteData.idx < MAX_LAYERS ) && ( sounds[noteData.idx] ) )
-                {
-                    SynthVoice::Params* VoiceParameters = &voice->p;
-
-                    auto vel  = CommonUtils::midiToGain( Velocity );
-                    auto gain = ( noteData.gain * noteData.layer[noteData.idx].gain );
-                    gain      = LayerPlayType::VELOCITY == noteData.layerPlay ? ( gain ) : ( gain * vel );
-
-                    VoiceParameters->voice           = sounds[noteData.idx];
-                    VoiceParameters->midiNote        = Note;
-                    VoiceParameters->rootNote        = noteData.keyNote;
-                    VoiceParameters->startSample     = noteData.layer[noteData.idx].offset;
-                    VoiceParameters->lengthInSamples = sounds[noteData.idx]->getNumSamplesPerChannel();
-                    VoiceParameters->gain            = gain;
-                    VoiceParameters->pan             = noteData.pan + noteData.layer[noteData.idx].pan;
-                    VoiceParameters->sampleRate      = (float)sampleRate();
-                    VoiceParameters->lfo             = noteData.lfo;
-                    VoiceParameters->envelope        = noteData.env;
-
-                    VoiceParameters->pitchFactor = AudIO::utils::calculatePitchFactor( noteData.semi, noteData.fine );
-
-                    // Queue this voice for processing...
-                    addVoiceForPlayback( voice, Note );
-                    //if( added ) DBG( "NoteAdded" );
-                }
-
-                // Simultaneous plays...
-                for( auto i = 0; i < MAX_SIMUL_ACTIONS; ++i )
-                {
-                    if( -1 != noteData.sPlay[i] )
-                        noteOn( noteData.sPlay[i], Velocity );
-                    if( -1 != noteData.sMute[i] )
-                        noteMute( noteData.sMute[i], true );
+                    root = pNote->keyNote.get();
+                    if( root < 0 || root > 127 ) root = assigned[0];
                 }
             }
-        }*/
-    }
+        }
 
-};
+        if( pNote )
+        {
+            auto notePoly = pNote->polyPhony.get();
+            if( auto soundSlice = pNote->getSourceSlice( 0 ) )
+            {
+                if( auto voice = dynamic_cast<AVoice*>( getFreeVoice( Note, notePoly ) ) )
+                {
+                    double pr = std::pow( 2.0, ( Note - root ) / 12.0 );
+                    voice->setPitchRatio( pr );
+                    voice->setSlice( soundSlice );
+                    voice->noteOn( Note, Velocity );
+                    addVoiceForPlayback( voice );
+                }
+            }
+        }
+    }
+}

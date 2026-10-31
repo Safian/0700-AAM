@@ -274,244 +274,258 @@ private:
         return NULL;
     }
 
-    void handle_packet(const uint8_t* buf, ssize_t n, int port) {
+    struct MidiParser {
+        uint8_t status = 0;
+        uint8_t data[2] = { 0, 0 };
+        int data_idx = 0;
+        int expected_data = 0;
+        bool in_sysex = false;
+
+        template<typename Callback>
+        void feed(const uint8_t* buf, ssize_t n, Callback&& cb) {
+            for (ssize_t i = 0; i < n; ++i) {
+                uint8_t b = buf[i];
+                if (b >= 0xF8) {
+                    continue; // Skip realtime clock
+                }
+                if (b == 0xF0) {
+                    in_sysex = true;
+                    status = 0;
+                    continue;
+                }
+                if (b == 0xF7) {
+                    in_sysex = false;
+                    status = 0;
+                    continue;
+                }
+                if (in_sysex) {
+                    continue;
+                }
+                if (b & 0x80) {
+                    status = b;
+                    data_idx = 0;
+                    switch (b & 0xF0) {
+                        case 0x80:
+                        case 0x90:
+                        case 0xA0:
+                        case 0xB0:
+                        case 0xE0:
+                            expected_data = 2;
+                            break;
+                        case 0xC0:
+                        case 0xD0:
+                            expected_data = 1;
+                            break;
+                        default:
+                            expected_data = 0;
+                            break;
+                    }
+                } else if (status != 0) {
+                    data[data_idx++] = b;
+                    if (data_idx == expected_data) {
+                        cb(status, data[0], (expected_data > 1 ? data[1] : 0));
+                        data_idx = 0; // ready for running status
+                    }
+                }
+            }
+        }
+    };
+
+    MidiParser m_parser0;
+    MidiParser m_parser1;
+    MidiParser m_parser2;
+
+    static inline int get_akai_pad_index(int note) {
+        switch (note) {
+            case 37: return 0;  // Pad 1  (A01)
+            case 36: return 1;  // Pad 2  (A02)
+            case 42: return 2;  // Pad 3  (A03)
+            case 82: return 3;  // Pad 4  (A04)
+            case 40: return 4;  // Pad 5  (A05)
+            case 38: return 5;  // Pad 6  (A06)
+            case 46: return 6;  // Pad 7  (A07)
+            case 44: return 7;  // Pad 8  (A08)
+            case 48: return 8;  // Pad 9  (A09)
+            case 47: return 9;  // Pad 10 (A10)
+            case 45: return 10; // Pad 11 (A11)
+            case 43: return 11; // Pad 12 (A12)
+            case 49: return 12; // Pad 13 (A13)
+            case 55: return 13; // Pad 14 (A14)
+            case 51: return 14; // Pad 15 (A15)
+            case 53: return 15; // Pad 16 (A16)
+            default: return -1;
+        }
+    }
+
+    static inline HardwareButton get_akai_button(int note) {
+        switch (note) {
+            // Bal szekcio (Tempo / Metro / Arp / Octave)
+            case 53:  return HW_BTN_TAP_TEMPO;
+            case 112: return HW_BTN_METRONOME;
+            case 118: return HW_BTN_ARP;
+            case 119: return HW_BTN_LATCH;
+            case 7:   return HW_BTN_OCTAVE_DOWN;
+            case 10:  return HW_BTN_OCTAVE_UP;
+
+            // Bal-kozepso szekcio (Bank A-D + Touch Strip)
+            case 35:  return HW_BTN_BANK_A;
+            case 36:  return HW_BTN_BANK_B;
+            case 37:  return HW_BTN_BANK_C;
+            case 38:  return HW_BTN_BANK_D;
+            case 4:   return HW_BTN_TOUCH_STRIP;
+            case 42:  return HW_BTN_TOUCH_FX;
+            case 11:  return HW_BTN_NOTE_REPEAT;
+
+            // Kozepso 2x4 oszlop
+            case 39:  return HW_BTN_FULL_LEVEL;
+            case 40:  return HW_BTN_16_LEVELS;
+            case 9:   return HW_BTN_ERASE;
+            case 122: return HW_BTN_COPY;
+            case 50:  return HW_BTN_SHIFT; // Left Shift
+            case 123: return HW_BTN_MENU;
+            case 121: return HW_BTN_SOUNDS;
+            case 52:  return HW_BTN_MAIN;
+
+            // Jobb felso (Q-Link gomb + Data Dial + +/-)
+            case 0:   return HW_BTN_QLINK;
+            case 111: return HW_BTN_ENTER; // Data Dial Push
+            case 55:  return HW_BTN_MINUS;
+            case 54:  return HW_BTN_PLUS;
+
+            // 2x5 Mod matrix
+            case 2:   return HW_BTN_PROG_EDIT;
+            case 117: return HW_BTN_GRID;
+            case 116: return HW_BTN_TRACK_MIX;
+            case 43:  return HW_BTN_TRACK_MUTE;
+            case 75:  return HW_BTN_AUTOMATION;
+            case 120: return HW_BTN_KEYBOARD_CONTROL;
+            case 6:   return HW_BTN_SAMPLE_EDIT;
+            case 12:  return HW_BTN_TC;
+            case 67:  return HW_BTN_UNDO;
+            case 49:  return HW_BTN_SHIFT; // Right Shift
+
+            // Transzport es Locate
+            case 68:  return HW_BTN_STEP_PREV; // <
+            case 69:  return HW_BTN_STEP_NEXT; // >
+            case 70:  return HW_BTN_LOCATE;
+            case 71:  return HW_BTN_BAR_PREV;  // <<
+            case 72:  return HW_BTN_BAR_NEXT;  // >>
+            case 73:  return HW_BTN_REC;
+            case 80:  return HW_BTN_OVERDUB;
+            case 81:  return HW_BTN_STOP;
+            case 82:  return HW_BTN_PLAY;
+            case 83:  return HW_BTN_PLAY_START;
+
+            default:  return HW_BTN_NONE;
+        }
+    }
+
+    void handle_midi_message(int port, uint8_t status, uint8_t d0, uint8_t d1) {
         if (!m_listener) return;
 
-        for (ssize_t i = 0; i < n; ++i) {
-            uint8_t b = buf[i];
-            if ((b & 0xF0) == 0x90 && (i + 2 < n)) {
-                int ch = b & 0x0F;
-                int note = buf[i+1], vel = buf[i+2];
+        int type = status & 0xF0;
+        int ch   = status & 0x0F;
 
-                if (port == 1) {
-                    // Port 1 is MPC Private: Control Surface (buttons, pads, Q-Link touch)
-                    // Notes here MUST NEVER trigger keybed notes!
-
-                    // 1. Performance Pads (ch == 9, Notes 36..51) - prioritized to avoid collision with button notes
-                    if (ch == 9) {
-                        int pad_idx = note - 36;
-                        if (pad_idx >= 0 && pad_idx < 16) {
-                            if (vel > 0) m_listener->on_pad_note_on(pad_idx, vel);
-                            else m_listener->on_pad_note_off(pad_idx);
-                        }
-                    }
-                    // 2. Q-Link capacitive touch tops (Port 1, ch 15, Notes 84..87)
-                    else if (ch == 15 && (note >= 84 && note <= 87)) {
+        if (port == 1) {
+            // Port 1 is MPC Private: Control Surface, Pads, Keybed strictly separated by channel
+            if (ch == 0) {
+                // CH 1: 45 Physical Buttons, Q-Links, Data Dial, Touch Strip
+                if (type == 0x90) {
+                    int note = d0, vel = d1;
+                    if (note >= 84 && note <= 87) {
                         m_listener->on_encoder_touch(note - 84, vel > 0);
-                    }
-                    // 2. Hardware Octave buttons (Note 7 = Down, Note 10 = Up)
-                    else if (note == 7) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_OCTAVE_DOWN);
-                        else m_listener->on_button_release(HW_BTN_OCTAVE_DOWN);
-                    } else if (note == 10) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_OCTAVE_UP);
-                        else m_listener->on_button_release(HW_BTN_OCTAVE_UP);
-                    }
-                    // 3. Transport buttons
-                    else if (note == 81 || note == 117) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_STOP);
-                        else m_listener->on_button_release(HW_BTN_STOP);
-                    } else if (note == 82 || note == 118) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_PLAY);
-                        else m_listener->on_button_release(HW_BTN_PLAY);
-                    } else if (note == 83) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_PLAY_START);
-                        else m_listener->on_button_release(HW_BTN_PLAY_START);
-                    } else if (note == 73 || note == 119) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_REC);
-                        else m_listener->on_button_release(HW_BTN_REC);
-                    } else if (note == 80 || note == 116) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_OVERDUB);
-                        else m_listener->on_button_release(HW_BTN_OVERDUB);
-                    }
-                    // 4. Tap Tempo
-                    else if ((note == 53 || note == 35) && (ch == 15 || ch == 0)) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_TAP_TEMPO);
-                    }
-                    // 5. Value +/- buttons
-                    else if (note == 54) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_PLUS);
-                        else m_listener->on_button_release(HW_BTN_PLUS);
-                    } else if (note == 55) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_MINUS);
-                        else m_listener->on_button_release(HW_BTN_MINUS);
-                    }
-                    // 6. Data Wheel Click (ENTER) & Cursors
-                    else if (note == 111 || note == 60) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_ENTER);
-                        else m_listener->on_button_release(HW_BTN_ENTER);
-                    } else if (note == 56 || note == 65) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_CURSOR_UP);
-                        else m_listener->on_button_release(HW_BTN_CURSOR_UP);
-                    } else if (note == 57 || note == 66) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_CURSOR_DOWN);
-                        else m_listener->on_button_release(HW_BTN_CURSOR_DOWN);
-                    } else if (note == 68) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_CURSOR_LEFT);
-                        else m_listener->on_button_release(HW_BTN_CURSOR_LEFT);
-                    } else if (note == 69) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_CURSOR_RIGHT);
-                        else m_listener->on_button_release(HW_BTN_CURSOR_RIGHT);
-                    }
-                    // 7. Navigation & Modes
-                    else if (note == 67 || note == 20) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_UNDO);
-                    } else if (note == 9 || note == 21) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_ERASE);
-                    } else if (note == 39) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_FULL_LEVEL);
-                    } else if (note == 40 || note == 59) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_16_LEVELS);
-                    } else if (note == 11) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_NOTE_REPEAT);
-                    } else if (note == 49) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_SHIFT);
-                        else m_listener->on_button_release(HW_BTN_SHIFT);
-                    } else if (note == 51) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_MAIN);
-                    } else if (note == 50) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_BROWSE);
-                    } else if (note == 52 || note == 64) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_GRID);
-                    } else if (note == 47 || note == 58) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_STEP_SEQ);
-                    } else if (note == 48 || note == 61) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_SAMPLER);
-                    } else if (note == 46) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_SAMPLE_EDIT);
-                    } else if (note == 45) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_PROG_EDIT);
-                    } else if (note == 43 || note == 62) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_PAD_MIX);
-                    } else if (note == 44 || note == 63) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_TRACK_MIX);
-                    } else if (note == 41 || note == 60) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_PAD_MUTE);
-                    } else if (note == 42 || note == 61) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_TRACK_MUTE);
-                    } else if (note == 38 || note == 59) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_NEXT_SEQ);
-                    } else if (note == 37 || note == 123) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_MENU);
-                    }
-                    // 8. Pad Bank buttons (Note 106..109)
-                    else if (note == 106) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_BANK_A);
-                        else m_listener->on_button_release(HW_BTN_BANK_A);
-                    } else if (note == 107) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_BANK_B);
-                        else m_listener->on_button_release(HW_BTN_BANK_B);
-                    } else if (note == 108) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_BANK_C);
-                        else m_listener->on_button_release(HW_BTN_BANK_C);
-                    } else if (note == 109) {
-                        if (vel > 0) m_listener->on_button_press(HW_BTN_BANK_D);
-                        else m_listener->on_button_release(HW_BTN_BANK_D);
-                    }
-                    else {
-                        printf("[AKAI-BTN] Port 1 Note %d (0x%02X) ch=%d vel=%d\n", note, note, ch, vel);
-                        fflush(stdout);
-                    }
-                } else {
-                    // Port 0 (Keybed) or Port 2 (DIN MIDI In)
-                    if (ch == 9) {
-                        int pad_idx = note - 36;
-                        if (pad_idx >= 0 && pad_idx < 16) {
-                            if (vel > 0) m_listener->on_pad_note_on(pad_idx, vel);
-                            else m_listener->on_pad_note_off(pad_idx);
+                    } else if (note == 78) {
+                        // Touch strip finger touch
+                    } else {
+                        HardwareButton btn = get_akai_button(note);
+                        if (btn != HW_BTN_NONE) {
+                            if (vel > 0) m_listener->on_button_press(btn);
+                            else m_listener->on_button_release(btn);
+                        } else {
+                            printf("[AKAI-BTN] Unmapped Port 1 Note %d (0x%02X) vel=%d\n", note, note, vel);
+                            fflush(stdout);
                         }
-                    } else {
-                        if (vel > 0) m_listener->on_keybed_note_on(note, vel);
-                        else m_listener->on_keybed_note_off(note);
                     }
-                }
-                i += 2;
-            } else if ((b & 0xF0) == 0x80 && (i + 2 < n)) {
-                int ch = b & 0x0F;
-                int note = buf[i+1];
-
-                if (port == 1) {
-                    if (ch == 9) {
-                        int pad_idx = note - 36;
-                        if (pad_idx >= 0 && pad_idx < 16) m_listener->on_pad_note_off(pad_idx);
-                    } else if (ch == 15 && (note >= 84 && note <= 87)) {
+                } else if (type == 0x80) {
+                    int note = d0;
+                    if (note >= 84 && note <= 87) {
                         m_listener->on_encoder_touch(note - 84, false);
-                    } else if (note == 7) {
-                        m_listener->on_button_release(HW_BTN_OCTAVE_DOWN);
-                    } else if (note == 10) {
-                        m_listener->on_button_release(HW_BTN_OCTAVE_UP);
-                    } else if (note == 81 || note == 117) {
-                        m_listener->on_button_release(HW_BTN_STOP);
-                    } else if (note == 82 || note == 118) {
-                        m_listener->on_button_release(HW_BTN_PLAY);
-                    } else if (note == 83) {
-                        m_listener->on_button_release(HW_BTN_PLAY_START);
-                    } else if (note == 73 || note == 119) {
-                        m_listener->on_button_release(HW_BTN_REC);
-                    } else if (note == 80 || note == 116) {
-                        m_listener->on_button_release(HW_BTN_OVERDUB);
-                    } else if (note == 54) {
-                        m_listener->on_button_release(HW_BTN_PLUS);
-                    } else if (note == 55) {
-                        m_listener->on_button_release(HW_BTN_MINUS);
-                    } else if (note == 111 || note == 60) {
-                        m_listener->on_button_release(HW_BTN_ENTER);
-                    } else if (note == 56 || note == 65) {
-                        m_listener->on_button_release(HW_BTN_CURSOR_UP);
-                    } else if (note == 57 || note == 66) {
-                        m_listener->on_button_release(HW_BTN_CURSOR_DOWN);
-                    } else if (note == 68) {
-                        m_listener->on_button_release(HW_BTN_CURSOR_LEFT);
-                    } else if (note == 69) {
-                        m_listener->on_button_release(HW_BTN_CURSOR_RIGHT);
-                    } else if (note == 49) {
-                        m_listener->on_button_release(HW_BTN_SHIFT);
-                    } else if (note == 106) {
-                        m_listener->on_button_release(HW_BTN_BANK_A);
-                    } else if (note == 107) {
-                        m_listener->on_button_release(HW_BTN_BANK_B);
-                    } else if (note == 108) {
-                        m_listener->on_button_release(HW_BTN_BANK_C);
-                    } else if (note == 109) {
-                        m_listener->on_button_release(HW_BTN_BANK_D);
-                    }
-                } else {
-                    // Port 0 or Port 2 NoteOff
-                    if (ch == 9) {
-                        int pad_idx = note - 36;
-                        if (pad_idx >= 0 && pad_idx < 16) m_listener->on_pad_note_off(pad_idx);
                     } else {
-                        m_listener->on_keybed_note_off(note);
+                        HardwareButton btn = get_akai_button(note);
+                        if (btn != HW_BTN_NONE) {
+                            m_listener->on_button_release(btn);
+                        }
+                    }
+                } else if (type == 0xB0) {
+                    int cc_num = d0, cc_val = d1;
+                    if (cc_num >= 16 && cc_num <= 19) {
+                        // Q-Link 1..4 relative rotary
+                        int delta = (cc_val < 64) ? cc_val : (cc_val - 128);
+                        m_listener->on_encoder_turn(cc_num - 16, delta);
+                    } else if (cc_num == 100) {
+                        // Data Dial relative rotary (CC 100 on MPC Key 61!)
+                        int delta = (cc_val < 64) ? cc_val : (cc_val - 128);
+                        m_listener->on_jog_dial(delta);
+                    } else if (cc_num == 33 || cc_num == 69) {
+                        m_listener->on_touch_strip(cc_val);
                     }
                 }
-                i += 2;
-            } else if ((b & 0xF0) == 0xB0 && (i + 2 < n)) {
-                int cc_num = buf[i+1], cc_val = buf[i+2];
-                if (cc_num >= 16 && cc_num <= 19) {
-                    int k = cc_num - 16;
-                    int delta = (cc_val < 64) ? cc_val : (cc_val - 128);
-                    m_listener->on_encoder_turn(k, delta);
-                } else if (cc_num == 60) {
-                    int delta = (cc_val < 64) ? cc_val : (cc_val - 128);
-                    m_listener->on_jog_dial(delta);
-                } else if (cc_num == 64) {
-                    m_listener->on_sustain_pedal(cc_val >= 64);
-                } else if (cc_num == 69 || cc_num == 33) {
-                    m_listener->on_touch_strip(cc_val);
-                } else if (cc_num == 117) {
-                    if (cc_val > 0) m_listener->on_button_press(HW_BTN_STOP);
-                } else if (cc_num == 118) {
-                    if (cc_val > 0) m_listener->on_button_press(HW_BTN_PLAY);
-                } else if (cc_num == 119) {
-                    if (cc_val > 0) m_listener->on_button_press(HW_BTN_REC);
-                } else if (cc_num == 116) {
-                    if (cc_val > 0) m_listener->on_button_press(HW_BTN_OVERDUB);
+            } else if (ch == 9) {
+                // CH 10: 16 Performance Pads (Akai GM layout)
+                int pad_idx = get_akai_pad_index(d0);
+                if (pad_idx >= 0 && pad_idx < 16) {
+                    if (type == 0x90) {
+                        if (d1 > 0) m_listener->on_pad_note_on(pad_idx, d1);
+                        else m_listener->on_pad_note_off(pad_idx);
+                    } else if (type == 0x80) {
+                        m_listener->on_pad_note_off(pad_idx);
+                    }
                 }
-                i += 2;
-            } else if ((b & 0xF0) == 0xE0 && (i + 2 < n)) {
-                int lsb = buf[i+1], msb = buf[i+2];
-                m_listener->on_pitch_bend((msb << 7) | lsb);
-                i += 2;
+            } else if (ch == 15) {
+                // CH 16: 61 Keybed Keys, Wheels, and Rear Pedals (NEVER triggers buttons!)
+                if (type == 0x90) {
+                    if (d1 > 0) m_listener->on_keybed_note_on(d0, d1);
+                    else m_listener->on_keybed_note_off(d0);
+                } else if (type == 0x80) {
+                    m_listener->on_keybed_note_off(d0);
+                } else if (type == 0xE0) {
+                    int lsb = d0, msb = d1;
+                    m_listener->on_pitch_bend((msb << 7) | lsb);
+                } else if (type == 0xB0) {
+                    int cc_num = d0, cc_val = d1;
+                    if (cc_num == 64) {
+                        m_listener->on_sustain_pedal(cc_val >= 64);
+                    }
+                }
+            }
+        } else {
+            // Port 0 (Keybed) or Port 2 (DIN MIDI In)
+            if (ch == 9) {
+                int pad_idx = get_akai_pad_index(d0);
+                if (pad_idx < 0 && d0 >= 36 && d0 < 52) pad_idx = d0 - 36;
+                if (pad_idx >= 0 && pad_idx < 16) {
+                    if (type == 0x90) {
+                        if (d1 > 0) m_listener->on_pad_note_on(pad_idx, d1);
+                        else m_listener->on_pad_note_off(pad_idx);
+                    } else if (type == 0x80) {
+                        m_listener->on_pad_note_off(pad_idx);
+                    }
+                }
+            } else {
+                if (type == 0x90) {
+                    if (d1 > 0) m_listener->on_keybed_note_on(d0, d1);
+                    else m_listener->on_keybed_note_off(d0);
+                } else if (type == 0x80) {
+                    m_listener->on_keybed_note_off(d0);
+                } else if (type == 0xE0) {
+                    int lsb = d0, msb = d1;
+                    m_listener->on_pitch_bend((msb << 7) | lsb);
+                } else if (type == 0xB0) {
+                    int cc_num = d0, cc_val = d1;
+                    if (cc_num == 64) {
+                        m_listener->on_sustain_pedal(cc_val >= 64);
+                    }
+                }
             }
         }
     }
@@ -522,21 +536,25 @@ private:
             if (m_in0) {
                 ssize_t n = snd_rawmidi_read(m_in0, buf, sizeof(buf));
                 if (n > 0) {
-                    if (m_out2) snd_rawmidi_write(m_out2, buf, n);
-                    handle_packet(buf, n, 0);
+                    m_parser0.feed(buf, n, [this](uint8_t s, uint8_t d0, uint8_t d1) {
+                        handle_midi_message(0, s, d0, d1);
+                    });
                 }
             }
             if (m_in1) {
                 ssize_t n = snd_rawmidi_read(m_in1, buf, sizeof(buf));
                 if (n > 0) {
-                    if (m_out2) snd_rawmidi_write(m_out2, buf, n);
-                    handle_packet(buf, n, 1);
+                    m_parser1.feed(buf, n, [this](uint8_t s, uint8_t d0, uint8_t d1) {
+                        handle_midi_message(1, s, d0, d1);
+                    });
                 }
             }
             if (m_in2) {
                 ssize_t n = snd_rawmidi_read(m_in2, buf, sizeof(buf));
                 if (n > 0) {
-                    handle_packet(buf, n, 2);
+                    m_parser2.feed(buf, n, [this](uint8_t s, uint8_t d0, uint8_t d1) {
+                        handle_midi_message(2, s, d0, d1);
+                    });
                 }
             }
             usleep(1000);
@@ -558,20 +576,14 @@ public:
         snd_rawmidi_open(&m_in1, &m_out1, "hw:0,0,1", SND_RAWMIDI_NONBLOCK);
         snd_rawmidi_open(&m_in2, &m_out2, "hw:0,0,2", SND_RAWMIDI_NONBLOCK);
 
-        uint8_t inquiry[] = { 0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7 };
-        uint8_t akai_init[] = { 0xF0, 0x47, 0x7F, 0x4B, 0x60, 0x00, 0x04, 0x40, 0x00, 0x00, 0x00, 0xF7 };
-        if (m_out0) {
-            snd_rawmidi_write(m_out0, inquiry, sizeof(inquiry));
-            snd_rawmidi_write(m_out0, akai_init, sizeof(akai_init));
-        }
-        if (m_out1) {
-            snd_rawmidi_write(m_out1, inquiry, sizeof(inquiry));
-            snd_rawmidi_write(m_out1, akai_init, sizeof(akai_init));
-        }
+        // Mode 0x41: Port 1 Private enabled, Port 0 Public disabled, transport MMC disabled
+        uint8_t akai_init[] = { 0xF0, 0x47, 0x7F, 0x4B, 0x60, 0x00, 0x01, 0x41, 0xF7 };
+        if (m_out0) snd_rawmidi_write(m_out0, akai_init, sizeof(akai_init));
+        if (m_out1) snd_rawmidi_write(m_out1, akai_init, sizeof(akai_init));
 
         m_running = true;
         pthread_create(&m_thread, NULL, thread_entry, this);
-        printf("[AKAI-CONTROLLER] RawMIDI (hw:0,0,0 keybed, hw:0,0,1 controls, hw:0,0,2 DIN OUT) -> STARTED\n");
+        printf("[AKAI-CONTROLLER] RawMIDI (hw:0,0,0 keybed, hw:0,0,1 controls, hw:0,0,2 DIN OUT) -> STARTED (Mode 0x41 Private)\n");
         return true;
     }
 
@@ -583,15 +595,16 @@ public:
             case HW_LED_PLAY: note = 82; break;
             case HW_LED_STOP: note = 81; break;
             case HW_LED_REC: note = 73; break;
+            case HW_LED_OVERDUB: note = 80; break;
             case HW_LED_OCTAVE_DOWN: note = 7; break;
             case HW_LED_OCTAVE_UP: note = 10; break;
             case HW_LED_FULL_LEVEL: note = 39; break;
             case HW_LED_16_LEVELS: note = 40; break;
             case HW_LED_NOTE_REPEAT: note = 11; break;
-            case HW_LED_BANK_A: note = 106; break;
-            case HW_LED_BANK_B: note = 107; break;
-            case HW_LED_BANK_C: note = 108; break;
-            case HW_LED_BANK_D: note = 109; break;
+            case HW_LED_BANK_A: note = 35; break;
+            case HW_LED_BANK_B: note = 36; break;
+            case HW_LED_BANK_C: note = 37; break;
+            case HW_LED_BANK_D: note = 38; break;
             default: break;
         }
         if (note != -1) {

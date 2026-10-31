@@ -27,9 +27,39 @@ private:
     int m_cmd_fd = -1;
     int m_cmd_fd_w = -1;
     std::string m_cmd_buf;
+    bool m_shift_pressed = false;
+    bool m_locate_pressed = false;
+    int m_current_bank = 0;
+    int m_octave_offset = 0;
+    int m_key_pitch_map[128];
+
+    bool isShiftDown() const { return m_shift_pressed; }
+    bool isLocateDown() const { return m_locate_pressed; }
+
+    void updateBankLeds()
+    {
+        if (m_hw && m_hw->control_surface()) {
+            int b = m_current_bank % 4;
+            m_hw->control_surface()->set_led(HW_LED_BANK_A, b == 0);
+            m_hw->control_surface()->set_led(HW_LED_BANK_B, b == 1);
+            m_hw->control_surface()->set_led(HW_LED_BANK_C, b == 2);
+            m_hw->control_surface()->set_led(HW_LED_BANK_D, b == 3);
+        }
+    }
+
+    void updateOctaveLeds()
+    {
+        if (m_hw && m_hw->control_surface()) {
+            m_hw->control_surface()->set_led(HW_LED_OCTAVE_DOWN, m_octave_offset < 0);
+            m_hw->control_surface()->set_led(HW_LED_OCTAVE_UP, m_octave_offset > 0);
+        }
+    }
 
     void sendButtonMsg(int buttonCode, int state)
     {
+        if (buttonCode == contracts::DeviceControlContracts::BtnLedSequence::EN_SHIFT) {
+            contracts::shiftBtnState = (state == contracts::DeviceControlContracts::BTN_PRESSED);
+        }
         CPktMgr::HWMsg_t msg;
         msg.pktType = CPktMgr::EN_PKT_TYPE_BUTTON;
         msg.pktCmd = contracts::DeviceControlContracts::BtnCmd::EN_BTN_STATUS;
@@ -237,6 +267,7 @@ public:
         : m_framebuffer_img(juce::Image::ARGB, 1280, 800, false)
     {
         m_last_tap_time = std::chrono::steady_clock::now();
+        for (int i = 0; i < 128; ++i) m_key_pitch_map[i] = -1;
     }
 
     ~KickHardwareBridge() override
@@ -326,10 +357,28 @@ public:
         auto& ae = mt::getAudioInterface();
         switch (btn)
         {
+            case HW_BTN_SHIFT:
+            {
+                m_shift_pressed = true;
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_SHIFT, contracts::DeviceControlContracts::BTN_PRESSED);
+                break;
+            }
+            case HW_BTN_LOCATE:
+            {
+                m_locate_pressed = true;
+                break;
+            }
             case HW_BTN_STOP:
             {
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_STOP, contracts::DeviceControlContracts::BTN_PRESSED);
-                ae.setSequenceStop();
+                if (isShiftDown()) {
+                    // Shift + STOP: Return to start (01:01:00)
+                    ae.setSequenceStop();
+                    ae.setSequencePlay(ae.getSelectedSequence(), false, false);
+                    ae.setSequenceStop();
+                } else {
+                    ae.setSequenceStop();
+                }
                 ae.stopPreview();
                 auto sel = ae.getSelected();
                 for (int ch = 1; ch <= 16; ++ch) {
@@ -362,67 +411,6 @@ public:
                 }
                 break;
             }
-            case HW_BTN_GRID:
-            {
-                kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeGridView);
-                break;
-            }
-            case HW_BTN_BANK_A:
-            {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A, contracts::DeviceControlContracts::BTN_PRESSED);
-                if (m_hw && m_hw->control_surface()) {
-                    m_hw->control_surface()->set_led(HW_LED_BANK_A, true);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_B, false);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_C, false);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_D, false);
-                }
-                break;
-            }
-            case HW_BTN_BANK_B:
-            {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_B, contracts::DeviceControlContracts::BTN_PRESSED);
-                if (m_hw && m_hw->control_surface()) {
-                    m_hw->control_surface()->set_led(HW_LED_BANK_A, false);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_B, true);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_C, false);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_D, false);
-                }
-                break;
-            }
-            case HW_BTN_BANK_C:
-            {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_C, contracts::DeviceControlContracts::BTN_PRESSED);
-                if (m_hw && m_hw->control_surface()) {
-                    m_hw->control_surface()->set_led(HW_LED_BANK_A, false);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_B, false);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_C, true);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_D, false);
-                }
-                break;
-            }
-            case HW_BTN_BANK_D:
-            {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_D, contracts::DeviceControlContracts::BTN_PRESSED);
-                if (m_hw && m_hw->control_surface()) {
-                    m_hw->control_surface()->set_led(HW_LED_BANK_A, false);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_B, false);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_C, false);
-                    m_hw->control_surface()->set_led(HW_LED_BANK_D, true);
-                }
-                break;
-            }
-            case HW_BTN_CURSOR_UP:
-                on_jog_dial(1);
-                break;
-            case HW_BTN_CURSOR_DOWN:
-                on_jog_dial(-1);
-                break;
-            case HW_BTN_CURSOR_LEFT:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_PRESSED);
-                break;
-            case HW_BTN_CURSOR_RIGHT:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_PRESSED);
-                break;
             case HW_BTN_REC:
             {
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD, contracts::DeviceControlContracts::BTN_PRESSED);
@@ -435,17 +423,183 @@ public:
             }
             case HW_BTN_TAP_TEMPO:
             {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO, contracts::DeviceControlContracts::BTN_PRESSED);
-                m_tempo_edit_active = true;
-                auto now = std::chrono::steady_clock::now();
-                auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_tap_time).count();
-                m_last_tap_time = now;
-                if (diff >= 200 && diff <= 2000) {
-                    int tap_bpm = (int)(60000.0 / diff + 0.5);
-                    if (tap_bpm >= 30 && tap_bpm <= 300) {
-                        ae.setSequenceBPM(ae.getSelectedSequence(), tap_bpm);
-                        ae.setMasterBPM(tap_bpm);
+                if (isShiftDown()) {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MASTER, contracts::DeviceControlContracts::BTN_PRESSED);
+                } else {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO, contracts::DeviceControlContracts::BTN_PRESSED);
+                    m_tempo_edit_active = true;
+                    auto now = std::chrono::steady_clock::now();
+                    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_tap_time).count();
+                    m_last_tap_time = now;
+                    if (diff >= 200 && diff <= 2000) {
+                        int tap_bpm = (int)(60000.0 / diff + 0.5);
+                        if (tap_bpm >= 30 && tap_bpm <= 300) {
+                            ae.setSequenceBPM(ae.getSelectedSequence(), tap_bpm);
+                            ae.setMasterBPM(tap_bpm);
+                        }
                     }
+                }
+                break;
+            }
+            case HW_BTN_METRONOME:
+            {
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeOptions);
+                } else {
+                    auto& metronome = mt::getSettings().metronome;
+                    metronome.enabled = !metronome.enabled();
+                    printf("[BRIDGE] Metronome %s\n", metronome.enabled() ? "ON" : "OFF");
+                    fflush(stdout);
+                }
+                break;
+            }
+            case HW_BTN_ARP:
+            {
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadPerform);
+                } else {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT, contracts::DeviceControlContracts::BTN_PRESSED);
+                }
+                break;
+            }
+            case HW_BTN_LATCH:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LATCH, contracts::DeviceControlContracts::BTN_PRESSED);
+                break;
+            }
+            case HW_BTN_OCTAVE_DOWN:
+            {
+                if (m_octave_offset > -3) {
+                    m_octave_offset--;
+                    updateOctaveLeds();
+                    printf("[BRIDGE] Octave transposed to %d\n", m_octave_offset);
+                    fflush(stdout);
+                }
+                break;
+            }
+            case HW_BTN_OCTAVE_UP:
+            {
+                if (m_octave_offset < 3) {
+                    m_octave_offset++;
+                    updateOctaveLeds();
+                    printf("[BRIDGE] Octave transposed to %d\n", m_octave_offset);
+                    fflush(stdout);
+                }
+                break;
+            }
+            case HW_BTN_BANK_A:
+            {
+                int bank = isShiftDown() ? 4 : 0;
+                m_current_bank = bank;
+                ae.setBank(juce::String::charToString((char)('A' + bank)));
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank, contracts::DeviceControlContracts::BTN_PRESSED);
+                updateBankLeds();
+                break;
+            }
+            case HW_BTN_BANK_B:
+            {
+                int bank = isShiftDown() ? 5 : 1;
+                m_current_bank = bank;
+                ae.setBank(juce::String::charToString((char)('A' + bank)));
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank, contracts::DeviceControlContracts::BTN_PRESSED);
+                updateBankLeds();
+                break;
+            }
+            case HW_BTN_BANK_C:
+            {
+                int bank = isShiftDown() ? 6 : 2;
+                m_current_bank = bank;
+                ae.setBank(juce::String::charToString((char)('A' + bank)));
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank, contracts::DeviceControlContracts::BTN_PRESSED);
+                updateBankLeds();
+                break;
+            }
+            case HW_BTN_BANK_D:
+            {
+                int bank = isShiftDown() ? 7 : 3;
+                m_current_bank = bank;
+                ae.setBank(juce::String::charToString((char)('A' + bank)));
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank, contracts::DeviceControlContracts::BTN_PRESSED);
+                updateBankLeds();
+                break;
+            }
+            case HW_BTN_TOUCH_STRIP:
+            {
+                break;
+            }
+            case HW_BTN_TOUCH_FX:
+            {
+                kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeXYView);
+                break;
+            }
+            case HW_BTN_NOTE_REPEAT:
+            {
+                if (isShiftDown()) {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LATCH, contracts::DeviceControlContracts::BTN_PRESSED);
+                } else {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT, contracts::DeviceControlContracts::BTN_PRESSED);
+                }
+                break;
+            }
+            case HW_BTN_FULL_LEVEL:
+            {
+                if (isShiftDown()) {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_HALF_LEVEL, contracts::DeviceControlContracts::BTN_PRESSED);
+                    contracts::DclContractsHelper::setHalfLevel(true);
+                } else {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_FULL_LEVEL, contracts::DeviceControlContracts::BTN_PRESSED);
+                    contracts::DclContractsHelper::setHalfLevel(false);
+                }
+                break;
+            }
+            case HW_BTN_16_LEVELS:
+            {
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadPerform);
+                } else {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_16LEVELS, contracts::DeviceControlContracts::BTN_PRESSED);
+                }
+                break;
+            }
+            case HW_BTN_ERASE:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_ERASE, contracts::DeviceControlContracts::BTN_PRESSED);
+                break;
+            }
+            case HW_BTN_COPY:
+            {
+                if (isShiftDown()) {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_ERASE, contracts::DeviceControlContracts::BTN_PRESSED);
+                } else {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_COPY, contracts::DeviceControlContracts::BTN_PRESSED);
+                }
+                break;
+            }
+            case HW_BTN_MENU:
+            {
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
+                } else {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeOptions);
+                }
+                break;
+            }
+            case HW_BTN_SOUNDS:
+            {
+                kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
+                break;
+            }
+            case HW_BTN_MAIN:
+            {
+                kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
+                break;
+            }
+            case HW_BTN_QLINK:
+            {
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuKnobEdit);
+                } else {
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LINK, contracts::DeviceControlContracts::BTN_PRESSED);
                 }
                 break;
             }
@@ -481,14 +635,22 @@ public:
                 }
                 break;
             }
-            case HW_BTN_MAIN:
+            case HW_BTN_PROG_EDIT:
             {
-                kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeXYView);
+                } else {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuProgramEdit);
+                }
                 break;
             }
-            case HW_BTN_BROWSE:
+            case HW_BTN_GRID:
             {
-                kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeSequencerView);
+                } else {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeGridView);
+                }
                 break;
             }
             case HW_BTN_STEP_SEQ:
@@ -496,29 +658,27 @@ public:
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeSequencerView);
                 break;
             }
+            case HW_BTN_TRACK_MIX:
+            {
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadMixer);
+                } else {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuChannelMixer);
+                }
+                break;
+            }
             case HW_BTN_PAD_MIX:
             {
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadMixer);
                 break;
             }
-            case HW_BTN_TRACK_MIX:
+            case HW_BTN_TRACK_MUTE:
             {
-                kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuChannelMixer);
-                break;
-            }
-            case HW_BTN_SAMPLER:
-            {
-                kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuSampler);
-                break;
-            }
-            case HW_BTN_SAMPLE_EDIT:
-            {
-                kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuSampleEdit);
-                break;
-            }
-            case HW_BTN_PROG_EDIT:
-            {
-                kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuProgramEdit);
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadMute);
+                } else {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuTrackMute);
+                }
                 break;
             }
             case HW_BTN_PAD_MUTE:
@@ -526,9 +686,66 @@ public:
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadMute);
                 break;
             }
-            case HW_BTN_TRACK_MUTE:
+            case HW_BTN_AUTOMATION:
             {
-                kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuTrackMute);
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_AUTOMATION, contracts::DeviceControlContracts::BTN_PRESSED);
+                break;
+            }
+            case HW_BTN_KEYBOARD_CONTROL:
+            {
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuMidiControl);
+                } else {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadPerform);
+                }
+                break;
+            }
+            case HW_BTN_SAMPLE_EDIT:
+            {
+                if (isShiftDown()) {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuSampler);
+                } else {
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuSampleEdit);
+                }
+                break;
+            }
+            case HW_BTN_SAMPLER:
+            {
+                kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuSampler);
+                break;
+            }
+            case HW_BTN_TC:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_TC, contracts::DeviceControlContracts::BTN_PRESSED);
+                break;
+            }
+            case HW_BTN_UNDO:
+            {
+                if (isShiftDown()) {
+                    ae.getUndoManager().redo();
+                } else {
+                    ae.getUndoManager().undo();
+                }
+                break;
+            }
+            case HW_BTN_STEP_PREV:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_PRESSED);
+                break;
+            }
+            case HW_BTN_STEP_NEXT:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_PRESSED);
+                break;
+            }
+            case HW_BTN_BAR_PREV:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BACK, contracts::DeviceControlContracts::BTN_PRESSED);
+                break;
+            }
+            case HW_BTN_BAR_NEXT:
+            {
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
             }
             case HW_BTN_NEXT_SEQ:
@@ -536,37 +753,18 @@ public:
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuNextSequence);
                 break;
             }
-            case HW_BTN_MENU:
-            {
-                kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeOptions);
+            case HW_BTN_CURSOR_UP:
+                on_jog_dial(1);
                 break;
-            }
-            case HW_BTN_FULL_LEVEL:
-            {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_FULL_LEVEL, contracts::DeviceControlContracts::BTN_PRESSED);
-                contracts::DclContractsHelper::setHalfLevel(false);
+            case HW_BTN_CURSOR_DOWN:
+                on_jog_dial(-1);
                 break;
-            }
-            case HW_BTN_16_LEVELS:
-            {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_16LEVELS, contracts::DeviceControlContracts::BTN_PRESSED);
+            case HW_BTN_CURSOR_LEFT:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
-            }
-            case HW_BTN_NOTE_REPEAT:
-            {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT, contracts::DeviceControlContracts::BTN_PRESSED);
+            case HW_BTN_CURSOR_RIGHT:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
-            }
-            case HW_BTN_ERASE:
-            {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_ERASE, contracts::DeviceControlContracts::BTN_PRESSED);
-                break;
-            }
-            case HW_BTN_UNDO:
-            {
-                ae.getUndoManager().undo();
-                break;
-            }
             default:
                 break;
         }
@@ -576,6 +774,13 @@ public:
     {
         switch (btn)
         {
+            case HW_BTN_SHIFT:
+                m_shift_pressed = false;
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_SHIFT, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_LOCATE:
+                m_locate_pressed = false;
+                break;
             case HW_BTN_STOP:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_STOP, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
@@ -607,10 +812,48 @@ public:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_D, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             case HW_BTN_CURSOR_LEFT:
+            case HW_BTN_STEP_PREV:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             case HW_BTN_CURSOR_RIGHT:
+            case HW_BTN_STEP_NEXT:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_BAR_PREV:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BACK, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_BAR_NEXT:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_TAP_TEMPO:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_NOTE_REPEAT:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_LATCH:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LATCH, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_FULL_LEVEL:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_FULL_LEVEL, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_16_LEVELS:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_16LEVELS, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_ERASE:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_ERASE, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_COPY:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_COPY, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_TC:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_TC, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_AUTOMATION:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_AUTOMATION, contracts::DeviceControlContracts::BTN_RELEASED);
+                break;
+            case HW_BTN_QLINK:
+                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LINK, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             default:
                 break;
@@ -667,8 +910,16 @@ public:
         if (m_hw && m_hw->control_surface())
             m_hw->control_surface()->set_touch_strip_leds(val);
     }
-    void on_pitch_bend(int /*val*/) override {}
-    void on_sustain_pedal(bool /*down*/) override {}
+    void on_pitch_bend(int val) override
+    {
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::pitchWheel(1, val));
+    }
+    void on_sustain_pedal(bool down) override
+    {
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
+    }
 
     void on_pad_note_on(int pad_num, int vel) override
     {
@@ -680,7 +931,7 @@ public:
             msg.data = { pad_num, contracts::DeviceControlContracts::BTN_PRESSED, vel, 0 };
             contracts::DclSignals::dispatchHardwareInput(msg);
 
-            int note = 36 + pad_num;
+            int note = pad_num + mt::getAudioInterface().getBankOffset();
             mt::getAudioInterface().addLiveMidiNote(mt::getAudioInterface().getSelected(), note, vel);
         }
     }
@@ -695,19 +946,29 @@ public:
             msg.data = { pad_num, contracts::DeviceControlContracts::BTN_RELEASED, 0, 0 };
             contracts::DclSignals::dispatchHardwareInput(msg);
 
-            int note = 36 + pad_num;
+            int note = pad_num + mt::getAudioInterface().getBankOffset();
             mt::getAudioInterface().stopLiveMidiNote(mt::getAudioInterface().getSelected(), note);
         }
     }
 
     void on_keybed_note_on(int pitch, int vel) override
     {
-        mt::getAudioInterface().addLiveMidiNote(mt::getAudioInterface().getSelected(), pitch, vel);
+        int sounding_pitch = juce::jlimit(0, 127, pitch + m_octave_offset * 12);
+        if (pitch >= 0 && pitch < 128) {
+            m_key_pitch_map[pitch] = sounding_pitch;
+        }
+        mt::getAudioInterface().addLiveMidiNote(mt::getAudioInterface().getSelected(), sounding_pitch, vel);
     }
 
     void on_keybed_note_off(int pitch) override
     {
-        mt::getAudioInterface().stopLiveMidiNote(mt::getAudioInterface().getSelected(), pitch);
+        int sounding_pitch = (pitch >= 0 && pitch < 128 && m_key_pitch_map[pitch] >= 0)
+                             ? m_key_pitch_map[pitch]
+                             : juce::jlimit(0, 127, pitch + m_octave_offset * 12);
+        if (pitch >= 0 && pitch < 128) {
+            m_key_pitch_map[pitch] = -1;
+        }
+        mt::getAudioInterface().stopLiveMidiNote(mt::getAudioInterface().getSelected(), sounding_pitch);
     }
 
     void pollCommands()
@@ -799,6 +1060,28 @@ public:
                 else if (strcmp(sval, "CURSOR_DOWN") == 0) b = HW_BTN_CURSOR_DOWN;
                 else if (strcmp(sval, "CURSOR_LEFT") == 0) b = HW_BTN_CURSOR_LEFT;
                 else if (strcmp(sval, "CURSOR_RIGHT") == 0) b = HW_BTN_CURSOR_RIGHT;
+                else if (strcmp(sval, "METRONOME") == 0) b = HW_BTN_METRONOME;
+                else if (strcmp(sval, "ARP") == 0) b = HW_BTN_ARP;
+                else if (strcmp(sval, "LATCH") == 0) b = HW_BTN_LATCH;
+                else if (strcmp(sval, "OCT_DOWN") == 0) b = HW_BTN_OCTAVE_DOWN;
+                else if (strcmp(sval, "OCT_UP") == 0) b = HW_BTN_OCTAVE_UP;
+                else if (strcmp(sval, "TOUCH_STRIP") == 0) b = HW_BTN_TOUCH_STRIP;
+                else if (strcmp(sval, "TOUCH_FX") == 0) b = HW_BTN_TOUCH_FX;
+                else if (strcmp(sval, "COPY") == 0) b = HW_BTN_COPY;
+                else if (strcmp(sval, "SHIFT") == 0) b = HW_BTN_SHIFT;
+                else if (strcmp(sval, "SOUNDS") == 0) b = HW_BTN_SOUNDS;
+                else if (strcmp(sval, "QLINK") == 0) b = HW_BTN_QLINK;
+                else if (strcmp(sval, "ENTER") == 0) b = HW_BTN_ENTER;
+                else if (strcmp(sval, "PLUS") == 0) b = HW_BTN_PLUS;
+                else if (strcmp(sval, "MINUS") == 0) b = HW_BTN_MINUS;
+                else if (strcmp(sval, "AUTOMATION") == 0) b = HW_BTN_AUTOMATION;
+                else if (strcmp(sval, "KEYBOARD_CONTROL") == 0) b = HW_BTN_KEYBOARD_CONTROL;
+                else if (strcmp(sval, "TC") == 0) b = HW_BTN_TC;
+                else if (strcmp(sval, "STEP_PREV") == 0) b = HW_BTN_STEP_PREV;
+                else if (strcmp(sval, "STEP_NEXT") == 0) b = HW_BTN_STEP_NEXT;
+                else if (strcmp(sval, "LOCATE") == 0) b = HW_BTN_LOCATE;
+                else if (strcmp(sval, "BAR_PREV") == 0) b = HW_BTN_BAR_PREV;
+                else if (strcmp(sval, "BAR_NEXT") == 0) b = HW_BTN_BAR_NEXT;
                 if (b != HW_BTN_NONE) {
                     on_button_press(b);
                     on_button_release(b);
