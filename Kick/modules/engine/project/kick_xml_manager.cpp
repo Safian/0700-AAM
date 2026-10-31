@@ -33,6 +33,49 @@ void onPersistenceThread(std::function<void()> action) {
         return nullptr;
     }, &action);
 }
+
+bool isAudioFilePath(const juce::String& path) {
+    if (path.isEmpty()) return false;
+    return juce::File(path).hasFileExtension(".wav;bwf;aif;aiff;flac;ogg;mp3;wmv;asf;wm;wma");
+}
+
+void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir) {
+    if (!projectDir.exists() || !tree.isValid()) return;
+
+    static const juce::Identifier idPath("path");
+    static const juce::Identifier idSource("source");
+
+    auto processProperty = [&](const juce::Identifier& prop) {
+        if (!tree.hasProperty(prop)) return;
+        auto val = tree.getProperty(prop).toString();
+        if (isAudioFilePath(val) && juce::File::isAbsolutePath(val)) {
+            juce::File f(val);
+            if (f.isAChildOf(projectDir)) {
+                tree.setProperty(prop, f.getRelativePathFrom(projectDir), nullptr);
+            } else if (f.existsAsFile()) {
+                auto samplesDir = projectDir.getChildFile("samples");
+                if (!samplesDir.exists() && projectDir.getChildFile("Imported").exists())
+                    samplesDir = projectDir.getChildFile("Imported");
+                samplesDir.createDirectory();
+
+                auto dest = samplesDir.getChildFile(f.getFileName());
+                if (dest.existsAsFile() && dest.getFullPathName() != f.getFullPathName()) {
+                    dest = samplesDir.getChildFile(f.getParentDirectory().getFileName() + "_" + f.getFileName());
+                }
+                if (!dest.existsAsFile()) f.copyFileTo(dest);
+                tree.setProperty(prop, dest.getRelativePathFrom(projectDir), nullptr);
+            }
+        }
+    };
+
+    processProperty(idPath);
+    processProperty(idSource);
+
+    for (int i = 0; i < tree.getNumChildren(); ++i) {
+        auto child = tree.getChild(i);
+        relativizeSamplePaths(child, projectDir);
+    }
+}
 }
 
 namespace mt {
@@ -144,6 +187,8 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
         }
         return failSave("Cannot save over factory demo/template. Please use Save As to a project folder.", reason);
     }
+
+    relativizeSamplePaths(vt, xmlFile.getParentDirectory());
 
     const auto xml = vt.toXmlString();
     if (xmlFile.loadFileAsString() != xml) {
