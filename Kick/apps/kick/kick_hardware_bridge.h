@@ -24,6 +24,9 @@ private:
     std::chrono::steady_clock::time_point m_last_tap_time;
     bool m_tempo_edit_active = false;
     int m_frame_counter = 0;
+    int m_cmd_fd = -1;
+    int m_cmd_fd_w = -1;
+    std::string m_cmd_buf;
 
     void sendButtonMsg(int buttonCode, int state)
     {
@@ -40,22 +43,38 @@ private:
             m_last_touch_x[slot] = x;
             m_last_touch_y[slot] = y;
         }
-        // Map 1280x800 logical landscape coordinates to 1024x600 Kick UI coordinates
-        float kx = x * (1024.0f / 1280.0f);
-        float ky = y * (600.0f / 800.0f);
 
-        juce::MessageManager::callAsync([this, slot, x, y, kx, ky, is_down, is_up]() {
+        juce::MessageManager::callAsync([this, slot, x, y, is_down, is_up]() {
             if (!m_root) return;
 
-            int ix = juce::roundToInt(kx);
-            int iy = juce::roundToInt(ky);
+            int ix = x;
+            int iy = y;
 
             auto* target = m_root->getComponentAt(ix, iy);
             if (!target) target = m_root;
 
-            auto localPt = target->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
+            auto* peer = m_window ? m_window->getPeer() : nullptr;
             juce::ModifierKeys mods = is_up ? juce::ModifierKeys() : juce::ModifierKeys::leftButtonModifier;
 
+            printf("[TOUCH] slot=%d pos=(%d,%d) target='%s' [%s] peer=%p\n",
+                   slot, ix, iy, target->getName().toRawUTF8(),
+                   is_down ? "DOWN" : (is_up ? "UP" : "DRAG"),
+                   peer);
+            fflush(stdout);
+
+            if (peer)
+            {
+                peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::touch,
+                                       juce::Point<float>((float)ix, (float)iy),
+                                       mods,
+                                       1.0f,
+                                       0.0f,
+                                       juce::Time::currentTimeMillis(),
+                                       {},
+                                       slot);
+            }
+
+            auto localPt = target->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
             juce::MouseEvent e(juce::Desktop::getInstance().getMainMouseSource(),
                                localPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                target, target,
@@ -64,49 +83,57 @@ private:
                                juce::Time::getCurrentTime(),
                                1, false);
 
-            printf("[TOUCH] slot=%d (%d,%d)->(%.1f,%.1f) target='%s' [%s]\n",
-                   slot, x, y, kx, ky, target->getName().toRawUTF8(),
-                   is_down ? "DOWN" : (is_up ? "UP" : "DRAG"));
-            fflush(stdout);
-
             if (is_down)
             {
                 if (slot >= 0 && slot < 10) m_touch_targets[slot] = target;
-                target->mouseDown(e);
+                if (!peer) target->mouseDown(e);
             }
             else if (is_up)
             {
                 auto* downTarget = (slot >= 0 && slot < 10) ? m_touch_targets[slot].getComponent() : nullptr;
-                if (downTarget) {
-                    auto downLocalPt = downTarget->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
+                auto* effectiveTarget = downTarget ? downTarget : target;
+                if (!peer && effectiveTarget) {
+                    auto downLocalPt = effectiveTarget->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
                     juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                           downTarget, downTarget,
+                                           effectiveTarget, effectiveTarget,
                                            juce::Time::getCurrentTime(),
                                            downLocalPt,
                                            juce::Time::getCurrentTime(),
                                            1, false);
-                    downTarget->mouseUp(downE);
-                    if (slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
-                } else {
-                    target->mouseUp(e);
+                    effectiveTarget->mouseUp(downE);
                 }
+
+                // If target or ancestor is a button, ensure it clicks even in headless/direct mode
+                auto* btn = dynamic_cast<juce::Button*>(effectiveTarget);
+                if (!btn && effectiveTarget) btn = effectiveTarget->findParentComponentOfClass<juce::Button>();
+                if (!btn) btn = dynamic_cast<juce::Button*>(target);
+                if (!btn && target) btn = target->findParentComponentOfClass<juce::Button>();
+                if (btn) {
+                    printf("[TOUCH] Button triggered: '%s' (pos %d,%d)\n", btn->getName().toRawUTF8(), ix, iy);
+                    fflush(stdout);
+                    btn->triggerClick();
+                }
+
+                if (slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
             }
             else
             {
                 auto* downTarget = (slot >= 0 && slot < 10) ? m_touch_targets[slot].getComponent() : nullptr;
-                if (downTarget) {
-                    auto downLocalPt = downTarget->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
-                    juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
-                                           downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                           downTarget, downTarget,
-                                           juce::Time::getCurrentTime(),
-                                           downLocalPt,
-                                           juce::Time::getCurrentTime(),
-                                           1, false);
-                    downTarget->mouseDrag(downE);
-                } else {
-                    target->mouseDrag(e);
+                if (!peer) {
+                    if (downTarget) {
+                        auto downLocalPt = downTarget->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
+                        juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
+                                               downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                               downTarget, downTarget,
+                                               juce::Time::getCurrentTime(),
+                                               downLocalPt,
+                                               juce::Time::getCurrentTime(),
+                                               1, false);
+                        downTarget->mouseDrag(downE);
+                    } else {
+                        target->mouseDrag(e);
+                    }
                 }
             }
         });
@@ -140,6 +167,8 @@ private:
 
     void timerCallback() override
     {
+        pollCommands();
+
         if (!m_hw || !m_root || !m_hw->display()) return;
 
         auto* targetComp = m_root;
@@ -251,13 +280,23 @@ public:
 
             // Start 30 FPS framebuffer render loop
             startTimerHz(30);
-            printf("[HAL] KickHardwareBridge fully operational (Display 1280x800 @ 30FPS, Touch, ControlSurface)\n");
+
+            // Create command FIFO for testing / remote control
+            unlink("/data/kick_cmd");
+            mkfifo("/data/kick_cmd", 0666);
+            m_cmd_fd = open("/data/kick_cmd", O_RDONLY | O_NONBLOCK);
+            m_cmd_fd_w = open("/data/kick_cmd", O_WRONLY | O_NONBLOCK);
+
+            printf("[HAL] KickHardwareBridge fully operational (Display 1280x800 @ 30FPS, Touch, ControlSurface, CmdFIFO)\n");
         }
     }
 
     void stop()
     {
         stopTimer();
+        if (m_cmd_fd >= 0) { close(m_cmd_fd); m_cmd_fd = -1; }
+        if (m_cmd_fd_w >= 0) { close(m_cmd_fd_w); m_cmd_fd_w = -1; }
+        unlink("/data/kick_cmd");
         if (m_hw) {
             m_hw->shutdown();
             m_hw.reset();
@@ -577,5 +616,105 @@ public:
     void on_keybed_note_off(int pitch) override
     {
         mt::getAudioInterface().stopLiveMidiNote(mt::getAudioInterface().getSelected(), pitch);
+    }
+
+    void pollCommands()
+    {
+        if (m_cmd_fd < 0) return;
+        char buf[512];
+        int n = (int)read(m_cmd_fd, buf, sizeof(buf) - 1);
+        if (n > 0) {
+            buf[n] = '\0';
+            m_cmd_buf += buf;
+            size_t pos;
+            while ((pos = m_cmd_buf.find('\n')) != std::string::npos) {
+                std::string line = m_cmd_buf.substr(0, pos);
+                m_cmd_buf.erase(0, pos + 1);
+                while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+                if (!line.empty()) processCommand(line);
+            }
+        }
+    }
+
+    void processCommand(const std::string& cmd)
+    {
+        char op[64] = { 0 };
+        int a1 = 0, a2 = 0;
+        char sval[128] = { 0 };
+        if (sscanf(cmd.c_str(), "%63s %d %d", op, &a1, &a2) == 3) {
+            if (strcmp(op, "touch") == 0) {
+                printf("[CMD] touch %d %d\n", a1, a2);
+                fflush(stdout);
+                on_touch_down(0, a1, a2);
+                on_touch_up(0);
+            } else if (strcmp(op, "touch_down") == 0) {
+                printf("[CMD] touch_down %d %d\n", a1, a2);
+                fflush(stdout);
+                on_touch_down(0, a1, a2);
+            } else if (strcmp(op, "touch_move") == 0) {
+                printf("[CMD] touch_move %d %d\n", a1, a2);
+                fflush(stdout);
+                on_touch_move(0, a1, a2);
+            } else if (strcmp(op, "pad") == 0) {
+                printf("[CMD] pad %d vel=%d\n", a1, a2);
+                fflush(stdout);
+                if (a2 > 0) on_pad_note_on(a1, a2);
+                else on_pad_note_off(a1);
+            } else if (strcmp(op, "key") == 0) {
+                printf("[CMD] key %d vel=%d\n", a1, a2);
+                fflush(stdout);
+                if (a2 > 0) on_keybed_note_on(a1, a2);
+                else on_keybed_note_off(a1);
+            } else if (strcmp(op, "encoder") == 0) {
+                printf("[CMD] encoder %d delta=%d\n", a1, a2);
+                fflush(stdout);
+                on_encoder_turn(a1, a2);
+            }
+        } else if (sscanf(cmd.c_str(), "%63s %127s", op, sval) == 2) {
+            if (strcmp(op, "btn") == 0) {
+                printf("[CMD] btn %s\n", sval);
+                fflush(stdout);
+                HardwareButton b = HW_BTN_NONE;
+                if (strcmp(sval, "PLAY") == 0) b = HW_BTN_PLAY;
+                else if (strcmp(sval, "STOP") == 0) b = HW_BTN_STOP;
+                else if (strcmp(sval, "PLAY_START") == 0) b = HW_BTN_PLAY_START;
+                else if (strcmp(sval, "REC") == 0) b = HW_BTN_REC;
+                else if (strcmp(sval, "OVERDUB") == 0) b = HW_BTN_OVERDUB;
+                else if (strcmp(sval, "MAIN") == 0) b = HW_BTN_MAIN;
+                else if (strcmp(sval, "BROWSE") == 0) b = HW_BTN_BROWSE;
+                else if (strcmp(sval, "STEP_SEQ") == 0) b = HW_BTN_STEP_SEQ;
+                else if (strcmp(sval, "PAD_MIX") == 0) b = HW_BTN_PAD_MIX;
+                else if (strcmp(sval, "TRACK_MIX") == 0) b = HW_BTN_TRACK_MIX;
+                else if (strcmp(sval, "SAMPLER") == 0) b = HW_BTN_SAMPLER;
+                else if (strcmp(sval, "PAD_MUTE") == 0) b = HW_BTN_PAD_MUTE;
+                else if (strcmp(sval, "TRACK_MUTE") == 0) b = HW_BTN_TRACK_MUTE;
+                else if (strcmp(sval, "NEXT_SEQ") == 0) b = HW_BTN_NEXT_SEQ;
+                else if (strcmp(sval, "MENU") == 0) b = HW_BTN_MENU;
+                else if (strcmp(sval, "TAP_TEMPO") == 0) b = HW_BTN_TAP_TEMPO;
+                else if (strcmp(sval, "UNDO") == 0) b = HW_BTN_UNDO;
+                if (b != HW_BTN_NONE) {
+                    on_button_press(b);
+                    on_button_release(b);
+                }
+            } else if (strcmp(op, "jog") == 0) {
+                int delta = atoi(sval);
+                printf("[CMD] jog %d\n", delta);
+                fflush(stdout);
+                on_jog_dial(delta);
+            } else if (strcmp(op, "strip") == 0) {
+                int val = atoi(sval);
+                printf("[CMD] strip %d\n", val);
+                fflush(stdout);
+                on_touch_strip(val);
+            } else if (strcmp(op, "snapshot") == 0) {
+                printf("[CMD] snapshot %s\n", sval);
+                fflush(stdout);
+                saveSnapshot(m_framebuffer_img, sval);
+            }
+        } else if (strcmp(cmd.c_str(), "touch_up") == 0) {
+            printf("[CMD] touch_up\n");
+            fflush(stdout);
+            on_touch_up(0);
+        }
     }
 };
