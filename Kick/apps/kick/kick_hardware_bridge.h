@@ -108,10 +108,13 @@ private:
             int ix = x;
             int iy = y;
 
-            auto* target = root->getComponentAt(ix, iy);
+            // Search desktop components first (modal dialogs, popups, dropdowns)
+            auto* target = juce::Desktop::getInstance().findComponentAt(juce::Point<int>(ix, iy));
+            if (!target) target = root->getComponentAt(ix, iy);
             if (!target) target = root;
 
-            auto* peer = m_window ? m_window->getPeer() : nullptr;
+            auto* peer = target->getPeer();
+            if (!peer && m_window) peer = m_window->getPeer();
             juce::ModifierKeys mods = is_up ? juce::ModifierKeys() : juce::ModifierKeys::leftButtonModifier;
 
             if (peer)
@@ -126,7 +129,7 @@ private:
                                        slot);
             }
 
-            auto localPt = target->getLocalPoint(root, juce::Point<int>(ix, iy)).toFloat();
+            auto localPt = target->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
             juce::MouseEvent e(juce::Desktop::getInstance().getMainMouseSource(),
                                localPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                target, target,
@@ -145,7 +148,7 @@ private:
                 auto* downTarget = (slot >= 0 && slot < 10) ? m_touch_targets[slot].getComponent() : nullptr;
                 auto* effectiveTarget = downTarget ? downTarget : target;
                 if (effectiveTarget) {
-                    auto downLocalPt = effectiveTarget->getLocalPoint(root, juce::Point<int>(ix, iy)).toFloat();
+                    auto downLocalPt = effectiveTarget->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
                     juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                            effectiveTarget, effectiveTarget,
@@ -170,7 +173,7 @@ private:
             {
                 auto* downTarget = (slot >= 0 && slot < 10) ? m_touch_targets[slot].getComponent() : nullptr;
                 if (downTarget) {
-                    auto downLocalPt = downTarget->getLocalPoint(root, juce::Point<int>(ix, iy)).toFloat();
+                    auto downLocalPt = downTarget->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
                     juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                            downTarget, downTarget,
@@ -276,6 +279,18 @@ private:
                 g.addTransform(juce::AffineTransform::scale(1280.0f / (float)compW, 800.0f / (float)compH));
             }
             targetComp->paintEntireComponent(g, true);
+
+            // Composite any desktop popups, dropdowns, and modal dialogs on top
+            int numDesktop = juce::Desktop::getInstance().getNumComponents();
+            for (int i = 0; i < numDesktop; ++i) {
+                auto* c = juce::Desktop::getInstance().getComponent(i);
+                if (c != nullptr && c != targetComp && c->isVisible()) {
+                    g.saveState();
+                    g.setOrigin(c->getX(), c->getY());
+                    c->paintEntireComponent(g, true);
+                    g.restoreState();
+                }
+            }
         }
 
         {
