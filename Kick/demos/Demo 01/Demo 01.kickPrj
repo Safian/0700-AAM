@@ -327,11 +327,11 @@
         <TEMPO/>
       </TEMPOS>
       <TRACKS>
-        <TRACK id="TRK_01" name="Drums" program="DnB Kit" length="8" isSeqLength="1"
+        <TRACK id="TRK_01" name="Drums" program="DxIfBT3g" length="8" isSeqLength="1"
                level="100" pan="0" mute="0" solo="0"/>
-        <TRACK id="TRK_02" name="Bass" program="DnB Kit" length="8" isSeqLength="1"
+        <TRACK id="TRK_02" name="Bass" program="DxIfBT3g" length="8" isSeqLength="1"
                level="95" pan="0" mute="0" solo="0"/>
-        <TRACK id="TRK_03" name="Lead &amp; FX" program="DnB Kit" length="8"
+        <TRACK id="TRK_03" name="Lead &amp; FX" program="DxIfBT3g" length="8"
                isSeqLength="1" level="88" pan="5" mute="0" solo="0"/>
       </TRACKS>
     </SEQUENCE>
