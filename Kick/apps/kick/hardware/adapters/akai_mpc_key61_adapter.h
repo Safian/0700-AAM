@@ -142,77 +142,81 @@ private:
         struct input_event ev;
 
         while (m_running) {
+            pfd.revents = 0;
             if (poll(&pfd, 1, 50) <= 0) continue;
-            ssize_t n = read(m_fd, &ev, sizeof(ev));
-            if (n != sizeof(ev)) continue;
 
-            if (ev.type == EV_ABS) {
-                if (ev.code == ABS_MT_SLOT) {
-                    if (ev.value >= 0 && ev.value < MAX_SLOTS) {
-                        m_current_slot = ev.value;
-                    }
-                } else if (ev.code == ABS_MT_TRACKING_ID) {
-                    Slot* slot = &m_slots[m_current_slot];
-                    if (ev.value == -1) {
-                        if (slot->active && slot->was_down && m_listener) {
-                            m_listener->on_touch_up(m_current_slot);
+            while (read(m_fd, &ev, sizeof(ev)) == sizeof(ev)) {
+                if (ev.type == EV_ABS) {
+                    if (ev.code == ABS_MT_SLOT) {
+                        if (ev.value >= 0 && ev.value < MAX_SLOTS) {
+                            m_current_slot = ev.value;
                         }
-                        slot->active = false;
-                        slot->was_down = false;
-                        slot->has_x = false;
-                        slot->has_y = false;
-                    } else {
-                        slot->active = true;
-                        slot->was_down = false;
-                        slot->has_x = false;
-                        slot->has_y = false;
+                    } else if (ev.code == ABS_MT_TRACKING_ID) {
+                        Slot* slot = &m_slots[m_current_slot];
+                        if (ev.value == -1) {
+                            if (slot->active && slot->was_down && m_listener) {
+                                m_listener->on_touch_up(m_current_slot);
+                            }
+                            slot->active = false;
+                            slot->was_down = false;
+                            slot->has_x = false;
+                            slot->has_y = false;
+                        } else {
+                            slot->active = true;
+                        }
+                    } else if (ev.code == ABS_MT_POSITION_X || ev.code == ABS_X) {
+                        m_slots[m_current_slot].active = true;
+                        m_slots[m_current_slot].raw_x = ev.value;
+                        m_slots[m_current_slot].has_x = true;
+                    } else if (ev.code == ABS_MT_POSITION_Y || ev.code == ABS_Y) {
+                        m_slots[m_current_slot].active = true;
+                        m_slots[m_current_slot].raw_y = ev.value;
+                        m_slots[m_current_slot].has_y = true;
                     }
-                } else if (ev.code == ABS_MT_POSITION_X || ev.code == ABS_X) {
-                    m_slots[m_current_slot].raw_x = ev.value;
-                    m_slots[m_current_slot].has_x = true;
-                } else if (ev.code == ABS_MT_POSITION_Y || ev.code == ABS_Y) {
-                    m_slots[m_current_slot].raw_y = ev.value;
-                    m_slots[m_current_slot].has_y = true;
-                }
-            } else if (ev.type == EV_KEY && ev.code == BTN_TOUCH) {
-                if (ev.value == 0) {
+                } else if (ev.type == EV_KEY && ev.code == BTN_TOUCH) {
+                    if (ev.value == 1) {
+                        m_slots[0].active = true;
+                    } else if (ev.value == 0) {
+                        for (int s = 0; s < MAX_SLOTS; ++s) {
+                            if (m_slots[s].active && m_slots[s].was_down && m_listener) {
+                                m_listener->on_touch_up(s);
+                            }
+                            m_slots[s].active = false;
+                            m_slots[s].was_down = false;
+                            m_slots[s].has_x = false;
+                            m_slots[s].has_y = false;
+                        }
+                    }
+                } else if (ev.type == EV_SYN && ev.code == SYN_REPORT) {
                     for (int s = 0; s < MAX_SLOTS; ++s) {
-                        if (m_slots[s].active && m_slots[s].was_down && m_listener) {
-                            m_listener->on_touch_up(s);
+                        Slot* slot = &m_slots[s];
+                        if (!slot->active) continue;
+                        if (!slot->has_x && !slot->was_down) continue;
+                        if (!slot->has_y && !slot->was_down) continue;
+
+                        // Inverted rotation matrix for ILI2117 (0..2048):
+                        int rx = slot->raw_x, ry = slot->raw_y;
+                        if (rx < 0) rx = 0;
+                        if (rx > 2048) rx = 2048;
+                        if (ry < 0) ry = 0;
+                        if (ry > 2048) ry = 2048;
+
+                        int ui_x = ((2048 - ry) * (m_logical_w - 1)) / 2048;
+                        int ui_y = (rx * (m_logical_h - 1)) / 2048;
+
+                        if (!slot->was_down) {
+                            if (m_listener) {
+                                m_listener->on_touch_down(s, ui_x, ui_y);
+                            }
+                            slot->was_down = true;
+                        } else if (ui_x != slot->last_x || ui_y != slot->last_y) {
+                            if (m_listener) {
+                                m_listener->on_touch_move(s, ui_x, ui_y);
+                            }
                         }
-                        m_slots[s].active = false;
-                        m_slots[s].was_down = false;
-                        m_slots[s].has_x = false;
-                        m_slots[s].has_y = false;
+                        slot->last_x = ui_x;
+                        slot->last_y = ui_y;
                     }
-                }
-            } else if (ev.type == EV_SYN && ev.code == SYN_REPORT) {
-                for (int s = 0; s < MAX_SLOTS; ++s) {
-                    Slot* slot = &m_slots[s];
-                    if (!slot->active || !slot->has_x || !slot->has_y) continue;
-
-                    // Inverted rotation matrix for ILI2117 (0..2048):
-                    int rx = slot->raw_x, ry = slot->raw_y;
-                    if (rx < 0) rx = 0;
-                    if (rx > 2048) rx = 2048;
-                    if (ry < 0) ry = 0;
-                    if (ry > 2048) ry = 2048;
-
-                    int ui_x = ((2048 - ry) * (m_logical_w - 1)) / 2048;
-                    int ui_y = (rx * (m_logical_h - 1)) / 2048;
-
-                    if (!slot->was_down) {
-                        if (m_listener) {
-                            m_listener->on_touch_down(s, ui_x, ui_y);
-                        }
-                        slot->was_down = true;
-                    } else if (ui_x != slot->last_x || ui_y != slot->last_y) {
-                        if (m_listener) {
-                            m_listener->on_touch_move(s, ui_x, ui_y);
-                        }
-                    }
-                    slot->last_x = ui_x;
-                    slot->last_y = ui_y;
                 }
             }
         }

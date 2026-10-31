@@ -48,9 +48,27 @@ void AudioDevice::audioDeviceIOCallbackWithContext(const float* const* in, int n
         [this](const auto& inputBlock, auto& outputBlock) noexcept {
             for (uint32_t c = 0; c < inputs; ++c) if (auto* dst = _buffer.getInputBuffer(c)) std::copy_n(inputBlock.getReadPointer(static_cast<int>(c)), engineFrames, dst);
             _buffer.clearOutputs(); process(_buffer);
+            static int logCount = 0;
+            static float peakMax = 0.0f;
             for (uint32_t c = 0; c < outputs; ++c) {
                 auto* dst = outputBlock.getWritePointer(static_cast<int>(c));
-                if (auto* src = _buffer.getOutputBuffer(c)) std::copy_n(src, engineFrames, dst); else std::fill_n(dst, engineFrames, 0.f);
+                if (auto* src = _buffer.getOutputBuffer(c)) {
+                    std::copy_n(src, engineFrames, dst);
+                    for (uint32_t i = 0; i < engineFrames; ++i) {
+                        float a = std::abs(src[i]);
+                        if (a > peakMax) peakMax = a;
+                    }
+                } else {
+                    std::fill_n(dst, engineFrames, 0.f);
+                }
+            }
+            if (++logCount >= 100) {
+                if (peakMax > 0.0001f) {
+                    printf("[AUDIO] Output streaming: peak=%.4f\n", peakMax);
+                    fflush(stdout);
+                }
+                logCount = 0;
+                peakMax = 0.0f;
             }
         });
 }
