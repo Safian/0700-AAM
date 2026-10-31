@@ -116,6 +116,7 @@ class AkaiMpcKey61TouchAdapter : public ITouchAdapter {
 private:
     struct Slot {
         bool active;
+        bool was_down;
         int raw_x, raw_y;
         bool has_x, has_y;
         int last_x, last_y;
@@ -153,14 +154,16 @@ private:
                 } else if (ev.code == ABS_MT_TRACKING_ID) {
                     Slot* slot = &m_slots[m_current_slot];
                     if (ev.value == -1) {
-                        if (slot->active && m_listener) {
+                        if (slot->active && slot->was_down && m_listener) {
                             m_listener->on_touch_up(m_current_slot);
                         }
                         slot->active = false;
+                        slot->was_down = false;
                         slot->has_x = false;
                         slot->has_y = false;
                     } else {
                         slot->active = true;
+                        slot->was_down = false;
                         slot->has_x = false;
                         slot->has_y = false;
                     }
@@ -174,10 +177,11 @@ private:
             } else if (ev.type == EV_KEY && ev.code == BTN_TOUCH) {
                 if (ev.value == 0) {
                     for (int s = 0; s < MAX_SLOTS; ++s) {
-                        if (m_slots[s].active && m_listener) {
+                        if (m_slots[s].active && m_slots[s].was_down && m_listener) {
                             m_listener->on_touch_up(s);
                         }
                         m_slots[s].active = false;
+                        m_slots[s].was_down = false;
                         m_slots[s].has_x = false;
                         m_slots[s].has_y = false;
                     }
@@ -197,10 +201,15 @@ private:
                     int ui_x = ((2048 - ry) * (m_logical_w - 1)) / 2048;
                     int ui_y = (rx * (m_logical_h - 1)) / 2048;
 
-                    if (!slot->has_x || !slot->has_y) continue;
-
-                    if (m_listener) {
-                        m_listener->on_touch_down(s, ui_x, ui_y);
+                    if (!slot->was_down) {
+                        if (m_listener) {
+                            m_listener->on_touch_down(s, ui_x, ui_y);
+                        }
+                        slot->was_down = true;
+                    } else if (ui_x != slot->last_x || ui_y != slot->last_y) {
+                        if (m_listener) {
+                            m_listener->on_touch_move(s, ui_x, ui_y);
+                        }
                     }
                     slot->last_x = ui_x;
                     slot->last_y = ui_y;
