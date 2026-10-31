@@ -69,6 +69,21 @@ Mivel az [`akai_mpc_key61_adapter.h`](file:///Users/szabi/Documents/Projects/Saf
 - Korábban a `Port 1`-en fel nem ismert `ch == 0` gombok beleestek az `on_keybed_note_on(note, vel)` ágba. Mivel a valódi funkciógombok magas MIDI Note-okat küldenek — **`112` (`E8`/`G8` regiszter) = METRONOME**, **`116` (`G#8`) = MIX**, **`117` (`A8`) = GRID**, **`121` (`C#9`) = SOUNDS**, **`123` (`D#9`) = MENU** —, a gombnyomások a szintetizátort szólaltatták meg.
 - Az első demó ([`Kick/apps/mpc_gui/main_gui.cpp`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/apps/mpc_gui/main_gui.cpp#L1426-L1531)) egyetlen statikus képernyőből állt (a `HW_BTN_MAIN/BROWSE/GRID/SAMPLER` ágak üresek voltak), csak ~13 gombot figyelt, és egy fix beépített 21-mintás F9 Grand Piano + 16 WAV lejátszót hajtott meg — ezért nem látszottak benne a képernyőugrálások és a DCL bank-eltolások.
 
+### 1.4. Miért jön ki most NAGYON-NAGYON HALK jel az `Out-1,2` kimenetre (`peak = 0.0021` = `-54 dBFS`, 1 mm-es zöld csík a keverőn)?
+
+Az ALSA `ACVM` 4-csatornás `S32_LE` kimenet (`/etc/asound.conf` -> `pcm.quad_route`, `Main Out L/R + Phones L/R`) **100%-osan jó és egységerősítésű (`1.0`)**. A hiba a `Kick` saját [`DrumVoice`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/modules/engine/audio_program/synth/drum_voice.cpp#L158-L204) DSP hangmotorjában van (már az ALSA előtt, az [`AudIO/src/juce_adapter.cpp`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/AudIO/src/juce_adapter.cpp#L67) float pufferében is `peak=0.0021`):
+
+1. **`1.0 / 127.0 = -42.1 dB` Sustain mértékegység-hiba:**
+   - Az [`MTIAtomicADSR::attachTo`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/modules/engine/audio_program/source/mt_audio_iprogram_atomics.h#L113) alapértelmezett `sustain` értéke **`1.f`** (`0..1` float-ot feltételezve),
+   - miközben az [`mt::ADSR::setParameters`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/AudIO/juce_modules/AudIO_juce/DspAdapters.h#L7-L11) MIDI `0..127` egész számot vár, és elosztja `127.0`-val (`1.0 / 127.0 = 0.007874 = -42.1 dB`)!
+2. **`127×`-es lassítású (`347 Hz`) Pitch Envelope szorzási hiba:**
+   - A [`DrumVoice::process`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/modules/engine/audio_program/synth/drum_voice.cpp#L183) a lejátszási sebességet közvetlenül megszorozza a `pitchAdsr` értékével:
+     `auto pMod = pitchAdsr * masterPitchRatio * ( 1.0 - ( lfoToPitch * lfoOut ) );`
+   - Mivel `pitchAdsr` is `1.0 / 127.0 = 0.007874`, minden dobminta **127-szer lassabban (~7 oktávval mélyebben, halláshatár alatti DC-morajlásként)** játszódik le, ráadásul `-42.1 dB` csillapítással (`0.007874 * panner = 0.0021` = `-54 dBFS`)!
+3. **Hiányzó `Pad Mixer` csatorna-fader bekötés és One-Shot levágás + kikommentelt `KeygroupProgram`:**
+   - A [`DrumProgram::noteOn`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/modules/engine/audio_program/synth/DrumProgram.cpp#L125-L130) nem adja át a pad saját `CLIP` hangerejét/panorámáját (`pNote->gL`, `pNote->gR`) a `DrumVoice`-nak, és `ONE_SHOT` módban is azonnal leállítja a mintát `noteOff`-kor.
+   - A [`KeygroupProgram::noteOn`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/modules/engine/audio_program/synth/KeygroupProgram.cpp#L67) elején pedig egy ideiglenes `return;` kikapcsolta a teljes kromatikus Keygroup szintetizátort!
+
 ---
 
 ## 2. Hivatalos Akai MPC Key 61 Fizikai Felépítés és Képi Referencia
@@ -305,6 +320,11 @@ flowchart TD
 - **Klaviatúra oktáv/transzponálás követés (`OCT -` / `OCT +`):** Ragadásmentes `m_active_key_notes[128]` követés (`-3..+3` oktáv, `+Shift`-tel félhang-transzponálás, két gomb egyszerre = `0` reset).
 - **LED szinkronizáció:** A valódi MPC Key 61 Note-számokon (`BANK A..D = 35..38`, aktív módgombok, transzport LED-ek) + 16 RGB pad színfrissítés egyetlen atomi `0x65` SysEx keretben.
 
-### 3. [`Demo 01.kickPrj`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/demos/Demo%2001/Demo%2001.kickPrj) és Nyers MIDI Tesztkapu
+### 3. [`DrumVoice`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/modules/engine/audio_program/synth/drum_voice.cpp) és [`KeygroupProgram`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/modules/engine/audio_program/synth/KeygroupProgram.cpp) teljes hangerejű (`0 dBFS`) DSP javítása
+- **[`mt_audio_iprogram_atomics.h`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/modules/engine/audio_program/source/mt_audio_iprogram_atomics.h#L113):** `MTIAtomicADSR` `sustain` alapértékének javítása `127.f`-re (`MIDI::MAX`), hogy az `ampEnv` egységerősítésű (`1.0`) legyen a `1/127 = -42.1 dB` helyett.
+- **[`drum_voice.cpp`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/modules/engine/audio_program/synth/drum_voice.cpp#L183):** A `pitchAdsr` szorzás javítása félhang-alapú modulációra (`depth == 0` esetén `1.0`), megszüntetve a `127×`-es lassítást; a `CLIP` saját `Pad Mixer` `gL/gR` (`gain` + `pan`) bekötése; `ONE_SHOT` módban a minta végigjátszása pad-felengedés után is.
+- **[`KeygroupProgram.cpp`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/modules/engine/audio_program/synth/KeygroupProgram.cpp#L67):** Az ideiglenes korai `return;` eltávolítása és a kromatikus `AVoice` hangképzés bekötése, hogy a 61 billentyűs zongora tiszta, polifonikus dallamhangszert szólaltasson meg.
+
+### 4. [`Demo 01.kickPrj`](file:///Users/szabi/Documents/Projects/Safian/.worktrees/kick-pr13/Kick/demos/Demo%2001/Demo%2001.kickPrj) és Nyers MIDI + Peak Tesztkapu
 - A `DnB Kit` 16 padját a `Kick` szabványos **Bank A (`keyNote="0..15"`)** tartományába igazítjuk (hogy a képernyőn lévő `PAD A01..A16` mind telített legyen és szóljon), a dallamsávra pedig valódi kromatikus **`Keygroup` (`type="1"`)** hangszerprogramot teszünk a 61 billentyűs klaviatúrához.
-- A `/data/kick_cmd` kap egy `rawmidi <port> <hex...>` parancsot, amellyel közvetlenül a `handle_packet` bájtbemenetén teszteljük le mind a 16 padot (`Pad Mixer`-ben is!), mind a 61 billentyűt és mind a 45 fizikai gombot.
+- A `/data/kick_cmd` kap egy `rawmidi <port> <hex...>` parancsot, amellyel közvetlenül a `handle_packet` bájtbemenetén teszteljük le mind a 16 padot (`Pad Mixer`-ben is!), mind a 61 billentyűt, mind a 45 fizikai gombot **és ellenőrizzük, hogy az `[AUDIO] Output streaming: peak=` eléri a rendes `0.40..0.95` (`-8..0 dBFS`) szintet!**
