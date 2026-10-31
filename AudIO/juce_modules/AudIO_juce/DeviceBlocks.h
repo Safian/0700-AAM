@@ -21,8 +21,11 @@ void deviceBlocks(const float* const* in, int ni, float* const* out, int no, int
             if (c < ni && in && in[c]) std::copy_n(in[c] + done, n, dst);
             else std::fill_n(dst, n, 0.f);
         }
-        for (int c = 0; c < output.getNumChannels() && c < no; ++c)
-            if (out && out[c]) std::copy_n(output.getReadPointer(c, static_cast<int>(filled)), n, out[c] + done);
+        for (int c = 0; c < no; ++c)
+            if (out && out[c]) {
+                int srcCh = (output.getNumChannels() > 0) ? (c % output.getNumChannels()) : 0;
+                std::copy_n(output.getReadPointer(srcCh, static_cast<int>(filled)), n, out[c] + done);
+            }
         filled += n; done += static_cast<int>(n);
         if (filled == block) {
             output.clear(); process(input, output); filled = 0;

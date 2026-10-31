@@ -39,6 +39,7 @@ enum HardwareButton {
     HW_BTN_SHIFT,
     HW_BTN_MAIN,
     HW_BTN_BROWSE,
+    HW_BTN_GRID,
     HW_BTN_TRACK_MIX,
     HW_BTN_PAD_MIX,
     HW_BTN_TRACK_MUTE,
@@ -66,6 +67,10 @@ enum HardwareLed {
     HW_LED_FULL_LEVEL,
     HW_LED_16_LEVELS,
     HW_LED_NOTE_REPEAT,
+    HW_LED_BANK_A,
+    HW_LED_BANK_B,
+    HW_LED_BANK_C,
+    HW_LED_BANK_D,
     NUM_HW_LEDS
 };
 

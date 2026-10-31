@@ -36,6 +36,8 @@ namespace kick_ui
         mt::utils::addAndMakeVisible( this, menuButton, mainModeButton, gridButton, stepSeqButton, axisButton, settingsButton, newFileButton, kickBrowseButton, kickPlayButton, metronomeButton, project );
         mt::utils::setRadioGroupID( (int)RadioGroupId::AppTopMenu, menuButton, mainModeButton, gridButton, stepSeqButton, axisButton, settingsButton, kickBrowseButton, newFileButton );
 
+        kickPlayButton.setClickingTogglesState( true );
+
         mainModeButton.setToggleState( true, juce::dontSendNotification );
 
         setPaintingIsUnclipped( true );

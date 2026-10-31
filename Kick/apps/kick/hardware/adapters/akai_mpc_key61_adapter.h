@@ -283,86 +283,144 @@ private:
                 int ch = b & 0x0F;
                 int note = buf[i+1], vel = buf[i+2];
 
-                // 1. Q-Link capacitive touch tops (Port 1, ch 15, Notes 84..87)
-                if (port == 1 && ch == 15 && (note >= 84 && note <= 87)) {
-                    m_listener->on_encoder_touch(note - 84, vel > 0);
-                }
-                // 2. Hardware Octave buttons (Note 7 = Down, Note 10 = Up)
-                else if (note == 7) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_OCTAVE_DOWN);
-                    else m_listener->on_button_release(HW_BTN_OCTAVE_DOWN);
-                } else if (note == 10) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_OCTAVE_UP);
-                    else m_listener->on_button_release(HW_BTN_OCTAVE_UP);
-                }
-                // 3. Transport buttons
-                else if (note == 81 || note == 117) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_STOP);
-                    else m_listener->on_button_release(HW_BTN_STOP);
-                } else if (note == 82 || note == 118) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_PLAY);
-                    else m_listener->on_button_release(HW_BTN_PLAY);
-                } else if (note == 83) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_PLAY_START);
-                    else m_listener->on_button_release(HW_BTN_PLAY_START);
-                } else if (note == 73 || note == 119) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_REC);
-                    else m_listener->on_button_release(HW_BTN_REC);
-                } else if (note == 80 || note == 116) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_OVERDUB);
-                    else m_listener->on_button_release(HW_BTN_OVERDUB);
-                }
-                // 4. Tap Tempo
-                else if ((note == 53 || note == 35) && (ch == 15 || ch == 0)) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_TAP_TEMPO);
-                }
-                // 5. Value +/- buttons
-                else if (note == 54) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_PLUS);
-                    else m_listener->on_button_release(HW_BTN_PLUS);
-                } else if (note == 55) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_MINUS);
-                    else m_listener->on_button_release(HW_BTN_MINUS);
-                }
-                // 6. Data Wheel Click (ENTER) & Cursors
-                else if (note == 111 || note == 60) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_ENTER);
-                    else m_listener->on_button_release(HW_BTN_ENTER);
-                } else if (note == 56 || note == 65) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_CURSOR_UP);
-                    else m_listener->on_button_release(HW_BTN_CURSOR_UP);
-                } else if (note == 57 || note == 66) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_CURSOR_DOWN);
-                    else m_listener->on_button_release(HW_BTN_CURSOR_DOWN);
-                }
-                // 7. Navigation & Modes
-                else if (note == 67 || note == 20) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_UNDO);
-                } else if (note == 9 || note == 21) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_ERASE);
-                } else if (note == 39) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_FULL_LEVEL);
-                } else if (note == 40 || note == 59) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_16_LEVELS);
-                } else if (note == 11) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_NOTE_REPEAT);
-                } else if (note == 49) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_SHIFT);
-                    else m_listener->on_button_release(HW_BTN_SHIFT);
-                } else if (note == 51) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_MAIN);
-                } else if (note == 50) {
-                    if (vel > 0) m_listener->on_button_press(HW_BTN_BROWSE);
-                }
-                // 8. Performance Keys & Pads
-                else {
-                    if (ch == 9) { // Drum Pads
+                if (port == 1) {
+                    // Port 1 is MPC Private: Control Surface (buttons, pads, Q-Link touch)
+                    // Notes here MUST NEVER trigger keybed notes!
+
+                    // 1. Performance Pads (ch == 9, Notes 36..51) - prioritized to avoid collision with button notes
+                    if (ch == 9) {
                         int pad_idx = note - 36;
                         if (pad_idx >= 0 && pad_idx < 16) {
                             if (vel > 0) m_listener->on_pad_note_on(pad_idx, vel);
                             else m_listener->on_pad_note_off(pad_idx);
                         }
-                    } else { // 61-Key Keybed
+                    }
+                    // 2. Q-Link capacitive touch tops (Port 1, ch 15, Notes 84..87)
+                    else if (ch == 15 && (note >= 84 && note <= 87)) {
+                        m_listener->on_encoder_touch(note - 84, vel > 0);
+                    }
+                    // 2. Hardware Octave buttons (Note 7 = Down, Note 10 = Up)
+                    else if (note == 7) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_OCTAVE_DOWN);
+                        else m_listener->on_button_release(HW_BTN_OCTAVE_DOWN);
+                    } else if (note == 10) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_OCTAVE_UP);
+                        else m_listener->on_button_release(HW_BTN_OCTAVE_UP);
+                    }
+                    // 3. Transport buttons
+                    else if (note == 81 || note == 117) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_STOP);
+                        else m_listener->on_button_release(HW_BTN_STOP);
+                    } else if (note == 82 || note == 118) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_PLAY);
+                        else m_listener->on_button_release(HW_BTN_PLAY);
+                    } else if (note == 83) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_PLAY_START);
+                        else m_listener->on_button_release(HW_BTN_PLAY_START);
+                    } else if (note == 73 || note == 119) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_REC);
+                        else m_listener->on_button_release(HW_BTN_REC);
+                    } else if (note == 80 || note == 116) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_OVERDUB);
+                        else m_listener->on_button_release(HW_BTN_OVERDUB);
+                    }
+                    // 4. Tap Tempo
+                    else if ((note == 53 || note == 35) && (ch == 15 || ch == 0)) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_TAP_TEMPO);
+                    }
+                    // 5. Value +/- buttons
+                    else if (note == 54) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_PLUS);
+                        else m_listener->on_button_release(HW_BTN_PLUS);
+                    } else if (note == 55) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_MINUS);
+                        else m_listener->on_button_release(HW_BTN_MINUS);
+                    }
+                    // 6. Data Wheel Click (ENTER) & Cursors
+                    else if (note == 111 || note == 60) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_ENTER);
+                        else m_listener->on_button_release(HW_BTN_ENTER);
+                    } else if (note == 56 || note == 65) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_CURSOR_UP);
+                        else m_listener->on_button_release(HW_BTN_CURSOR_UP);
+                    } else if (note == 57 || note == 66) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_CURSOR_DOWN);
+                        else m_listener->on_button_release(HW_BTN_CURSOR_DOWN);
+                    } else if (note == 68) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_CURSOR_LEFT);
+                        else m_listener->on_button_release(HW_BTN_CURSOR_LEFT);
+                    } else if (note == 69) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_CURSOR_RIGHT);
+                        else m_listener->on_button_release(HW_BTN_CURSOR_RIGHT);
+                    }
+                    // 7. Navigation & Modes
+                    else if (note == 67 || note == 20) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_UNDO);
+                    } else if (note == 9 || note == 21) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_ERASE);
+                    } else if (note == 39) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_FULL_LEVEL);
+                    } else if (note == 40 || note == 59) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_16_LEVELS);
+                    } else if (note == 11) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_NOTE_REPEAT);
+                    } else if (note == 49) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_SHIFT);
+                        else m_listener->on_button_release(HW_BTN_SHIFT);
+                    } else if (note == 51) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_MAIN);
+                    } else if (note == 50) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_BROWSE);
+                    } else if (note == 52 || note == 64) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_GRID);
+                    } else if (note == 47 || note == 58) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_STEP_SEQ);
+                    } else if (note == 48 || note == 61) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_SAMPLER);
+                    } else if (note == 46) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_SAMPLE_EDIT);
+                    } else if (note == 45) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_PROG_EDIT);
+                    } else if (note == 43 || note == 62) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_PAD_MIX);
+                    } else if (note == 44 || note == 63) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_TRACK_MIX);
+                    } else if (note == 41 || note == 60) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_PAD_MUTE);
+                    } else if (note == 42 || note == 61) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_TRACK_MUTE);
+                    } else if (note == 38 || note == 59) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_NEXT_SEQ);
+                    } else if (note == 37 || note == 123) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_MENU);
+                    }
+                    // 8. Pad Bank buttons (Note 106..109)
+                    else if (note == 106) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_BANK_A);
+                        else m_listener->on_button_release(HW_BTN_BANK_A);
+                    } else if (note == 107) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_BANK_B);
+                        else m_listener->on_button_release(HW_BTN_BANK_B);
+                    } else if (note == 108) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_BANK_C);
+                        else m_listener->on_button_release(HW_BTN_BANK_C);
+                    } else if (note == 109) {
+                        if (vel > 0) m_listener->on_button_press(HW_BTN_BANK_D);
+                        else m_listener->on_button_release(HW_BTN_BANK_D);
+                    }
+                    else {
+                        printf("[AKAI-BTN] Port 1 Note %d (0x%02X) ch=%d vel=%d\n", note, note, ch, vel);
+                        fflush(stdout);
+                    }
+                } else {
+                    // Port 0 (Keybed) or Port 2 (DIN MIDI In)
+                    if (ch == 9) {
+                        int pad_idx = note - 36;
+                        if (pad_idx >= 0 && pad_idx < 16) {
+                            if (vel > 0) m_listener->on_pad_note_on(pad_idx, vel);
+                            else m_listener->on_pad_note_off(pad_idx);
+                        }
+                    } else {
                         if (vel > 0) m_listener->on_keybed_note_on(note, vel);
                         else m_listener->on_keybed_note_off(note);
                     }
@@ -372,21 +430,53 @@ private:
                 int ch = b & 0x0F;
                 int note = buf[i+1];
 
-                if (port == 1 && ch == 15 && (note >= 84 && note <= 87)) {
-                    m_listener->on_encoder_touch(note - 84, false);
-                } else if (note == 7) {
-                    m_listener->on_button_release(HW_BTN_OCTAVE_DOWN);
-                } else if (note == 10) {
-                    m_listener->on_button_release(HW_BTN_OCTAVE_UP);
-                } else if (note == 81 || note == 82 || note == 83 || note == 73 || note == 80 ||
-                           note == 117 || note == 118 || note == 119 || note == 116 ||
-                           note == 53 || note == 35 || note == 54 || note == 55 ||
-                           note == 56 || note == 57 || note == 65 || note == 66 ||
-                           note == 111 || note == 60 || note == 67 || note == 20 ||
-                           note == 9 || note == 21 || note == 39 || note == 40 ||
-                           note == 59 || note == 11 || note == 49 || note == 50 || note == 51) {
-                    if (note == 49) m_listener->on_button_release(HW_BTN_SHIFT);
+                if (port == 1) {
+                    if (ch == 9) {
+                        int pad_idx = note - 36;
+                        if (pad_idx >= 0 && pad_idx < 16) m_listener->on_pad_note_off(pad_idx);
+                    } else if (ch == 15 && (note >= 84 && note <= 87)) {
+                        m_listener->on_encoder_touch(note - 84, false);
+                    } else if (note == 7) {
+                        m_listener->on_button_release(HW_BTN_OCTAVE_DOWN);
+                    } else if (note == 10) {
+                        m_listener->on_button_release(HW_BTN_OCTAVE_UP);
+                    } else if (note == 81 || note == 117) {
+                        m_listener->on_button_release(HW_BTN_STOP);
+                    } else if (note == 82 || note == 118) {
+                        m_listener->on_button_release(HW_BTN_PLAY);
+                    } else if (note == 83) {
+                        m_listener->on_button_release(HW_BTN_PLAY_START);
+                    } else if (note == 73 || note == 119) {
+                        m_listener->on_button_release(HW_BTN_REC);
+                    } else if (note == 80 || note == 116) {
+                        m_listener->on_button_release(HW_BTN_OVERDUB);
+                    } else if (note == 54) {
+                        m_listener->on_button_release(HW_BTN_PLUS);
+                    } else if (note == 55) {
+                        m_listener->on_button_release(HW_BTN_MINUS);
+                    } else if (note == 111 || note == 60) {
+                        m_listener->on_button_release(HW_BTN_ENTER);
+                    } else if (note == 56 || note == 65) {
+                        m_listener->on_button_release(HW_BTN_CURSOR_UP);
+                    } else if (note == 57 || note == 66) {
+                        m_listener->on_button_release(HW_BTN_CURSOR_DOWN);
+                    } else if (note == 68) {
+                        m_listener->on_button_release(HW_BTN_CURSOR_LEFT);
+                    } else if (note == 69) {
+                        m_listener->on_button_release(HW_BTN_CURSOR_RIGHT);
+                    } else if (note == 49) {
+                        m_listener->on_button_release(HW_BTN_SHIFT);
+                    } else if (note == 106) {
+                        m_listener->on_button_release(HW_BTN_BANK_A);
+                    } else if (note == 107) {
+                        m_listener->on_button_release(HW_BTN_BANK_B);
+                    } else if (note == 108) {
+                        m_listener->on_button_release(HW_BTN_BANK_C);
+                    } else if (note == 109) {
+                        m_listener->on_button_release(HW_BTN_BANK_D);
+                    }
                 } else {
+                    // Port 0 or Port 2 NoteOff
                     if (ch == 9) {
                         int pad_idx = note - 36;
                         if (pad_idx >= 0 && pad_idx < 16) m_listener->on_pad_note_off(pad_idx);
@@ -498,6 +588,10 @@ public:
             case HW_LED_FULL_LEVEL: note = 39; break;
             case HW_LED_16_LEVELS: note = 40; break;
             case HW_LED_NOTE_REPEAT: note = 11; break;
+            case HW_LED_BANK_A: note = 106; break;
+            case HW_LED_BANK_B: note = 107; break;
+            case HW_LED_BANK_C: note = 108; break;
+            case HW_LED_BANK_D: note = 109; break;
             default: break;
         }
         if (note != -1) {
