@@ -187,7 +187,7 @@ namespace mt
             uint8_t buffer[3];
             if( step > 0 )
             {
-                int bufVal = ( 4095 / step );
+                int bufVal = juce::jlimit( 0, 4095, ( step * 4095 ) / 127 );
                 buffer[0]  = ( 0x30 | ( toChannelmap( channel ) ) );
                 buffer[1]  = ( bufVal >> 4 ) & 0xFF;
                 buffer[2]  = ( bufVal << 4 ) & 0xF0;
