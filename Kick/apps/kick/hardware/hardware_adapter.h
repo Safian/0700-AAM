@@ -121,6 +121,7 @@ public:
     virtual ~IControlSurfaceAdapter() = default;
     virtual bool start(IHardwareEventListener* listener) = 0;
     virtual void set_led(HardwareLed led, bool on, uint32_t rgb = 0) = 0;
+    virtual void set_touch_strip_leds(int /*val*/) {}
     virtual void stop() = 0;
 };
 

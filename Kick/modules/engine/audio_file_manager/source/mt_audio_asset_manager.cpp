@@ -118,7 +118,14 @@ namespace mt
 
     void MTAudioAssetManager::restoreAsset( juce::ValueTree assetVT, AssetTypes Type )
     {
-        auto file = assetVT.getProperty( IDs::path, "" );
+        auto file = assetVT.getProperty( IDs::path, "" ).toString();
+
+        if( file.isNotEmpty() && !juce::File::isAbsolutePath( file ) && projDir != juce::File() )
+        {
+            auto resolved = projDir.getChildFile( file );
+            if( resolved.existsAsFile() )
+                file = resolved.getFullPathName();
+        }
 
         // Add to asset manager.
         addToAssetMgr( file, Type );
@@ -313,6 +320,24 @@ namespace mt
 
     std::vector<std::unique_ptr<ASoundSlice>>& MTAudioAssetManager::getAssetSlices( const juce::String& File )
     {
+        auto it = sliceMap.find( File );
+        if( it != sliceMap.end() )
+            return it->second;
+
+        if( !juce::File::isAbsolutePath( File ) && projDir != juce::File() )
+        {
+            auto resolved = projDir.getChildFile( File ).getFullPathName();
+            auto rit = sliceMap.find( resolved );
+            if( rit != sliceMap.end() )
+                return rit->second;
+        }
+
+        for( auto& kv : sliceMap )
+        {
+            if( juce::File( kv.first ).getFileName() == juce::File( File ).getFileName() )
+                return kv.second;
+        }
+
         return sliceMap[File];
     }
 
@@ -323,7 +348,28 @@ namespace mt
 
     ASoundSlice* MTAudioAssetManager::getAssetSlice( const juce::String& File, int Index )
     {
-        return ( Index < sliceMap[File].size() ) ? sliceMap[File].at( Index ).get() : nullptr;
+        auto it = sliceMap.find( File );
+        if( it != sliceMap.end() && Index < it->second.size() )
+            return it->second.at( Index ).get();
+
+        if( !juce::File::isAbsolutePath( File ) && projDir != juce::File() )
+        {
+            auto resolved = projDir.getChildFile( File ).getFullPathName();
+            auto rit = sliceMap.find( resolved );
+            if( rit != sliceMap.end() && Index < rit->second.size() )
+                return rit->second.at( Index ).get();
+        }
+
+        for( auto& kv : sliceMap )
+        {
+            if( juce::File( kv.first ).getFileName() == juce::File( File ).getFileName() )
+            {
+                if( Index < kv.second.size() )
+                    return kv.second.at( Index ).get();
+            }
+        }
+
+        return nullptr;
     }
 
     void MTAudioAssetManager::addAssetSlice( const juce::String& File, ASoundSlice* Slice, int Index )

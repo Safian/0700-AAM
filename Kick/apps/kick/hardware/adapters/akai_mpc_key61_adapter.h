@@ -402,7 +402,7 @@ private:
                     m_listener->on_jog_dial(delta);
                 } else if (cc_num == 64) {
                     m_listener->on_sustain_pedal(cc_val >= 64);
-                } else if (cc_num == 69) {
+                } else if (cc_num == 69 || cc_num == 33) {
                     m_listener->on_touch_strip(cc_val);
                 } else if (cc_num == 117) {
                     if (cc_val > 0) m_listener->on_button_press(HW_BTN_STOP);
@@ -500,6 +500,13 @@ public:
             uint8_t msg[3] = { (uint8_t)0x90, (uint8_t)note, (uint8_t)(on ? 127 : 0) };
             snd_rawmidi_write(m_out1, msg, 3);
         }
+    }
+
+    void set_touch_strip_leds(int val) override {
+        if (!m_out1) return;
+        // CC33 (0x21) feedback to physical LED ladder (0..127)
+        uint8_t msg[3] = { 0xB0, 0x21, (uint8_t)(val & 0x7F) };
+        snd_rawmidi_write(m_out1, msg, 3);
     }
 
     void stop() override {

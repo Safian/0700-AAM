@@ -62,6 +62,8 @@ namespace mt
         {
             if( 0 == File.compare( it->getFilePath() ) )
                 return it;
+            if( juce::File( File ).getFileName() == it->getFileName() )
+                return it;
         }
         return nullptr;
     }
