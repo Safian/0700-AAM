@@ -620,6 +620,27 @@ public:
         snd_rawmidi_write(m_out1, msg, 3);
     }
 
+    void set_pad_rgb(int pad, uint8_t r, uint8_t g, uint8_t b) override {
+        if (pad < 0 || pad > 15) return;
+        uint8_t p = (uint8_t)(pad & 0x0F);
+        uint8_t red = (uint8_t)(r & 0x7F);
+        uint8_t grn = (uint8_t)(g & 0x7F);
+        uint8_t blu = (uint8_t)(b & 0x7F);
+
+        // Akai MPC RGB SysEx: F0 47 [DevID] 4B 65 00 04 [pad] [R] [G] [B] F7
+        uint8_t sysex_all[] = { 0xF0, 0x47, 0x7F, 0x4B, 0x65, 0x00, 0x04, p, red, grn, blu, 0xF7 };
+        uint8_t sysex_dev[] = { 0xF0, 0x47, 0x00, 0x4B, 0x65, 0x00, 0x04, p, red, grn, blu, 0xF7 };
+
+        if (m_out1) {
+            snd_rawmidi_write(m_out1, sysex_all, sizeof(sysex_all));
+            snd_rawmidi_write(m_out1, sysex_dev, sizeof(sysex_dev));
+        }
+        if (m_out0) {
+            snd_rawmidi_write(m_out0, sysex_all, sizeof(sysex_all));
+            snd_rawmidi_write(m_out0, sysex_dev, sizeof(sysex_dev));
+        }
+    }
+
     void stop() override {
         if (m_running) {
             m_running = false;
