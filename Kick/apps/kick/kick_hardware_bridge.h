@@ -36,6 +36,32 @@ private:
     bool isShiftDown() const { return m_shift_pressed; }
     bool isLocateDown() const { return m_locate_pressed; }
 
+    void getBankColor(int bank, uint8_t& r, uint8_t& g, uint8_t& b) const
+    {
+        switch (bank % 8) {
+            case 0: r = 35; g = 15; b = 0;  break; // Bank A: Warm Amber / Gold
+            case 1: r = 0;  g = 25; b = 45; break; // Bank B: Electric Cyan
+            case 2: r = 0;  g = 45; b = 10; break; // Bank C: Emerald Green
+            case 3: r = 40; g = 0;  b = 45; break; // Bank D: Vivid Magenta
+            case 4: r = 45; g = 35; b = 0;  break; // Bank E: Bright Yellow
+            case 5: r = 45; g = 10; b = 20; break; // Bank F: Coral / Rose
+            case 6: r = 15; g = 45; b = 25; break; // Bank G: Aqua Mint
+            case 7: r = 25; g = 15; b = 45; break; // Bank H: Violet Lavender
+            default: r = 25; g = 25; b = 25; break;
+        }
+    }
+
+    void refreshPadColors()
+    {
+        if (m_hw && m_hw->control_surface()) {
+            uint8_t r, g, b;
+            getBankColor(m_current_bank, r, g, b);
+            for (int i = 0; i < 16; ++i) {
+                m_hw->control_surface()->set_pad_rgb(i, r, g, b);
+            }
+        }
+    }
+
     void updateBankLeds()
     {
         if (m_hw && m_hw->control_surface()) {
@@ -44,6 +70,7 @@ private:
             m_hw->control_surface()->set_led(HW_LED_BANK_B, b == 1);
             m_hw->control_surface()->set_led(HW_LED_BANK_C, b == 2);
             m_hw->control_surface()->set_led(HW_LED_BANK_D, b == 3);
+            refreshPadColors();
         }
     }
 
@@ -299,7 +326,7 @@ public:
                 m_hw->control_surface()->start(this);
                 m_hw->control_surface()->set_led(HW_LED_STOP, true);
                 m_hw->control_surface()->set_led(HW_LED_PLAY, false);
-                m_hw->control_surface()->set_led(HW_LED_BANK_A, true);
+                updateBankLeds();
             }
 
             mt::signals::playStateChanged.connect([this](mt::TransportState state) {
@@ -925,6 +952,11 @@ public:
     {
         if (pad_num >= 0 && pad_num < 16)
         {
+            if (m_hw && m_hw->control_surface()) {
+                // Flash pad bright white/cyan on hit!
+                m_hw->control_surface()->set_pad_rgb(pad_num, 127, 127, 127);
+            }
+
             CPktMgr::HWMsg_t msg;
             msg.pktType = CPktMgr::EN_PKT_TYPE_PAD;
             msg.pktCmd = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
@@ -940,6 +972,13 @@ public:
     {
         if (pad_num >= 0 && pad_num < 16)
         {
+            if (m_hw && m_hw->control_surface()) {
+                // Restore pad to bank idle color
+                uint8_t r = 35, g = 15, b = 0;
+                getBankColor(m_current_bank, r, g, b);
+                m_hw->control_surface()->set_pad_rgb(pad_num, r, g, b);
+            }
+
             CPktMgr::HWMsg_t msg;
             msg.pktType = CPktMgr::EN_PKT_TYPE_PAD;
             msg.pktCmd = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
