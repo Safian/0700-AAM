@@ -524,7 +524,18 @@ public:
     }
 
     void on_encoder_touch(int /*encoder_idx*/, bool /*touched*/) override {}
-    void on_touch_strip(int /*val*/) override {}
+    void on_touch_strip(int val) override
+    {
+        CPktMgr::HWMsg_t msg;
+        msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_SLIDER;
+        msg.pktCmd  = contracts::DeviceControlContracts::SliderCmd::EN_SLIDER_TOUCH_INPUT;
+        msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
+        msg.data    = { juce::jlimit(0, 100, (int)std::round(val * 100.0f / 127.0f)) };
+        contracts::DclSignals::dispatchHardwareInput(msg);
+
+        if (m_hw && m_hw->control_surface())
+            m_hw->control_surface()->set_touch_strip_leds(val);
+    }
     void on_pitch_bend(int /*val*/) override {}
     void on_sustain_pedal(bool /*down*/) override {}
 

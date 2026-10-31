@@ -39,63 +39,63 @@
   </BUSES>
   <FILEMANAGER id="FM_DNB">
     <ASSETS>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/FL_DNB_KICK.wav">
+      <FILE path="samples/FL_DNB_KICK.wav">
         <SLICE id="SL_36" name="FL_DNB_KICK" loopStart="0" loopEnd="11405"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TSP_OVERVIEW_YAANO_snare_fast_rim.wav">
+      <FILE path="samples/TSP_OVERVIEW_YAANO_snare_fast_rim.wav">
         <SLICE id="SL_37" name="TSP_OVERVIEW_YAANO_snare_fast_rim" loopStart="0"
                loopEnd="4725"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/Drums_-_Snare.wav">
+      <FILE path="samples/Drums_-_Snare.wav">
         <SLICE id="SL_38" name="Drums_-_Snare" loopStart="0" loopEnd="30229"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TSP_OVERVIEW_WINGZ_rim_bigpink_D#.wav">
+      <FILE path="samples/TSP_OVERVIEW_WINGZ_rim_bigpink_D#.wav">
         <SLICE id="SL_39" name="TSP_OVERVIEW_WINGZ_rim_bigpink_D#" loopStart="0"
                loopEnd="21711"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TEDDY_KILLERZ_hihat_06.wav">
+      <FILE path="samples/TEDDY_KILLERZ_hihat_06.wav">
         <SLICE id="SL_40" name="TEDDY_KILLERZ_hihat_06" loopStart="0" loopEnd="4962"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/14_DNB_Hats.wav">
+      <FILE path="samples/14_DNB_Hats.wav">
         <SLICE id="SL_41" name="14_DNB_Hats" loopStart="0" loopEnd="60828"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/BOS_DTTE_Crash_One_Shot_Seventies_Organic.wav">
+      <FILE path="samples/BOS_DTTE_Crash_One_Shot_Seventies_Organic.wav">
         <SLICE id="SL_42" name="BOS_DTTE_Crash_One_Shot_Seventies_Organic" loopStart="0"
                loopEnd="220500"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/BOS_NFXL_174_FX_Riser_One_Shot_Complete.wav">
+      <FILE path="samples/BOS_NFXL_174_FX_Riser_One_Shot_Complete.wav">
         <SLICE id="SL_43" name="BOS_NFXL_174_FX_Riser_One_Shot_Complete" loopStart="0"
                loopEnd="220500"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TEDDY_KILLERZ_172_bass_reece_short_13_D.wav">
+      <FILE path="samples/TEDDY_KILLERZ_172_bass_reece_short_13_D.wav">
         <SLICE id="SL_44" name="TEDDY_KILLERZ_172_bass_reece_short_13_D" loopStart="0"
                loopEnd="92303"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/BOS_NFXL_Bass_One_Shot_Bringing_F.wav">
+      <FILE path="samples/BOS_NFXL_Bass_One_Shot_Bringing_F.wav">
         <SLICE id="SL_45" name="BOS_NFXL_Bass_One_Shot_Bringing_F" loopStart="0"
                loopEnd="30767"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/BOS_NFXL_Bass_One_Shot_Him_G#.wav">
+      <FILE path="samples/BOS_NFXL_Bass_One_Shot_Him_G#.wav">
         <SLICE id="SL_46" name="BOS_NFXL_Bass_One_Shot_Him_G#" loopStart="0"
                loopEnd="61535"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TEDDY_KILLERZ_bass_short_bass_hit_02_F#.wav">
+      <FILE path="samples/TEDDY_KILLERZ_bass_short_bass_hit_02_F#.wav">
         <SLICE id="SL_47" name="TEDDY_KILLERZ_bass_short_bass_hit_02_F#" loopStart="0"
                loopEnd="33947"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/MORE_GIRAFFES_bass_plait_pluck_C.wav">
+      <FILE path="samples/MORE_GIRAFFES_bass_plait_pluck_C.wav">
         <SLICE id="SL_48" name="MORE_GIRAFFES_bass_plait_pluck_C" loopStart="0"
                loopEnd="90448"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TSP_REDPILL_172_bass_synth_diplo_D.wav">
+      <FILE path="samples/TSP_REDPILL_172_bass_synth_diplo_D.wav">
         <SLICE id="SL_49" name="TSP_REDPILL_172_bass_synth_diplo_D" loopStart="0"
                loopEnd="122916"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TSP_HTM_175_vocal_wet_mc_multiplex_itsa_boom_box_hook_Gmin.wav">
+      <FILE path="samples/TSP_HTM_175_vocal_wet_mc_multiplex_itsa_boom_box_hook_Gmin.wav">
         <SLICE id="SL_50" name="TSP_HTM_175_vocal_wet_mc_multiplex_itsa_boom_box_hook_Gmin"
                loopStart="0" loopEnd="220500"/>
       </FILE>
-      <FILE path="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/tp_mdbe_174_pad_loop_bright_saws_Amin.wav">
+      <FILE path="samples/tp_mdbe_174_pad_loop_bright_saws_Amin.wav">
         <SLICE id="SL_51" name="tp_mdbe_174_pad_loop_bright_saws_Amin" loopStart="0"
                loopEnd="220500"/>
       </FILE>
@@ -110,7 +110,7 @@
         <CLIP keyNote="36" minNote="36" maxNote="36" samplePlay="0" layerPlay="0"
               gain="1.00" pan="0.00">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/FL_DNB_KICK.wav"
+            <LAYER source="samples/FL_DNB_KICK.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -123,7 +123,7 @@
         <CLIP keyNote="37" minNote="37" maxNote="37" samplePlay="0" layerPlay="0"
               gain="0.70" pan="-0.10">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TSP_OVERVIEW_YAANO_snare_fast_rim.wav"
+            <LAYER source="samples/TSP_OVERVIEW_YAANO_snare_fast_rim.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -136,7 +136,7 @@
         <CLIP keyNote="38" minNote="38" maxNote="38" samplePlay="0" layerPlay="0"
               gain="0.95" pan="0.00">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/Drums_-_Snare.wav"
+            <LAYER source="samples/Drums_-_Snare.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -149,7 +149,7 @@
         <CLIP keyNote="39" minNote="39" maxNote="39" samplePlay="0" layerPlay="0"
               gain="0.75" pan="0.20">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TSP_OVERVIEW_WINGZ_rim_bigpink_D#.wav"
+            <LAYER source="samples/TSP_OVERVIEW_WINGZ_rim_bigpink_D#.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -162,7 +162,7 @@
         <CLIP keyNote="40" minNote="40" maxNote="40" samplePlay="0" layerPlay="0"
               gain="0.65" pan="-0.20">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TEDDY_KILLERZ_hihat_06.wav"
+            <LAYER source="samples/TEDDY_KILLERZ_hihat_06.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -175,7 +175,7 @@
         <CLIP keyNote="41" minNote="41" maxNote="41" samplePlay="0" layerPlay="0"
               gain="0.60" pan="0.25">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/14_DNB_Hats.wav"
+            <LAYER source="samples/14_DNB_Hats.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -188,7 +188,7 @@
         <CLIP keyNote="42" minNote="42" maxNote="42" samplePlay="0" layerPlay="0"
               gain="0.80" pan="-0.15">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/BOS_DTTE_Crash_One_Shot_Seventies_Organic.wav"
+            <LAYER source="samples/BOS_DTTE_Crash_One_Shot_Seventies_Organic.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -201,7 +201,7 @@
         <CLIP keyNote="43" minNote="43" maxNote="43" samplePlay="0" layerPlay="0"
               gain="0.85" pan="0.00">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/BOS_NFXL_174_FX_Riser_One_Shot_Complete.wav"
+            <LAYER source="samples/BOS_NFXL_174_FX_Riser_One_Shot_Complete.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -214,7 +214,7 @@
         <CLIP keyNote="44" minNote="44" maxNote="44" samplePlay="0" layerPlay="0"
               gain="0.90" pan="0.00">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TEDDY_KILLERZ_172_bass_reece_short_13_D.wav"
+            <LAYER source="samples/TEDDY_KILLERZ_172_bass_reece_short_13_D.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -227,7 +227,7 @@
         <CLIP keyNote="45" minNote="45" maxNote="45" samplePlay="0" layerPlay="0"
               gain="0.95" pan="-0.05">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/BOS_NFXL_Bass_One_Shot_Bringing_F.wav"
+            <LAYER source="samples/BOS_NFXL_Bass_One_Shot_Bringing_F.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -240,7 +240,7 @@
         <CLIP keyNote="46" minNote="46" maxNote="46" samplePlay="0" layerPlay="0"
               gain="0.95" pan="0.05">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/BOS_NFXL_Bass_One_Shot_Him_G#.wav"
+            <LAYER source="samples/BOS_NFXL_Bass_One_Shot_Him_G#.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -253,7 +253,7 @@
         <CLIP keyNote="47" minNote="47" maxNote="47" samplePlay="0" layerPlay="0"
               gain="0.85" pan="0.00">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TEDDY_KILLERZ_bass_short_bass_hit_02_F#.wav"
+            <LAYER source="samples/TEDDY_KILLERZ_bass_short_bass_hit_02_F#.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -266,7 +266,7 @@
         <CLIP keyNote="48" minNote="48" maxNote="48" samplePlay="0" layerPlay="0"
               gain="0.80" pan="0.30">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/MORE_GIRAFFES_bass_plait_pluck_C.wav"
+            <LAYER source="samples/MORE_GIRAFFES_bass_plait_pluck_C.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -279,7 +279,7 @@
         <CLIP keyNote="49" minNote="49" maxNote="49" samplePlay="0" layerPlay="0"
               gain="0.85" pan="-0.25">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TSP_REDPILL_172_bass_synth_diplo_D.wav"
+            <LAYER source="samples/TSP_REDPILL_172_bass_synth_diplo_D.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -292,7 +292,7 @@
         <CLIP keyNote="50" minNote="50" maxNote="50" samplePlay="0" layerPlay="0"
               gain="0.90" pan="0.00">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/TSP_HTM_175_vocal_wet_mc_multiplex_itsa_boom_box_hook_Gmin.wav"
+            <LAYER source="samples/TSP_HTM_175_vocal_wet_mc_multiplex_itsa_boom_box_hook_Gmin.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
@@ -305,7 +305,7 @@
         <CLIP keyNote="51" minNote="51" maxNote="51" samplePlay="0" layerPlay="0"
               gain="0.55" pan="0.00">
           <LAYERS>
-            <LAYER source="/Users/szabi/Documents/Projects/Safian/BehringerKick/Kick/demos/Demo 01/samples/tp_mdbe_174_pad_loop_bright_saws_Amin.wav"
+            <LAYER source="samples/tp_mdbe_174_pad_loop_bright_saws_Amin.wav"
                    slice="0" velocityStart="0" velocityEnd="127"/>
           </LAYERS>
           <SPLAY/>
