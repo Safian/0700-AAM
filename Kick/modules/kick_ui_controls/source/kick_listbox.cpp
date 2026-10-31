@@ -612,12 +612,7 @@ namespace ui
         if( checker.shouldBailOut() )
             return;
 
-        auto currentTime = juce::Time::getCurrentTime();
-
-        if( ( currentTime - lastClickTime ).inMilliseconds() <= doubleClickTimeoutMs && currentTime != lastClickTime )
-            mouseDoubleClick( event );
-        else
-            lastClickTime = currentTime;
+        knobClicked();
     }
 
     void KickListBox::resized()
