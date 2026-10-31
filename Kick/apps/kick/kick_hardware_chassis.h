@@ -87,6 +87,16 @@ public:
         ribbon = std::make_unique<kick_hw_ui::HardwareRibbon>();
         addChildComponent( ribbon.get() );
 
+        // 5b. Reusable Utility buttons (FULL LEVEL, 16 LEVELS, ERASE)
+        utilButtons[0] = std::make_unique<kick_hw_ui::HardwareButton>( contracts::DeviceControlContracts::EN_FULL_LEVEL, false, juce::Colour( 0xffffcc00 ), true );
+        addChildComponent( utilButtons[0].get() );
+
+        utilButtons[1] = std::make_unique<kick_hw_ui::HardwareButton>( contracts::DeviceControlContracts::EN_16LEVELS, false, juce::Colour( 0xffffcc00 ), true );
+        addChildComponent( utilButtons[1].get() );
+
+        utilButtons[2] = std::make_unique<kick_hw_ui::HardwareButton>( contracts::DeviceControlContracts::EN_ERASE, false, juce::Colour( 0xffff3b30 ), false );
+        addChildComponent( utilButtons[2].get() );
+
         // 6. Reusable Bank A..D buttons
         const int bankCodes[4] = { contracts::DeviceControlContracts::EN_BANK_A, contracts::DeviceControlContracts::EN_BANK_B, contracts::DeviceControlContracts::EN_BANK_C, contracts::DeviceControlContracts::EN_BANK_D };
         for( int b = 0; b < 4; ++b )
@@ -322,7 +332,24 @@ public:
             if( ribbon )
             {
                 ribbon->setVisible( true );
-                ribbon->setBounds( toScreen( 35.0f, 363.0f, 55.0f, 150.0f ) );
+                ribbon->setBounds( toScreen( 35.0f, 363.0f, 55.0f, 140.0f ) );
+            }
+
+            // Utility buttons under Touch Ribbon
+            if( utilButtons[0] )
+            {
+                utilButtons[0]->setVisible( true );
+                utilButtons[0]->setBounds( toScreen( 45.0f, 531.0f, 38.0f, 26.0f ) );
+            }
+            if( utilButtons[1] )
+            {
+                utilButtons[1]->setVisible( true );
+                utilButtons[1]->setBounds( toScreen( 45.0f, 593.0f, 38.0f, 26.0f ) );
+            }
+            if( utilButtons[2] )
+            {
+                utilButtons[2]->setVisible( true );
+                utilButtons[2]->setBounds( toScreen( 45.0f, 655.0f, 38.0f, 26.0f ) );
             }
 
             // Banks (Bank A..D caps on chassis: x ~ 441, 504, 567, 630; y ~ 362; w=34, h=25)
@@ -725,6 +752,7 @@ public:
         if( recKnob ) recKnob->setVisible( false );
         if( jogWheel ) jogWheel->setVisible( false );
         if( ribbon ) ribbon->setVisible( false );
+        for( auto& u : utilButtons ) if( u ) u->setVisible( false );
         for( auto& b : bankButtons ) if( b ) b->setVisible( false );
         for( auto& t : transButtons ) if( t ) t->setVisible( false );
     }
@@ -743,6 +771,7 @@ public:
     std::unique_ptr<kick_hw_ui::HardwareRotaryKnob> recKnob;
     std::unique_ptr<kick_hw_ui::HardwareJogWheel>   jogWheel;
     std::unique_ptr<kick_hw_ui::HardwareRibbon>     ribbon;
+    std::unique_ptr<kick_hw_ui::HardwareButton>     utilButtons[3];
     std::unique_ptr<kick_hw_ui::HardwareButton>     bankButtons[4];
     std::unique_ptr<kick_hw_ui::HardwareButton>     transButtons[5];
 

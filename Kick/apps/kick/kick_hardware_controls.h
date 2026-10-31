@@ -359,13 +359,13 @@ private:
 //==============================================================================
 /**
  * 4. HardwareButton: Physical Backlit Button Component.
- * Supports circular transport buttons and rectangular mode/bank buttons.
+ * Supports circular transport buttons and rectangular mode/bank/utility buttons.
  */
 class HardwareButton : public juce::Component
 {
 public:
-    HardwareButton( int code = 0, bool circular = false, juce::Colour col = juce::Colour( 0xffff9900 ) )
-        : buttonCode( code ), isCircular( circular ), ledColour( col )
+    HardwareButton( int code = 0, bool circular = false, juce::Colour col = juce::Colour( 0xffff9900 ), bool isToggle = false )
+        : buttonCode( code ), isCircular( circular ), ledColour( col ), toggleMode( isToggle )
     {
         setOpaque( false );
     }
@@ -377,6 +377,7 @@ public:
     bool getLit() const noexcept { return isLit; }
 
     void setLedColour( juce::Colour col ) { ledColour = col; repaint(); }
+    void setToggleMode( bool toggle ) { toggleMode = toggle; }
 
     void paint( juce::Graphics& g ) override
     {
@@ -385,38 +386,50 @@ public:
             auto r = getLocalBounds().toFloat().reduced( 1.5f );
             if( isCircular )
             {
-                g.setColour( ledColour.withAlpha( isDown ? 0.45f : 0.25f ) );
+                g.setColour( ledColour.withAlpha( isDown ? 0.55f : 0.35f ) );
                 g.fillEllipse( r );
                 g.setColour( ledColour );
                 g.drawEllipse( r, 2.0f );
             }
             else
             {
-                g.setColour( ledColour.withAlpha( isDown ? 0.40f : 0.20f ) );
+                g.setColour( ledColour.withAlpha( isDown ? 0.45f : 0.25f ) );
                 g.fillRoundedRectangle( r, 3.0f );
                 g.setColour( ledColour.withAlpha( isDown ? 1.0f : 0.85f ) );
-                g.drawRoundedRectangle( r, 3.0f, 1.0f );
+                g.drawRoundedRectangle( r, 3.0f, 1.5f );
             }
         }
     }
 
     void mouseDown( const juce::MouseEvent& ) override
     {
-        isDown = true;
-        sendDclButton( buttonCode, true );
+        if( toggleMode )
+        {
+            isLit = !isLit;
+            sendDclButton( buttonCode, isLit );
+        }
+        else
+        {
+            isDown = true;
+            sendDclButton( buttonCode, true );
+        }
         repaint();
     }
 
     void mouseUp( const juce::MouseEvent& ) override
     {
-        isDown = false;
-        sendDclButton( buttonCode, false );
-        repaint();
+        if( !toggleMode )
+        {
+            isDown = false;
+            sendDclButton( buttonCode, false );
+            repaint();
+        }
     }
 
 private:
     int          buttonCode{ 0 };
     bool         isCircular{ false };
+    bool         toggleMode{ false };
     bool         isDown{ false };
     bool         isLit{ false };
     juce::Colour ledColour{ 0xffff9900 };
@@ -424,7 +437,7 @@ private:
 
 //==============================================================================
 /**
- * 5. HardwareRibbon: Touch Ribbon Strip Component with 20-segment LED ladder.
+ * 5. HardwareRibbon: Touch Ribbon Strip Component with authentic 16-segment LED ladder.
  */
 class HardwareRibbon : public juce::Component
 {
@@ -434,20 +447,78 @@ public:
         setOpaque( false );
     }
 
+    void setValue( float val )
+    {
+        touchValue = juce::jlimit( 0.0f, 1.0f, val );
+        repaint();
+    }
+
+    float getValue() const noexcept { return touchValue; }
+
     void paint( juce::Graphics& g ) override
     {
+        auto bounds = getLocalBounds().toFloat();
+        float w = bounds.getWidth();
+        float h = bounds.getHeight();
+        if( w <= 0 || h <= 0 ) return;
+
+        // 1. Draw touch thumb / highlight across the touch area when active
         if( isTouching )
         {
-            auto r = getLocalBounds().toFloat();
-            float fillH = r.getHeight() * touchValue;
-            float topY  = r.getBottom() - fillH;
+            float fillH = h * touchValue;
+            float topY  = bounds.getBottom() - fillH;
 
-            // Draw dynamic LED ladder
-            g.setColour( juce::Colour( 0x44ff2d55 ) );
-            g.fillRect( r.getX(), topY, r.getWidth(), fillH );
+            // Touch position indicator bar (neon amber / cyan glow)
+            g.setColour( juce::Colour( 0x55ffcc00 ) );
+            g.fillRect( 2.0f, topY - 3.0f, w * 0.65f, 6.0f );
 
-            g.setColour( juce::Colour( 0xffff2d55 ) );
-            g.fillRect( r.getX(), topY - 2.0f, r.getWidth(), 4.0f );
+            g.setColour( juce::Colour( 0xffffffff ) );
+            g.fillRect( 4.0f, topY - 1.0f, w * 0.60f, 2.0f );
+        }
+
+        // 2. Draw authentic 16-segment LED ladder on the right side
+        // In base coords, the LED column is on the right side of the bevel
+        float ledX = w * 0.72f;
+        float ledW = juce::jmax( 3.0f, w * 0.16f );
+        float ledTopY = h * 0.07f;
+        float ledH = h * 0.86f;
+
+        const int numSegments = 16;
+        float segSpacing = 1.5f;
+        float totalGaps = (numSegments - 1) * segSpacing;
+        float segH = ( ledH - totalGaps ) / (float)numSegments;
+
+        for( int i = 0; i < numSegments; ++i )
+        {
+            // Segment 0 is at bottom, 15 is at top
+            float segY = ledTopY + ( ( numSegments - 1 - i ) * ( segH + segSpacing ) );
+            float segThreshold = (float)( i + 1 ) / (float)numSegments;
+
+            bool isLit = ( touchValue >= segThreshold - 0.03f );
+
+            if( isLit )
+            {
+                // Lit LED segment: vivid red / amber
+                juce::Colour col = ( i >= 12 ) ? juce::Colour( 0xffff3322 ) : juce::Colour( 0xffff2233 );
+
+                // Outer glow
+                g.setColour( col.withAlpha( 0.45f ) );
+                g.fillRoundedRectangle( ledX - 1.0f, segY - 1.0f, ledW + 2.0f, segH + 2.0f, 1.0f );
+
+                // Core segment
+                g.setColour( col );
+                g.fillRoundedRectangle( ledX, segY, ledW, segH, 1.0f );
+
+                // Bright center highlight
+                g.setColour( juce::Colour( 0xffff9988 ) );
+                g.fillRect( ledX + 1.0f, segY + 0.5f, ledW - 2.0f, 1.0f );
+            }
+            else
+            {
+                // Unlit segment: faint dark bezel
+                g.setColour( juce::Colour( 0x221a1111 ) );
+                g.fillRoundedRectangle( ledX, segY, ledW, segH, 0.8f );
+            }
         }
     }
 
