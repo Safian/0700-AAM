@@ -392,10 +392,10 @@ public:
             }
             else
             {
-                g.setColour( ledColour.withAlpha( isDown ? 0.45f : 0.25f ) );
-                g.fillRoundedRectangle( r, 4.0f );
-                g.setColour( ledColour );
-                g.drawRoundedRectangle( r, 4.0f, 2.0f );
+                g.setColour( ledColour.withAlpha( isDown ? 0.40f : 0.20f ) );
+                g.fillRoundedRectangle( r, 3.0f );
+                g.setColour( ledColour.withAlpha( isDown ? 1.0f : 0.85f ) );
+                g.drawRoundedRectangle( r, 3.0f, 1.0f );
             }
         }
     }

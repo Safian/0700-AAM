@@ -325,13 +325,13 @@ public:
                 ribbon->setBounds( toScreen( 35.0f, 363.0f, 55.0f, 150.0f ) );
             }
 
-            // Banks
+            // Banks (Bank A..D caps on chassis: x ~ 441, 504, 567, 630; y ~ 362; w=34, h=25)
             for( int b = 0; b < 4; ++b )
             {
                 if( bankButtons[b] )
                 {
                     bankButtons[b]->setVisible( true );
-                    bankButtons[b]->setBounds( toScreen( 440.0f + b * 60.0f, 350.0f, 38.0f, 28.0f ) );
+                    bankButtons[b]->setBounds( toScreen( 441.0f + b * 63.0f, 362.0f, 34.0f, 25.0f ) );
                 }
             }
 
@@ -589,13 +589,13 @@ private:
     {
         using namespace contracts;
 
-        // Bank A..D: Y in [348, 380]
-        if( by >= 348.0f && by <= 380.0f )
+        // Bank A..D: Y in [360, 390]
+        if( by >= 360.0f && by <= 390.0f )
         {
             if( bx >= 438.0f && bx <= 478.0f ) return DeviceControlContracts::EN_BANK_A;
-            if( bx >= 498.0f && bx <= 538.0f ) return DeviceControlContracts::EN_BANK_B;
-            if( bx >= 558.0f && bx <= 598.0f ) return DeviceControlContracts::EN_BANK_C;
-            if( bx >= 618.0f && bx <= 658.0f ) return DeviceControlContracts::EN_BANK_D;
+            if( bx >= 501.0f && bx <= 541.0f ) return DeviceControlContracts::EN_BANK_B;
+            if( bx >= 564.0f && bx <= 604.0f ) return DeviceControlContracts::EN_BANK_C;
+            if( bx >= 627.0f && bx <= 667.0f ) return DeviceControlContracts::EN_BANK_D;
         }
 
         // Mode row: Y in [410, 440]
