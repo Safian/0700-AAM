@@ -27,13 +27,13 @@ juce::File getAppDirs( DirType T )
     const auto resource = juce::SystemStats::getEnvironmentVariable("KICK_RESOURCE_ROOT", {});
     const auto data = juce::SystemStats::getEnvironmentVariable("KICK_DATA_ROOT", {});
     if (resource.isNotEmpty()) {
-        const auto root = juce::File::getCurrentWorkingDirectory().getChildFile(resource);
+        const auto root = juce::File::isAbsolutePath(resource) ? juce::File(resource) : juce::File::getCurrentWorkingDirectory().getChildFile(resource);
         if (T == MTAssets) return root.getChildFile("assets");
         if (T == MTTemp) return root.getChildFile("templates");
         if (T == MTDemos) return root.getChildFile("demos");
     }
     if (data.isNotEmpty()) {
-        const auto root = juce::File::getCurrentWorkingDirectory().getChildFile(data);
+        const auto root = juce::File::isAbsolutePath(data) ? juce::File(data) : juce::File::getCurrentWorkingDirectory().getChildFile(data);
         if (T == MTPrefs) return root.getChildFile("prefs");
         if (T == MTProjects) return root.getChildFile("projects");
         if (T == MTLog) return root.getChildFile("logs");
@@ -120,20 +120,35 @@ juce::File getAppDirs( DirType T )
     else if( T == MTPrefs )
         return resolveMacPath( "./prefs" );
 #elif defined( LINUX ) || defined( __linux__ )
+    auto resolveLinuxPath = [] (const juce::String& primary, const juce::String& fallback) -> juce::File
+    {
+        juce::File prim (primary);
+        if (prim.exists())
+            return prim;
+        return juce::File (fallback);
+    };
+
+    auto makeDir = [] (const juce::File& f) -> juce::File
+    {
+        if (!f.exists())
+            f.createDirectory();
+        return f;
+    };
+
     if( T == MTAssets )
-        return juce::File( "/app/assets" );
+        return resolveLinuxPath( "/data/assets", "/app/assets" );
     else if( T == MTSamples )
-        return juce::File( "/data/sounds" );
+        return makeDir( resolveLinuxPath( "/data/sounds", "/app/sounds" ) );
     else if( T == MTDemos )
-        return juce::File( "/app/demos/" );
+        return resolveLinuxPath( "/data/demos", "/app/demos" );
     else if( T == MTTemp )
-        return juce::File( "/app/templates/" );
+        return resolveLinuxPath( "/data/templates", "/app/templates" );
     else if( T == MTProjects )
-        return juce::File( "/home/Kick/projects/" );
+        return makeDir( resolveLinuxPath( "/data/projects", "/home/Kick/projects" ) );
     else if( T == MTLog )
-        return juce::File( "/home/Kick/logs/" );
+        return makeDir( resolveLinuxPath( "/data/logs", "/home/Kick/logs" ) );
     else if( T == MTPrefs )
-        return juce::File( "/home/Kick/prefs" );
+        return makeDir( resolveLinuxPath( "/data/prefs", "/home/Kick/prefs" ) );
 #endif
 
     return juce::File::getSpecialLocation( juce::File::tempDirectory );

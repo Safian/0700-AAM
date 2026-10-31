@@ -28,6 +28,9 @@
 #if JUCE_MAC
  #include "kick_hardware_chassis.h"
 #endif
+#if JUCE_LINUX || __linux__
+ #include "kick_hardware_bridge.h"
+#endif
 #if KICK_APP_SMOKE_TEST
  #include "../../tests/platform/AppSmoke.h"
 #endif
@@ -192,6 +195,13 @@ public:
 #elif( JUCE_ANDROID || JUCE_LINUX || __linux__ )
         if (!smoke) juce::Desktop::getInstance().setKioskModeComponent( w.get(), false );
 #endif
+#if JUCE_LINUX || __linux__
+        if (!smoke)
+        {
+            hwBridge = std::make_unique<KickHardwareBridge>();
+            hwBridge->start( w.get(), &kick_ui::KickHome::Instance() );
+        }
+#endif
         if (smoke) juce::Timer::callAfterDelay(1500, [this] {
 #if KICK_APP_SMOKE_TEST
             const auto error = runKickAppSmoke();
@@ -228,6 +238,10 @@ public:
         MelatoninPerfetto::get().endSession();
 #endif
         // Add your application's shutdown code here ...
+#if JUCE_LINUX || __linux__
+        if (hwBridge) hwBridge->stop();
+        hwBridge.reset();
+#endif
         Controls::InputEvents::shutdown();
         mt::getAudioInterface().closeProject();
         w = nullptr;
@@ -644,6 +658,9 @@ private:
     std::unique_ptr<KickDeviceAdapter>    adapter;
     std::unique_ptr<KickAudioEngineAdapter>    engineAdapter;
     std::shared_ptr<contracts::AudioInterface> audioInterface;
+#if JUCE_LINUX || __linux__
+    std::unique_ptr<KickHardwareBridge>        hwBridge;
+#endif
 #if PERFETTO
     std::unique_ptr<perfetto::TracingSession> tracingSession;
 #endif
