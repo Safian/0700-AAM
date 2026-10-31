@@ -160,7 +160,9 @@ void AppTrack::populate( void )
 
 void AppTrack::onProjectLoaded( juce::File )
 {
-    populate();
+    juce::MessageManager::callAsync( [this]() {
+        populate();
+    } );
 }
 
 void AppTrack::onTrackSelectionChange( const mt::MTSelected& Selected )

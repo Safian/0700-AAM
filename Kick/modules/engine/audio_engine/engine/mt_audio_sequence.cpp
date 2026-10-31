@@ -60,7 +60,9 @@ namespace mt
             mFile.readFrom( stream );
         }
 
-        for( auto it : vTree )
+        auto tracksVT = vTree.getChildWithName( IDs::TRACKS );
+        auto targetTree = tracksVT.isValid() ? tracksVT : vTree;
+        for( auto it : targetTree )
         {
             if( it.hasType( IDs::TRACK ) )
             {

@@ -100,12 +100,12 @@ namespace AudIO
         unsigned int shSteps{ 0 };
         unsigned int shIncrement{ 0 };
 
-        inline void  recalculate() noexcept override;
+        void         recalculate() noexcept override;
         inline float poly_blep( float hp ) const;
-        inline void  advance_internal( unsigned int NumSamples ) noexcept;
+        void         advance_internal( unsigned int NumSamples ) noexcept;
 
-        inline float nextSample_internal( unsigned int NumSamples ) noexcept;
-        inline float nextSample_polyBlep( unsigned int NumSamples ) noexcept;
+        float        nextSample_internal( unsigned int NumSamples ) noexcept;
+        float        nextSample_polyBlep( unsigned int NumSamples ) noexcept;
     };
 
 };
