@@ -20,6 +20,7 @@ private:
     juce::Image m_framebuffer_img;
     int m_last_touch_x[10] = { 0 };
     int m_last_touch_y[10] = { 0 };
+    juce::Component::SafePointer<juce::Component> m_touch_targets[10];
     std::chrono::steady_clock::time_point m_last_tap_time;
     bool m_tempo_edit_active = false;
     int m_frame_counter = 0;
@@ -43,14 +44,71 @@ private:
         float kx = x * (1024.0f / 1280.0f);
         float ky = y * (600.0f / 800.0f);
 
-        juce::MessageManager::callAsync([this, slot, kx, ky, is_up]() {
-            if (!m_window) return;
-            auto* peer = m_window->getPeer();
-            if (!peer) return;
-            juce::Point<float> pt(kx, ky);
+        juce::MessageManager::callAsync([this, slot, x, y, kx, ky, is_down, is_up]() {
+            if (!m_root) return;
+
+            int ix = juce::roundToInt(kx);
+            int iy = juce::roundToInt(ky);
+
+            auto* target = m_root->getComponentAt(ix, iy);
+            if (!target) target = m_root;
+
+            auto localPt = target->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
             juce::ModifierKeys mods = is_up ? juce::ModifierKeys() : juce::ModifierKeys::leftButtonModifier;
-            peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::touch,
-                                   pt, mods, 1.0f, 0.0f, juce::Time::currentTimeMillis(), {}, slot);
+
+            juce::MouseEvent e(juce::Desktop::getInstance().getMainMouseSource(),
+                               localPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                               target, target,
+                               juce::Time::getCurrentTime(),
+                               localPt,
+                               juce::Time::getCurrentTime(),
+                               1, false);
+
+            printf("[TOUCH] slot=%d (%d,%d)->(%.1f,%.1f) target='%s' [%s]\n",
+                   slot, x, y, kx, ky, target->getName().toRawUTF8(),
+                   is_down ? "DOWN" : (is_up ? "UP" : "DRAG"));
+            fflush(stdout);
+
+            if (is_down)
+            {
+                if (slot >= 0 && slot < 10) m_touch_targets[slot] = target;
+                target->mouseDown(e);
+            }
+            else if (is_up)
+            {
+                auto* downTarget = (slot >= 0 && slot < 10) ? m_touch_targets[slot].getComponent() : nullptr;
+                if (downTarget) {
+                    auto downLocalPt = downTarget->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
+                    juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
+                                           downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                           downTarget, downTarget,
+                                           juce::Time::getCurrentTime(),
+                                           downLocalPt,
+                                           juce::Time::getCurrentTime(),
+                                           1, false);
+                    downTarget->mouseUp(downE);
+                    if (slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
+                } else {
+                    target->mouseUp(e);
+                }
+            }
+            else
+            {
+                auto* downTarget = (slot >= 0 && slot < 10) ? m_touch_targets[slot].getComponent() : nullptr;
+                if (downTarget) {
+                    auto downLocalPt = downTarget->getLocalPoint(m_root, juce::Point<int>(ix, iy)).toFloat();
+                    juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
+                                           downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                           downTarget, downTarget,
+                                           juce::Time::getCurrentTime(),
+                                           downLocalPt,
+                                           juce::Time::getCurrentTime(),
+                                           1, false);
+                    downTarget->mouseDrag(downE);
+                } else {
+                    target->mouseDrag(e);
+                }
+            }
         });
     }
 
