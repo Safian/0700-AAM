@@ -33,3 +33,15 @@ Eszköz: MPC Key 61, `192.168.0.30`. Alap: `fork/safian/main` `4605b75e` (a Sess
 
 ## Nyitott
 Fizikai próba kell: a 3. és 4. hiba pontos oka (gomb-naplózás kell), LOCATE+STEP, SHIFT+STOP, LED két színe, pad RGB, RECALL, PAN→CC10, érintő skálázás.
+
+## 2. kör (önállóan, a felhasználó nélkül)
+Ág a helyi próbákkal: `hw-local-patches` (a `fork`-on; ideiglenes startup-patch, `seekSteps`, `[AKAI-BTN]`/`[AKAI-LED]` naplózás, `ledraw`/`aftertouch` ideiglenes parancsok). Build-recept: `docs/AKAI_MPC_KEY61_BUILD_RECIPE.md`.
+
+### 7. hiba – spontán SIGSEGV üresjáratban (új)
+A `KICK_AKAI_PORT0=0` módban futó példány (PID 29666, kb. 25 perc futás után, nem nyúlt hozzá senki) összeomlott: `/data/coredumps/Kick.2026-11-01T052810Z.core.zst`, `signal=11`. Backtrace: `Aura::Aura::processReplacing (this=0x3f2aa08, sampleFrames=0)` at `AudIO/AudIO/airwindows/src/Aura/AuraProc.cpp:78`, az audio szálban (a további frame-ek `??`, "corrupt stack?"). **Korlát:** a core az előző `-g` buildből való, a szimbólumokat az utána újraépített binaryval oldottam fel (az AudIO kód nem változott, a függvénynév valószínű, de a pontos sor nem biztos). Ok nem megállapítva; a `sampleFrames=0` hívás gyanús.
+
+### (a) Indulási LED-bájtok (`initButtonLeds`, alapértelmezett mód, `[AKAI-LED]` napló)
+A Port 1-re először mind a 36 LED-re `0x90 <note> 0x00` megy (led=0..35, `value=0`), majd STOP (note 81) `127`, bank A (note 35) `3`, MAIN (note 52) `127`. A felhasználó szerint ennek ellenére minden gomb világít, tehát a `0x90 <note> 0` nem kapcsolja ki a LED-eket (vagy a firmware alapból világít és ezt figyelmen kívül hagyja). Az alternatívák (`0x80 <note> 0`, `0x90` 1/2/3/4/127 értékekkel) bájtszinten előkészítve vannak (`echo "ledraw 90 52 03" > /data/kick_cmd`), de **a hatásuk nem ellenőrizhető**: nincs LED-visszaolvasás, a felhasználó alszik, a Macen csak az iPhone Continuity Camera van, azt nem használtam (nem a hardverre néz, és engedély nélkül nem fényképezek). **Fizikai próba kell.**
+
+### (c) Pad-tartás ismétlése
+A bridge aftertouch-kapuja (`m_pad_aftertouch_enabled`) kódban alapból `false`, a UI Hardware beállítása kapcsolja be. `echo "aftertouch 0|1" > /data/kick_cmd` ideiglenes parancs kész (`[CMD] aftertouch gate=0` a naplóban), de a nyomva tartott pad fizikai nyomás nélkül nem szimulálható. **Fizikai próba kell** (előbb kapu `0`, utána `1`, és figyelni, hogy a gyors ismétlés megszűnik-e).
