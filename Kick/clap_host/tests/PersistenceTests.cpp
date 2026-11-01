@@ -308,6 +308,46 @@ int main(int argc, char** argv) {
         }
         check(doc.close(), "close N1 document");
     }
+    {   // P1: N1 layout, then the drive of A disappears. A has no live-relative path (name clash), so its saved reference must come
+        // from the session's source -> copy map, not be rewritten to the absolute path (silent mute layer on reopen).
+        const auto projFile = directory.getChildFile("p1/project.xml");
+        const auto samples = projFile.getParentDirectory().getChildFile("samples");
+        const auto zeta = directory.getChildFile("UsbP1/Zeta/kick.wav"), alpha = directory.getChildFile("UsbP1/Alpha/kick.wav");
+        check(zeta.create().wasOk() && zeta.replaceWithText("zeta") && alpha.create().wasOk() && alpha.replaceWithText("alpha"), "seed P1 sources");
+        mt::KickXML doc("ROOT", ".xml", "1");
+        check(doc.loadOrCreate(projFile).isValid(), "create P1 document");
+        juce::ValueTree lz("LAYER"), la("LAYER");
+        lz.setProperty("source", zeta.getFullPathName(), nullptr); la.setProperty("source", alpha.getFullPathName(), nullptr);
+        doc.getState().appendChild(lz, nullptr); doc.getState().appendChild(la, nullptr);
+        auto savedAt = [&](int i) { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(i).getProperty("source").toString(); };
+        check(doc.save() && savedAt(0) == "samples/kick.wav" && savedAt(1) == "samples/Alpha_kick.wav", "P1: first save maps both");
+        check(zeta.deleteFile(), "P1: zeta source disappears");
+        doc.getState().setProperty("touch", 1, nullptr);
+        check(doc.save(), "P1: save with a missing source succeeds");
+        check(savedAt(0) == "samples/kick.wav" && savedAt(1) == "samples/Alpha_kick.wav", "P1: missing source keeps its saved relative copy");
+        check(lz.getProperty("source").toString() == zeta.getFullPathName(), "P1: live tree untouched");
+        check(samples.getChildFile("kick.wav").loadFileAsString() == "zeta" && samples.findChildFiles(juce::File::findFiles, false, "*.wav").size() == 2, "P1: copies intact");
+        check(doc.close(), "close P1 document");
+    }
+    {   // P1b: two Kicks_kick sources vanish together and the layer order changes: each source keeps its own copy.
+        const auto projFile = directory.getChildFile("p1b/project.xml");
+        const auto k1 = directory.getChildFile("UsbP1b/Kit1/Kicks/kick.wav"), k2 = directory.getChildFile("UsbP1b/Kit2/Kicks/kick.wav");
+        const auto taken = projFile.getParentDirectory().getChildFile("samples/kick.wav");
+        check(taken.create().wasOk() && taken.replaceWithText("own"), "seed P1b taken sample");
+        check(k1.create().wasOk() && k1.replaceWithText("kit1") && k2.create().wasOk() && k2.replaceWithText("kit2"), "seed P1b sources");
+        mt::KickXML doc("ROOT", ".xml", "1");
+        check(doc.loadOrCreate(projFile).isValid(), "create P1b document");
+        juce::ValueTree l1("LAYER"), l2("LAYER");
+        l1.setProperty("source", k1.getFullPathName(), nullptr); l2.setProperty("source", k2.getFullPathName(), nullptr);
+        doc.getState().appendChild(l1, nullptr); doc.getState().appendChild(l2, nullptr);
+        auto savedAt = [&](int i) { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(i).getProperty("source").toString(); };
+        check(doc.save() && savedAt(0) == "samples/Kicks_kick.wav" && savedAt(1) == "samples/Kicks_kick_2.wav", "P1b: first save maps both");
+        check(k1.deleteFile() && k2.deleteFile(), "P1b: both sources disappear");
+        doc.getState().moveChild(1, 0, nullptr);
+        check(doc.save(), "P1b: save succeeds");
+        check(savedAt(0) == "samples/Kicks_kick_2.wav" && savedAt(1) == "samples/Kicks_kick.wav", "P1b: reordered layers keep their own copies");
+        check(doc.close(), "close P1b document");
+    }
     {   // O1: after a save A is live-relative (samples/kick.wav). A new external B with identical bytes, or A added again as a new
         // node, must not adopt that file: the live tree already claims it. Each gets its own copy and stays absolute live.
         const auto projFile = directory.getChildFile("o1/project.xml");

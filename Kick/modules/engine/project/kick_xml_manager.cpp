@@ -199,6 +199,7 @@ juce::ValueTree KickXML::loadOrCreate(const juce::File& requested) {
         }
         vt.removeListener(this);
         vt = loaded;
+        sessionCopies.clear();
         xmlFileDir = directory; xmlFile = file; directoryText = directory.getFullPathName();
         dirty.store(!existing);
         vt.addListener(this);
@@ -267,11 +268,18 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
     // Sample paths stay rewritten in the live document as before: relativizeSamplePaths copies each foreign sample into the
     // project once and is only idempotent because the live path becomes relative (a copy would duplicate files every save).
     CopiedMap copied;
+    // Missing sources resolve through the copies this session made (and recognised) for them, so a vanished source keeps its own
+    // saved file instead of being guessed by name or written back as an absolute path.
+    for (auto it = sessionCopies.begin(); it != sessionCopies.end();) {
+        if (!it->second.existsAsFile()) it = sessionCopies.erase(it);
+        else { if (!juce::File(it->first).existsAsFile()) copied[it->first] = it->second; ++it; }
+    }
     NameClashSet names;
     LiveRefSet liveRefs;
     juce::String copyError;
     collectExternalSamples(vt, xmlFile.getParentDirectory(), names, liveRefs);
     relativizeSamplePaths(vt, xmlFile.getParentDirectory(), false, copied, names, liveRefs, copyError);
+    for (const auto& entry : copied) sessionCopies[entry.first] = entry.second;
     if (copyError.isNotEmpty()) return failSave("Cannot copy sample " + copyError, reason);
     // Sources renamed (destination differs from their own file name) or sharing a file name with another external source are
     // relativised on the serialised copy only; the live source stays absolute.
@@ -317,6 +325,6 @@ bool KickXML::close() {
 void KickXML::detachWithoutSaving() {
     timer.stopTimer(); cancelPendingUpdate(); autosaveDue.store(false);
     const juce::ScopedLock guard(lock);
-    xmlFile = juce::File{}; xmlFileDir = juce::File{}; directoryText.clear();
+    xmlFile = juce::File{}; xmlFileDir = juce::File{}; directoryText.clear(); sessionCopies.clear();
 }
 } // namespace mt
