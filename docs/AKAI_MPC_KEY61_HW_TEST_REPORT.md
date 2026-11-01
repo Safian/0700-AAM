@@ -127,3 +127,13 @@ A TC gomb megnyitja a Timing Correct ablakot. Mivel az érintés nem működik, 
 
 ### Main Volume
 A forgatásra a hangerő nem változott; a TODO szerint analóg, MIDI-t nem küld, input-eszköz sincs. A nyers MIDI-s mérés (`[AKAI-RAW]`, ág: `hw-touch-diag`) a build után következik.
+
+## 8. kör – érintés-javítás (`fd2480de`) hardveren, `[TOUCH]` napló
+Build: `safian/main` `fd2480de` + `[AKAI-RAW]` napló (ág `hw-diag-raw`, csak az utóbbi tér el). A `[TOUCH] init: framebuffer touch space 1280x800 -> UI 1024x600` sor megjelenik.
+
+| Út | Eredmény |
+|---|---|
+| Injektált `touch 440 145` (framebuffer) | `ui=(352,108)`, `target=KickToggleButton 'Program' 133x44`, `peer=1`, "native peer path"; **a snapshot nem változik** (md5 `eec1c1112cb6` előtte és utána) |
+| Fizikai koppintás a Program fülre | `[AKAI-TOUCH] down slot=0 raw=(395,1346) range=2048x2048 -> fb=(438,154)`, `ui=(350,115)`, `target=KickToggleButton 'Program'`, "native peer path"; **a képernyő nem vált** |
+
+A koordináta-átvitel (nyers → framebuffer → UI) és a hit-test **helyes**; a hiba az esemény kézbesítésében van. Mindkét esetben a "native peer path" fut (`peer=1`), tehát a `peer->handleMouseEvent(InputSourceType::touch, ...)` hívás nem jut el a gombig. Gyanú: a JUCE multitouch patch (`juce_MouseInputSource`/`MouseInputSourceList`) csak `xi.opcode != 0` esetén hoz létre touch-forrást (`canUseTouch()` is `xi.opcode != 0`), X nélkül nincs touch bemeneti forrás, ezért az `InputSourceType::touch` esemény elvész. Javaslat: X nélkül `InputSourceType::mouse` (0. forrás) használata a peer-útban, vagy a peer-nélküli kézi útra váltás.
