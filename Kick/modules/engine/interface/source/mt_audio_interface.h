@@ -458,6 +458,15 @@ namespace mt
         bool                        toggleTimingCorrectEnabled() { const bool n = !tcEnabled.load(); tcEnabled.store( n ); return n; } // UI thread
         void                        setTimingCorrectParams( const track::timingCorrectInfo& Info ) { tcParams = Info; }
         const track::timingCorrectInfo& getTimingCorrectParams() const { return tcParams; }
+        // AUTOMATION (track LEVEL lanes; track pan has no consumer in the engine, so it is not automatable).
+        // Mode (0 Off, 1 Read, 2 Write; global, session-only, not persisted): Read plays the lanes back on the tick thread,
+        // Write records level moves made while the track plays, Off ignores lanes. Lanes persist with the project.
+        void setAutomationMode( int Mode );
+        int  getAutomationMode();
+        // Clears the lane of the track in Selection as one undo step. Returns 0, -1 if no such track.
+        int clearAutomation( const MTSelected& Selection );
+        // Clears the lanes of every track of every sequence (one undo step).
+        void clearAllAutomation();
         int randomNotes( const MTSelected& Selection, const track::randomEventsInfo& Info );
         int pitchQuantizeNotes( const MTSelected& Selection, const track::pitchQuantizeInfo& Info );
         int explode( const MTSelected& Selection );

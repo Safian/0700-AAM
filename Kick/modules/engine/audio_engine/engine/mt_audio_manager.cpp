@@ -293,6 +293,38 @@ namespace mt
     }
 
     ////////////////////////////
+    //// Automation..
+    ////////////////////////////
+    void MTAudioManager::setAutomationMode( int Mode )
+    {
+        Mode = automation::clampMode( Mode );
+        if( Mode == automationMode.exchange( Mode ) )
+            return;
+        forAllSequences( [Mode]( MTSequence* S ) {
+            S->forAllTracks( [Mode]( MTTrack* T ) { T->automationModeChanged( Mode ); } );
+        } );
+    }
+
+    void MTAudioManager::clearAutomation( int Scope )
+    {
+        undoManager.beginNewTransaction( "Clear Automation" );
+        if( 0 == Scope )
+        {
+            if( auto* t = getTrack() )
+                t->clearAutomation( true );
+        }
+        else if( 1 == Scope )
+        {
+            if( auto* s = getSequence( selected.sequence ) )
+                s->forAllTracks( []( MTTrack* T ) { T->clearAutomation( true ); } );
+        }
+        else
+            forAllSequences( []( MTSequence* S ) {
+                S->forAllTracks( []( MTTrack* T ) { T->clearAutomation( true ); } );
+            } );
+    }
+
+    ////////////////////////////
     //// Listeners..
     ////////////////////////////
     void MTAudioManager::addListener( MTAudioInterfaceListener* l )
