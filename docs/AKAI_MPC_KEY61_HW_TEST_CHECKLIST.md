@@ -40,7 +40,7 @@ Minden gomb: lenyomás → várt funkció; felengedés → **nem ragad be** (T6b
 - [ ] **`<<` / `>>`**: egy ütem vissza/előre **lejátszás közben**, **megállítva**, **szünetben**; hosszú hang vagy ratchet az ugrás fölött nem lóg be; nincs hang-elcsúszás vagy kiesés.
 - [ ] **LOCATE+`<<`** = 1. ütem, **LOCATE+`>>`** = az utolsó ütem eleje.
 - [ ] **Shift+STOP (RETURN)**: megáll, a kijelzett playhead az 1. ütemre áll; a következő PLAY onnan indul. PLAY START parkolt seek után elölről indul.
-- [ ] LOCATE+`<`/`>` (előző/következő esemény): **nincs megvalósítva**.
+- [ ] **LOCATE+`<` / `>`**: a kiválasztott track előző/következő note-kezdetére ugrik lejátszás közben és megállítva (PLAY a parkolt tickről indul); hosszú hang az ugrás fölött; nincs wrap (az első esemény előtt tick 0).
 
 ## 4. LED-ek (**!** a kétszínű LED-ek mostantól 3-as szintet kapnak 127 helyett)
 - [ ] PLAY/REC/OVERDUB/BANK A–D teli fénnyel világít (ha halvány vagy rossz színű: `set_led(true)` 127 volt korábban).
@@ -71,4 +71,4 @@ dmesg | grep -i -E "i2c|dac|gpio|acvm|i2s"
 
 ## Ha valami elromlik – visszavonás
 A motor-érintő munkák külön commitként vannak, egyenként visszavonhatók (`git revert <commit>`; a mellettük levő merge-commit nem kell):
-`904aaf52` + `3e981bf3` (bar seek és a namespace-javítása, **együtt**), `ecfeb260` (pitch bend/sustain), `9fd98db4` (RECALL), `03db3663` (arpeggiator), `d1cd2421` (timing correct). Visszavonás előtt futtasd újra a natív buildet (`ninja -C build-linux Kick`).
+`904aaf52` + `3e981bf3` + `daf8bd22` (bar seek, a namespace-javítása és a tick-seek/event-seek, **együtt**), `ecfeb260` (pitch bend/sustain), `9fd98db4` (RECALL), `03db3663` (arpeggiator), `d1cd2421` (timing correct). Visszavonás előtt futtasd újra a natív buildet (`ninja -C build-linux Kick`).
