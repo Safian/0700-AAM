@@ -172,14 +172,14 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 - [ ] **T12** Touch Strip: gomb (mód-váltás), CC34 LSB, Note 78 érintés.
 - [ ] **T13** LED-bővítés: `HardwareLed` + intenzitás/kétszínű API; aktív mód, SHIFT, LOCATE, ARP, LATCH, COPY… LED; BANK E–H megkülönböztetése.
 - [ ] **T14** (kész és beolvasztva: `753d60f1`, de hardveren nem próbált) Hátra: a halványítás (0,30 / 0,08) és a hozzá nem rendelt pad megjelenése hangolása eszközön; ellenőrizni, hogy a `KickLEDs` bank-/programváltáskor új pad-szín csomagot küld-e; a Bank A–H pad-színes megkülönböztetése megszűnt (a gomb-LED sem különbözteti meg az E–H-t). Opcionális: 16 pad egy keretben.
-- [ ] **T15** Audio bemenet (INPUT 1/2) a `IAudioAdapter` capture-ággal, ha a Looper/Sampler felvételhez kell.
+- [x] **T15** (felderítve, kód nem kell) Audio bemenet: a teljes Kick app **nem** az `IAudioAdapter`-t használja, hanem a JUCE `AudioDeviceManager`-t (`mt_audio_manager.cpp:73`: `AudioDevice(AUDIO_NUM_INPUTS=2, ..)`, `AudIO/src/juce_adapter.cpp:22,40-48`), amely az ALSA capture-t is megnyitja; a Looper/Sampler ezt fogyasztja. A `AkaiMpcKey61AudioAdapter` (playback-only) csak az `apps/mpc_gui` önálló programban él. Teendő eszközön: ellenőrizni, hogy a JUCE a `plughw:1,0` capture-t megnyitja-e (lásd T32 próbalista). Az `mpc_gui`-ban nincs felvétel-funkció, ott capture nem szükséges. (Felderítő ágens állítása, kódolvasás; nem ellenőrzött futtatással.)
 
 ### P2 – robusztusság és teljesítmény
 
 - [ ] **T16** `poll()` a `usleep` helyett; zárolás a RawMIDI írásra (a `set_pad_rgb` az olvasó szálról, `on_pad_note_on`-ból is ír, így több szál ír ugyanarra a portra). A `set_pad_rgb` a Port 0-ra is küld, ami a T5 szerint némítandó.
 - [ ] **T17** Eszköz- és útvonal-felderítés (`/proc/asound/cards`, `EVIOCGABS`) a hardkódolt `hw:0,0,x` / `event0` / `2048` helyett; a factory ne tippeljen alapértelmezett MPC-t.
 - [ ] **T18** Audio: tényleges `buffer_size` használata, latency-cél egyeztetése a loggal, Phones/Main külön szint, limiter a hard clip helyett. **Eszközön mérendő.**
-- [ ] **T19** CV/Gate 1–8, DIN MIDI, USB-B: döntés, hogy az adapter vagy a JUCE MIDI-réteg felel-e értük.
+- [ ] **T19** CV/Gate: a DAC-kód (`kick_I2c.cpp`: `/dev/i2c-3`, cím `0xC`, `0x30|ch` 3 bájtos írás) csak `KICK_ENABLE_HARDWARE=ON` és `hardwareEnabled()` mellett fut, az Akai-ról nincs dokumentált DAC/busz/cím. **Vakon nem írunk** ismeretlen I2C eszközre. Hardveres próba után dönthető el, hogy Linux-DAC vagy az STM32 (USB-MIDI/SysEx) viszi-e a CV-t.
 - [ ] **T20** Rejtett tempo-szerkesztő mód (3.4) felülvizsgálata.
 
 ### P3 – tesztelés
@@ -217,4 +217,4 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 - [x] **T28** kész és beolvasztva (`9fd98db4`): REC+Shift = RECALL a kiválasztott trackre (30 s, 2048 esemény), egy undo lépés; hardveren nem próbált. Hátra: nincs UI/LED visszajelzés; futó szekvenciánál a note-list zár hiánya miatti lehetséges verseny (`MTNoteList::addNote`), tartott hangok árvaként elvesznek.
 - [x] **T29** kész és beolvasztva (`57050685`): MAIN+Shift a HomeListView Track fülére lép (`AppMainmode::selectTab`); hardveren nem próbált.
 - [ ] **T30** (részben: `7781c7b1`) EN_TC megnyitja a List Edit Timing Correct ablakát; a motorban nincs TC (quantize) és nincs Automation. Hátra: valódi TC (folyamatban: T30b), Automation csak motor-koncepcióval értelmezhető (nincs).
-- [ ] **T32** Audio bemenet (T15) és CV/Gate (T19) hardveres felderítése: mit ad az Akai Linux (ALSA capture, CV DAC), és mit használ már a `kick_I2c.cpp`.
+- [ ] **T32** Eszközön futtatandó próbalista (MPC, root): `cat /proc/asound/cards; cat /proc/asound/pcm; arecord -l; aplay -l`; `arecord -D plughw:1,0 --dump-hw-params -d 1 /dev/null`; `arecord -D plughw:1,0 -f S32_LE -c 2 -r 44100 -d 5 /tmp/in.wav`; `amixer -c 1 scontrols; amixer -c 1 contents`; `cat /etc/asound.conf`; `i2cdetect -l; ls -l /dev/i2c-*`; `ls /sys/bus/i2c/devices; cat /sys/bus/i2c/devices/*/name`; `dmesg | grep -i -E "i2c|dac|gpio|acvm|i2s"`. Ha nincs `/dev/i2c-*`, a CV valószínűleg az STM32-n megy (firmware/SysEx kérdés). A +48V fantomtáp vezérlése valószínűleg az STM32-n át megy (nem ellenőrzött).
