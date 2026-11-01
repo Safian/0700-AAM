@@ -68,4 +68,10 @@ namespace mt
         bool                  sustainDown{ false };
         std::array<bool, 128> held{};
     };
+    // Pedal holds live notes only; sequencer (non-live) notes release at once. Returns true when the note must be released now.
+    inline bool releaseNowOnNoteOff( SustainState& s, bool live, int n )
+    {
+        return !live || s.onNoteOff( n );
+    }
+
 } // namespace mt

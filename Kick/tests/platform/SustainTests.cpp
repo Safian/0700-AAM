@@ -71,14 +71,17 @@ int main()
     { // sequencer (non-live) note-off with the pedal down releases at once; SustainState is not written by it
         SustainState s;
         s.onCC64( 127, R );
-        const bool live = false;
-        bool       released = false;
-        if( !live || s.onNoteOff( 60 ) ) released = true; // mirrors MTIProgram::noteProcess
-        CHECK( released );
+        CHECK( mt::releaseNowOnNoteOff( s, false, 60 ) );
         CHECK( !s.isHeld( 60 ) );
         rel.clear();
         s.onCC64( 0, R );
         CHECK( rel.empty() );
+    }
+    { // live note-off with the pedal down is held back, and recorded as held
+        SustainState s;
+        s.onCC64( 127, R );
+        CHECK( !mt::releaseNowOnNoteOff( s, true, 60 ) );
+        CHECK( s.isHeld( 60 ) );
     }
     if( g_fail ) return 1;
     std::printf( "SustainTests OK\n" );

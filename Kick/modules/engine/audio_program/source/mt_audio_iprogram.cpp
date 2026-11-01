@@ -319,7 +319,7 @@ namespace mt
                     switch( playType )
                     {
                         case SamplePlayType::NOTE_ON:
-                            if( !live || sustain.onNoteOff( noteNo ) ) // Pedal holds live notes only; sequencer notes release at once.
+                            if( releaseNowOnNoteOff( sustain, live, noteNo ) ) // Pedal holds live notes only; sequencer notes release at once.
                                 noteOff( noteNo );
                             //DBG( "Note Off----" << noteNo );
                         case SamplePlayType::ONE_SHOT: // Nothing to be done here.
