@@ -12,6 +12,7 @@
 #include "audio_engine/audio_engine.h"
 #include <chrono>
 #include <atomic>
+#include <array>
 #include <cstdint>
 
 class KickHardwareBridge : public IHardwareEventListener, private juce::Timer
@@ -36,6 +37,9 @@ private:
     // goes to the same code even if Shift was released first.
     int  m_tc_sent_code = -1;
     int  m_automation_sent_code = -1;
+    // Generic version for the other Shift-dependent buttons: DCL code sent on press, indexed by HardwareButton.
+    struct PressedCodes { std::array<int, 128> v; PressedCodes() { v.fill(-1); } };
+    PressedCodes m_pressed_code;
     int m_current_bank = 0;
     int m_octave_offset = 0;
     int m_key_pitch_map[128];
@@ -164,6 +168,26 @@ private:
         msg.pktCmd = contracts::DeviceControlContracts::BtnCmd::EN_BTN_STATUS;
         msg.data = { buttonCode, state };
         contracts::DclSignals::dispatchHardwareInput(msg);
+    }
+
+    // Press: remember which DCL code went out for this physical button, so the release matches it.
+    void sendTrackedPress(HardwareButton btn, int code)
+    {
+        if (btn >= 0 && btn < (int)m_pressed_code.v.size())
+            m_pressed_code.v[(size_t)btn] = code;
+        sendButtonMsg(code, contracts::DeviceControlContracts::BTN_PRESSED);
+    }
+
+    // Release: BTN_RELEASED for the remembered code (then forgotten); else for fallbackCode; fallbackCode < 0 = send nothing.
+    void sendTrackedRelease(HardwareButton btn, int fallbackCode)
+    {
+        int code = fallbackCode;
+        if (btn >= 0 && btn < (int)m_pressed_code.v.size() && m_pressed_code.v[(size_t)btn] >= 0) {
+            code = m_pressed_code.v[(size_t)btn];
+            m_pressed_code.v[(size_t)btn] = -1;
+        }
+        if (code >= 0)
+            sendButtonMsg(code, contracts::DeviceControlContracts::BTN_RELEASED);
     }
 
     void dispatchTouch(int slot, int x, int y, bool is_down, bool is_up)
@@ -547,9 +571,9 @@ public:
             case HW_BTN_TAP_TEMPO:
             {
                 if (isShiftDown()) {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MASTER, contracts::DeviceControlContracts::BTN_PRESSED);
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_MASTER);
                 } else {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO, contracts::DeviceControlContracts::BTN_PRESSED);
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO);
                     m_tempo_edit_active = true;
                     auto now = std::chrono::steady_clock::now();
                     auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_tap_time).count();
@@ -581,7 +605,7 @@ public:
                 if (isShiftDown()) {
                     kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadPerform);
                 } else {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT, contracts::DeviceControlContracts::BTN_PRESSED);
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT);
                 }
                 break;
             }
@@ -615,7 +639,7 @@ public:
                 int bank = isShiftDown() ? 4 : 0;
                 m_current_bank = bank;
                 ae.setBank(juce::String::charToString((char)('A' + bank)));
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank, contracts::DeviceControlContracts::BTN_PRESSED);
+                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank);
                 updateBankLeds();
                 break;
             }
@@ -624,7 +648,7 @@ public:
                 int bank = isShiftDown() ? 5 : 1;
                 m_current_bank = bank;
                 ae.setBank(juce::String::charToString((char)('A' + bank)));
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank, contracts::DeviceControlContracts::BTN_PRESSED);
+                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank);
                 updateBankLeds();
                 break;
             }
@@ -633,7 +657,7 @@ public:
                 int bank = isShiftDown() ? 6 : 2;
                 m_current_bank = bank;
                 ae.setBank(juce::String::charToString((char)('A' + bank)));
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank, contracts::DeviceControlContracts::BTN_PRESSED);
+                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank);
                 updateBankLeds();
                 break;
             }
@@ -642,7 +666,7 @@ public:
                 int bank = isShiftDown() ? 7 : 3;
                 m_current_bank = bank;
                 ae.setBank(juce::String::charToString((char)('A' + bank)));
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank, contracts::DeviceControlContracts::BTN_PRESSED);
+                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A + bank);
                 updateBankLeds();
                 break;
             }
@@ -658,19 +682,19 @@ public:
             case HW_BTN_NOTE_REPEAT:
             {
                 if (isShiftDown()) {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LATCH, contracts::DeviceControlContracts::BTN_PRESSED);
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_LATCH);
                 } else {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT, contracts::DeviceControlContracts::BTN_PRESSED);
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT);
                 }
                 break;
             }
             case HW_BTN_FULL_LEVEL:
             {
                 if (isShiftDown()) {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_HALF_LEVEL, contracts::DeviceControlContracts::BTN_PRESSED);
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_HALF_LEVEL);
                     contracts::DclContractsHelper::setHalfLevel(true);
                 } else {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_FULL_LEVEL, contracts::DeviceControlContracts::BTN_PRESSED);
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_FULL_LEVEL);
                     contracts::DclContractsHelper::setHalfLevel(false);
                 }
                 break;
@@ -682,7 +706,7 @@ public:
                     // (kick_AppHome.cpp), the same screen as KEYBOARD CONTROL. Kept as is.
                     kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadPerform);
                 } else {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_16LEVELS, contracts::DeviceControlContracts::BTN_PRESSED);
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_16LEVELS);
                 }
                 break;
             }
@@ -694,9 +718,9 @@ public:
             case HW_BTN_COPY:
             {
                 if (isShiftDown()) {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_ERASE, contracts::DeviceControlContracts::BTN_PRESSED);
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_ERASE);
                 } else {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_COPY, contracts::DeviceControlContracts::BTN_PRESSED);
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_COPY);
                 }
                 break;
             }
@@ -940,16 +964,16 @@ public:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             case HW_BTN_BANK_A:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A);
                 break;
             case HW_BTN_BANK_B:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_B, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_B);
                 break;
             case HW_BTN_BANK_C:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_C, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_C);
                 break;
             case HW_BTN_BANK_D:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_D, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_D);
                 break;
             case HW_BTN_CURSOR_LEFT:
             case HW_BTN_STEP_PREV:
@@ -965,25 +989,28 @@ public:
             case HW_BTN_BAR_NEXT:
                 break; // unbound, see on_button_press
             case HW_BTN_TAP_TEMPO:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO);
                 break;
             case HW_BTN_NOTE_REPEAT:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT);
+                break;
+            case HW_BTN_ARP:
+                sendTrackedRelease(btn, -1); // Shift variant opens a screen (no press); plain press was never released before
                 break;
             case HW_BTN_LATCH:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LATCH, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             case HW_BTN_FULL_LEVEL:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_FULL_LEVEL, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_FULL_LEVEL);
                 break;
             case HW_BTN_16_LEVELS:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_16LEVELS, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, -1); // Shift variant opens a screen (no press) -> release only if a press was sent
                 break;
             case HW_BTN_ERASE:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_ERASE, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             case HW_BTN_COPY:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_COPY, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_COPY);
                 break;
             case HW_BTN_TC:
                 sendButtonMsg(m_tc_sent_code >= 0 ? m_tc_sent_code : (int)contracts::DeviceControlContracts::BtnLedSequence::EN_TC, contracts::DeviceControlContracts::BTN_RELEASED);
