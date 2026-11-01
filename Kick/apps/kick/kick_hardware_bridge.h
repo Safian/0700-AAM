@@ -36,6 +36,10 @@ private:
     int m_last_touch_x[10] = { 0 };
     int m_last_touch_y[10] = { 0 };
     juce::Component::SafePointer<juce::Component> m_touch_targets[10];
+    // Manual path only: finger-down position (UI space) and "left the touch slop" latch, see exceedsTouchSlop().
+    int  m_touch_down_x[10] = { 0 };
+    int  m_touch_down_y[10] = { 0 };
+    bool m_touch_dragging[10] = { false };
     // Peer-path touch source (message thread only): probed on the first delivery, see deliverPeerTouch().
     bool m_touch_src_probed = false;
     bool m_touch_src_ok     = true;
@@ -457,7 +461,7 @@ private:
             // screen coordinates) and dispatches the event to the right component itself, so it is the ONLY dispatch
             // path for such a target (the manual mouseDown/Up below would deliver the event a second time).
             auto* top = target->getTopLevelComponent();
-            if (peer && top != nullptr && top != root && top->isOnDesktop() && top->getPeer() == peer)
+            if (peer && top != nullptr && top != root && top->isOnDesktop() && top->isShowing() && top->getPeer() == peer)
             {
                 if (is_down || is_up) { printf("[TOUCH] popup peer path\n"); fflush(stdout); }
                 deliverPeerTouch(peer, ix, iy, mods, slot, is_down || is_up);
@@ -466,10 +470,20 @@ private:
             }
 
             // G15: with a native peer the peer dispatches the event to the right component itself; the manual
-            // mouseDown / mouseUp / mouseDrag below is only for the peer-less (headless) window.
-            if (peer)
+            // mouseDown / mouseUp / mouseDrag below is for a window the peer cannot hit-test: no peer, or a hidden
+            // window (no X display, Main.cpp): the peer exists but Component::getComponentAt() rejects an invisible
+            // component, so ComponentPeer::handleMouseEvent would find no target.
+            const bool windowShowing = root->isShowing();
+            const auto path = kick_hw::probe::chooseDeliveryPath(peer != nullptr, windowShowing);
+            if (is_down || is_up)
             {
-                if (is_down || is_up) { printf("[TOUCH] native peer path\n"); fflush(stdout); }
+                printf("[TOUCH] delivery=%s (peer=%d showing=%d)\n", kick_hw::probe::deliveryPathName(path),
+                       peer != nullptr ? 1 : 0, (int)windowShowing);
+                fflush(stdout);
+            }
+            if (path == kick_hw::probe::DeliveryPath::Peer)
+            {
+                if (is_down || is_up) { printf("[TOUCH] native peer path (peer visible=1)\n"); fflush(stdout); }
                 deliverPeerTouch(peer, ix, iy, mods, slot, is_down || is_up);
                 if (is_up && slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
                 return;
@@ -486,7 +500,13 @@ private:
 
             if (is_down)
             {
-                if (slot >= 0 && slot < 10) m_touch_targets[slot] = target;
+                if (slot >= 0 && slot < 10)
+                {
+                    m_touch_targets[slot] = target;
+                    m_touch_down_x[slot] = ix;
+                    m_touch_down_y[slot] = iy;
+                    m_touch_dragging[slot] = false;
+                }
                 target->mouseDown(e);
                 printf("[TOUCH] manual mouseDown delivered to '%s'\n", target->getName().toRawUTF8());
                 fflush(stdout);
@@ -517,12 +537,20 @@ private:
                     fflush(stdout);
                 }
 
-                if (slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
+                if (slot >= 0 && slot < 10) { m_touch_targets[slot] = nullptr; m_touch_dragging[slot] = false; }
             }
             else
             {
                 auto* downTarget = (slot >= 0 && slot < 10) ? m_touch_targets[slot].getComponent() : nullptr;
-                if (downTarget) {
+                // Drag-jitter: Button::mouseDrag would reset a pressed button (mouse source, no real hover), so
+                // drags below the touch slop are not forwarded; past it they are, and stay forwarded (latched).
+                const bool inSlot = slot >= 0 && slot < 10;
+                if (inSlot && !m_touch_dragging[slot]
+                    && kick_hw::probe::exceedsTouchSlop(m_touch_down_x[slot], m_touch_down_y[slot], ix, iy))
+                    m_touch_dragging[slot] = true;
+                if (inSlot && !m_touch_dragging[slot]) {
+                    // finger still within the tap slop: nothing to deliver
+                } else if (downTarget) {
                     auto downLocalPt = downTarget->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
                     juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,

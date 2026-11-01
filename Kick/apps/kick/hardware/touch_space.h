@@ -71,5 +71,28 @@ inline const char* touchRouteName(TouchRoute r)
     return r == TouchRoute::Touch ? "touch" : r == TouchRoute::Mouse ? "mouse(src0)" : "drop";
 }
 
+// Which delivery path a touch takes. The peer path (ComponentPeer::handleMouseEvent) hit-tests through
+// Component::getComponentAt(), which rejects a component whose visibleFlag is false. The window is created hidden when
+// there is no X display (Main.cpp), so there the peer exists (peer=1) but never finds a target: the manual
+// target->mouseDown / mouseUp path has to run instead. A shown window on a real display keeps the peer path.
+enum class DeliveryPath { Peer, Manual };
+
+inline DeliveryPath chooseDeliveryPath(bool peerPresent, bool windowShowing)
+{
+    return (peerPresent && windowShowing) ? DeliveryPath::Peer : DeliveryPath::Manual;
+}
+
+inline const char* deliveryPathName(DeliveryPath p) { return p == DeliveryPath::Peer ? "peer" : "manual"; }
+
+// Manual path only: Button::mouseDrag/mouseUp ask Button::isMouseSourceOver(), which for the (non-touch) main mouse
+// source is Component::isMouseOver() - false without a real pointer. Every forwarded mouseDrag would therefore reset
+// the button to normal and the release would not click. A finger jitters 1-3 px during a tap, so drags are forwarded
+// only once the finger has left the touch slop around the down point (then latched, so sliders / knobs follow).
+inline bool exceedsTouchSlop(int downX, int downY, int x, int y, int slopPx = 8)
+{
+    const long long dx = (long long)x - downX, dy = (long long)y - downY;
+    return dx * dx + dy * dy > (long long)slopPx * slopPx;
+}
+
 } // namespace probe
 } // namespace kick_hw
