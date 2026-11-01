@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../hardware_adapter.h"
+#include "../midi_parser.h"
 #include <alsa/asoundlib.h>
 #include <linux/input.h>
 #include <fcntl.h>
@@ -274,63 +275,6 @@ private:
         return NULL;
     }
 
-    struct MidiParser {
-        uint8_t status = 0;
-        uint8_t data[2] = { 0, 0 };
-        int data_idx = 0;
-        int expected_data = 0;
-        bool in_sysex = false;
-
-        template<typename Callback>
-        void feed(const uint8_t* buf, ssize_t n, Callback&& cb) {
-            for (ssize_t i = 0; i < n; ++i) {
-                uint8_t b = buf[i];
-                if (b >= 0xF8) {
-                    continue; // Skip realtime clock
-                }
-                if (b == 0xF0) {
-                    in_sysex = true;
-                    status = 0;
-                    continue;
-                }
-                if (b == 0xF7) {
-                    in_sysex = false;
-                    status = 0;
-                    continue;
-                }
-                if (in_sysex) {
-                    continue;
-                }
-                if (b & 0x80) {
-                    status = b;
-                    data_idx = 0;
-                    switch (b & 0xF0) {
-                        case 0x80:
-                        case 0x90:
-                        case 0xA0:
-                        case 0xB0:
-                        case 0xE0:
-                            expected_data = 2;
-                            break;
-                        case 0xC0:
-                        case 0xD0:
-                            expected_data = 1;
-                            break;
-                        default:
-                            expected_data = 0;
-                            break;
-                    }
-                } else if (status != 0) {
-                    data[data_idx++] = b;
-                    if (data_idx == expected_data) {
-                        cb(status, data[0], (expected_data > 1 ? data[1] : 0));
-                        data_idx = 0; // ready for running status
-                    }
-                }
-            }
-        }
-    };
-
     MidiParser m_parser0;
     MidiParser m_parser1;
     MidiParser m_parser2;
@@ -584,14 +528,44 @@ public:
     bool start(IHardwareEventListener* listener) override {
         m_listener = listener;
 
-        snd_rawmidi_open(&m_in0, &m_out0, "hw:0,0,0", SND_RAWMIDI_NONBLOCK);
-        snd_rawmidi_open(&m_in1, &m_out1, "hw:0,0,1", SND_RAWMIDI_NONBLOCK);
-        snd_rawmidi_open(&m_in2, &m_out2, "hw:0,0,2", SND_RAWMIDI_NONBLOCK);
+        if (m_running) return true; // already started
+
+        struct PortSpec { snd_rawmidi_t** in; snd_rawmidi_t** out; const char* name; };
+        const PortSpec ports[] = {
+            { &m_in0, &m_out0, "hw:0,0,0" },
+            { &m_in1, &m_out1, "hw:0,0,1" },
+            { &m_in2, &m_out2, "hw:0,0,2" },
+        };
+        for (const auto& p : ports) {
+            *p.in = nullptr;
+            *p.out = nullptr;
+            int err = snd_rawmidi_open(p.in, p.out, p.name, SND_RAWMIDI_NONBLOCK);
+            if (err < 0) {
+                fprintf(stderr, "[AKAI-CONTROLLER] Cannot open %s: %s\n", p.name, snd_strerror(err));
+                *p.in = nullptr;
+                *p.out = nullptr;
+            }
+        }
+
+        // Port 1 (MPC Private) carries buttons, pads and keybed. Without it the
+        // control surface is useless: report failure instead of a silent "started".
+        if (!m_in1 || !m_out1) {
+            fprintf(stderr, "[AKAI-CONTROLLER] Port 1 (hw:0,0,1) unavailable -> control surface NOT started\n");
+            stop();
+            return false;
+        }
+
+        m_parser0.reset();
+        m_parser1.reset();
+        m_parser2.reset();
 
         // Mode 0x41: Port 1 Private enabled, Port 0 Public disabled, transport MMC disabled
         uint8_t akai_init[] = { 0xF0, 0x47, 0x7F, 0x4B, 0x60, 0x00, 0x01, 0x41, 0xF7 };
+        // ARCHITECT-CLARIFY: the review says the mode SysEx should reach Port 1 only, but the
+        // hardware-verified build also writes it to Port 0 (the host command port?). Keep both
+        // until verified on a device; then drop the Port 0 write if it is not needed.
         if (m_out0) snd_rawmidi_write(m_out0, akai_init, sizeof(akai_init));
-        if (m_out1) snd_rawmidi_write(m_out1, akai_init, sizeof(akai_init));
+        snd_rawmidi_write(m_out1, akai_init, sizeof(akai_init));
 
         m_running = true;
         pthread_create(&m_thread, NULL, thread_entry, this);
