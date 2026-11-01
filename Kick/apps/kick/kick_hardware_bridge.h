@@ -787,7 +787,8 @@ public:
             }
             case HW_BTN_BAR_NEXT:
             {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BTN_PRESSED);
+                // ARCHITECT-CLARIFY: which DCL button should ">>" (bar +1) send? It must NOT be EN_KNOB_ENTER
+                // (that made ">>" act as the Data Dial push). Unbound until decided.
                 break;
             }
             case HW_BTN_NEXT_SEQ:
@@ -865,8 +866,7 @@ public:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BACK, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             case HW_BTN_BAR_NEXT:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BTN_RELEASED);
-                break;
+                break; // unbound, see on_button_press
             case HW_BTN_TAP_TEMPO:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
@@ -976,10 +976,10 @@ public:
             msg.pktType = CPktMgr::EN_PKT_TYPE_PAD;
             msg.pktCmd = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
             msg.data = { pad_num, contracts::DeviceControlContracts::BTN_PRESSED, vel, 0 };
+            // The sound is started by the active screen's handleCommand() (Grid, PadMixer, PadPerform,
+            // PadColor, FileBrowser, MainMode) from this DCL packet. Do not also start the note here,
+            // otherwise those screens trigger every hit twice.
             contracts::DclSignals::dispatchHardwareInput(msg);
-
-            int note = pad_num + mt::getAudioInterface().getBankOffset();
-            mt::getAudioInterface().addLiveMidiNote(mt::getAudioInterface().getSelected(), note, vel);
         }
     }
 
@@ -999,9 +999,6 @@ public:
             msg.pktCmd = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
             msg.data = { pad_num, contracts::DeviceControlContracts::BTN_RELEASED, 0, 0 };
             contracts::DclSignals::dispatchHardwareInput(msg);
-
-            int note = pad_num + mt::getAudioInterface().getBankOffset();
-            mt::getAudioInterface().stopLiveMidiNote(mt::getAudioInterface().getSelected(), note);
         }
     }
 
