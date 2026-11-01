@@ -63,11 +63,13 @@ namespace AudIO
             std::unique_ptr<Object> pObj;
 
             int  reset();
-            int  create( const std::string& Effect );
+            int  create( const std::string& Effect, uint32_t Samplerate, uint32_t Blocksize );
             bool isSame( const std::string& Effect ) const;
         };
 
         std::atomic<bool>                      _bypassAll{ false };
+        uint32_t                               _rate{ 0 };  // set in prepareToPlay, used for effects created later
+        uint32_t                               _block{ 0 };
         std::array<InsertEffects, MAX_INSERTS> _inserts;
 
         InsertEffects* getEffect( const std::string& Effect );
