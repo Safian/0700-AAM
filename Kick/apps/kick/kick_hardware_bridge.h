@@ -521,9 +521,13 @@ public:
                 // (MTTrack::stop resets the playheads) and the next play starts from the loop start / bar 1.
                 // The former Shift variant called setSequencePlay(.., Now=false), which only queued a stale
                 // "play at next bar" flag (_nextBar) and had no other effect.
-                // ARCHITECT-CLARIFY: should Shift+STOP also reset the displayed sequence playhead? MTSequence::stop()
-                // does not, and there is no engine call for it yet (see seek work, TODO T7b).
+                // Shift+STOP = RETURN (Akai MPC convention): after stopping, park the playhead on bar 1 so the
+                // displayed position resets too (MTSequence::stop() alone leaves it). A parked seek is
+                // consumed by the next play() and discarded by the next stop().
                 ae.setSequenceStop();
+                if (isShiftDown()) {
+                    ae.seekToBar(ae.getSelectedSequence(), 0);
+                }
                 ae.stopPreview();
                 auto sel = ae.getSelected();
                 for (int ch = 1; ch <= 16; ++ch) {
