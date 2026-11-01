@@ -32,6 +32,12 @@ int main()
     fbToUi(100, 50, 0, 0, 1024, 600, x, y);
     check(x == 100 && y == 50, "degenerate size leaves the point alone");
 
+    // Route: touch source available -> touch; else finger 0 is mouse source 0; other fingers dropped.
+    check(chooseTouchRoute(true, 0) == TouchRoute::Touch, "XI: finger 0 touch");
+    check(chooseTouchRoute(true, 3) == TouchRoute::Touch, "XI: finger 3 touch");
+    check(chooseTouchRoute(false, 0) == TouchRoute::Mouse, "no XI: finger 0 mouse");
+    check(chooseTouchRoute(false, 1) == TouchRoute::Drop, "no XI: finger 1 dropped");
+
     // Whole chain from the raw 2048x2048 range (rotated mount: UI x from inverted raw Y, UI y from raw X).
     rawToUi(0, 0, 2048, 2048, 1280, 800, 1024, 600, x, y);
     check(x == 1023 && y == 0, "raw (0,0) -> top right");
