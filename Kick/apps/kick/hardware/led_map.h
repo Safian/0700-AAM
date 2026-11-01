@@ -128,13 +128,14 @@ inline int bankLedLevel(int bank, int ledIndex)
 // Colour A (3) = green, colour B (4) = red is proven for AUTOMATION (Read green, Write red, KEY61_LED_COLOURS.md);
 // that REC / OVERDUB use the same A/B colours is NOT verified (the camera could not tell, section 2). Dummy choice:
 //   recording (not overdubbing): REC blinks red (colour B), OVERDUB dark;
-//   overdubbing: OVERDUB steady colour A, REC dark;
-//   idle: both dark. The engine has no "armed" state (REC starts the looper at once), so nothing is lit steady.
+//   recording and overdubbing: OVERDUB steady colour A, REC dark;
+//   idle: both dark. The overdubbing input is a MODE flag of the recorder that nothing clears after STOP, so it only
+//   counts while the looper is recording. The engine has no "armed" state (REC starts the looper at once), so nothing is lit steady.
 inline void recOverdubLedLevels(bool recording, bool overdubbing, bool blinkOn, int& recLevel, int& overdubLevel)
 {
     recLevel     = kLedOff;
     overdubLevel = kLedOff;
-    if (overdubbing)
+    if (recording && overdubbing)
         overdubLevel = kLedFullA;
     else if (recording)
         recLevel = blinkOn ? kLedFullB : kLedOff;
