@@ -151,6 +151,10 @@ namespace kick_ui
         };
 
         tcButton.onClick = [&]() {
+            // Only one Timing Correct window at a time: a second one would overwrite the open-window
+            // pointer and the first could no longer be closed from the hardware.
+            if( ListEditTimingCorrect::isOpen() )
+                return;
             ListEditTimingCorrect* pTc = new ListEditTimingCorrect();
             mt::utils::showOptions( "TIMING CORRECT", pTc, [pTc, this]( int R ) {
                 if( R == UI::APPLY )
