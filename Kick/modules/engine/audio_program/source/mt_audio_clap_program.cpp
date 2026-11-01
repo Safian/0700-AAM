@@ -32,7 +32,7 @@ MTClapProgram::MTClapProgram(AudIO::DawEngine& audioEngine, juce::ValueTree& tre
     MTIInsertsInterface::setup(inserts, undo, synth);
 }
 MTClapProgram::~MTClapProgram() { session->panic(); if (synth) engine.removeObject(synth->getId()); }
-void MTClapProgram::noteProcess(juce::Array<juce::MidiMessage>& messages) {
+void MTClapProgram::noteProcess(juce::Array<juce::MidiMessage>& messages, bool /*live*/) { // plugin gets all MIDI in both paths
     for (const auto& message : messages) {
         // Releases still reach a muted program so unmuting cannot revive held gates.
         if (isProgramEffectivelyMuted() && message.isNoteOn()) { session->panic(); continue; }
