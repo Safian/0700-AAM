@@ -219,6 +219,24 @@ int main(int argc, char** argv) {
         check(layer.getProperty("source").toString() == external.getFullPathName(), "live source still absolute");
         check(coll.close(), "close collision document");
     }
+    {   // Two layers on the same external file, samples/ still empty: one shared copy, both saved sources identical and relative.
+        const auto projFile = directory.getChildFile("dup/project.xml");
+        const auto samples = projFile.getParentDirectory().getChildFile("samples");
+        const auto external = directory.getChildFile("DupPack/kick.wav");
+        check(external.create().wasOk() && external.replaceWithText("dupsample"), "seed shared external sample");
+        mt::KickXML dup("ROOT", ".xml", "1");
+        check(dup.loadOrCreate(projFile).isValid(), "create shared-source document");
+        for (int i = 0; i < 2; ++i) {
+            juce::ValueTree layer("LAYER"); layer.setProperty("source", external.getFullPathName(), nullptr);
+            dup.getState().appendChild(layer, nullptr);
+        }
+        check(dup.save(), "save shared-source document");
+        const auto saved = juce::ValueTree::fromXml(projFile.loadFileAsString());
+        check(saved.getChild(0).getProperty("source").toString() == "samples/kick.wav" &&
+              saved.getChild(1).getProperty("source").toString() == "samples/kick.wav", "both layers saved with the same relative source");
+        check(samples.findChildFiles(juce::File::findFiles, false, "*").size() == 1 && samples.getChildFile("kick.wav").loadFileAsString() == "dupsample", "exactly one sample file created");
+        check(dup.close(), "close shared-source document");
+    }
     directory.deleteRecursively();
     std::cout << "PASS: actual KickXML autosave, close, worker save, bounded snapshots, failed/unsupported state, dirty/error reporting and retry\n";
 }
