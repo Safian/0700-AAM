@@ -1,5 +1,11 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – VÉGLEGES HARDVERES JELENTÉS (a riport "VÉGLEGES ÖSSZEFOGLALÓ" szakasza, TODO T5/T7b/T14/T19/T32/T33 frissítve)
+- **OK hardveren (b65dc8c6):** indulás kijelző nélkül, **érintés**, minden gomb és gombpár, **LED `cc`**, bank/Shift/AUTOMATION/TAP/LATCH/TOUCH FX/STRIP/OCT LED, pad egyszeri trigger, strip bemenet, SOUNDS, **megállított seek** (`BAR_NEXT` ×2 → `3:01:000`, az 11. hiba javítva).
+- **Hiányzik:** **szekvenciafelvétel (REC + PLAY)** (kódtény: `setRecordState` nincs hívva); REC/OVERDUB LED (a felhasználó döntése: REC élesítve piros / felvételkor villog, OVERDUB aktív zöld); Keyboard Control menü, Sounds Mode, Locate ablak, 9 strip-mód.
+- **Nem ellenőrzött:** a TC hardveres zárás (az injektált `btn TC` nem nyitja meg az ablakot; fizikai próba kell), a kerék/pedál hangerő-ugrás javítása, az Aura-hosszú futás (az éjszakai teszt reggel eredményt ad).
+- A következő hardveres ellenőrzéshez a szekvenciafelvétel megépítése kell; ha fent van, hash-t kérek.
+
 ## 2026-11-02 – FELHASZNÁLÓI DÖNTÉSEK (éjjel)
 1. **REC/OVERDUB LED – elfogadva:** a REC **élesítve = piros (folyamatos)**, **felvétel közben villog (piros)**; az OVERDUB **aktív = zöld**. (A doksi nem ír LED-színt; ez a felhasználó döntése.) Ez egészül ki a szekvenciafelvétel megépítésével (lásd az előző bejegyzés): a REC LED a **szekvencia** élesítési/felvételi állapotát kövesse, ne csak a looperét.
 2. **TC ablak hardveres zárása – marad** (Kick-kiegészítés, nem doksi), de a felhasználó kéri, hogy írjuk le, mivel jár: lásd a riport/terv megjegyzést alább.

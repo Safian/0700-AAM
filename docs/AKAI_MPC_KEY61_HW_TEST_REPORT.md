@@ -224,3 +224,37 @@ A húzás (`mouseDrag`) külön naplósort nem ír; a csúszka és a tekerő a f
 3. **REC** felvétele törli a szekvencia eseményeit; **OVERDUB** a meglévőket megtartja ("record note events without overwriting"), felvétel előtt vagy közben kapcsolható; egy kör után az Overdub bekapcsol.
 4. **Shift+REC = Recall** (a felvétel nélkül játszott MIDI beszúrása).
 Az útmutató a REC/OVERDUB LED-színt nem írja le.
+
+# VÉGLEGES ÖSSZEFOGLALÓ (2026-11-02, build `safian/main` `b65dc8c6`, ARMv7 `-g`, `KICK_NO_HARDWARE=1`)
+A fenti körök (1–14) összegzése. Minden állítás a megadott körben mért bizonyítékra támaszkodik; az útmutató: MPC v3.10 (`docs/akai_mpc_hardware/`, összevetés: `KEY61_DOC_VS_KICK.md`).
+
+## Hardveren igazolt (OK)
+| Terület | Állapot | Kör |
+|---|---|---|
+| Build és telepítés | recept rögzítve (`AKAI_MPC_KEY61_BUILD_RECIPE.md`, `tools/build-armv7.sh`, `JOBS=2`) | 2., 3. |
+| Indulás kijelző nélkül | működik (`179c99c9`), tmp patch nélkül | 3. |
+| **Érintés** | működik: fizikai és injektált, `delivery=manual`; fülváltás, Step Seq csúszka, tekerő | 13. |
+| Gombok | minden gomb megérkezik (`[AKAI-BTN]`); gombpárok a várt képernyőt nyitják: EDIT/XYFX, GRID/STEP SEQ, MIX/PAD, MUTE/PAD, SAMPLE EDIT/SAMPLER, KEYBOARD CONTROL/MIDI CTRL, SOUNDS, UNDO/REDO, AUTOMATION | 6., 7. |
+| LED-protokoll | **`cc`** (`0xB0 <note> <érték>`) működik; ez az alap | 4. |
+| LED-ek | STOP, PLAY, bank A–D, MIX/MUTE (fehér/piros), AUTOMATION (zöld=Read, piros=Write, sötét=Off), TAP TEMPO, LATCH, TOUCH FX/STRIP, OCT+ ; **a két Shift LED szinkronban** (felhasználó) | 4., 11. |
+| Pad | egyszeri trigger nyomva tartva is (aftertouch-csomag kikapcsolva); pad-színek bankonként változnak | 6., 7. |
+| Touch strip bemenet | CC33/CC34, 14 bit (1040 üzenet) | 11. |
+| SOUNDS gomb | a File Browser nyílik, nem omlik össze | 5. |
+| Megállított seek | `BAR_NEXT` ×2 megállítva → `3:01:000` (injektált), a kijelző frissül | végleges |
+
+## Hiba / hiányzó funkció
+| Tétel | Állapot |
+|---|---|
+| **Szekvenciafelvétel (REC + PLAY → pad a sávba)** | **hiányzik** (`setRecordState` nincs hívva, `EN_RECORD` csak a looperé) — 14. kör |
+| REC/OVERDUB LED | nincs bekötve a szekvenciára; felhasználói döntés: REC élesítve piros, felvételkor villog; OVERDUB aktív zöld |
+| Keyboard Control menü, Sounds Mode, Locate ablak, a 12 strip-módból 9 | hiányzik (doksi szerint kell) — `KEY61_DOC_VS_KICK.md` |
+| Main Volume gomb | a Kick alatt nem hat; nem MIDI, nem input-esemény (hardver/firmware) |
+| Touch strip LED-sor | a doksi szerint nincs szoftveres funkciója (nem hiba) |
+| Automation: Shift | a doksi szerint ki/be kapcsol; a Kick csak kikapcsol |
+| Stop dupla nyomás | nem vizsgált |
+
+## Nem ellenőrzött hardveren
+- **TC ablak hardveres zárása** (ENTER/STOP = Apply, Shift+STOP/MAIN = Cancel): az injektált `btn TC` nem nyitja meg az ablakot (List Edit marad); **fizikai TC → ENTER próba kell**.
+- Pitch bend / mod kerék / pedál: az első track hangerő-ugrásának javítása (motor `reloadMidiMeter`) nincs újramérve.
+- Aura (`processReplacing`, `sampleFrames=0`) hosszú futás: az éjszakai teszt folyamatban (reggel kiegészítem).
+- Pad RGB hosszabb mérése, `KICK_AKAI_PORT0=0` összehasonlítás, MIDI-program PAN→CC10, RECALL, CV/Gate (a CV-hez a hardveres írás szándékosan ki van kapcsolva).
