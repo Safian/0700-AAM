@@ -22,6 +22,7 @@
 #pragma once
 
 #include "mt_audio_midi_program.h"
+#include "mt_midi_pan.h"
 
 namespace mt
 {
@@ -85,6 +86,20 @@ namespace mt
 
                 reloadMidiMeter( 1.f );
                 outMidiMeter.reload( ( MIDI::SCALER * getProgramChannel() ) );
+            }
+            else if( Property == IDs::pan )
+            {
+                // Mixer PAN knob -> CC10 on the program's MIDI channel/port (same path as noteProcess). Like the CC/Bank
+                // branches above this runs on the thread that changed the property (message thread for the UI), not the tick thread.
+                const int cc = midipan::panToCC10( (double)vTree.getProperty( IDs::pan, PAN::DEFAULT ) );
+                if( cc != lastPanCC )
+                {
+                    lastPanCC = cc;
+                    ae.sendMidiMessage( port, juce::MidiMessage::controllerEvent( getMidiChannel(), 10, cc ) );
+
+                    reloadMidiMeter( 1.f );
+                    outMidiMeter.reload( ( MIDI::SCALER * cc ) );
+                }
             }
         }
         else
