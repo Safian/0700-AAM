@@ -31,3 +31,9 @@ A felhasználó utasítása: ne álljunk meg apró döntés miatt; ha UI-elem ke
 - Hiányzó forrás + hiányzó másolat: a mentés nem blokkol (lecsatolt meghajtó ne akadályozza az autosave-et/bezárást), a mentett út megmarad; naplósor mentésenként (szerkesztés után, 1,5 s debounce).
 - PLAY/STOP az üzenetszálon marad (eszközön mérendő); a STOP alatti átmeneti Paused állapot elfogadott.
 - Pitch wheel némított MIDI programon minden értéket átenged; némított sample programnál nincs release-átengedés; az autosave gyakorisága Read módban változatlan.
+
+## Review-fix ciklus összegzés (3–16. kör, `195ffd30..62226301`)
+- A 16. opus kör pontosan „Nincs megerősített hiba”-t mondott a `195ffd30..62226301` tartományra (vége a ciklusnak; az U1 érintés-javítás után egy új, rövid kör jön az új kódra).
+- Mentési sample-ág (K3…S1), végső elv: **a mentés az élő fát nem módosítja**; a samples/ alá másolás és a relatív utak csak a mentési snapshotban (`KickXML::patchSnapshot` a pan-nél, `relativizeSamplePaths` a snapshoton). Ismert korlát: ha egy külső forrás tartalma két mentés között változik, a már rögzített másolat nem frissül.
+- Tartósan hiányzó minta: a mentés nem blokkol, a mentett út megmarad, naplósor; felhasználói jelzés (egyszeri, nem blokkoló) még DUMMY/teendő.
+- Hardveres visszajelzés: tartalék Desktop-display (SOUNDS összeomlás) javítva és eszközön igazolt; LED `cc` alap; érintés vizsgálat folyamatban (U1).
