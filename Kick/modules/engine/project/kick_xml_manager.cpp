@@ -61,7 +61,10 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
                     samplesDir = projectDir.getChildFile("Imported");
 
                 auto dest = samplesDir.getChildFile(f.getFileName());
-                const bool collision = dest.existsAsFile() && dest.getFullPathName() != f.getFullPathName();
+                // An existing samples/<name> with identical bytes is the same sample (e.g. a second layer using the same external
+                // file after the first one copied it), not a collision; it is shared instead of duplicated as <parent>_<name>.
+                const bool collision = dest.existsAsFile() && dest.getFullPathName() != f.getFullPathName() &&
+                                       !(f.existsAsFile() && dest.hasIdenticalContentTo(f));
                 if (collision) {
                     if (!renameCollisions) return;
                     dest = samplesDir.getChildFile(f.getParentDirectory().getFileName() + "_" + f.getFileName());
