@@ -308,6 +308,51 @@ int main(int argc, char** argv) {
         }
         check(doc.close(), "close N1 document");
     }
+    {   // O1: after a save A is live-relative (samples/kick.wav). A new external B with identical bytes, or A added again as a new
+        // node, must not adopt that file: the live tree already claims it. Each gets its own copy and stays absolute live.
+        const auto projFile = directory.getChildFile("o1/project.xml");
+        const auto samples = projFile.getParentDirectory().getChildFile("samples");
+        const auto a = directory.getChildFile("Packs/A/kick.wav"), b = directory.getChildFile("Packs/B/kick.wav");
+        check(a.create().wasOk() && a.replaceWithText("same") && b.create().wasOk() && b.replaceWithText("same"), "seed O1 sources");
+        mt::KickXML doc("ROOT", ".xml", "1");
+        check(doc.loadOrCreate(projFile).isValid(), "create O1 document");
+        juce::ValueTree l1("LAYER"), l2("LAYER"), l3("LAYER");
+        l1.setProperty("source", a.getFullPathName(), nullptr);
+        doc.getState().appendChild(l1, nullptr);
+        auto savedAt = [&](int i) { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(i).getProperty("source").toString(); };
+        check(doc.save() && l1.getProperty("source").toString() == "samples/kick.wav" && savedAt(0) == "samples/kick.wav", "O1: A becomes relative");
+        l2.setProperty("source", b.getFullPathName(), nullptr);
+        doc.getState().appendChild(l2, nullptr);
+        l3.setProperty("source", a.getFullPathName(), nullptr);
+        for (int round = 0; round < 2; ++round) {
+            if (round == 1) doc.getState().appendChild(l3, nullptr);
+            check(doc.save(), "save O1 document");
+            check(l1.getProperty("source").toString() == "samples/kick.wav", "O1: A keeps its file");
+            check(l2.getProperty("source").toString() == b.getFullPathName(), "O1: B stays absolute live");
+            check(savedAt(0) == "samples/kick.wav" && savedAt(1) != "samples/kick.wav" && savedAt(1).startsWith("samples/"), "O1: B has its own saved file");
+            if (round == 1) check(l3.getProperty("source").toString() == a.getFullPathName() && savedAt(2) != "samples/kick.wav" && savedAt(2) != savedAt(1) && savedAt(2).startsWith("samples/"), "O1: re-added A gets its own file");
+            check(samples.findChildFiles(juce::File::findFiles, false, "*.wav").size() == (round == 0 ? 2 : 3), "O1: file count stable");
+            doc.getState().setProperty("touch", round, nullptr);
+        }
+        check(doc.close(), "close O1 document");
+    }
+    {   // O2: a failed sample copy must fail the save (dirty, error), leave the source absolute and the file untouched.
+        const auto projFile = directory.getChildFile("o2/project.xml");
+        const auto src = directory.getChildFile("Packs/C/snare.wav");
+        check(src.create().wasOk() && src.replaceWithText("snare"), "seed O2 source");
+        mt::KickXML doc("ROOT", ".xml", "1");
+        check(doc.loadOrCreate(projFile).isValid(), "create O2 document");
+        const auto samples = projFile.getParentDirectory().getChildFile("samples");
+        check(samples.create().wasOk(), "block samples dir with a file");
+        juce::ValueTree l("LAYER");
+        l.setProperty("source", src.getFullPathName(), nullptr);
+        doc.getState().appendChild(l, nullptr);
+        check(!doc.save() && doc.isDirty() && doc.getLastSaveError().contains("Cannot copy sample"), "O2: failed copy fails the save and keeps dirty");
+        check(l.getProperty("source").toString() == src.getFullPathName() && !projFile.loadFileAsString().contains("samples/"), "O2: no relative path for a missing file");
+        check(samples.deleteFile() && doc.save() && !doc.isDirty() && l.getProperty("source").toString() == "samples/snare.wav" &&
+              samples.getChildFile("snare.wav").loadFileAsString() == "snare", "O2: retry succeeds once the copy works");
+        check(doc.close(), "close O2 document");
+    }
     directory.deleteRecursively();
     std::cout << "PASS: actual KickXML autosave, close, worker save, bounded snapshots, failed/unsupported state, dirty/error reporting and retry\n";
 }
