@@ -162,8 +162,8 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 ### P1 – hiányzó funkciók
 
 - [ ] **T6** (részben kész és beolvasztva) Hátra: 16 LEVEL+Shift (NOTES): döntés szerint marad a `MenuPadPerform` (Kick `EN_NOTES` is ezt nyitja), nincs teendő. TC+Shift és AUTOMATION+Shift: lásd T30. SOUNDS+Shift / MAIN+Shift / REC+Shift: kész (T25, T29, T28).
-- [ ] **T6b** (kész és beolvasztva: `3ac2e6d1`, hardveren nem próbált) Hátra: tempo-szerkesztő módban a `+`/`−` nyomás nem küld semmit, de a felengedés `EN_PLUS`/`EN_MINUS`-t küld (release press nélkül).
-- [ ] **T7** LOCATE kombinációk: LOCATE+`<<` (1. ütem) és LOCATE+`>>` (utolsó ütem eleje) kész a T7b-vel. Hátra: LOCATE+`<`/`>` = előző/következő esemény (ehhez eseménylista-API kell).
+- [x] **T6b** kész és beolvasztva (`3ac2e6d1`, `53d80738`): minden Shift-függő és megosztott-kódú gomb (COPY, FULL LEVEL, TAP TEMPO, NOTE REPEAT, BANK, ARP, PLUS/MINUS, STEP/CURSOR) a nyomáskor küldött kódot engedi fel, press nélkül nincs release; hardveren nem próbált.
+- [ ] **T7** LOCATE+`<<`/`>>` kész (T7b). Hátra: LOCATE+`<`/`>` (előző/következő esemény) **blokkolt**: a `MTAudioInterface::seek(ticks)` csak játszó szekvenciára hat, nincs next/previous event API, és tick-szintű parkolt seek sincs. Új motor-API kellene (következő/előző esemény tick + parkolt tick-seek).
 - [ ] **T7b** (kész és beolvasztva: `904aaf52`, **hardveren nem próbált, a motor lejátszó-magját érinti**) `seekToBar`/`seekBars`/`getSequenceLastBar` a motorban, a `<<`/`>>` kötve. A tick-eltolás a szekvenciában van (`tickShift`), a `CMidiClock` változatlan. Hátra / nyitott: (1) hardveres teszt: `<<`/`>>` lejátszás közben, megállítva, szünetben; hosszú hang vagy ratchet az ugrás fölött; PLAY START parkolt seek után; (2) parkolt seek nem látszik a globális playheaden, amíg semmi nem játszott; (3) song módban a lépés-időzítés nyers óra-tickeket használ; (4) részleges loop és audio-típusú trackek nincsenek elemezve; (5) a Shift+STOP „RETURN” a kijelzett playheadet nem állítja vissza.
 - [x] **T8** kész és beolvasztva (`a49e4f38`): Shift+OCT± = ±1 félhang (korlát ±12, saját feltételezés), OCT−+OCT+ együtt = reset; `key_transpose.h` + host-teszt; hardveren nem próbált. Hátra: az oktáv-LED nem mutatja a félhang-transzpozíciót.
 - [x] **T9** kész és beolvasztva (`6ea8d26a`): channel aftertouch, mod wheel (CC1), expression (CC11), FS2 (CC65) a Port 1 ch 15-ről a kiválasztott trackre; a motor ezekből csak a CC1-et fogyasztja, a többi a MIDI-program külső portjára megy. Hátra: a Port 0/2 ágon nincs (duplázódás kockázata).
@@ -176,16 +176,16 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 
 ### P2 – robusztusság és teljesítmény
 
-- [ ] **T16** `poll()` a `usleep` helyett; zárolás a RawMIDI írásra (a `set_pad_rgb` az olvasó szálról, `on_pad_note_on`-ból is ír, így több szál ír ugyanarra a portra). A `set_pad_rgb` a Port 0-ra is küld, ami a T5 szerint némítandó.
-- [ ] **T17** Eszköz- és útvonal-felderítés (`/proc/asound/cards`, `EVIOCGABS`) a hardkódolt `hw:0,0,x` / `event0` / `2048` helyett; a factory ne tippeljen alapértelmezett MPC-t.
+- [x] **T16** kész és beolvasztva (`31b7d850`): a RawMIDI olvasó `poll()`-t használ (20 ms), minden írás kimenetenként egy mutexen megy; hardveren nem próbált (valódi rawmidi poll/revents, terhelés). Hátra: a `set_pad_rgb` Port 0-ra írása (T5).
+- [x] **T17** kész és beolvasztva (`31b7d850`): `device_probe.h` (kártya, érintő-eszköz felderítés, `EVIOCGABS` tartomány), minden hibánál a régi `hw:0,0,x` / `plughw:1,0` / `event0` / 2048 tartalék. **Figyelem:** ha a valódi érintő-maximum nem 2048, a skálázás szándékosan megváltozik: hardveren ellenőrizendő; az `MPC` kulcsszó az első találatot veszi.
 - [ ] **T18** Audio: tényleges `buffer_size` használata, latency-cél egyeztetése a loggal, Phones/Main külön szint, limiter a hard clip helyett. **Eszközön mérendő.**
 - [ ] **T19** CV/Gate: a DAC-kód (`kick_I2c.cpp`: `/dev/i2c-3`, cím `0xC`, `0x30|ch` 3 bájtos írás) csak `KICK_ENABLE_HARDWARE=ON` és `hardwareEnabled()` mellett fut, az Akai-ról nincs dokumentált DAC/busz/cím. **Vakon nem írunk** ismeretlen I2C eszközre. Hardveres próba után dönthető el, hogy Linux-DAC vagy az STM32 (USB-MIDI/SysEx) viszi-e a CV-t.
-- [ ] **T20** Rejtett tempo-szerkesztő mód (3.4) felülvizsgálata.
+- [x] **T20** kész és beolvasztva (`53d80738`): a ragadós tempo-szerkesztő mód megszűnt (a Kick UI nem fogyasztja az `EN_TAP_TEMPO`-t); Akai-konvenció szerint a Data Dial csak a TAP TEMPO fizikai lenyomása alatt állítja a BPM-et, a +/− mindig navigál.
 
 ### P3 – tesztelés
 
-- [ ] **T21** (részben kész: a parsernek van hoston futó tesztje, `Kick/tests/platform/MidiParserTests.cpp`) Hátra: egységteszt a `get_akai_button` / `get_akai_pad_index` táblákra (mind a 45 gomb + 16 pad); ehhez a táblákat ALSA-mentes headerbe kell kiemelni.
-- [ ] **T22** `kick_cmd` `rawmidi` parancs a review szerint, hogy hardver nélkül is lehessen bájtszinten tesztelni.
+- [x] **T21** kész és beolvasztva (`31b7d850`): `akai_map.h` + `AkaiMapTests.cpp` (45 gomb-Note, 16 pad bijekció, 49 és 50 is SHIFT).
+- [x] **T22** kész és beolvasztva (`31b7d850`): `rawmidi <port> <hex...>` a `/data/kick_cmd` FIFO-ban, ugyanazon a parseren/dispatchen át (`inject_bytes`); a parancsot futtatva nem próbáltam, csak fordul.
 - [x] **T23** Hardveres próbalista elkészült: `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` (gombok, Shift-párok, pad/billentyű, transport/seek, LED-ek, hang, döntést hozó próbák, visszavonási commitok).
 
 ## 6. Döntések (2026-11-01)
