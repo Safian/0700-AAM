@@ -181,7 +181,9 @@ public:
             if( auto* content = w != nullptr ? w->getContentComponent() : nullptr )
             {
                 auto                  image = content->createComponentSnapshot( content->getLocalBounds() );
-                juce::FileOutputStream output{ dir.getChildFile( name + ".png" ) };
+                auto                   shotFile = dir.getChildFile( name + ".png" );
+                shotFile.deleteFile(); // FileOutputStream appends to an existing file
+                juce::FileOutputStream output{ shotFile };
                 juce::PNGImageFormat   png;
                 if( !output.openedOk() || !png.writeImageToStream( image, output ) ) setApplicationReturnValue( 2 );
             }
@@ -277,6 +279,7 @@ public:
             const auto path = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SNAPSHOT", {});
             if (path.isNotEmpty() && w->getContentComponent()) {
                 auto image = w->getContentComponent()->createComponentSnapshot(w->getContentComponent()->getLocalBounds());
+                juce::File(path).deleteFile(); // FileOutputStream appends to an existing file
                 juce::FileOutputStream output{juce::File(path)};
                 juce::PNGImageFormat png;
                 if (!output.openedOk() || !png.writeImageToStream(image, output)) setApplicationReturnValue(2);

@@ -31,6 +31,8 @@ namespace kick_ui
 
         // Current dialog values as engine params (Apply -> MTAudioInterface::timingCorrect).
         mt::track::timingCorrectInfo getData();
+        // Global TC Off/On choice; the caller commits it to the engine on Apply only.
+        bool getGlobalEnabled();
 
     private:
         ui::KickToggleOptions globalTC{ "GLOBAL TIMING CORRECT", { "Off", "On" } };
