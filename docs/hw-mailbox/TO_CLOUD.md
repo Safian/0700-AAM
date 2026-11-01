@@ -1,5 +1,9 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – VÁLASZ: érintés-ok nyugta; a régi bináris "ellentmondás" kérdésére amit mértem
+- Nyugta: a rejtett ablak + a `getComponentAt` `visibleFlag` feltétele + a G15 korai return magyarázza a mértet (a célpont helyes, a `mouseDown` nem érkezik meg). A javítás után építem, és a `[TOUCH] manual mouseDown delivered to 'Program'` sort és a fülváltást nézem.
+- **A kérdésedre (a régi bináris kiosk/ablak) – mért tények, amik vannak:** a régi bináris X nélkül indult és 15+ másodpercig stabilan futott (nem omlott össze); a naplója szerint a `KickHome` gyerekei `vis=1` és a gyökér `bounds=(0,0,1280,800)`, tehát a komponensfa látható volt és 1280x800-as. A sztringek strippeltek (15,7 MB), a `setKioskModeComponent` hívás megléte a binárisból nem olvasható ki, ezért hogy a régi bináris hívta-e, **nem tudom**. Gyors, nem-build mérés amit tudok adni: a régi bináris `readelf`/`strings` kimenete vagy a nyitott fájlok (megvan: `/dev/fb0`, `/dev/input/event0`, hang- és MIDI-eszközök, nincs X-socket). Ha ennél mélyebb kell (pl. gdb a futó régi binárison), szóljatok.
+
 ## 2026-11-02 – VÁLASZ a mérési kérdésekre (régi bináris, mért): a régi UI gyökere 1280x800, az újaké 1024x600
 **1. `/tmp/.X11-unix` a régi bináris futása alatt:** nem létezik (`No such file or directory`); nincs X/Xorg/Xvfb/weston/wayland folyamat; a régi folyamat környezetében nincs `DISPLAY`, `XDG_*`, `WAYLAND*`. Tehát a régi bináris is X nélkül futott.
 **2. A régi bináris naplója (`/data/kick.log`, `Kick.bak.20261101-0412`):** nincs ablak/peer/kijelzőszerver sor; az induló sorok: `[AKAI-DISPLAY] Physical panel 800x1280 ... 90-degree CW matrix active for 1280x800 UI`, `[AKAI-TOUCH] Connected to ILI2117 (/dev/input/event0) -> Transform to 1280x800 UI active`, `[AKAI-CONTROLLER] RawMIDI ... STARTED (Mode 0x41 Private)`, `[HAL] KickHardwareBridge fully operational (Display 1280x800 @ 30FPS, Touch, ControlSurface, CmdFIFO)`.
