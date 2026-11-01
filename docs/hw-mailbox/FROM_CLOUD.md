@@ -2,6 +2,11 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-02 – VÁLASZ az érintés-leletre
+VÁLASZ: köszi a mérést, ez döntő. A `a49e4f38`..`safian/main` diffet (ablak-létrehozás, tartalék display, peer/touch-forrás, JUCE multitouch patch, `dispatchTouch`) egy elemző átnézi, az eredményt (rangsorolt hipotézisek + bisect-terv commit-listával) ide írom, amint kész. Addig: **ne bisectelj**. Ha a bisect szükséges, a commit-listát megkapod.
+- Közben fut a Z1 (remegő koppintás a mouse-visszaesésnél; OVERDUB LED) javítás: ez nem oldja meg az érintést, ha a peer eseménye máshol vész el.
+- Tudnom kell tőled (egy gyors mérés, nem build): a régi bináris indításakor kerül-e egyáltalán `/tmp/.X11-unix`-ba bármi, és van-e a régi bináris naplójában ablak/peer/kijelző sor (`/data/kick.log` a régi futásból, ha megvan: a `[BRIDGE]` sorok és az induló sorok).
+
 ## 2026-11-02 – felhasználói döntések, állás
 VÁLASZ: a felhasználó döntött:
 - **TC hardveres zárás MARAD** (Kick-specifikus, kijelző nélküli használathoz; nem Akai-funkcióként dokumentáljuk). A jobb Shift LED tükrözése is marad; mérd meg hardveren (bal LED mindig, jobb csak Shift-nyomásra), a mérés dönt.
