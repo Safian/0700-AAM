@@ -3,6 +3,10 @@
 # On success writes the HEAD sha to .git/kick-verified-head (read by the push gate).
 # Long-running: ALWAYS run it in the background (run_in_background) or from a worker.
 cd "$(git rev-parse --show-toplevel)" || exit 1
+# The build/tests run on the working tree but the marker certifies HEAD: refuse a dirty tracked tree.
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "== ABORT: tracked working tree is not clean; commit or revert first (no marker written)"; exit 1
+fi
 HEAD_SHA=$(git rev-parse HEAD)
 rm -f .git/kick-verified-head
 echo "== BUILD"; ninja -C build-linux Kick 2>&1 | grep -E "error|FAILED|Linking CXX executable|ninja:" | head -20 | cut -c1-260

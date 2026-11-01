@@ -181,7 +181,9 @@ public:
             if( auto* content = w != nullptr ? w->getContentComponent() : nullptr )
             {
                 auto                  image = content->createComponentSnapshot( content->getLocalBounds() );
-                juce::FileOutputStream output{ dir.getChildFile( name + ".png" ) };
+                auto                   shotFile = dir.getChildFile( name + ".png" );
+                shotFile.deleteFile(); // FileOutputStream appends to an existing file
+                juce::FileOutputStream output{ shotFile };
                 juce::PNGImageFormat   png;
                 if( !output.openedOk() || !png.writeImageToStream( image, output ) ) setApplicationReturnValue( 2 );
             }
@@ -239,13 +241,18 @@ public:
         w->setTopLeftPosition( 0, 0 );
 #endif
 
+        // Headless (no X server / display, e.g. the MPC framebuffer bridge): JUCE's Linux setKioskComponent()
+        // dereferences getDisplayForRect() unchecked and a native peer cannot be created. The bridge renders
+        // the component tree itself (peer-less touch path), so keep the window hidden and skip kiosk mode.
+        const bool hasDisplay = ! juce::Desktop::getInstance().getDisplays().displays.isEmpty();
+
         // Visibility...
-        w->setVisible(!smoke);
+        w->setVisible(!smoke && hasDisplay);
 
 #if JUCE_IOS
-        if (!smoke) juce::Desktop::getInstance().setKioskModeComponent( w.get(), true );
+        if (!smoke && hasDisplay) juce::Desktop::getInstance().setKioskModeComponent( w.get(), true );
 #elif( JUCE_ANDROID || JUCE_LINUX || __linux__ )
-        if (!smoke) juce::Desktop::getInstance().setKioskModeComponent( w.get(), false );
+        if (!smoke && hasDisplay) juce::Desktop::getInstance().setKioskModeComponent( w.get(), false );
 #endif
 #if JUCE_LINUX || __linux__
         if (!smoke)
@@ -272,6 +279,7 @@ public:
             const auto path = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SNAPSHOT", {});
             if (path.isNotEmpty() && w->getContentComponent()) {
                 auto image = w->getContentComponent()->createComponentSnapshot(w->getContentComponent()->getLocalBounds());
+                juce::File(path).deleteFile(); // FileOutputStream appends to an existing file
                 juce::FileOutputStream output{juce::File(path)};
                 juce::PNGImageFormat png;
                 if (!output.openedOk() || !png.writeImageToStream(image, output)) setApplicationReturnValue(2);

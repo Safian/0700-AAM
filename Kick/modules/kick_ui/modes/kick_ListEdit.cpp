@@ -153,8 +153,12 @@ namespace kick_ui
         tcButton.onClick = [&]() {
             ListEditTimingCorrect* pTc = new ListEditTimingCorrect();
             mt::utils::showOptions( "TIMING CORRECT", pTc, [pTc, this]( int R ) {
-                if( R == UI::APPLY && ae.timingCorrect( ae.getSelected(), pTc->getData() ) < 0 )
-                    mt::utils::showNotification( "Timing correct: range not supported" );
+                if( R == UI::APPLY )
+                {
+                    ae.setTimingCorrectEnabled( pTc->getGlobalEnabled() );
+                    if( ae.timingCorrect( ae.getSelected(), pTc->getData() ) < 0 )
+                        mt::utils::showNotification( "Timing correct: range not supported" );
+                }
                 delete pTc;
             },
                                     { 0, 0, 650, 520 } );
@@ -550,6 +554,11 @@ namespace kick_ui
         return Div.endsWithChar( 'T' ) ? ticks * 2 / 3 : ticks;
     }
 
+    bool ListEditTimingCorrect::getGlobalEnabled()
+    {
+        return globalTC.getSelected() == 1;
+    }
+
     mt::track::timingCorrectInfo ListEditTimingCorrect::getData()
     {
         mt::track::timingCorrectInfo d;
@@ -606,21 +615,23 @@ namespace kick_ui
             shiftTiming.setValue( d.shiftTicks, juce::dontSendNotification );
             window.setValue( d.windowPct, juce::dontSendNotification );
             strength.setValue( d.strengthPct, juce::dontSendNotification );
+            bool gridFound = false;
             for( bool trip : { false, true } )
             {
                 auto opts = trip ? CommonUtils::getTripletTimeDivisions() : CommonUtils::getDefaultTimeDivisions();
-                for( size_t i = 0; i < opts.size(); ++i )
+                for( size_t i = 0; i < opts.size() && !gridFound; ++i )
                     if( timeDivToTicks( opts[i] ) == d.gridTicks )
                     {
                         triplet.setToggleState( trip, juce::dontSendNotification );
                         timeDivList.setListOptions( opts, (int)i );
+                        gridFound = true; // first match wins (BAR is 0 ticks in both lists)
                     }
+                if( gridFound )
+                    break;
             }
         }
 
-        globalTC.onSelectionChanged = [&]( int Index, const juce::String& Selected ) {
-            mt::getAudioInterface().setTimingCorrectEnabled( Index == 1 );
-        };
+        // The global Off/On switch is committed by the caller on Apply only (getGlobalEnabled()), not on selection.
 
         timeDivList.onSelectionChanged = [&]( int Index, const juce::String& Selected ) {};
 
