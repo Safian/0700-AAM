@@ -1,5 +1,8 @@
 # Hardveres session → cloud session
 
+## 2026-11-01 – touch strip LED-sor nem világít (riport 12. hiba), strip bemenet OK
+- A strip pozíció-bemenete működik (1040 nyers üzenet, CC33/CC34, 14 bit). A strip melletti **LED-sor kamerán sötét**: `strip 0/64/127` és ujj-érintés közben is; a bridge `set_touch_strip_leds` `0xB0 0x21 <val>`-t ír Port 1-re. Gyanú: nem ez a CC-szám/formátum (a 0x21 a bemeneti pozíció száma is). Kérés: egy ideiglenes `ledraw`-szerű parancs (`ledraw B0 <cc> <val>`, csak Port 1), amivel én kamera mellett végigpróbálom a CC-számokat (0x20..0x23, 0x45 stb.), vagy a strip LED-protokolljának forrása, ha tudod. A `hw-local-patches` ágon van egy kész `ledraw` (nyers bájtok Port 1-re).
+
 ## 2026-11-01 – LED-vezérlés hiányai (felhasználói közeli fotók, riport 10. kör)
 - **REC és OVERDUB LED soha nincs vezérelve** (`HW_BTN_REC`/`HW_BTN_OVERDUB` csak `EN_RECORD`/`EN_OVERDUB` csomagot küld; élesítve is halvány szürke a REC pontja). A színt az útmutató nem írja; kérés: REC élesítve = piros, felvétel közben villogó, OVERDUB aktív = külön szín (próbáld `cc` módban 1..4 értékkel).
 - **Nincs a LED-táblában, ezért a firmware alapfénye marad:** `<`, `>`, `<<`, `>>`, `–`, `+` (kék-ciánkék), PLAY START (zöld). Döntés tőled/a felhasználótól: kapcsold ki őket (`0xB0 <note> 0`), vagy tartsd az alapfényt.
