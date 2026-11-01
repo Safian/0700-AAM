@@ -96,9 +96,10 @@ juce::File chooseDest(const juce::File& samplesDir, const juce::File& src, const
                     if (entry.first != src.getFullPathName()) claimedByOther = true;
                     else if (map == &copied) return dest;
                 }
-        if (claimedByOther) continue;
+        // A live reference keeps its target even when that file is currently missing (otherwise a new source would be handed the
+        // name and the referencing node would silently play the new source's audio).
+        if (claimedByOther || liveRefs.count(dest.getFullPathName())) continue;
         if (!dest.existsAsFile()) return dest;
-        if (liveRefs.count(dest.getFullPathName())) continue;
         if (dest.hasIdenticalContentTo(src)) return dest;
     }
     return {};
