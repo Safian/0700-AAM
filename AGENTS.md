@@ -61,3 +61,17 @@ what was not touched, which gate ran and its result, open questions. Start with 
 - Enforced by `.claude/hooks/block-foreground-long-cmds.py` (PreToolUse on Bash, wired in `.claude/settings.json`):
   such foreground commands are blocked with a message. Keep the hook and this rule in sync.
 - Hand one worker a whole multi-step task (e.g. merge, build, test, push) instead of splitting it across the orchestrator.
+
+## Build and test (Linux, native x86 — cloud container)
+Run `bash .claude/hooks/setup-linux-build.sh` once per fresh container (idempotent; log `/tmp/kick-setup.log`): it installs the
+headers (ALSA, X11/XInput2, freetype, fontconfig, GL, curl, JACK, xvfb), clones JUCE 7.0.12 into `.3rdPartySourceCache/` and
+configures `build-linux/` (all git-excluded). Run it in the background.
+```
+ninja -C build-linux Kick        # full app incl. the hardware bridge (apps/kick/Main.cpp); run in the background
+```
+Host tests (no JUCE/ALSA), from `Kick/tests/platform`: `g++ -std=c++17 -Wall -Wextra -fsanitize=address,undefined -o /tmp/t XTests.cpp && /tmp/t`
+(`PadColourMapTests` takes `../../assets/Default/theme.xml` as its argument). They are also registered in that directory's `CMakeLists.txt`.
+Headless screenshots (smoke test): `KICK_SMOKE_SHOTS_DIR=<dir> KICK_SMOKE_SCREENS="HomeGridView,MenuPadMixer" KICK_DATA_ROOT=<tmp>
+KICK_RESOURCE_ROOT=$PWD/Kick KICK_NO_AUDIO_DEVICE=1 KICK_NO_SERIAL_DEVICE=1 KICK_NO_HARDWARE=1 xvfb-run -a build-linux/apps/kick/Kick_artefacts/Release/Kick --smoke-test`.
+Per-change compile check without a full build: take the TU command from `build-linux/compile_commands.json`, swap the path
+prefix to your worktree, drop `-o`/`-MD`, add `-fsyntax-only`. Worker template: `.claude/agents/kick-worker.md`.
