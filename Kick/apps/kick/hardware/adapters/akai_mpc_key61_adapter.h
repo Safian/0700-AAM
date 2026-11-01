@@ -415,6 +415,8 @@ private:
                     } else {
                         HardwareButton btn = get_akai_button(note);
                         if (btn != HW_BTN_NONE) {
+                            printf("[AKAI-BTN] note=%d vel=%d\n", note, vel);
+                            fflush(stdout);
                             if (vel > 0) m_listener->on_button_press(btn);
                             else m_listener->on_button_release(btn);
                         } else {
@@ -431,6 +433,8 @@ private:
                     } else {
                         HardwareButton btn = get_akai_button(note);
                         if (btn != HW_BTN_NONE) {
+                            printf("[AKAI-BTN] note=%d vel=%d\n", note, d1);
+                            fflush(stdout);
                             m_listener->on_button_release(btn);
                         }
                     }
