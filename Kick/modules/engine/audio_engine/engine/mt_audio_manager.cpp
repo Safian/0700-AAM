@@ -276,7 +276,24 @@ namespace mt
 
     bool MTAudioManager::saveProject()
     {
-        return projectManager::save();
+        // G10: in Read mode the programs' pan holds the automated value; the project must store the pre-automation one.
+        // Message thread only (ValueTree writes); elsewhere the plain save runs.
+        if( panBases.empty() || !juce::MessageManager::getInstance()->isThisTheMessageThread() )
+            return projectManager::save();
+        std::vector<std::pair<juce::String, double>> automated;
+        savingProject.store( true );
+        for( const auto& b : panBases )
+            if( auto* p = getProgramById( b.first ) )
+            {
+                automated.emplace_back( b.first, (double)p->getPan() );
+                p->vTree.setProperty( IDs::pan, b.second, nullptr );
+            }
+        const bool ok = projectManager::save();
+        for( const auto& a : automated )
+            if( auto* p = getProgramById( a.first ) )
+                p->vTree.setProperty( IDs::pan, a.second, nullptr );
+        savingProject.store( false );
+        return ok;
     }
     ////////////////////////////
     //// Undo/Redo..
