@@ -75,7 +75,7 @@ Az adapter `get_akai_button()` mind a 45 Note-ot leképezi. A viselkedést a `Ki
 | `<` `>` | ✅ → MINUS/PLUS | ❌ LOCATE+: előző/köv. esemény | |
 | LOCATE | ⚠️ csak flag | – | `isLocateDown()` sehol nincs hívva |
 | `<<` | ✅ → `EN_BACK` | ❌ LOCATE+: START | |
-| `>>` | ❌ **→ `EN_KNOB_ENTER`** | ❌ LOCATE+: END | **Hiba:** a `>>` Enter-t nyom (`kick_hardware_bridge.h` ~746) |
+| `>>` | ❌ nincs kötve (szándékosan: korábban tévesen Enter-t nyomott) | ❌ LOCATE+: END | Kötés kérdéses, lásd §6/1 |
 | REC | ✅ | ❌ RECALL | |
 | OVER DUB | ✅ | – | |
 | STOP | ✅ | ⚠️ Return to start | Megvalósítás (stop→play(false,false)→stop) hatása ❓; dupla nyomás = MIDI panic nincs külön, de minden STOP all-notes-off-ot küld |
@@ -98,7 +98,7 @@ Az adapter `get_akai_button()` mind a 45 Note-ot leképezi. A viselkedést a `Ki
 | 16 pad lookup (`{37,36,42,82,40,38,46,44,48,47,45,43,49,55,51,53}`) | ✅ | Egyezik a review-val |
 | Pad velocity | ✅ | |
 | Pad poly aftertouch (`0xA9`) | ❌ | A parser átadja, de `handle_midi_message` nem kezeli; a DCL `PAD` csomag aftertouch mezője fixen `0` (`msg.data = {pad, state, vel, 0}`); a UI-ban van Aftertouch csúszka és `padPressed(..., Aftertouch)` |
-| Pad dupla trigger | ❓ | `on_pad_note_on` DCL-csomagot **és** `addLiveMidiNote`-ot is küld. A review pont ennek törlését írja elő; ha a Pad Mixer/Grid UI is hangot indít a csomagra, dupla hang lesz |
+| Pad dupla trigger | ✅ | A híd már csak a DCL pad-csomagot küldi; a Grid/PadMixer/PadPerform/PadColor/FileBrowser/MainMode képernyők maguk indítják a hangot. Következmény: azokon a képernyőkön, ahol nincs ilyen kezelő, a pad nem szól (az upstream viselkedés) – hardveren ellenőrizendő ❓ |
 | 61 billentyű (ch 15) | ✅ | Oktáv-eltolás + `m_key_pitch_map` |
 | Channel aftertouch (`0xDF`) | ❌ | Az adapter eldobja |
 | Mod wheel (CC1) | ❌ | Az adapter eldobja; a motor kezelné (`modWheel()`, CV program) |
@@ -134,11 +134,9 @@ Az adapter `get_akai_button()` mind a 45 Note-ot leképezi. A viselkedést a `Ki
 
 ## 3. Hibák és kockázatok (javítandó)
 
-1. **Parser túlindexelés** – `MidiParser::feed`: a `0xF1..0xF6` státuszok `expected_data = 0`-t kapnak, de utánuk érkező adatbájtok `data[data_idx++]`-ot írnak, és `data_idx == expected_data` sosem teljesül → `data[2]` tömb túlírása. Nem ellenőrizhető élőben, de port 2/DIN forrásnál reális (pl. MTC quarter frame `0xF1`).
-2. **`>>` = ENTER** – `HW_BTN_BAR_NEXT` → `EN_KNOB_ENTER` (press és release). Hibás kötés.
 3. **Nem működő/ismeretlen hatású kimenő eseményeknek hiszünk**: pitch bend és sustain a motorban valószínűleg nem hat (§2.3).
 4. **Rejtett tempo-szerkesztő mód** – TAP TEMPO után `m_tempo_edit_active` átveszi a `+`/`−`/Data Dial funkciót, amíg ENTER vagy STOP nem érkezik. Nem hardveres viselkedés, felhasználót megzavarhat.
-5. **Init SysEx mindkét portra** – `start()` az `m_out0`-ra is küldi a `0x41` módot, miközben a review szerint a Port 0-t némítani kell. Hatása ❓. Emellett `snd_rawmidi_open` visszatérési értéke nincs ellenőrizve, `start()` mindig `true`.
+5. **Init SysEx mindkét portra** – `start()` az `m_out0`-ra is küldi a `0x41` módot, miközben a review szerint a Port 0-t némítani kell. A hardveren igazolt build így küldte, ezért nem töröltem; eszközön kell eldönteni, kell-e a Port 0 írás (a `set_pad_rgb` is ír a Port 0-ra).
 6. **Port 0 / Port 2 tartalék ág** – a `d0 - 36` pad-fallback és a "minden más billentyű" ág a régi hibás viselkedést tartja életben; Port 2-ről érkező bármi billentyűnek számít.
 7. **Szálbiztonság** – `set_led()` (UI szál) és a RawMIDI olvasó szál ugyanazt az `m_out1`-et nem zárolja; a HAL `IHardwareEventListener` hívásai az olvasó szálról jönnek (a `dispatchHardwareInput` ezt `callAsync`-kel kezeli, de a `addLiveMidiNote/Msg` és `setBank` közvetlenül hívódik) ❓.
 8. **Polling** – `snd_rawmidi_read` NONBLOCK + `usleep(1000)`: akár 1 ms többletlatency és állandó CPU-használat; `poll()` illene ide.
@@ -154,22 +152,19 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 - BANK dupla nyomás = E–H
 - `/data/kick_cmd` `rawmidi <port> <hex...>` parancs (a `processCommand` nem ismeri)
 - MAIN+Shift TRACK, SOUNDS+Shift FAVORITES, TC+Shift ON/OFF, AUTOMATION+Shift OFF, REC+Shift RECALL
-- A pad-ütés dupla hangindításának teljes megszüntetése (lásd 2.3)
 
 ## 5. TODO (prioritás szerint)
 
 ### P0 – hibák
 
-- [ ] **T1** `MidiParser`: `0xF1..0xF6` státuszok kezelése (adatbájt-szám 1/2/1/0.., vagy eldobás), `data_idx` határvédelem. Ajánlott: kiemelni a parsert hardverfüggetlen headerbe, hogy hoston tesztelhető legyen.
-- [ ] **T2** `HW_BTN_BAR_NEXT` ne legyen `EN_KNOB_ENTER`; döntés kell, mi legyen a helyes DCL-kötés (lásd §6, kérdés 1).
-- [ ] **T3** Pad dupla trigger ellenőrzése: `on_pad_note_on` vs. UI-oldali pad-kezelők. Egy forrás maradjon.
-- [ ] **T4** Ellenőrizni/javítani, hogy pitch bend és sustain eljut-e a hangmotorig (`MTIProgram` üres ágak, hiányzó CC64 `case`). Ha az al-programok sem kezelik, bekötni.
-- [ ] **T5** Init SysEx csak Port 1-re; `snd_rawmidi_open` hibakezelés; `start()` térjen vissza `false`-szal, ha a Port 1 nem nyílik.
+- [ ] **T4** (elemezve, nincs kód) Pitch bend és sustain **nincs hatással**: `MTIProgram::noteProcess` (`mt_audio_iprogram.cpp` ~261–336) `isPitchWheel()`/aftertouch ága üres, a CC `switch` csak CC1-et és CC123-at kezel; más felülírás nincs (a `MTMidiProgram` mindent kiküld a külső MIDI portra, ott működik). Javasolt terv: `std::atomic<float> bendRatio` az `MTIAtomicProgramMaster`-ben, szorzás a `master.pitchRatio`-val a voice-ban (`DrumVoice` már olvassa: `drum_voice.cpp` ~164), sustain: atomi pedál-flag + voice-onkénti „held” flag, ONE_SHOT-ot kihagyva. **Döntés kell** (§6/6), és hardveres hallgatásos ellenőrzés.
+- [ ] **T5** (részben kész) Eszközön eldönteni, hogy az init SysEx Port 0-ra kell-e (lásd §3/5). A `snd_rawmidi_open` hibakezelés és a `start()` `false` visszatérés kész.
 
 ### P1 – hiányzó funkciók
 
 - [ ] **T6** Shift-párok: SOUNDS→FAVORITES, MAIN→TRACK, TC→ON/OFF (`EN_ON_OFF`), AUTOMATION→OFF, REC→RECALL, 16 LEVEL→NOTES külön képernyő (ha létezik).
 - [ ] **T7** LOCATE kombinációk (`isLocateDown()` használata): `<<`→START, `>>`→END, `<`/`>`→előző/következő esemény.
+- [ ] **T7b** `>>` (bar +1) DCL-kötése: döntés kell (§6/1); jelenleg nincs kötve.
 - [ ] **T8** OCT: Shift+OCT félhang-transzpozíció, OCT−+OCT+ reset; LED-létra a mérték szerint.
 - [ ] **T9** Billentyűzet/kerekek: channel aftertouch (`0xDF`), mod wheel (CC1), expression (CC11), FS2 (CC65) bekötése az `IHardwareEventListener`-be és a hídba.
 - [ ] **T10** Pad aftertouch (`0xA9`) → DCL `PAD` csomag 4. mező.
@@ -189,7 +184,7 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 
 ### P3 – tesztelés
 
-- [ ] **T21** Hoston futtatható egységteszt a parserre és a `get_akai_button` / `get_akai_pad_index` táblákra (mind a 45 gomb + 16 pad + határesetek). Jelenleg nincs ilyen teszt az adapterhez.
+- [ ] **T21** (részben kész: a parsernek van hoston futó tesztje, `Kick/tests/platform/MidiParserTests.cpp`) Hátra: egységteszt a `get_akai_button` / `get_akai_pad_index` táblákra (mind a 45 gomb + 16 pad); ehhez a táblákat ALSA-mentes headerbe kell kiemelni.
 - [ ] **T22** `kick_cmd` `rawmidi` parancs a review szerint, hogy hardver nélkül is lehessen bájtszinten tesztelni.
 - [ ] **T23** Hardveres smoke lista (kézi): minden gomb + Shift-pár, 16 pad, billentyű/kerekek/pedálok, LED-ek, kijelző/érintés, audio-peak.
 
@@ -200,3 +195,4 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 3. A METRONOME+Shift `EN_PREF` (Config) legyen, vagy marad `HomeOptions`?
 4. A `Kick` upstream-barát marad (AGENTS.md), vagy ez az adapter helyi, hardver-specifikus réteg? Ez dönti el, mi mehet upstream PR-ba (valószínűleg csak a platformfüggetlen parser/teszt).
 5. Szükséges-e az audio bemenet és a CV/Gate ebben a körben?
+6. A pitch bend csak a keygroup/kromatikus programokra hasson, vagy a dobokra is? Fix ±2 félhang elég, vagy programonkénti beállítás kell?
