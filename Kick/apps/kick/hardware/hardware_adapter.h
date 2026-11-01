@@ -183,7 +183,6 @@ public:
     // Level based LED: 0 = off, 1 = dim A, 2 = dim B, 3 = full A, 4 = full B (see hardware/led_map.h).
     // Default: no-op, so adapters without intensity / second colour need not implement it.
     virtual void set_led_level(HardwareLed /*led*/, int /*level*/) {}
-    virtual void set_touch_strip_leds(int /*val*/) {}
     virtual void set_pad_rgb(int /*pad*/, uint8_t /*r*/, uint8_t /*g*/, uint8_t /*b*/) {}
     // Feeds raw MIDI bytes through the same parser + dispatch path as the hardware port 'port' (0..2), so byte level
     // tests need no hardware (kick_cmd "rawmidi"). Default: no-op.
