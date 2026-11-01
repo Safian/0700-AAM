@@ -56,12 +56,12 @@ int main()
         CHECK(!wheel.active() && strip.active());
         CHECK(kick_hw::routeBend(strip, 8192, Sel{ 3 }).track == 2);
         CHECK(!strip.active());
-        kick_hw::HeldTarget<Sel> cc;
-        CHECK(kick_hw::routeCc(cc, 0, Sel{ 5 }).track == 5);          // 0 without hold -> current
-        CHECK(kick_hw::routeCc(cc, 10, Sel{ 1 }).track == 1);
-        CHECK(kick_hw::routeCc(cc, 60, Sel{ 2 }).track == 1);
-        CHECK(kick_hw::routeCc(cc, 0, Sel{ 2 }).track == 1);          // 0 returns to track 1
-        CHECK(!cc.active());
+        // AA1b: CC1 / CC11 follow the current selection, also at a non-zero value after a track change
+        CHECK(kick_hw::routeCc(0, Sel{ 5 }).track == 5);
+        CHECK(kick_hw::routeCc(10, Sel{ 1 }).track == 1);
+        CHECK(kick_hw::routeCc(60, Sel{ 2 }).track == 2);   // track switched while the wheel is at 60 -> new track
+        CHECK(kick_hw::routeCc(127, Sel{ 3 }).track == 3);
+        CHECK(kick_hw::routeCc(0, Sel{ 4 }).track == 4);
     }
     if (g_fail == 0) std::printf("hw_targets: all passed\n");
     return g_fail ? 1 : 0;
