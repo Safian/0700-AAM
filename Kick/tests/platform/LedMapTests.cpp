@@ -67,6 +67,24 @@ int main()
             }
         check(bankLedLevel(-1, 0) == kLedFullA, "negative bank -> A");
     }
+    { // wire formats
+        uint8_t m[3];
+        makeLedMessage(LedWire::Note, 81, 0, m);
+        check(m[0] == 0x90 && m[1] == 81 && m[2] == 0, "note: off is 0x90 n 0");
+        makeLedMessage(LedWire::Cc, 81, 3, m);
+        check(m[0] == 0xB0 && m[1] == 81 && m[2] == 3, "cc");
+        makeLedMessage(LedWire::Cc, 81, 0, m);
+        check(m[0] == 0xB0 && m[2] == 0, "cc off keeps CC");
+        makeLedMessage(LedWire::NoteOff0, 82, 127, m);
+        check(m[0] == 0x90 && m[1] == 82 && m[2] == 127, "noteoff0 on");
+        makeLedMessage(LedWire::NoteOff0, 82, 0, m);
+        check(m[0] == 0x80 && m[1] == 82 && m[2] == 0, "noteoff0 off is 0x80 n 0");
+        bool k = false;
+        check(parseLedWire(nullptr, &k) == LedWire::Note && k, "unset -> note");
+        check(parseLedWire("cc", &k) == LedWire::Cc && k, "cc");
+        check(parseLedWire("noteoff0", &k) == LedWire::NoteOff0 && k, "noteoff0");
+        check(parseLedWire("bogus", &k) == LedWire::Note && !k, "unknown -> note, flagged");
+    }
     std::puts("OK");
     return 0;
 }
