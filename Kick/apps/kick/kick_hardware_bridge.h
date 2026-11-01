@@ -755,9 +755,12 @@ public:
         if (kick_ui::ListEditTimingCorrect::isOpen()) {
             const auto act = kick_hw::timingCorrectDialogAction(btn, isShiftDown());
             if (act != kick_hw::ModalDialogAction::None) {
-                if (btn >= 0 && btn < NUM_HW_BUTTONS) m_modal_consumed[(size_t)btn] = true;
-                kick_ui::ListEditTimingCorrect::closeFromHardware(act == kick_hw::ModalDialogAction::Apply);
-                return;
+                // Swallow the button (and its release) only if the dialog really closed; with a nested list popup
+                // on top closeFromHardware() does nothing and returns false, so the button runs normally.
+                if (kick_ui::ListEditTimingCorrect::closeFromHardware(act == kick_hw::ModalDialogAction::Apply)) {
+                    if (btn >= 0 && btn < NUM_HW_BUTTONS) m_modal_consumed[(size_t)btn] = true;
+                    return;
+                }
             }
         }
         switch (btn)

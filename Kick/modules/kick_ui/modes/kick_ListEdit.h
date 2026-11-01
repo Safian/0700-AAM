@@ -31,7 +31,7 @@ namespace kick_ui
 
         // Explicit "dialog is open" state for the hardware bridge (the dialog is modal and has touch-only buttons).
         // Message thread only. closeFromHardware() ends the modal state with APPLY / CANCEL (same as the buttons);
-        // false when no Timing Correct dialog is open.
+        // false (and nothing closed) when no dialog is open or a nested popup is the foremost modal component.
         static bool isOpen();
         static bool closeFromHardware( bool apply );
 

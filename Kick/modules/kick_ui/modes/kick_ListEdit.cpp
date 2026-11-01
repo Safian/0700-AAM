@@ -582,6 +582,13 @@ namespace kick_ui
     bool ListEditTimingCorrect::closeFromHardware( bool apply )
     {
         if( !g_openTimingCorrect ) return false;
+        // Close only when the TC's own modal popup is the foremost modal component. A nested list popup (TYPE /
+        // EVENTS) is modal on top and re-parents a KickList owned by this dialog; ending the lower modal then would
+        // delete the dialog under it (use-after-free when the list popup closes). Then do nothing and return false.
+        juce::Component* modalAncestor = nullptr;
+        for( auto* c = g_openTimingCorrect->getParentComponent(); c != nullptr; c = c->getParentComponent() )
+            if( c->isCurrentlyModal( false ) ) { modalAncestor = c; break; }
+        if( modalAncestor == nullptr || !modalAncestor->isCurrentlyModal( true ) ) return false;
         mt::utils::exitDialog( g_openTimingCorrect, apply ? UI::APPLY : UI::CANCEL );
         return true;
     }
