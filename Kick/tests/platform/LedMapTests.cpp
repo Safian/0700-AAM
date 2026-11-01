@@ -92,7 +92,7 @@ int main()
         recOverdubLedLevels(true, true, false, r, o);
         check(r == kLedOff && o == kLedFullA, "overdubbing: OVERDUB steady, REC dark");
         recOverdubLedLevels(false, true, true, r, o);
-        check(r == kLedOff && o == kLedFullA, "overdub without record flag");
+        check(r == kLedOff && o == kLedOff, "overdub mode flag without recording: dark (stale flag after STOP)");
         check(blinkPhase(0) && blinkPhase(249) && !blinkPhase(250) && !blinkPhase(499) && blinkPhase(500), "blink phase");
     }
     std::puts("OK");

@@ -366,9 +366,9 @@ private:
         });
     }
 
-    // Peer-path delivery. JUCE only creates touch input sources when XInput2 is present (multitouch patch); without it
-    // (headless hardware) peer->handleMouseEvent(touch, ...) is silently dropped. The first call probes whether JUCE
-    // made a touch source; if not, finger 0 is delivered as InputSourceType::mouse (source 0) from then on. Real XI
+    // Peer-path delivery. The JUCE multitouch patch allows touch input sources without XInput2 too (canUseTouch() is
+    // true), so a finger is a real touch source and Button::mouseDrag/mouseUp use its own position. The first call still
+    // probes whether JUCE made a touch source; if not (unpatched JUCE), finger 0 is delivered as InputSourceType::mouse (source 0) from then on. Real XI
     // touch on a display, macOS and iOS keep the touch type. Message thread only.
     void deliverPeerTouch(juce::ComponentPeer* peer, int ix, int iy, juce::ModifierKeys mods, int slot, bool log)
     {

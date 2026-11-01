@@ -53,7 +53,10 @@ inline void rawToUi(int rawX, int rawY, int rangeX, int rangeY, int fbW, int fbH
 
 // Which JUCE mouse input source a peer-path touch event goes to. The multitouch JUCE patch creates touch sources only
 // when the X server offers XInput2 (xi.opcode != 0); without X (headless hardware) MouseInputSourceList::canUseTouch()
-// is false, getOrCreateMouseInputSource(touch) returns nullptr and the event is dropped silently. Then source 0
+// is false, getOrCreateMouseInputSource(touch) returns nullptr and the event is dropped silently. The patch now also
+// returns true there (the bridge is the only touch producer), so on Linux the Touch route is always taken; the mouse
+// fallback is kept only as a safety net, because JUCE's Button::mouseDrag/mouseUp on a mouse source ask XQueryPointer
+// (not the finger) via isMouseOver() and a jittering tap would not click. Without a touch source source 0
 // (InputSourceType::mouse, always available) carries finger 0; further fingers cannot be represented and are dropped.
 enum class TouchRoute { Touch, Mouse, Drop };
 
