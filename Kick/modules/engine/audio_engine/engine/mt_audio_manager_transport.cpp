@@ -187,6 +187,7 @@ namespace mt
     int MTAudioTransportManager::stop()
     {
         midiClock.stop();
+        songActive = false;
         setTransportState( TransportState::Stopped );
 
         int retVal = -1;
@@ -274,6 +275,7 @@ namespace mt
         {
             if( lastSeqTicks <= playTime )
             {
+                songActive = false;
                 signals::onSongStopped();
                 resetSong();
             }
@@ -411,6 +413,7 @@ namespace mt
             auto length  = pSeq->isLooping.get() ? pSeq->loopEnd.get() - pSeq->loopStart.get() : (int)pSeq->length.get();
             lastSeqTicks = pSeq->getTicksPerBar() * ( playQueue.size() ? playQueue.back().repeatCount * length : SongInfo.steps[Index].repeatCount * length );
             stepIndex    = Index;
+            songActive   = true;
             setSelectedSequence( firstSeq );
             play( firstSeq );
 
