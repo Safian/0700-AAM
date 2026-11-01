@@ -622,7 +622,7 @@ namespace mt
     ///
     int MTSequence::seekToBar( int Bar0 )
     {
-        const auto bar = mt::bar_seek::clampBar( Bar0, getLength() );
+        const auto bar = bar_seek::clampBar( Bar0, getLength() );
 
         // Always record the target: while playing, the tick-processing thread picks it up in onTick(); while stopped or
         // paused, play()/resume() consume it. No lock and no work on the caller's thread in the playing case.
@@ -643,18 +643,18 @@ namespace mt
         auto current = seekTargetBar.load();
         if( 0 > current )
             current = ( isPlaying || isPaused.load() ) ? (int)sequencePlayhead.bnb.bar : 0; // stopped: play() starts at bar 0
-        return seekToBar( mt::bar_seek::relativeBar( current, DeltaBars, getLength() ) );
+        return seekToBar( bar_seek::relativeBar( current, DeltaBars, getLength() ) );
     }
 
     int MTSequence::getLastBar()
     {
-        return mt::bar_seek::lastBar( isLooping.get(), loopEnd.get(), getLength() );
+        return bar_seek::lastBar( isLooping.get(), loopEnd.get(), getLength() );
     }
 
     // Counters/playhead of the sequence itself for the start of Bar0 (no tracks, no clock shift).
     void MTSequence::showBar( int Bar0 )
     {
-        const auto bar = (unsigned int)mt::bar_seek::clampBar( Bar0, getLength() );
+        const auto bar = (unsigned int)bar_seek::clampBar( Bar0, getLength() );
 
         // Tick data first: seekSeqenceInternal() and the bar/beat counters depend on the bar's time signature.
         initializeTickDataFromTempoSettings( getSequenceTempoSettings( bar ) );
@@ -678,10 +678,10 @@ namespace mt
     {
         const juce::ScopedLock sl( lock );
 
-        const auto bar    = (unsigned int)mt::bar_seek::clampBar( Bar0, getLength() );
+        const auto bar    = (unsigned int)bar_seek::clampBar( Bar0, getLength() );
         const auto target = getTicksUpto( bar );
 
-        tickShift.store( mt::bar_seek::shiftFor( target, RawTick ) );
+        tickShift.store( bar_seek::shiftFor( target, RawTick ) );
         prevTicks.store( target ); // onTick() computes diff = shifted - prevTicks: 0 for the tick that applied the seek
 
         showBar( (int)bar );
@@ -816,7 +816,7 @@ namespace mt
         }
 
         // Everything below works on the sequence's own (shifted) timeline.
-        const unsigned int Ticks = mt::bar_seek::shifted( RawTicks, tickShift.load() );
+        const unsigned int Ticks = bar_seek::shifted( RawTicks, tickShift.load() );
 
         auto diff = Ticks - prevTicks;
         prevTicks.store( Ticks );

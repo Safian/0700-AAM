@@ -257,9 +257,9 @@ namespace mt
 
         // fillMidiMessages() plays (prevTick, Tick]; queued note-offs are keyed by absolute (shifted) ticks that
         // are compared with tickCtr, so tickCtr must follow prevTick (== shifted tick).
-        prevTick = mt::bar_seek::prevTickFor( TargetTick );
+        prevTick = bar_seek::prevTickFor( TargetTick );
         tickCtr  = prevTick;
-        tickPos  = mt::bar_seek::wrapToLength( TargetTick, lengthInTicks.load() );
+        tickPos  = bar_seek::wrapToLength( TargetTick, lengthInTicks.load() );
 
         trackPlayhead.bnb = seq.toBnB( tickPos );
         recalculateIndex( tickPos );
