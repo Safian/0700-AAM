@@ -22,6 +22,7 @@
 #include "kick_xml_manager.h"
 #include "../../common/source/kick_paths.h"
 #include <map>
+#include <set>
 
 namespace {
 // Never hold the document lock while waiting for the message thread. Project
@@ -40,13 +41,60 @@ bool isAudioFilePath(const juce::String& path) {
     return juce::File(path).hasFileExtension(".wav;bwf;aif;aiff;flac;ogg;mp3;wmv;asf;wm;wma");
 }
 
-// renameCollisions=false (live tree): children of the project and copies to the sample's own name; a name collision is left
-// absolute, because the asset slice map is keyed by the absolute path and a renamed live source would mute the sample.
-// renameCollisions=true (serialised snapshot only): handles just the collision, as samples/<parent>_<name>.
-// copied: per save, absolute source path -> destination it was copied to. The same source may share its destination (two layers
-// on one external file); a different source with identical bytes is a different asset and must not be merged (separate slice maps).
+// Live pass (renameCollisions=false): copies every foreign sample into the project (once) and records source -> destination in
+// `copied`. The live property is rewritten to samples/<name> only when that is safe: the destination is the source's own file
+// name AND no other external source in the tree has the same file name. Otherwise the live source stays absolute, because the
+// asset slice map is keyed by the absolute path and MTAudioAssetManager's file-name fallback (first key with that name, in map
+// order) would hand this layer ANOTHER source's slice once a same-named sibling was rewritten (wrong slice, or mute).
+// Snapshot pass (renameCollisions=true): only applies the recorded destination to the serialised copy.
+// copied: per save, absolute source path -> destination. The same source may share its destination (two layers on one external
+// file); a different source is never mapped onto a file another source claimed in this save.
 using CopiedMap = std::map<juce::String, juce::File>;
-void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, bool renameCollisions, CopiedMap& copied) {
+using NameClashSet = std::map<juce::String, std::set<juce::String>>; // file name -> distinct external absolute sources
+
+void collectExternalSamples(const juce::ValueTree& tree, const juce::File& projectDir, NameClashSet& names) {
+    for (const char* prop : {"path", "source"}) {
+        if (!tree.hasProperty(prop)) continue;
+        const auto val = tree.getProperty(prop).toString();
+        if (isAudioFilePath(val) && juce::File::isAbsolutePath(val) && !juce::File(val).isAChildOf(projectDir))
+            names[juce::File(val).getFileName()].insert(juce::File(val).getFullPathName());
+    }
+    for (int i = 0; i < tree.getNumChildren(); ++i) collectExternalSamples(tree.getChild(i), projectDir, names);
+}
+
+// Candidate names for a source: <name>, <parent>_<name>, <parent>_<stem>_2<ext>, <parent>_<stem>_3<ext>, ...
+juce::File candidateDest(const juce::File& samplesDir, const juce::File& src, int index) {
+    if (index == 0) return samplesDir.getChildFile(src.getFileName());
+    const auto parent = src.getParentDirectory().getFileName() + "_";
+    if (index == 1) return samplesDir.getChildFile(parent + src.getFileName());
+    return samplesDir.getChildFile(parent + src.getFileNameWithoutExtension() + "_" + juce::String(index) + src.getFileExtension());
+}
+
+// First candidate that is free (copy there), or already holds this source's own copy: claimed by this very source earlier in the
+// save, or an unclaimed file from an earlier save with identical bytes. A file claimed by a different source is skipped, so two
+// sources never share a file (separate slice maps). Remaining case: two distinct assets with identical bytes AND identical
+// parent folder name + file name (e.g. /Kit1/Kicks/kick.wav and /Kit2/Kicks/kick.wav, same bytes) get candidate names in order;
+// in a later session, when the earlier copy is not claimed in that save, the first of them may adopt the other's identical file.
+// A source that no longer exists cannot be compared: it only maps to an existing renamed copy (index >= 1), as before.
+juce::File chooseDest(const juce::File& samplesDir, const juce::File& src, const CopiedMap& copied) {
+    const bool exists = src.existsAsFile();
+    for (int index = exists ? 0 : 1; index < 1000; ++index) {
+        const auto dest = candidateDest(samplesDir, src, index);
+        if (!dest.existsAsFile()) return exists ? dest : juce::File();
+        bool claimedByOther = false;
+        for (const auto& entry : copied)
+            if (entry.second == dest) {
+                if (entry.first == src.getFullPathName()) return dest;
+                claimedByOther = true;
+            }
+        if (claimedByOther) continue;
+        if (!exists || dest.hasIdenticalContentTo(src)) return dest;
+    }
+    return {};
+}
+
+void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, bool renameCollisions, CopiedMap& copied,
+                           const NameClashSet& names) {
     if (!projectDir.exists() || !tree.isValid()) return;
 
     static const juce::Identifier idPath("path");
@@ -59,27 +107,26 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
             juce::File f(val);
             if (f.isAChildOf(projectDir)) {
                 if (!renameCollisions) tree.setProperty(prop, f.getRelativePathFrom(projectDir), nullptr);
-            } else if (renameCollisions || f.existsAsFile()) {
+            } else if (renameCollisions) {
+                const auto done = copied.find(f.getFullPathName());
+                if (done != copied.end()) tree.setProperty(prop, done->second.getRelativePathFrom(projectDir), nullptr);
+            } else {
                 auto samplesDir = projectDir.getChildFile("samples");
                 if (!samplesDir.exists() && projectDir.getChildFile("Imported").exists())
                     samplesDir = projectDir.getChildFile("Imported");
 
-                auto dest = samplesDir.getChildFile(f.getFileName());
-                // An existing samples/<name> is only shared when this very source was copied there earlier in this save.
                 const auto done = copied.find(f.getFullPathName());
-                const bool collision = dest.existsAsFile() && dest.getFullPathName() != f.getFullPathName() &&
-                                       !(done != copied.end() && done->second == dest);
-                if (collision) {
-                    if (!renameCollisions) return;
-                    dest = samplesDir.getChildFile(f.getParentDirectory().getFileName() + "_" + f.getFileName());
-                } else if (renameCollisions) return;
+                auto dest = done != copied.end() ? done->second : chooseDest(samplesDir, f, copied);
+                if (dest == juce::File()) return;
                 if (!dest.existsAsFile()) {
-                    if (!f.existsAsFile()) return;
                     samplesDir.createDirectory();
                     f.copyFileTo(dest);
                 }
                 copied[f.getFullPathName()] = dest;
-                tree.setProperty(prop, dest.getRelativePathFrom(projectDir), nullptr);
+                const auto clash = names.find(f.getFileName());
+                const bool unique = clash == names.end() || clash->second.size() <= 1;
+                if (unique && dest.getFileName() == f.getFileName())
+                    tree.setProperty(prop, dest.getRelativePathFrom(projectDir), nullptr);
             }
         }
     };
@@ -89,7 +136,7 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
 
     for (int i = 0; i < tree.getNumChildren(); ++i) {
         auto child = tree.getChild(i);
-        relativizeSamplePaths(child, projectDir, renameCollisions, copied);
+        relativizeSamplePaths(child, projectDir, renameCollisions, copied, names);
     }
 }
 }
@@ -210,11 +257,14 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
     // Sample paths stay rewritten in the live document as before: relativizeSamplePaths copies each foreign sample into the
     // project once and is only idempotent because the live path becomes relative (a copy would duplicate files every save).
     CopiedMap copied;
-    relativizeSamplePaths(vt, xmlFile.getParentDirectory(), false, copied);
-    // Collisions with an existing samples/<name> are renamed on the serialised copy only; the live source stays absolute.
+    NameClashSet names;
+    collectExternalSamples(vt, xmlFile.getParentDirectory(), names);
+    relativizeSamplePaths(vt, xmlFile.getParentDirectory(), false, copied, names);
+    // Sources renamed (destination differs from their own file name) or sharing a file name with another external source are
+    // relativised on the serialised copy only; the live source stays absolute.
     // patchSnapshot only ever touches this serialised copy, never the live document (the audio thread reads it).
     auto snapshot = vt.createCopy();
-    relativizeSamplePaths(snapshot, xmlFile.getParentDirectory(), true, copied);
+    relativizeSamplePaths(snapshot, xmlFile.getParentDirectory(), true, copied, names);
     if (patchSnapshot) patchSnapshot(snapshot);
 
     const auto xml = snapshot.toXmlString();
