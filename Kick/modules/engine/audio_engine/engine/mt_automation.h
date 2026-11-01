@@ -21,13 +21,52 @@ namespace mt::automation
         Write = 2  // parameter moves made while the transport plays are recorded
     };
 
-    // Automatable parameters. Track PAN is deliberately absent: a MIDI track's pan has no consumer in the engine
-    // (see MTTrack), so a lane for it would be a fake feature.
+    // Automatable parameters. LEVEL is the track's level. PAN is the pan of the PROGRAM the track plays (the track's
+    // own pan has no consumer in the engine; the program's pan is what the mixer knobs write and what the drum/clip/
+    // keygroup voices and the MIDI program's CC10 path consume). The numeric ids are persisted (autoParam): never reorder.
     enum Param : int
     {
         Level = 0, // MTTrack level 0..127 (velocity scaler)
+        Pan   = 1, // program pan, fixed point: -kPanScale..kPanScale (= PAN::MIN..PAN::MAX = -1..1)
         Count
     };
+
+    constexpr int kPanScale = 1000; // lane value = round( pan * kPanScale ); 1 unit = 0.001, finer than PAN::STEP (0.01)
+    constexpr int kNoValue  = INT32_MIN; // "nothing" for atomics that carry a lane value
+
+    inline int32_t panToValue( double Pan )
+    {
+        if( !( Pan == Pan ) )
+            return 0;
+        const double v = Pan * kPanScale;
+        const double c = v < -kPanScale ? -kPanScale : ( v > kPanScale ? kPanScale : v );
+        return (int32_t)( c < 0 ? c - 0.5 : c + 0.5 );
+    }
+    inline double  valueToPan( int32_t Value )
+    {
+        const int c = Value < -kPanScale ? -kPanScale : ( Value > kPanScale ? kPanScale : Value );
+        return (double)c / kPanScale;
+    }
+
+    // Persistence: a lane node stores its Param as `autoParam`. A node WITHOUT autoParam (projects saved before the
+    // PAN lane existed) is a Level lane; unknown values are not a lane we understand (nullopt-like: returns -1).
+    inline int paramFromStored( bool HasParam, int Stored )
+    {
+        if( !HasParam )
+            return Level;
+        return ( Stored >= 0 && Stored < Count ) ? Stored : -1;
+    }
+
+    // Deterministic owner among several tracks that want to drive / record the same program's pan: the lowest
+    // order key (sequence index * 1000 + track index, supplied by the caller) wins; ties -> first listed. -1 if none.
+    inline int pickPanOwner( const int* Orders, int N )
+    {
+        int best = -1;
+        for( int i = 0; i < N; ++i )
+            if( best < 0 || Orders[i] < Orders[best] )
+                best = i;
+        return best;
+    }
 
     struct Point
     {

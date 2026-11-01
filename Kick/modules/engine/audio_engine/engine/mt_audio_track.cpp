@@ -142,6 +142,7 @@ namespace mt
         {
             stopAllMidiNotes();
             program.store( newProgram );
+            bindProgramTree( newProgram );
             manager.triggerTrackProgramChanged( getIndex(), program.load() );
         }
     }
@@ -172,7 +173,9 @@ namespace mt
             else if( Property == IDs::program )
                 progChangeHandler();
         }
-        else if( TreeWhosePropertyHasChanged.hasType( IDs::AUTOLANE ) && Property == IDs::autoPoints )
+        else if( progTree.isValid() && progTree == TreeWhosePropertyHasChanged && Property == IDs::pan )
+            recordPanMove(); // program pan moved (mixer knob, Q-Link): Write mode records it
+        else if( TreeWhosePropertyHasChanged.hasType( IDs::AUTOLANE ) && ( Property == IDs::autoPoints || Property == IDs::autoProgram ) )
             reloadLaneFromState(); // undo/redo of a clear, or project load
     }
 
@@ -184,52 +187,97 @@ namespace mt
         {
             const juce::ScopedLock sl( laneWriteLock );
             laneRec.reset();
+            panRec.reset();
         }
         laneApplied.store( -1 );
-        if( automation::Read != Mode ) // leaving Read: fall back to the stored level, the lane no longer drives it
+        panApplied.store( automation::kNoValue );
+        panTarget.store( automation::kNoValue ); // drop a value published before the mode changed
+        // Leaving Read: the level falls back to the stored level. The program pan (which Read wrote into the program's
+        // pan property) is restored by MTAudioManager::setAutomationMode, because a program can be shared by tracks.
+        if( automation::Read != Mode )
             levelScaler = ( MTITrackData::level.get() * MIDI::SCALER );
     }
 
     bool MTTrack::hasAutomation() const
     {
         const juce::ScopedLock sl( lock );
-        return !laneLevel.empty();
+        return !laneLevel.empty() || !lanePan.empty();
     }
 
+    // The AUTOLANE child of the track holding Param. A node without `autoParam` (saved before the PAN lane existed)
+    // is the Level lane.
+    juce::ValueTree MTTrack::findLaneNode( int Param ) const
+    {
+        for( int i = 0; i < vTree.getNumChildren(); ++i )
+        {
+            auto c = vTree.getChild( i );
+            if( c.hasType( IDs::AUTOLANE ) && Param == automation::paramFromStored( c.hasProperty( IDs::autoParam ), (int)c[IDs::autoParam] ) )
+                return c;
+        }
+        return {};
+    }
+
+    // One undo step together with the caller's transaction (MTAudioManager::clearAutomation opens it): both lanes are
+    // cleared through the UndoManager, the ValueTree listener reloads (empties) the in-memory lanes.
     void MTTrack::clearAutomation( bool Undoable )
     {
-        auto node = vTree.getChildWithName( IDs::AUTOLANE );
-        if( node.isValid() && node[IDs::autoPoints].toString().isNotEmpty() )
+        bool levelDone = false, panDone = false;
+        if( Undoable )
         {
-            // The ValueTree listener reloads (empties) the lane; this also makes the clear undoable.
-            node.setProperty( IDs::autoPoints, "", Undoable ? undoManager : nullptr );
-            if( Undoable )
-                return;
+            auto ln = findLaneNode( automation::Level );
+            if( ln.isValid() && ln[IDs::autoPoints].toString().isNotEmpty() )
+            {
+                ln.setProperty( IDs::autoPoints, "", undoManager );
+                levelDone = true;
+            }
+            auto pn = findLaneNode( automation::Pan );
+            if( pn.isValid() && pn[IDs::autoPoints].toString().isNotEmpty() )
+            {
+                pn.setProperty( IDs::autoPoints, "", undoManager );
+                panDone = true;
+            }
         }
-        automation::Lane empty;
         {
+            automation::Lane       emptyL, emptyP;
             const juce::ScopedLock w( laneWriteLock );
             {
                 const juce::ScopedLock sl( lock );
-                laneLevel.swap( empty );
+                if( !levelDone ) laneLevel.swap( emptyL );
+                if( !panDone ) lanePan.swap( emptyP );
             }
+            if( !levelDone ) laneCommitted = "";
+            if( !panDone ) lanePanCommitted = "";
             laneRec.reset();
-            laneCommitted = "";
+            panRec.reset();
+            refreshPanActive();
         }
         laneApplied.store( -1 );
+        panApplied.store( automation::kNoValue );
     }
 
-    // Applies the lane value for the (post-wrap) track position to levelScaler. Tick thread, called with `lock` held.
-    // No allocation; only writes when the interpolated value changed.
+    // Applies the lane values for the (post-wrap) track position. Tick thread, called with `lock` held. No allocation;
+    // only acts when the interpolated value changed. Level goes to levelScaler; Pan is handed to the message thread.
     void MTTrack::applyLaneAt( unsigned int Pos )
     {
-        if( laneLevel.empty() || automation::Read != manager.getAutomationMode() )
+        if( automation::Read != manager.getAutomationMode() )
             return;
-        const int v = juce::jlimit( 0, 127, (int)automation::valueAt( laneLevel, (int32_t)Pos, -1 ) );
-        if( v != laneApplied.load( std::memory_order_relaxed ) )
+        if( !laneLevel.empty() )
         {
-            laneApplied.store( v, std::memory_order_relaxed );
-            levelScaler.store( v * MIDI::SCALER, std::memory_order_relaxed );
+            const int v = juce::jlimit( 0, 127, (int)automation::valueAt( laneLevel, (int32_t)Pos, -1 ) );
+            if( v != laneApplied.load( std::memory_order_relaxed ) )
+            {
+                laneApplied.store( v, std::memory_order_relaxed );
+                levelScaler.store( v * MIDI::SCALER, std::memory_order_relaxed );
+            }
+        }
+        if( !lanePan.empty() && lanePanActive.load( std::memory_order_relaxed ) )
+        {
+            const int v = juce::jlimit( -automation::kPanScale, automation::kPanScale, (int)automation::valueAt( lanePan, (int32_t)Pos, 0 ) );
+            if( v != panApplied.load( std::memory_order_relaxed ) )
+            {
+                panApplied.store( v, std::memory_order_relaxed );
+                panTarget.store( v, std::memory_order_relaxed ); // message thread applies it (MTAudioManager::applyAutomatedPans)
+            }
         }
     }
 
@@ -258,6 +306,62 @@ namespace mt
         commitLane( juce::String( automation::toString( laneLevel ) ) ); // laneLevel only changes under laneWriteLock
     }
 
+    // Program pan moved (the played program's tree). Write mode only. When several tracks play the same program only
+    // the lowest (sequence, track) playing one records, so exactly one lane owns the take (MTAudioManager::isPanLaneOwner;
+    // same ordering that decides playback in applyAutomatedPans).
+    void MTTrack::recordPanMove()
+    {
+        if( automation::Write != manager.getAutomationMode() )
+            return;
+        auto      p    = program.load();
+        const int tick = livePlayTick.load( std::memory_order_relaxed );
+        if( !isPlaying.load() || tick < 0 || !p || p->isAudio() || !progTree.isValid() )
+        {
+            const juce::ScopedLock w( laneWriteLock );
+            panRec.reset();
+            return;
+        }
+        if( !manager.isPanLaneOwner( this, p ) )
+            return;
+        const juce::String progId = p->id.get();
+        const int          value  = automation::panToValue( (double)progTree.getProperty( IDs::pan, PAN::DEFAULT ) );
+
+        const juce::ScopedLock w( laneWriteLock );
+        const bool             sameProgram = ( lanePanProgId == progId );
+        automation::Lane       next        = sameProgram ? lanePan : automation::Lane(); // a new program starts a fresh lane
+        if( !sameProgram )
+            panRec.reset();
+        if( automation::RecResult::Recorded != automation::recordMove( next, panRec, tick, value ) )
+            return;
+        {
+            const juce::ScopedLock sl( lock );
+            lanePan.swap( next );
+        }
+        commitPanLane( juce::String( automation::toString( lanePan ) ), progId );
+        refreshPanActive();
+    }
+
+    void MTTrack::refreshPanActive()
+    {
+        lanePanActive.store( lanePanProgId.isNotEmpty() && lanePanProgId == MTITrackData::programId.get(), std::memory_order_relaxed );
+    }
+
+    // Follows the played program: its tree is listened to for pan moves (Write recording).
+    void MTTrack::bindProgramTree( MTIProgram* P )
+    {
+        if( progTree.isValid() )
+            progTree.removeListener( this );
+        progTree = P ? P->vTree : juce::ValueTree();
+        if( progTree.isValid() )
+            progTree.addListener( this );
+        {
+            const juce::ScopedLock w( laneWriteLock );
+            panRec.reset();
+            refreshPanActive();
+        }
+        panApplied.store( automation::kNoValue );
+    }
+
     // Stores the lane text in the track's ValueTree (not undoable: a take is not an edit step) so it saves/loads
     // with the project. Caller holds laneWriteLock.
     void MTTrack::commitLane( const juce::String& Points )
@@ -265,27 +369,79 @@ namespace mt
         if( Points == laneCommitted )
             return;
         laneCommitted = Points;
-        auto node     = vTree.getOrCreateChildWithName( IDs::AUTOLANE, nullptr );
+        auto node     = findLaneNode( automation::Level );
+        if( !node.isValid() )
+        {
+            node = juce::ValueTree( IDs::AUTOLANE );
+            vTree.addChild( node, -1, nullptr );
+        }
         node.setProperty( IDs::autoParam, (int)automation::Level, nullptr );
         node.setProperty( IDs::autoPoints, Points, nullptr );
     }
 
-    // Reads the lane from the ValueTree (construction, project load, undo/redo). Skips if it is our own commit.
+    // PAN lane node: a second AUTOLANE child (autoParam = Pan, autoProgram = program id, autoPoints). A Level node is
+    // always created first (empty if needed) so that a reader which only knows the Level lane and takes the first
+    // AUTOLANE child still sees a harmless Level node. Caller holds laneWriteLock. The committed text and program id
+    // are set BEFORE the ValueTree writes so that the listener's reloadLaneFromState sees our own commit and skips.
+    void MTTrack::commitPanLane( const juce::String& Points, const juce::String& ProgramId )
+    {
+        lanePanCommitted = Points;
+        lanePanProgId    = ProgramId;
+        if( !findLaneNode( automation::Level ).isValid() )
+        {
+            auto lv = juce::ValueTree( IDs::AUTOLANE );
+            lv.setProperty( IDs::autoParam, (int)automation::Level, nullptr );
+            lv.setProperty( IDs::autoPoints, "", nullptr );
+            vTree.addChild( lv, -1, nullptr );
+        }
+        auto node = findLaneNode( automation::Pan );
+        if( !node.isValid() )
+        {
+            node = juce::ValueTree( IDs::AUTOLANE );
+            node.setProperty( IDs::autoParam, (int)automation::Pan, nullptr );
+            vTree.addChild( node, -1, nullptr );
+        }
+        node.setProperty( IDs::autoProgram, ProgramId, nullptr );
+        node.setProperty( IDs::autoPoints, Points, nullptr );
+    }
+
+    // Reads both lanes from the ValueTree (construction, project load, undo/redo). Skips lanes that are our own commit.
     void MTTrack::reloadLaneFromState()
     {
-        const auto node   = vTree.getChildWithName( IDs::AUTOLANE );
-        const auto points = node.isValid() ? node[IDs::autoPoints].toString() : juce::String();
         const juce::ScopedLock w( laneWriteLock );
-        if( points == laneCommitted )
-            return;
-        laneCommitted = points;
-        auto next     = automation::fromString( points.toStdString() );
         {
-            const juce::ScopedLock sl( lock );
-            laneLevel.swap( next );
+            const auto node   = findLaneNode( automation::Level );
+            const auto points = node.isValid() ? node[IDs::autoPoints].toString() : juce::String();
+            if( points != laneCommitted )
+            {
+                laneCommitted = points;
+                auto next     = automation::fromString( points.toStdString() );
+                {
+                    const juce::ScopedLock sl( lock );
+                    laneLevel.swap( next );
+                }
+                laneRec.reset();
+                laneApplied.store( -1 );
+            }
         }
-        laneRec.reset();
-        laneApplied.store( -1 );
+        {
+            const auto node   = findLaneNode( automation::Pan );
+            const auto points = node.isValid() ? node[IDs::autoPoints].toString() : juce::String();
+            const auto progId = node.isValid() ? node[IDs::autoProgram].toString() : juce::String();
+            if( points != lanePanCommitted || progId != lanePanProgId )
+            {
+                lanePanCommitted = points;
+                lanePanProgId    = progId;
+                auto next        = automation::fromString( points.toStdString() );
+                {
+                    const juce::ScopedLock sl( lock );
+                    lanePan.swap( next );
+                }
+                panRec.reset();
+                panApplied.store( automation::kNoValue );
+            }
+            refreshPanActive();
+        }
     }
 
     void MTTrack::handleAsyncUpdate()

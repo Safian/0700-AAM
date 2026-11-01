@@ -41,7 +41,12 @@ namespace mt
     {
     public:
         explicit MTTrack( MTAudioManager& M, MTSequence& Seq, juce::UndoManager* UM, juce::ValueTree& VT );
-        ~MTTrack() { trackPlayhead.clear(); };
+        ~MTTrack()
+        {
+            trackPlayhead.clear();
+            if( progTree.isValid() )
+                progTree.removeListener( this );
+        };
 
         juce::ValueTree& getVT() { return vTree; };
         juce::ValueTree& getState() { return vTree; };
@@ -145,6 +150,13 @@ namespace mt
         // Drops the recorded lane. Undoable through the track's UndoManager when Undoable (the caller opens the transaction).
         void clearAutomation( bool Undoable );
         bool hasAutomation() const;
+        // PAN lane (see mt_automation.h): keyed to the PROGRAM the track plays; applies only while the track's program
+        // id equals the id the lane was recorded for. Playback never touches the ValueTree from the tick thread: onTick
+        // publishes the lane value in panTarget, and MTAudioManager::applyAutomatedPans (message thread, 25 Hz timer)
+        // collects it with takePanTarget() and writes the program's pan property - the same property the mixer knob
+        // writes, so drum/clip/keygroup voices and the MIDI program's CC10 path react exactly as to a manual move.
+        bool isPlayingProgram( const MTIProgram* P ) const { return isPlaying.load() && livePlayTick.load( std::memory_order_relaxed ) >= 0 && program.load() == P; }
+        int takePanTarget(){ return panTarget.exchange( automation::kNoValue ); }
 
         // Solo Mute; don't call this API's directly without careful analysis.
         inline void setSoloMute( bool Mute ) { soloMuted = Mute; }
@@ -170,6 +182,11 @@ namespace mt
         void        commitLane( const juce::String& Points );
         void        reloadLaneFromState();
         void        applyLaneAt( unsigned int Pos );
+        void        recordPanMove();
+        void        bindProgramTree( MTIProgram* P );
+        void        refreshPanActive(); // caller holds laneWriteLock
+        juce::ValueTree findLaneNode( int Param ) const;
+        void            commitPanLane( const juce::String& Points, const juce::String& ProgramId );
 
         MTAudioManager&          manager;
         MTSequence&              seq;
@@ -198,6 +215,15 @@ namespace mt
         juce::CriticalSection laneWriteLock;
         juce::String          laneCommitted;           // last text stored in / read from the ValueTree; laneWriteLock
         std::atomic<int>      laneApplied{ -1 };       // last level pushed to levelScaler by playback (-1 = none)
+        // PAN lane state. lanePan: like laneLevel (tick thread reads under `lock`, writers swap under `lock` + laneWriteLock).
+        automation::Lane      lanePan;
+        automation::RecState  panRec;                  // laneWriteLock
+        juce::String          lanePanCommitted;        // laneWriteLock
+        juce::String          lanePanProgId;           // program id the lane belongs to; laneWriteLock
+        juce::ValueTree       progTree;                // the played program's tree (listened to for pan moves in Write mode)
+        std::atomic<bool>     lanePanActive{ false };  // lane non-empty and its program id == the track's program id
+        std::atomic<int>      panApplied{ automation::kNoValue }; // last pan value published by playback (tick thread)
+        std::atomic<int>      panTarget{ automation::kNoValue };  // tick thread -> message thread hand-off
         mutable juce::CriticalSection lock;
 
         std::atomic<bool>         soloMuted{ false };

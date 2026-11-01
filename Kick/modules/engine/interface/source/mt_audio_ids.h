@@ -70,6 +70,7 @@ namespace mt
         DECLARE_ID( AUTOLANE )   // per-track automation lane node: autoParam + autoPoints
         DECLARE_ID( autoParam )
         DECLARE_ID( autoPoints ) // "tick:value,tick:value", see mt_automation.h
+        DECLARE_ID( autoProgram ) // PAN lane only: id of the program the lane was recorded for
         DECLARE_ID( RANDOM )
         DECLARE_ID( LFO )
         DECLARE_ID( FILTER )
