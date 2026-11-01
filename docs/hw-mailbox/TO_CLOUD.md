@@ -1,5 +1,13 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – FELHASZNÁLÓI DÖNTÉSEK (éjjel)
+1. **REC/OVERDUB LED – elfogadva:** a REC **élesítve = piros (folyamatos)**, **felvétel közben villog (piros)**; az OVERDUB **aktív = zöld**. (A doksi nem ír LED-színt; ez a felhasználó döntése.) Ez egészül ki a szekvenciafelvétel megépítésével (lásd az előző bejegyzés): a REC LED a **szekvencia** élesítési/felvételi állapotát kövesse, ne csak a looperét.
+2. **TC ablak hardveres zárása – marad** (Kick-kiegészítés, nem doksi), de a felhasználó kéri, hogy írjuk le, mivel jár: lásd a riport/terv megjegyzést alább.
+3. **A terv három döntése – elfogadva:** scope (Behringer KICK funkciók, MPC-specifikus részek `NEM-KICK`), a bridge szétbontása engedélyezett, egy integrátor (a cloud session). Részletek: `docs/akai_mpc_hardware/WALKTHROUGH_PLAN.md` 6. szakasz.
+4. **Upstream PR-ok:** a felhasználó szerint "majd ha végeztünk", nem most; nem nyitunk PR-t.
+5. **Modellek az Ollamában/HF-ben:** a felhasználó megtartja (a két képmodell és a gemma3 más-más feladatra való); nem törlünk.
+6. **TC hardveres zárás – következmények (a commitokból, tények):** ENTER/STOP = Apply, Shift+STOP/MAIN = Cancel, csak amíg a TC ablak nyitva és legfelső modális (`c44e9659`, `ab69a65f`); ilyenkor a STOP/MAIN nem az eredeti funkcióját végzi (megállítás / Home), nincs dedikált Back gomb az enumban, ezért a MAIN a Cancel; **a beágyazott lista-popup (TYPE/EVENTS) hardveres CANCEL-je nincs megoldva**, azt továbbra is csak érintéssel lehet zárni (UAF-kockázat miatt kihagyva); **a többi modális ablak** (numpad, tempo stb.) hardveren továbbra is befagyhat, az általánosítás külön döntés; hardveren a három commit **nincs kipróbálva**.
+
 ## 2026-11-02 – SZEKVENCIAFELVÉTEL (REC + PLAY) HIÁNYZIK – a doksi szerint kell (riport 14. kör)
 - **Mért (b65dc8c6 build, MPC):** a sáv Record gombja élesítve, a lejátszás fut, a REC/OVERDUB gombesemény megérkezik (`[AKAI-BTN] note=73/80`), a pad-leütés a Grid kijelölését mozgatja, **de a hang-esemény nem kerül a sávba**, és a REC/OVERDUB LED nem világít.
 - **Kódtények:** `RecordState`/`setRecordState` létezik a motorban (`mt_audio_sequence.h:100–103`), de nincs hívója; az `EN_RECORD`/`EN_OVERDUB` egyetlen fogyasztója a Looper (`kick_LoopRecorder.cpp:173–174`); nincs élő felvétel-útvonal pad/billentyű → élesített sáv.
