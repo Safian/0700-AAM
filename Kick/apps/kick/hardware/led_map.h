@@ -68,7 +68,7 @@ inline int akaiLedNote(HardwareLed led, bool& twoColour)
     }
 }
 
-// HAL level -> value of the Note On velocity byte.
+// HAL level -> value of the LED Control Change data byte.
 inline uint8_t akaiLedValue(bool twoColour, int level)
 {
     level = clampLedLevel(level);
@@ -76,38 +76,14 @@ inline uint8_t akaiLedValue(bool twoColour, int level)
     return (uint8_t)(level == kLedOff ? 0 : (level <= kLedDimB ? 1 : 127));  // off / dim / full
 }
 
-// Wire format of a button LED write (runtime switch KICK_AKAI_LED_MODE, see the adapter's start()).
-//   Note    : 0x90 <note> <byte>                (default, today's behaviour)
-//   Cc      : 0xB0 <note> <byte>
-//   NoteOff0: 0x90 <note> <byte> for byte != 0, 0x80 <note> 0x00 for byte == 0
-enum class LedWire { Note, Cc, NoteOff0 };
-
-// "note" / "cc" / "noteoff0" (nullptr or anything else -> Note). 'known' (optional) reports whether it matched.
-inline LedWire parseLedWire(const char* s, bool* known = nullptr)
-{
-    auto eq = [](const char* a, const char* b) { while (*a && *a == *b) { ++a; ++b; } return *a == *b; };
-    bool k = true;
-    LedWire w = LedWire::Note;
-    if (!s || !*s || eq(s, "note")) {}
-    else if (eq(s, "cc")) w = LedWire::Cc;
-    else if (eq(s, "noteoff0")) w = LedWire::NoteOff0;
-    else k = false;
-    if (known) *known = k;
-    return w;
-}
-
-inline const char* ledWireName(LedWire w)
-{
-    return w == LedWire::Cc ? "cc" : (w == LedWire::NoteOff0 ? "noteoff0" : "note");
-}
+// Status byte of a button LED write: Control Change 0xB0 <note> <byte> on channel 0 (Port 1). Verified on the
+// MPC Key 61 with a camera (docs/akai_mpc_hardware/KEY61_LED_COLOURS.md); Note On/Off does not switch the LEDs.
+constexpr uint8_t kAkaiLedStatus = 0xB0;
 
 // The 3 bytes of one LED write (channel 0). 'byte' comes from akaiLedValue().
-inline void makeLedMessage(LedWire wire, int note, uint8_t byte, uint8_t out[3])
+inline void makeLedMessage(int note, uint8_t byte, uint8_t out[3])
 {
-    uint8_t status = 0x90;
-    if (wire == LedWire::Cc) status = 0xB0;
-    else if (wire == LedWire::NoteOff0 && byte == 0) status = 0x80;
-    out[0] = status;
+    out[0] = kAkaiLedStatus;
     out[1] = (uint8_t)(note & 0x7F);
     out[2] = (uint8_t)(byte & 0x7F);
 }
