@@ -25,6 +25,7 @@
 #include "mt_live_capture.h"
 #include "mt_arpeggiator.h"
 #include "mt_automation.h"
+#include "mt_mute_filter.h"
 
 namespace mt
 {
@@ -116,6 +117,8 @@ namespace mt
         // RECALL: commit the last WindowMs of captured live notes into this track's note list. Returns the number of
         // notes committed (0 if nothing was captured). Non-realtime (message thread); the caller owns the undo transaction.
         int recallLiveNotes( int WindowMs );
+        // G11 (accepted, documented): TC and RECALL hold MTTrack::lock for the whole edit (see below), so the tick thread of this
+        // track waits on it; a long edit can slip that track's ticks. Chosen over a lock-free double buffer for now.
         // Timing correct on this track's notes. LOCK ORDER (F2): takes MTTrack::lock (the lock onTick() holds while it walks
         // the note HashMap) and only then MTNoteList::lock (taken inside the note-list edits, e.g. add/erase via the
         // ValueTree listeners). Nothing may take MTNoteList::lock first and then MTTrack::lock. Passes the track length
@@ -233,6 +236,8 @@ namespace mt
         juce::String          lanePanCommitted;        // laneWriteLock
         std::atomic<bool>     panRestorePending{ false };
         juce::String          panRestoreId;           // laneWriteLock
+        bool                  inPanCommit{ false };    // true while commitPanLane writes the tree (G14); laneWriteLock
+        std::atomic<bool>     liveBendActive{ false }; // a live pitch wheel != centre arrived (G12); stop() centres only then
         juce::String          lanePanProgId;           // program id the lane belongs to; laneWriteLock
         juce::ValueTree       progTree;                // the played program's tree (listened to for pan moves in Write mode)
         std::atomic<bool>     lanePanActive{ false };  // lane non-empty and its program id == the track's program id

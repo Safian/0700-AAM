@@ -140,6 +140,11 @@ set_tests_properties(kick-sustain PROPERTIES TIMEOUT 10)
 add_executable(kick-hw-targets-tests HwTargetsTests.cpp)
 add_test(NAME kick-hw-targets COMMAND kick-hw-targets-tests)
 set_tests_properties(kick-hw-targets PROPERTIES TIMEOUT 10)
+
+# Muted track: which live messages still pass (note-off, pitch wheel, CC64, CC123); JUCE-free, header only.
+add_executable(kick-mute-filter-tests MuteFilterTests.cpp)
+add_test(NAME kick-mute-filter COMMAND kick-mute-filter-tests)
+set_tests_properties(kick-mute-filter PROPERTIES TIMEOUT 10)
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()
