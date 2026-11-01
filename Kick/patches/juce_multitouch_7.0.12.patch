@@ -28,7 +28,7 @@ diff --git a/modules/juce_gui_basics/native/juce_Windowing_linux.cpp b/modules/j
 index 4426f2ef0..02089b9e3 100644
 --- a/modules/juce_gui_basics/native/juce_Windowing_linux.cpp
 +++ b/modules/juce_gui_basics/native/juce_Windowing_linux.cpp
-@@ -698,18 +698,23 @@ void Desktop::allowedOrientationsChanged()                          {}
+@@ -698,18 +698,25 @@ void Desktop::allowedOrientationsChanged()                          {}
  //==============================================================================
  bool detail::MouseInputSourceList::addSource()
  {
@@ -54,8 +54,10 @@ index 4426f2ef0..02089b9e3 100644
  bool detail::MouseInputSourceList::canUseTouch() const
  {
 -    return false;
-+    std::cout << "checking for touch" << std::endl;
-+    return XWindowSystem::getInstance()->xi.opcode != 0;
++    // Kick: touch events are only ever injected by the hardware bridge (never by X), so a touch source is allowed
++    // even without XInput2 / a display. Without it a finger fell back to mouse source 0, whose isMouseOver() asks
++    // XQueryPointer (not the finger) and broke Button::mouseDrag / mouseUp for a jittering tap.
++    return true;
  }
  
  Point<float> MouseInputSource::getCurrentRawMousePosition()
