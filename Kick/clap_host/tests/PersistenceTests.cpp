@@ -172,9 +172,12 @@ int main(int argc, char** argv) {
         const auto autosaved = juce::ValueTree::fromXml(pairFile.loadFileAsString());
         check(static_cast<int>(autosaved.getProperty("other")) == 1 && autosaved.getProperty("pan").toString() == "base" &&
               pair.getState().getProperty("pan").toString() == "auto", "autosave patches the copy too");
+        const int patchCallsBeforeClose = patchCalls;
+        pair.getState().setProperty("other", 2, nullptr);
         check(pair.close(), "close patchSnapshot document");
         check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "closing save keeps the patched value");
-        check(patchCalls >= 3, "patchSnapshot ran for explicit, autosave and close");
+        check(patchCalls == patchCallsBeforeClose + 1, "closing save ran patchSnapshot exactly once");
+        check(static_cast<int>(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("other")) == 2, "closing save wrote the latest state");
         // Read-only location (demo dir; chmod is unreliable as root): Autosave/Close succeed without writing, without running
         // the live-state barrier or the patch, and leave the document clean.
         gTestDemosDir = directory.getChildFile("demos");
