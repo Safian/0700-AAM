@@ -153,6 +153,8 @@ namespace kick_ui
         tcButton.onClick = [&]() {
             ListEditTimingCorrect* pTc = new ListEditTimingCorrect();
             mt::utils::showOptions( "TIMING CORRECT", pTc, [pTc, this]( int R ) {
+                if( R == UI::APPLY && ae.timingCorrect( ae.getSelected(), pTc->getData() ) < 0 )
+                    mt::utils::showNotification( "Timing correct: range not supported" );
                 delete pTc;
             },
                                     { 0, 0, 650, 520 } );
@@ -536,6 +538,31 @@ namespace kick_ui
         }
     }
 
+    // "BAR" -> 0 (engine: one bar), "1/N" -> a whole note (4 * defaultPPQN ticks) / N, "1/NT" -> two thirds of that.
+    static int timeDivToTicks( const juce::String& Div )
+    {
+        if( !Div.startsWith( "1/" ) )
+            return 0;
+        const int n = Div.substring( 2 ).getIntValue();
+        if( n <= 0 )
+            return 0;
+        const int ticks = 4 * mt::defaultPPQN / n;
+        return Div.endsWithChar( 'T' ) ? ticks * 2 / 3 : ticks;
+    }
+
+    mt::track::timingCorrectInfo ListEditTimingCorrect::getData()
+    {
+        mt::track::timingCorrectInfo d;
+        d.type        = (mt::track::timingCorrectInfo::Type)juce::jlimit( 0, 3, type.getSelectedIndex() );
+        d.events      = (mt::track::timingCorrectInfo::Events)juce::jlimit( 0, 2, events.getSelectedIndex() );
+        d.gridTicks   = timeDivToTicks( timeDivList.getSelectedValue() );
+        d.swingPct    = (int)swing.getValue();
+        d.shiftTicks  = (int)shiftTiming.getValue();
+        d.windowPct   = (int)window.getValue();
+        d.strengthPct = (int)strength.getValue();
+        return d;
+    }
+
     ListEditTimingCorrect::ListEditTimingCorrect()
     {
         mt::utils::addAndMakeVisible( this, globalTC, timeDivisionLabel, timeDivList, triplet, type, events, swing, shiftTiming, window, strength );
@@ -568,7 +595,32 @@ namespace kick_ui
         window.setValue( 100, juce::dontSendNotification );
         strength.setValue( 100, juce::dontSendNotification );
 
-        globalTC.onSelectionChanged = [&]( int Index, const juce::String& Selected ) {};
+        // Restore the last values (kept in the engine for the session; also used by RECALL when global TC is on).
+        {
+            auto& ae = mt::getAudioInterface();
+            auto  d  = ae.getTimingCorrectParams();
+            globalTC.setSelected( ae.isTimingCorrectEnabled() ? 1 : 0, juce::dontSendNotification );
+            type.setSelected( (int)d.type, juce::dontSendNotification );
+            events.setSelected( (int)d.events, juce::dontSendNotification );
+            swing.setValue( d.swingPct, juce::dontSendNotification );
+            shiftTiming.setValue( d.shiftTicks, juce::dontSendNotification );
+            window.setValue( d.windowPct, juce::dontSendNotification );
+            strength.setValue( d.strengthPct, juce::dontSendNotification );
+            for( bool trip : { false, true } )
+            {
+                auto opts = trip ? CommonUtils::getTripletTimeDivisions() : CommonUtils::getDefaultTimeDivisions();
+                for( size_t i = 0; i < opts.size(); ++i )
+                    if( timeDivToTicks( opts[i] ) == d.gridTicks )
+                    {
+                        triplet.setToggleState( trip, juce::dontSendNotification );
+                        timeDivList.setListOptions( opts, (int)i );
+                    }
+            }
+        }
+
+        globalTC.onSelectionChanged = [&]( int Index, const juce::String& Selected ) {
+            mt::getAudioInterface().setTimingCorrectEnabled( Index == 1 );
+        };
 
         timeDivList.onSelectionChanged = [&]( int Index, const juce::String& Selected ) {};
 

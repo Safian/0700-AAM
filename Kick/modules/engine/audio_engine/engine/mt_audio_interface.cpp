@@ -1727,6 +1727,16 @@ namespace mt
         return -1;
     }
 
+    int MTAudioInterface::timingCorrect( const MTSelected& Selection, const track::timingCorrectInfo& Info )
+    {
+        auto t = manager->getTrack( Selection );
+        if( !t )
+            return -1;
+        tcParams = Info;
+        manager->getUndoManager().beginNewTransaction( "Timing Correct" );
+        return t->timingCorrect( Info );
+    }
+
     int MTAudioInterface::humanizeNotes( const MTSelected& Selection, const track::humanizeInfo& Info )
     {
         if( auto t = manager->getTrack( Selection ) )
@@ -1791,7 +1801,21 @@ namespace mt
             return -1;
         auto& um = manager->getUndoManager();
         um.beginNewTransaction( "Recall" );
-        return t->recallLiveNotes( WindowMs );
+        if( !tcEnabled.load() )
+            return t->recallLiveNotes( WindowMs );
+        // Global TC on: correct only the notes this recall adds (ids not present before), same undo transaction.
+        std::set<int> before;
+        for( auto vt : t->getNoteListVT() )
+            if( vt.hasType( IDs::NOTE ) ) before.insert( (int)vt.getProperty( IDs::id ) );
+        const int committed = t->recallLiveNotes( WindowMs );
+        if( committed > 0 )
+        {
+            std::set<int> added;
+            for( auto vt : t->getNoteListVT() )
+                if( vt.hasType( IDs::NOTE ) && !before.count( (int)vt.getProperty( IDs::id ) ) ) added.insert( (int)vt.getProperty( IDs::id ) );
+            t->timingCorrect( tcParams, &added );
+        }
+        return committed;
     }
 
     int MTAudioInterface::setArpEnabled( const MTSelected& Selection, bool On )

@@ -29,6 +29,9 @@ namespace kick_ui
         ListEditTimingCorrect();
         ~ListEditTimingCorrect() = default;
 
+        // Current dialog values as engine params (Apply -> MTAudioInterface::timingCorrect).
+        mt::track::timingCorrectInfo getData();
+
     private:
         ui::KickToggleOptions globalTC{ "GLOBAL TIMING CORRECT", { "Off", "On" } };
         ui::KickLabel         timeDivisionLabel{ "TIME DIVISION" };
