@@ -32,6 +32,7 @@ checks = [
     (POS + r"cmake\s+(?:--build|--install)\b", "cmake --build"),
     (POS + r"make\b", "make"),
     (POS + r"xvfb-run\b", "xvfb-run smoke-futtatas"),
+    (POS + r"(?:bash|sh)\s+\S*verify-green\.sh", "verify-green.sh (hatterben kell)"),
     (POS + r"(?:until|while)\b", "varakozo ciklus"),
     (POS + r"for\b[^\n]*\bg\+\+(?=\s)", "g++ ciklus"),
     (r"\bsleep\s+(?:[1-9]\d+|\d+\.\d+\d)\b", "sleep >= 10 s"),
