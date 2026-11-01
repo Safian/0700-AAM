@@ -296,10 +296,19 @@ namespace ui
 
     void KickRecordButton::mouseDown( const juce::MouseEvent& e )
     {
-        if( currentIndex < 2 )
-            ++currentIndex;
-        else
-            currentIndex = 0;
+        // Two states (the former third "stop" image state had no meaning): not armed <-> armed, as the engine's Rec Arm.
+        currentIndex = ( currentIndex == 1 ) ? 0 : 1;
+        repaint();
+        if( onArmChanged )
+            onArmChanged( currentIndex == 1 );
+    }
+
+    void KickRecordButton::setArmed( bool On )
+    {
+        const int idx = On ? 1 : 0;
+        if( idx == currentIndex )
+            return;
+        currentIndex = idx;
         repaint();
     }
 

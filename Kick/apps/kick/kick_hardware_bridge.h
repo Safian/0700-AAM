@@ -212,9 +212,19 @@ private:
         if (m_hw && m_hw->control_surface()) m_hw->control_surface()->set_led_level(led, level);
     }
 
-    // REC / OVERDUB LEDs follow the looper state (the consumer of EN_RECORD / EN_OVERDUB), polled from the 30 Hz timer on
-    // the message thread like kick_LoopRecorder does. The state getters read std::atomic<bool> flags of the recorder.
-    // The adapter cache drops unchanged writes, so the per-tick call costs nothing on the wire.
+    // Who gets hardware REC / OVERDUB: the Looper keeps them while its screen is shown or it is recording (it is the only
+    // EN_RECORD / EN_OVERDUB consumer of the original Kick); on every other screen they drive the SEQUENCE recording
+    // (arm the sequence, PLAY starts the take). Decided by the screen, as the original Kick routes buttons per screen.
+    static bool recOverdubGoesToLooper()
+    {
+        return mt::getAudioInterface().isLooperRecording()
+            || kick_ui::KickHome::Instance().getCurrentScreen() == kick_ui::Screen::MenuLooper;
+    }
+
+    // REC / OVERDUB LEDs follow the looper state while the looper records, else the SEQUENCE recording state (armed = steady
+    // red, recording = blinking red, overdub = green), polled from the 30 Hz timer on the message thread like
+    // kick_LoopRecorder does. The state getters read atomics / a short lock. The adapter cache drops unchanged writes,
+    // so the per-tick call costs nothing on the wire.
     void updateRecOverdubLeds()
     {
         if (!m_hw || !m_hw->control_surface()) return;
@@ -222,7 +232,8 @@ private:
         if (!ae.isProjectLoaded()) return;
         const long long ms = (long long)juce::Time::getMillisecondCounter();
         int rec = 0, od = 0;
-        kick_hw::recOverdubLedLevels(ae.isLooperRecording(), ae.isLooperOverdubbing(), kick_hw::blinkPhase(ms), rec, od);
+        kick_hw::recOverdubLedLevels(ae.isLooperRecording(), ae.isLooperOverdubbing(), ae.isSequenceRecArmed(),
+                                     ae.isSequenceRecording(), ae.isSequenceOverdub(), kick_hw::blinkPhase(ms), rec, od);
         setLed(HW_LED_REC, rec);
         setLed(HW_LED_OVERDUB, od);
     }
@@ -906,14 +917,23 @@ public:
                     // Already on the message thread (G1): the call edits the ValueTree / UndoManager (F3).
                     const mt::MTSelected sel = ae.getSelected();
                     ae.recallLiveMidi(sel);
-                } else {
+                } else if (recOverdubGoesToLooper()) {
                     sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD);
+                } else {
+                    // Sequence recording: REC arms the selected sequence, PLAY starts the take (engine-only, no DCL packet).
+                    ae.sequenceRecPressed();
+                    updateRecOverdubLeds();
                 }
                 break;
             }
             case HW_BTN_OVERDUB:
             {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_OVERDUB, contracts::DeviceControlContracts::BTN_PRESSED);
+                if (recOverdubGoesToLooper()) {
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_OVERDUB);
+                } else {
+                    ae.sequenceOverdubPressed();
+                    updateRecOverdubLeds();
+                }
                 break;
             }
             case HW_BTN_TAP_TEMPO:
@@ -1348,7 +1368,7 @@ public:
                 sendTrackedRelease(btn, -1); // RECALL (Shift) sent no press -> nothing to release
                 break;
             case HW_BTN_OVERDUB:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_OVERDUB, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, -1); // sequence OVERDUB sent no press -> nothing to release
                 break;
             case HW_BTN_ENTER:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BTN_RELEASED);

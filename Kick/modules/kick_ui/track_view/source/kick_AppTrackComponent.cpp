@@ -72,6 +72,9 @@ AppTrackDisplay::AppTrackDisplay( int Seq, int Track )
         else
             ae.setTrackLength( seq, track, Value );
     };
+    arm.onArmChanged = [&]( bool On ) {
+        ae.setTrackRecordArm( seq, track, On ); // Rec Arm: the track takes part in the next REC / OVERDUB take
+    };
     mute.onClick = [&]() {
         if( !pTrack ) return;
 
@@ -142,6 +145,7 @@ void AppTrackDisplay::setTrack( int Seq, int Track )
     track  = Track;
     seq    = Seq;
     pTrack = ae.getTrackData( seq, track );
+    arm.setArmed( ae.isTrackRecordArmed( seq, track ) );
 
     auto muteValueHandler        = [&]() { muteData = pTrack->mute; };
     auto soloValueHandler        = [&]() { soloData = pTrack->solo; };
