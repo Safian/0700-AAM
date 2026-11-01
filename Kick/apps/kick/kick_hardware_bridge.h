@@ -99,6 +99,7 @@ private:
     std::atomic<uint8_t> m_pad_last_vel[16] = {};         // note-on velocity of the held pad (aftertouch packet field 3)
     sigslot::connection m_pad_colour_conn;
     sigslot::connection m_screen_conn;
+    sigslot::connection m_play_conn;
 
     void onDclCommand(std::shared_ptr<ipc::MTIPCJson> message)
     {
@@ -624,7 +625,7 @@ public:
                     [this](std::shared_ptr<ipc::MTIPCJson> message) { onDclCommand(std::move(message)); });
             }
 
-            mt::signals::playStateChanged.connect([this](mt::TransportState state) {
+            if (!m_play_conn.connected()) m_play_conn = mt::signals::playStateChanged.connect([this](mt::TransportState state) {
                 bool isPlaying = (state == mt::TransportState::Playing);
                 if (m_hw && m_hw->control_surface()) {
                     m_hw->control_surface()->set_led(HW_LED_PLAY, isPlaying);
@@ -651,6 +652,7 @@ public:
         m_alive->store(false);
         m_pad_colour_conn.disconnect();
         m_screen_conn.disconnect();
+        m_play_conn.disconnect();
         stopTimer();
         if (m_cmd_fd >= 0) { close(m_cmd_fd); m_cmd_fd = -1; }
         if (m_cmd_fd_w >= 0) { close(m_cmd_fd_w); m_cmd_fd_w = -1; }
@@ -684,6 +686,8 @@ public:
     // on the message thread) calls the handle* bodies directly.
     void on_button_press(HardwareButton btn) override
     {
+        // H5: strip mode is cycled on the reader thread (same thread as on_touch_strip_touch/fine), not via callAsync.
+        if (btn == HW_BTN_TOUCH_STRIP) { cycleStripMode(); return; }
         juce::MessageManager::callAsync([this, alive = m_alive, btn]() { if (!alive->load()) return; handleButtonPress(btn); });
     }
     void on_button_release(HardwareButton btn) override
@@ -693,6 +697,20 @@ public:
     void on_jog_dial(int delta) override
     {
         juce::MessageManager::callAsync([this, alive = m_alive, delta]() { if (!alive->load()) return; handleJogDial(delta); });
+    }
+
+    // T12 (Akai convention, Kick has no strip modes): cycle slider -> pitch bend -> mod wheel. Uses only atomics,
+    // set_led_level and stripPitchSpringBack (m_target_mutex), so it is safe on the ALSA reader thread.
+    void cycleStripMode()
+    {
+        const int old_mode = m_strip_mode.load();
+        const int new_mode = kick_hw::strip::nextMode(old_mode);
+        m_strip_mode.store(new_mode);
+        if (old_mode == kick_hw::strip::kPitchBend) stripPitchSpringBack();
+        if (m_hw && m_hw->control_surface())
+            m_hw->control_surface()->set_led_level(HW_LED_TOUCH_STRIP, kick_hw::strip::modeLedLevel(new_mode));
+        printf("[STRIP] mode %d (0 slider, 1 pitch bend, 2 mod wheel)\n", new_mode);
+        fflush(stdout);
     }
 
     void handleButtonPress(HardwareButton btn)
@@ -763,9 +781,9 @@ public:
                 if (isShiftDown()) {
                     // REC+Shift = RECALL: commit the live notes captured on the selected track. Engine-only, no DCL packet
                     // (so no matching release is sent either, see sendTrackedRelease(btn, -1) below).
-                    // Message thread: the call edits the ValueTree / UndoManager (F3).
+                    // Already on the message thread (G1): the call edits the ValueTree / UndoManager (F3).
                     const mt::MTSelected sel = ae.getSelected();
-                    juce::MessageManager::callAsync([sel]() { mt::getAudioInterface().recallLiveMidi(sel); });
+                    ae.recallLiveMidi(sel);
                 } else {
                     sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD);
                 }
@@ -894,15 +912,7 @@ public:
             }
             case HW_BTN_TOUCH_STRIP:
             {
-                // T12 (Akai convention, Kick has no strip modes): cycle slider -> pitch bend -> mod wheel.
-                const int old_mode = m_strip_mode.load();
-                const int new_mode = kick_hw::strip::nextMode(old_mode);
-                m_strip_mode.store(new_mode);
-                if (old_mode == kick_hw::strip::kPitchBend) stripPitchSpringBack();
-                if (m_hw && m_hw->control_surface())
-                    m_hw->control_surface()->set_led_level(HW_LED_TOUCH_STRIP, kick_hw::strip::modeLedLevel(new_mode));
-                printf("[STRIP] mode %d (0 slider, 1 pitch bend, 2 mod wheel)\n", new_mode);
-                fflush(stdout);
+                cycleStripMode(); // kick_cmd path; the hardware path calls it from on_button_press (reader thread)
                 break;
             }
             case HW_BTN_TOUCH_FX:
@@ -968,11 +978,9 @@ public:
             {
                 if (isShiftDown()) {
                     // FAVORITES: open the file browser and jump to the next assigned favourite slot.
-                    // Both signals reach JUCE components: run them in order on the message thread (F3).
-                    juce::MessageManager::callAsync([]() {
-                        kick_ui::signals::sigBrowserShowFavourites();
-                        kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
-                    });
+                    // Both signals reach JUCE components; already on the message thread (G1), called in order.
+                    kick_ui::signals::sigBrowserShowFavourites();
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
                     break;
                 }
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
@@ -981,12 +989,10 @@ public:
             case HW_BTN_MAIN:
             {
                 if (isShiftDown()) {
-                    // TRACK: the Track tab (index 1) of HomeListView. Message thread (F3); the screen change is queued
-                    // behind it so the original order (select tab, then close/open the screen) is kept.
-                    juce::MessageManager::callAsync([]() {
-                        kick_ui::signals::sigMainModeSelectTab(1);
-                        kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
-                    });
+                    // TRACK: the Track tab (index 1) of HomeListView. Already on the message thread (G1); select tab,
+                    // then close/open the screen.
+                    kick_ui::signals::sigMainModeSelectTab(1);
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
                     break;
                 }
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
@@ -1076,8 +1082,8 @@ public:
                 m_automation_sent_code = kTcNoPacket;
                 const int amCur  = ae.getAutomationMode(); // 0 Off, 1 Read, 2 Write
                 const int amNext = isShiftDown() ? 0 : (amCur == 1 ? 2 : 1);
-                // Message thread (F3): the mode change touches the ValueTree and UI.
-                juce::MessageManager::callAsync([amNext]() { mt::getAudioInterface().setAutomationMode(amNext); });
+                // Already on the message thread (G1): set synchronously so a quick second press reads the new mode.
+                ae.setAutomationMode(amNext);
                 setLed(HW_LED_AUTOMATION, amNext == 2 ? kick_hw::kLedFullB : (amNext == 1 ? kick_hw::kLedFullA : kick_hw::kLedOff));
                 break;
             }
