@@ -51,3 +51,13 @@ team ID is `8R7QAX93QJ`. Simulator results are not evidence for audio timing –
 ## Git
 Commit only files you changed, by name (no `git add -A`). Put a report in the commit message: what changed,
 what was not touched, which gate ran and its result, open questions. Start with `WIP:` if a gate failed.
+
+## Working rules for agents (orchestrator vs workers)
+- The orchestrating session only does SMALL work (git status, reads, short edits, planning). Everything long
+  — builds (`ninja`, `cmake --build`, `make`), test runs, headless smoke runs (`xvfb-run`), merge+build+test+push
+  sequences, wait loops — is delegated to a worker (Agent tool) or run with `run_in_background: true`.
+- Never wait in the foreground (`until`/`while`/`sleep >= 10`): background jobs notify on completion.
+  A foreground command is cancelled when the user sends a message, so long foreground commands also get killed.
+- Enforced by `.claude/hooks/block-foreground-long-cmds.py` (PreToolUse on Bash, wired in `.claude/settings.json`):
+  such foreground commands are blocked with a message. Keep the hook and this rule in sync.
+- Hand one worker a whole multi-step task (e.g. merge, build, test, push) instead of splitting it across the orchestrator.
