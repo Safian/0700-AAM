@@ -288,6 +288,15 @@ namespace mt
         // on passing track position this api will restrict the track position to the length of the sequence.
         void seek( int posInTicks );
 
+        // Bar seek that follows what you hear (notes are re-aligned, hanging notes flushed). NUMBERING: bars are
+        // 0-based in the engine (0 = first bar); the UI shows bar + 1. Results are clamped to [0, length - 1], no wrap.
+        // Playing: applied on the next tick of the tick-processing thread. Stopped/paused: the position is parked and
+        // used by the next PLAY/resume (PLAY START and STOP discard it). Both return the resulting 0-based bar,
+        // or -1 for an invalid sequence. Sequence = sequence index, as in setSequencePlay().
+        int seekToBar( int Sequence, int Bar0 );
+        int seekBars( int Sequence, int DeltaBars ); // relative to the current (or already requested) bar
+        int getSequenceLastBar( int Sequence ); // 0-based start of the last bar: loopEnd - 1 when looping, else length - 1
+
         void setBBT( int knob, int value );
 
         // Transport API's
