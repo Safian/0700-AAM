@@ -7,6 +7,7 @@
 #include "hardware/led_map.h"
 #include "hardware/key_transpose.h"
 #include "hardware/strip_modes.h"
+#include "hardware/hw_targets.h"
 #include "hardware/system_probe.h"
 #include "contracts/dcl/dcl_signals.h"
 #include "contracts/dcl/dcl_contracts.h"
@@ -18,6 +19,7 @@
 #include <atomic>
 #include <array>
 #include <cstdint>
+#include <mutex>
 
 class KickHardwareBridge : public IHardwareEventListener, private juce::Timer
 {
@@ -39,7 +41,8 @@ private:
     int m_cmd_fd = -1;
     int m_cmd_fd_w = -1;
     std::string m_cmd_buf;
-    bool m_shift_pressed = false;
+    // Two Shift buttons (left / right) share one Kick Shift state: EN_SHIFT goes out only on 0->1 / 1->0 (F10).
+    kick_hw::ShiftCounter m_shift;
     // T12 touch strip mode (kick_hw::strip::Mode): 0 Kick slider, 1 pitch bend (spring back), 2 mod wheel (CC1).
     std::atomic<int>  m_strip_mode { 0 };
     std::atomic<bool> m_strip_pitch_sent { false };  // a pitch value was sent and not yet sprung back to centre
@@ -55,6 +58,14 @@ private:
     int m_current_bank = 0;
     KeyTranspose m_key_transpose;
     int m_key_pitch_map[128];
+
+    // F4/F5: live MIDI must end on the track that received its start, not on whatever is selected at that moment
+    // (track switch while a key / pedal / bend is held, ARP, sustain). Guarded by m_target_mutex (reader thread and
+    // the kick_cmd injector on the message thread both reach the on_* callbacks).
+    std::mutex m_target_mutex;
+    kick_hw::NoteTargets<mt::MTSelected> m_key_target;
+    kick_hw::HeldTarget<mt::MTSelected>  m_bend_target;
+    kick_hw::HeldTarget<mt::MTSelected>  m_sustain_target;
 
     // Project pad colours (DCL EN_PAD_SET_COLOUR_STATE). Written by the sendCommandToDcl handler
     // (any thread), read by the timer (message thread) and the MIDI reader thread. Lock-free.
@@ -129,7 +140,7 @@ private:
         }
     }
 
-    bool isShiftDown() const { return m_shift_pressed; }
+    bool isShiftDown() const { return m_shift.down(); }
     bool isLocateDown() const { return m_locate_pressed; }
 
     void getBankColor(int bank, uint8_t& r, uint8_t& g, uint8_t& b) const
@@ -215,7 +226,7 @@ private:
         for (HardwareLed l : modeLeds) setLed(l, l == m.led ? m.level : kick_hw::kLedOff);
     }
 
-    void updateShiftLed() { setLed(HW_LED_SHIFT, m_shift_pressed ? kick_hw::kLedFullA : kick_hw::kLedOff); }
+    void updateShiftLed() { setLed(HW_LED_SHIFT, m_shift.down() ? kick_hw::kLedFullA : kick_hw::kLedOff); }
 
     void updateArpLeds()
     {
@@ -324,10 +335,23 @@ private:
             if (!peer && m_window) peer = m_window->getPeer();
             juce::ModifierKeys mods = is_up ? juce::ModifierKeys() : juce::ModifierKeys::leftButtonModifier;
 
+            // F12: a popup / dropdown / dialog is its own desktop window. Its peer takes peer-local coordinates (not
+            // screen coordinates) and dispatches the event to the right component itself, so it is the ONLY dispatch
+            // path for such a target (the manual mouseDown/Up below would deliver the event a second time).
+            auto* top = target->getTopLevelComponent();
+            if (peer && top != nullptr && top != root && top->isOnDesktop() && top->getPeer() == peer)
+            {
+                peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::touch,
+                                       peer->globalToLocal(juce::Point<float>((float)ix, (float)iy)),
+                                       mods, 1.0f, 0.0f, juce::Time::currentTimeMillis(), {}, slot);
+                if (is_up && slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
+                return;
+            }
+
             if (peer)
             {
                 peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::touch,
-                                       juce::Point<float>((float)ix, (float)iy),
+                                       peer->globalToLocal(juce::Point<float>((float)ix, (float)iy)),
                                        mods,
                                        1.0f,
                                        0.0f,
@@ -620,9 +644,10 @@ public:
         {
             case HW_BTN_SHIFT:
             {
-                m_shift_pressed = true;
+                const bool first = m_shift.press();
                 updateShiftLed();
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_SHIFT, contracts::DeviceControlContracts::BTN_PRESSED);
+                if (first)
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_SHIFT, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
             }
             case HW_BTN_LOCATE:
@@ -680,7 +705,9 @@ public:
                 if (isShiftDown()) {
                     // REC+Shift = RECALL: commit the live notes captured on the selected track. Engine-only, no DCL packet
                     // (so no matching release is sent either, see sendTrackedRelease(btn, -1) below).
-                    ae.recallLiveMidi(ae.getSelected());
+                    // Message thread: the call edits the ValueTree / UndoManager (F3).
+                    const mt::MTSelected sel = ae.getSelected();
+                    juce::MessageManager::callAsync([sel]() { mt::getAudioInterface().recallLiveMidi(sel); });
                 } else {
                     sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD);
                 }
@@ -879,8 +906,11 @@ public:
             {
                 if (isShiftDown()) {
                     // FAVORITES: open the file browser and jump to the next assigned favourite slot.
-                    kick_ui::signals::sigBrowserShowFavourites();
-                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
+                    // Both signals reach JUCE components: run them in order on the message thread (F3).
+                    juce::MessageManager::callAsync([]() {
+                        kick_ui::signals::sigBrowserShowFavourites();
+                        kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
+                    });
                     break;
                 }
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
@@ -889,8 +919,13 @@ public:
             case HW_BTN_MAIN:
             {
                 if (isShiftDown()) {
-                    // TRACK: the Track tab (index 1) of HomeListView.
-                    kick_ui::signals::sigMainModeSelectTab(1);
+                    // TRACK: the Track tab (index 1) of HomeListView. Message thread (F3); the screen change is queued
+                    // behind it so the original order (select tab, then close/open the screen) is kept.
+                    juce::MessageManager::callAsync([]() {
+                        kick_ui::signals::sigMainModeSelectTab(1);
+                        kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
+                    });
+                    break;
                 }
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
                 break;
@@ -979,7 +1014,8 @@ public:
                 m_automation_sent_code = kTcNoPacket;
                 const int amCur  = ae.getAutomationMode(); // 0 Off, 1 Read, 2 Write
                 const int amNext = isShiftDown() ? 0 : (amCur == 1 ? 2 : 1);
-                ae.setAutomationMode(amNext);
+                // Message thread (F3): the mode change touches the ValueTree and UI.
+                juce::MessageManager::callAsync([amNext]() { mt::getAudioInterface().setAutomationMode(amNext); });
                 setLed(HW_LED_AUTOMATION, amNext == 2 ? kick_hw::kLedFullB : (amNext == 1 ? kick_hw::kLedFullA : kick_hw::kLedOff));
                 break;
             }
@@ -1087,9 +1123,11 @@ public:
         switch (btn)
         {
             case HW_BTN_SHIFT:
-                m_shift_pressed = false;
-                updateShiftLed();
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_SHIFT, contracts::DeviceControlContracts::BTN_RELEASED);
+                // Releasing one of two held Shift buttons keeps Shift on (F10).
+                if (m_shift.release()) {
+                    updateShiftLed();
+                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_SHIFT, contracts::DeviceControlContracts::BTN_RELEASED);
+                }
                 break;
             case HW_BTN_LOCATE:
                 m_locate_pressed = false;
@@ -1231,11 +1269,22 @@ public:
     void on_encoder_touch(int /*encoder_idx*/, bool /*touched*/) override {}
 
     // T12: pitch wheel back to the centre (strip finger left / mode left).
+    // Pitch bend: the track that received the first off-centre value gets the spring-back too (F5).
+    void sendPitchBend(int val)
+    {
+        auto& ae = mt::getAudioInterface();
+        mt::MTSelected target;
+        {
+            std::lock_guard<std::mutex> lk(m_target_mutex);
+            const mt::MTSelected cur = ae.getSelected();
+            target = (val == kick_hw::strip::kPitchCentre) ? m_bend_target.end(cur) : m_bend_target.begin(cur);
+        }
+        ae.addLiveMidiMsg(target, juce::MidiMessage::pitchWheel(1, val));
+    }
     void stripPitchSpringBack()
     {
         if (!m_strip_pitch_sent.exchange(false)) return;
-        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
-                                               juce::MidiMessage::pitchWheel(1, kick_hw::strip::pitchSpringBackTarget()));
+        sendPitchBend(kick_hw::strip::pitchSpringBackTarget());
     }
     void on_touch_strip_touch(bool down) override
     {
@@ -1245,8 +1294,7 @@ public:
     {
         if (m_strip_mode.load() != kick_hw::strip::kPitchBend) return;
         m_strip_pitch_sent.store(true);
-        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
-                                               juce::MidiMessage::pitchWheel(1, kick_hw::strip::pitchFromPosition(pos14)));
+        sendPitchBend(kick_hw::strip::pitchFromPosition(pos14));
     }
     void on_touch_strip(int val) override
     {
@@ -1270,13 +1318,19 @@ public:
     }
     void on_pitch_bend(int val) override
     {
-        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
-                                               juce::MidiMessage::pitchWheel(1, val));
+        sendPitchBend(val);
     }
     void on_sustain_pedal(bool down) override
     {
-        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
-                                               juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
+        // F4(b): the release goes to the track that got the press, even after a track change in between.
+        auto& ae = mt::getAudioInterface();
+        mt::MTSelected target;
+        {
+            std::lock_guard<std::mutex> lk(m_target_mutex);
+            const mt::MTSelected cur = ae.getSelected();
+            target = down ? m_sustain_target.begin(cur) : m_sustain_target.end(cur);
+        }
+        ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
     }
 
     void on_channel_aftertouch(int val) override
@@ -1322,11 +1376,20 @@ public:
         }
     }
 
+    // DISABLED (hardware report item 5, held pad re-triggers): Kick has no pressure-only packet. The only carrier is
+    // EN_PAD_STATE with state BTN_PRESSED and the aftertouch in byte 3, and every sound-starting screen (Grid, PadMixer,
+    // PadPerform, PadColor, FileBrowser, MainMode, ProgramEdit, ...) treats BTN_PRESSED as a NEW note-on and ignores byte 3
+    // (only SettingsHardware / MidiControlHardware read it). No other state value is safe: screens test `== BTN_PRESSED`
+    // or `if (padState)`. A safe shape cannot be proven from code, so no aftertouch packets are sent until a screen-side
+    // "pressure only" discriminator exists. The pad-aftertouch enable flag is still tracked.
+    static constexpr bool kSendPadAftertouchPackets = false;
+
     void on_pad_aftertouch(int pad_num, int val) override
     {
         // Kick reports pad pressure as the 4th field of EN_PAD_STATE (see DclContractsHelper::getPadAftertouch).
         // That packet also starts the sound in several screens, so (like the Kick hardware, which only reports
         // it after EN_PAD_SET_AFTER_TOUCH) send it only when enabled and while the pad is held.
+        if (!kSendPadAftertouchPackets) return;
         if (pad_num >= 0 && pad_num < 16 && m_pad_aftertouch_enabled.load() &&
             (m_pad_held.load() & (1u << pad_num)) != 0)
         {
@@ -1365,7 +1428,13 @@ public:
         if (pitch >= 0 && pitch < 128) {
             m_key_pitch_map[pitch] = sounding_pitch;
         }
-        mt::getAudioInterface().addLiveMidiNote(mt::getAudioInterface().getSelected(), sounding_pitch, vel);
+        auto& ae = mt::getAudioInterface();
+        const mt::MTSelected sel = ae.getSelected();
+        {
+            std::lock_guard<std::mutex> lk(m_target_mutex);
+            m_key_target.set(pitch, sel); // F5: the note-off goes to the track that got the note-on
+        }
+        ae.addLiveMidiNote(sel, sounding_pitch, vel);
     }
 
     void on_keybed_note_off(int pitch) override
@@ -1376,7 +1445,13 @@ public:
         if (pitch >= 0 && pitch < 128) {
             m_key_pitch_map[pitch] = -1;
         }
-        mt::getAudioInterface().stopLiveMidiNote(mt::getAudioInterface().getSelected(), sounding_pitch);
+        auto& ae = mt::getAudioInterface();
+        mt::MTSelected target;
+        {
+            std::lock_guard<std::mutex> lk(m_target_mutex);
+            target = m_key_target.take(pitch, ae.getSelected());
+        }
+        ae.stopLiveMidiNote(target, sounding_pitch);
     }
 
     void pollCommands()
