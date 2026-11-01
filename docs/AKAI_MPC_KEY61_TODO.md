@@ -157,12 +157,11 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 
 ### P0 – hibák
 
-- [ ] **T4** (elemezve, nincs kód) Pitch bend és sustain **nincs hatással**: `MTIProgram::noteProcess` (`mt_audio_iprogram.cpp` ~261–336) `isPitchWheel()`/aftertouch ága üres, a CC `switch` csak CC1-et és CC123-at kezel; más felülírás nincs (a `MTMidiProgram` mindent kiküld a külső MIDI portra, ott működik). Javasolt terv: `std::atomic<float> bendRatio` az `MTIAtomicProgramMaster`-ben, szorzás a `master.pitchRatio`-val a voice-ban (`DrumVoice` már olvassa: `drum_voice.cpp` ~164), sustain: atomi pedál-flag + voice-onkénti „held” flag, ONE_SHOT-ot kihagyva. **Döntés kell** (§6/6), és hardveres hallgatásos ellenőrzés.
 - [ ] **T5** (részben kész) Eszközön eldönteni, hogy az init SysEx Port 0-ra kell-e (lásd §3/5). A `snd_rawmidi_open` hibakezelés és a `start()` `false` visszatérés kész.
 
 ### P1 – hiányzó funkciók
 
-- [ ] **T6** (részben kész és beolvasztva: `336181dd`, hardveren nem próbált) Hátra: MAIN+Shift (TRACK: nincs képernyő-érték/DCL-kód, a Track a HomeListView egyik füle), REC+Shift (RECALL: nincs retro-capture a motorban), 16 LEVEL+Shift (NOTES: nincs külön képernyő), SOUNDS+Shift (jelenleg `MenuNextSequence`, nem valódi Favorites). TC+Shift és AUTOMATION+Shift `EN_ON_OFF`-ot küld, de a UI-ban nincs fogyasztója (UI-feladat kell).
+- [ ] **T6** (részben kész és beolvasztva) Hátra: 16 LEVEL+Shift (NOTES): döntés szerint marad a `MenuPadPerform` (Kick `EN_NOTES` is ezt nyitja), nincs teendő. TC+Shift és AUTOMATION+Shift: lásd T30. SOUNDS+Shift / MAIN+Shift / REC+Shift: kész (T25, T29, T28).
 - [ ] **T6b** (kész és beolvasztva: `3ac2e6d1`, hardveren nem próbált) Hátra: tempo-szerkesztő módban a `+`/`−` nyomás nem küld semmit, de a felengedés `EN_PLUS`/`EN_MINUS`-t küld (release press nélkül).
 - [ ] **T7** LOCATE kombinációk: LOCATE+`<<` (1. ütem) és LOCATE+`>>` (utolsó ütem eleje) kész a T7b-vel. Hátra: LOCATE+`<`/`>` = előző/következő esemény (ehhez eseménylista-API kell).
 - [ ] **T7b** (kész és beolvasztva: `904aaf52`, **hardveren nem próbált, a motor lejátszó-magját érinti**) `seekToBar`/`seekBars`/`getSequenceLastBar` a motorban, a `<<`/`>>` kötve. A tick-eltolás a szekvenciában van (`tickShift`), a `CMidiClock` változatlan. Hátra / nyitott: (1) hardveres teszt: `<<`/`>>` lejátszás közben, megállítva, szünetben; hosszú hang vagy ratchet az ugrás fölött; PLAY START parkolt seek után; (2) parkolt seek nem látszik a globális playheaden, amíg semmi nem játszott; (3) song módban a lépés-időzítés nyers óra-tickeket használ; (4) részleges loop és audio-típusú trackek nincsenek elemezve; (5) a Shift+STOP „RETURN” a kijelzett playheadet nem állítja vissza.
@@ -211,12 +210,11 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 
 ### Új tételek a döntésekből
 
+- [x] **T27** kész és beolvasztva (`735276a0`): METRONOME+Shift `EN_PREF` (a HomeAppban már volt fogyasztója: HomePreferencesView). **T31** kész (`5cfd562d`): Shift+STOP után a playhead az 1. ütemre áll (`seekToBar(seq,0)`). A motor-seek fordítási hibája javítva (`3e981bf3`).
 - [ ] **T24** Arpeggiator (motor + UI): Akai szokás szerint mód (fel/le/…), ráta, oktáv, LATCH-csel. Nagy, külön tervezés kell; az ARP gomb addig NOTE REPEAT alias.
-- [ ] **T25** SOUNDS+Shift: a fájlböngésző kedvenc-nézetének külső belépési pontja (UI), utána a bridge kötése; a mostani `MenuNextSequence` kötés lecserélendő.
-- [ ] **T26** (=T4) Pitch bend keygroup + dobok, fix ±2 félhang: `bendRatio` atomi a master-ben, szorzás a `pitchRatio`-val (`drum_voice.cpp` ~164, `iSynthVoice.cpp` ~90); sustain (CC64) külön döntés/tétel. Hallgatásos ellenőrzés kell.
-- [ ] **T27** METRONOME+Shift → `EN_PREF`: előbb megnézni, van-e fogyasztója; ha nincs, UI-feladat.
-- [ ] **T28** RECALL (retro-capture) motor-funkció: az élő MIDI-bemenet puffere; REC+Shift ezt hívja.
-- [ ] **T29** MAIN+Shift → Track fül: a HomeListView `tabSelected` külső elérése; bridge-kötés.
-- [ ] **T30** `EN_ON_OFF` UI-fogyasztók a TC (timing correct) és az Automation számára.
-- [ ] **T31** Shift+STOP: stop után `seekToBar(seq, 0)` a kijelzett playhead visszaállításához (kicsi, a seek-munkára épül; hardveren ellenőrizendő).
+- [x] **T25** kész és beolvasztva (`57050685`): SOUNDS+Shift a fájlböngésző következő kiosztott kedvenc-helyére ugrik (a Kick-ben nincs külön kedvenc-lista nézet, 5 kedvenc-gomb van); hardveren nem próbált.
+- [x] **T26** kész és beolvasztva (`ecfeb260`): pitch bend ±2 félhang keygroup és dob programokon, sustain CC64 (ONE_SHOT-ot kihagyva); hardveren nem hallgatott. Hátra: bend simítás (blokkonként lép), pedál-állapot nem nullázódik programváltásra/stopra, sustain NOTE_OFF típusú mintán nincs hatás.
+- [x] **T28** kész és beolvasztva (`9fd98db4`): REC+Shift = RECALL a kiválasztott trackre (30 s, 2048 esemény), egy undo lépés; hardveren nem próbált. Hátra: nincs UI/LED visszajelzés; futó szekvenciánál a note-list zár hiánya miatti lehetséges verseny (`MTNoteList::addNote`), tartott hangok árvaként elvesznek.
+- [x] **T29** kész és beolvasztva (`57050685`): MAIN+Shift a HomeListView Track fülére lép (`AppMainmode::selectTab`); hardveren nem próbált.
+- [ ] **T30** (részben: `7781c7b1`) EN_TC megnyitja a List Edit Timing Correct ablakát; a motorban nincs TC (quantize) és nincs Automation. Hátra: valódi TC (folyamatban: T30b), Automation csak motor-koncepcióval értelmezhető (nincs).
 - [ ] **T32** Audio bemenet (T15) és CV/Gate (T19) hardveres felderítése: mit ad az Akai Linux (ALSA capture, CV DAC), és mit használ már a `kick_I2c.cpp`.
