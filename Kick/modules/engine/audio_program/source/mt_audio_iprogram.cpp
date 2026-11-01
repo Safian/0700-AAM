@@ -260,7 +260,7 @@ namespace mt
 
     void MTIProgram::resetPerformance()
     {
-        // Only exception to "SustainState is written by live input only": stop() releases pedal-held notes (also muted).
+        // stop() (tick/message thread) races live input; SustainState is internally locked. It releases pedal-held notes (also muted).
         sustain.clearSeq(); // stop: no sequencer note stays active, so the release below covers every pitch
         sustain.onCC64( 0, [this]( int n ) { noteOff( n ); } );
         pitchBend( 8192 );
