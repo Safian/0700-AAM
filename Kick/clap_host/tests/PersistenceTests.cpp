@@ -194,6 +194,31 @@ int main(int argc, char** argv) {
         check(roCalls == 0 && ro.getState().getProperty("pan").toString() == "auto", "read-only close runs no prepare/patch and keeps the live tree");
         gTestDemosDir = juce::File();
     }
+    {   // Sample-path collision: samples/kick.wav exists and an external /Pack/kick.wav is loaded. The LIVE source must stay
+        // absolute (the asset slice map is keyed by it), the saved file gets samples/Pack_kick.wav, and re-saving never duplicates.
+        const auto projFile = directory.getChildFile("coll/project.xml");
+        const auto samples = projFile.getParentDirectory().getChildFile("samples");
+        const auto external = directory.getChildFile("Pack/kick.wav");
+        check(samples.getChildFile("kick.wav").create().wasOk() && samples.getChildFile("kick.wav").replaceWithText("own"), "seed colliding sample");
+        check(external.create().wasOk() && external.replaceWithText("external"), "seed external sample");
+        mt::KickXML coll("ROOT", ".xml", "1");
+        check(coll.loadOrCreate(projFile).isValid(), "create collision document");
+        juce::ValueTree layer("LAYER"); layer.setProperty("source", external.getFullPathName(), nullptr);
+        coll.getState().appendChild(layer, nullptr);
+        auto savedSource = [&] { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(0).getProperty("source").toString(); };
+        check(coll.save(), "save collision document");
+        check(layer.getProperty("source").toString() == external.getFullPathName(), "live source stays absolute on collision");
+        check(savedSource() == "samples/Pack_kick.wav", "saved file holds samples/<parent>_<name>");
+        check(samples.getChildFile("Pack_kick.wav").loadFileAsString() == "external" && samples.getChildFile("kick.wav").loadFileAsString() == "own", "collision copy made, original untouched");
+        coll.getState().setProperty("touch", 1, nullptr);
+        check(coll.save(), "second save");
+        check(savedSource() == "samples/Pack_kick.wav" && samples.findChildFiles(juce::File::findFiles, false, "*.wav").size() == 2, "second save does not duplicate");
+        check(external.deleteFile(), "external source disappears");
+        coll.getState().setProperty("touch", 2, nullptr);
+        check(coll.save() && savedSource() == "samples/Pack_kick.wav", "vanished source still maps to the existing renamed copy");
+        check(layer.getProperty("source").toString() == external.getFullPathName(), "live source still absolute");
+        check(coll.close(), "close collision document");
+    }
     directory.deleteRecursively();
     std::cout << "PASS: actual KickXML autosave, close, worker save, bounded snapshots, failed/unsupported state, dirty/error reporting and retry\n";
 }
