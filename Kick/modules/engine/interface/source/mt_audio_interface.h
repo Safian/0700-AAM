@@ -296,6 +296,14 @@ namespace mt
         int seekToBar( int Sequence, int Bar0 );
         int seekBars( int Sequence, int DeltaBars ); // relative to the current (or already requested) bar
         int getSequenceLastBar( int Sequence ); // 0-based start of the last bar: loopEnd - 1 when looping, else length - 1
+        // Tick-level seek (same hand-over as seekToBar). Returns the clamped tick, or -1 for an invalid sequence.
+        int seekToTick( int Sequence, int Tick );
+        // Tick a seek is relative to: pending/parked target, else the live playhead (playing/paused), else 0. -1: invalid.
+        int getSequenceSeekTick( int Sequence );
+        // Previous (Direction < 0, strictly before FromTick) / next (Direction > 0, strictly after) note start tick of
+        // the selected track, or -1 if there is none / invalid selection. Reads the track's note list: call it on the
+        // message thread (where the UI edits notes), not from the tick/audio thread.
+        int findEventTick( const MTSelected& Selection, int FromTick, int Direction );
 
         void setBBT( int knob, int value );
 

@@ -279,6 +279,23 @@ private:
             sendButtonMsg(code, contracts::DeviceControlContracts::BTN_RELEASED);
     }
 
+    // LOCATE + "<" / ">": move the playhead to the previous / next note start of the SELECTED track (Akai MPC
+    // convention), no wrap. No earlier event -> sequence start; no later event -> stay. This runs on the MIDI reader
+    // thread, but the note list is a juce::ValueTree edited on the message thread, so the lookup and the seek are
+    // done there (same pattern as dispatchTouch). The seek itself is applied on the tick thread by the engine.
+    void locateToEvent(int direction)
+    {
+        juce::MessageManager::callAsync([direction]() {
+            auto&      ae   = mt::getAudioInterface();
+            const auto sel  = ae.getSelected();
+            const int  from = ae.getSequenceSeekTick(sel.sequence);
+            if (from < 0) return;
+            int target = ae.findEventTick(sel, from, direction);
+            if (target < 0 && direction < 0 && from > 0) target = 0;
+            if (target >= 0) ae.seekToTick(sel.sequence, target);
+        });
+    }
+
     void dispatchTouch(int slot, int x, int y, bool is_down, bool is_up)
     {
         if (slot >= 0 && slot < 10) {
@@ -997,11 +1014,15 @@ public:
             }
             case HW_BTN_STEP_PREV:
             {
+                // LOCATE + button = jump to the previous event; no EN_MINUS press, so the tracked release sends nothing.
+                if (isLocateDown()) { locateToEvent(-1); break; }
                 sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS);
                 break;
             }
             case HW_BTN_STEP_NEXT:
             {
+                // LOCATE + button = jump to the next event; no EN_PLUS press, so the tracked release sends nothing.
+                if (isLocateDown()) { locateToEvent(1); break; }
                 sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS);
                 break;
             }
