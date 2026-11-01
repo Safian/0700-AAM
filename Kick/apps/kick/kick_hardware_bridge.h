@@ -903,13 +903,18 @@ public:
             }
             case HW_BTN_BAR_PREV:
             {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BACK, contracts::DeviceControlContracts::BTN_PRESSED);
+                // Engine bars are 0-based (UI: +1). LOCATE + "<<" = bar 1; stopped/paused parks the bar for PLAY.
+                const int seq = ae.getSelectedSequence();
+                if (isLocateDown()) ae.seekToBar(seq, 0);
+                else ae.seekBars(seq, -1);
                 break;
             }
             case HW_BTN_BAR_NEXT:
             {
-                // ARCHITECT-CLARIFY: which DCL button should ">>" (bar +1) send? It must NOT be EN_KNOB_ENTER
-                // (that made ">>" act as the Data Dial push). Unbound until decided.
+                // LOCATE + ">>" = start of the last bar (loopEnd - 1 when looping, else length - 1).
+                const int seq = ae.getSelectedSequence();
+                if (isLocateDown()) ae.seekToBar(seq, ae.getSequenceLastBar(seq));
+                else ae.seekBars(seq, 1);
                 break;
             }
             case HW_BTN_NEXT_SEQ:
@@ -984,10 +989,8 @@ public:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             case HW_BTN_BAR_PREV:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_BACK, contracts::DeviceControlContracts::BTN_RELEASED);
-                break;
             case HW_BTN_BAR_NEXT:
-                break; // unbound, see on_button_press
+                break; // act on press only
             case HW_BTN_TAP_TEMPO:
                 sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO);
                 break;
