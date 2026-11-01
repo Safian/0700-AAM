@@ -1565,7 +1565,7 @@ namespace mt
         return 0;
     }
 
-    int MTNoteList::timingCorrect( const track::timingCorrectInfo& Info, const std::set<int>* onlyIds )
+    int MTNoteList::timingCorrect( const track::timingCorrectInfo& Info, const std::set<int>* onlyIds, int trackLenTicks )
     {
         using E = track::timingCorrectInfo::Events;
         using T = track::timingCorrectInfo::Type;
@@ -1592,7 +1592,7 @@ namespace mt
             vts.push_back( vt );
         }
         const auto orig    = v;
-        const int  changed = tc::correct( v, p, (int)seq.getLengthInTicks() );
+        const int  changed = tc::correct( v, p, trackLenTicks > 0 ? trackLenTicks : (int)seq.getLengthInTicks() );
         if( changed <= 0 )
             return 0;
 

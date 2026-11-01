@@ -45,6 +45,20 @@ int main()
     check(clampTick(-1, 6144) == 0 && clampTick(6143, 6144) == 6143 && clampTick(6144, 6144) == 6143, "clampTick");
     check(clampTick(100, 0) == 0 && clampTick(100, -4) == 0 && clampTick(LLONG_MAX, 10) == 9, "clampTick degenerate");
 
+    // Track-aware (track of 384 ticks inside a longer sequence), starts {0, 96, 200}.
+    const std::vector<int> t = { 200, 0, 96, 400 /* beyond the track: ignored */ };
+    check(findEventInTrack(t, 100, 1, 384) == 200, "track: next inside the first repetition");
+    check(findEventInTrack(t, 300, 1, 384) == 384, "track: next past last event = first event of next repetition");
+    check(findEventInTrack(t, 300, -1, 384) == 200, "track: prev inside the first repetition");
+    check(findEventInTrack(t, 0, -1, 384) == -1, "track: prev at the very start: none");
+    check(findEventInTrack(t, 384, -1, 384) == 200, "track: prev at start of 2nd repetition = last event of the 1st");
+    check(findEventInTrack(t, 384 + 50, 1, 384) == 384 + 96, "track: next in 2nd repetition adds base");
+    check(findEventInTrack(t, 384 + 50, -1, 384) == 384, "track: prev in 2nd repetition adds base");
+    check(findEventInTrack(t, 384 * 2 + 300, 1, 384) == 384 * 3, "track: next across 3rd -> 4th repetition");
+    check(findEventInTrack(t, 10, 0, 384) == -1 && findEventInTrack(none, 10, 1, 384) == -1, "track: direction 0 / no events");
+    check(findEventInTrack(v, 500, 1, 0) == 960 && findEventInTrack(v, 500, -1, 0) == 384, "track: len 0 falls back to findEvent");
+    check(findEventInTrack(std::vector<int>{ 10 }, 10, 1, 384) == 384 + 10, "track: single event wraps to the next repetition");
+
     std::puts("EventSeekTests OK");
     return 0;
 }

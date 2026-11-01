@@ -116,6 +116,13 @@ namespace mt
         // RECALL: commit the last WindowMs of captured live notes into this track's note list. Returns the number of
         // notes committed (0 if nothing was captured). Non-realtime (message thread); the caller owns the undo transaction.
         int recallLiveNotes( int WindowMs );
+        // Timing correct on this track's notes. LOCK ORDER (F2): takes MTTrack::lock (the lock onTick() holds while it walks
+        // the note HashMap) and only then MTNoteList::lock (taken inside the note-list edits, e.g. add/erase via the
+        // ValueTree listeners). Nothing may take MTNoteList::lock first and then MTTrack::lock. Passes the track length
+        // (not the sequence length) so Start mode wraps inside the track (F6). Message thread only.
+        int timingCorrectLocked( const track::timingCorrectInfo& Info, const std::set<int>* OnlyIds = nullptr );
+        // Track length in ticks (0 = not set yet); thread safe.
+        int getLengthTicks() const { return (int)lengthInTicks.load(); }
 
         // Arpeggiator (per track). Acts on live input only (processIncomingMidiMessage) and is stepped by onTick, so it
         // runs while the transport plays; with the transport stopped, live notes pass through unchanged. Setters may be
