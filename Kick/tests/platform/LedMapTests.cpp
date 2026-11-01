@@ -93,6 +93,27 @@ int main()
         check(r == kLedOff && o == kLedFullA, "overdubbing: OVERDUB steady, REC dark");
         recOverdubLedLevels(false, true, true, r, o);
         check(r == kLedOff && o == kLedOff, "overdub mode flag without recording: dark (stale flag after STOP)");
+        // with the sequence state
+        recOverdubLedLevels(false, false, false, false, false, true, r, o);
+        check(r == kLedOff && o == kLedOff, "seq idle: both dark");
+        recOverdubLedLevels(false, false, true, false, false, false, r, o);
+        check(r == kLedFullB && o == kLedOff, "seq armed: REC steady red (blink phase irrelevant)");
+        recOverdubLedLevels(false, false, true, false, false, true, r, o);
+        check(r == kLedFullB && o == kLedOff, "seq armed, blink on: REC steady red");
+        recOverdubLedLevels(false, false, false, true, false, true, r, o);
+        check(r == kLedFullB && o == kLedOff, "seq recording, blink on: REC red");
+        recOverdubLedLevels(false, false, false, true, false, false, r, o);
+        check(r == kLedOff && o == kLedOff, "seq recording, blink off: REC dark (blinks)");
+        recOverdubLedLevels(false, false, true, false, true, false, r, o);
+        check(r == kLedFullB && o == kLedFullA, "seq armed + overdub: REC red, OVERDUB green");
+        recOverdubLedLevels(false, false, false, true, true, false, r, o);
+        check(r == kLedOff && o == kLedFullA, "seq recording + overdub, blink off: OVERDUB green steady");
+        recOverdubLedLevels(false, false, false, false, true, true, r, o);
+        check(r == kLedOff && o == kLedOff, "overdub flag without armed/recording: dark");
+        recOverdubLedLevels(true, false, true, false, true, true, r, o);
+        check(r == kLedFullB && o == kLedOff, "looper recording wins over the sequence state");
+        recOverdubLedLevels(true, true, true, false, false, false, r, o);
+        check(r == kLedOff && o == kLedFullA, "looper overdubbing wins");
         check(blinkPhase(0) && blinkPhase(249) && !blinkPhase(250) && !blinkPhase(499) && blinkPhase(500), "blink phase");
     }
     std::puts("OK");
