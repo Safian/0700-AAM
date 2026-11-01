@@ -45,6 +45,24 @@ int main()
         CHECK(!h.active());
         CHECK(h.peek(Sel{ 5 }).track == 5);
     }
+    { // G16: bend centre tolerance, separate strip / wheel targets, CC targets
+        CHECK(kick_hw::isBendCentre(8192) && kick_hw::isBendCentre(8190) && kick_hw::isBendCentre(8194));
+        CHECK(!kick_hw::isBendCentre(8189) && !kick_hw::isBendCentre(8195) && !kick_hw::isBendCentre(0));
+        kick_hw::HeldTarget<Sel> wheel, strip;
+        CHECK(kick_hw::routeBend(wheel, 9000, Sel{ 1 }).track == 1);  // wheel bends on track 1
+        CHECK(kick_hw::routeBend(strip, 7000, Sel{ 2 }).track == 2);  // strip bends on track 2 (own target)
+        CHECK(kick_hw::routeBend(wheel, 9500, Sel{ 3 }).track == 1);
+        CHECK(kick_hw::routeBend(wheel, 8191, Sel{ 3 }).track == 1);  // near-centre ends the wheel hold
+        CHECK(!wheel.active() && strip.active());
+        CHECK(kick_hw::routeBend(strip, 8192, Sel{ 3 }).track == 2);
+        CHECK(!strip.active());
+        kick_hw::HeldTarget<Sel> cc;
+        CHECK(kick_hw::routeCc(cc, 0, Sel{ 5 }).track == 5);          // 0 without hold -> current
+        CHECK(kick_hw::routeCc(cc, 10, Sel{ 1 }).track == 1);
+        CHECK(kick_hw::routeCc(cc, 60, Sel{ 2 }).track == 1);
+        CHECK(kick_hw::routeCc(cc, 0, Sel{ 2 }).track == 1);          // 0 returns to track 1
+        CHECK(!cc.active());
+    }
     if (g_fail == 0) std::printf("hw_targets: all passed\n");
     return g_fail ? 1 : 0;
 }

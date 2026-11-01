@@ -6,6 +6,7 @@
 // None of these classes is thread-safe; the bridge guards them with its own mutex.
 #include <array>
 #include <cstddef>
+#include <cstdlib>
 
 namespace kick_hw {
 
@@ -71,5 +72,24 @@ private:
     Target m_t {};
     bool   m_active = false;
 };
+
+// G16: a pitch wheel rarely rests on exactly 8192; values within +-2 of the centre count as "centred" (ends the hold).
+constexpr int kBendCentre = 8192;
+constexpr int kBendCentreTolerance = 2;
+inline bool isBendCentre(int val) { return std::abs(val - kBendCentre) <= kBendCentreTolerance; }
+
+// Route a 14-bit pitch value through its HeldTarget: off-centre starts/continues on the first track, centre ends there.
+template <typename Target>
+Target routeBend(HeldTarget<Target>& h, int val, const Target& current)
+{
+    return isBendCentre(val) ? h.end(current) : h.begin(current);
+}
+
+// Route a 0..127 controller whose rest value is 0 (mod wheel CC1, expression CC11): >0 begins, 0 ends.
+template <typename Target>
+Target routeCc(HeldTarget<Target>& h, int val, const Target& current)
+{
+    return val > 0 ? h.begin(current) : h.end(current);
+}
 
 } // namespace kick_hw
