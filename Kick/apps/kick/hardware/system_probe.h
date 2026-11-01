@@ -7,6 +7,7 @@
 #include <vector>
 #include <cstdio>
 #include <dirent.h>
+#include <sys/stat.h>
 
 // ============================================================================
 // Read-only system facts for the "probe" command of /data/kick_cmd (T32 / T19). JUCE / ALSA free.
@@ -69,6 +70,57 @@ inline std::string formatList(const std::string& title, bool opened, const std::
     return formatSection(title, body);
 }
 
+inline bool isDirectory(const std::string& path)
+{
+    struct stat st;
+    return ::stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+// Read-only dump of the ALSA proc tree of every card (the codec mixer elements are not listed in /proc for ASoC cards;
+// 'amixer' is NOT run: no exec, nothing is set). Per /proc/asound/cardN: the entry names, every regular file (cap
+// 'maxFileBytes' each; codec#*, id, ...), and one level down (pcm*, pcm*/sub*) the regular files too. Never writes.
+inline std::string buildAlsaCardDump(const std::string& root, size_t maxFileBytes = 8192)
+{
+    std::string r;
+    auto dumpFiles = [&](const std::string& rel, const std::vector<std::string>& names) {
+        for (const auto& n : names) {
+            const std::string p = rel + "/" + n;
+            if (isDirectory(root + p)) continue;
+            bool ok = false;
+            std::string t = readTextFile(root + p, &ok);
+            if (t.size() > maxFileBytes) t = t.substr(0, maxFileBytes) + "\n(truncated)";
+            r += formatSection(p, ok ? t : std::string("(cannot read)"));
+        }
+    };
+    for (const char* top : { "/proc/asound/devices", "/proc/asound/modules", "/proc/asound/version" })
+        r += formatSection(top, readTextFile(root + top));
+
+    std::vector<std::string> cards;
+    const bool ok = listDir(root + "/proc/asound", cards, "card");
+    r += formatList("/proc/asound/card*", ok, cards);
+    for (const auto& c : cards) {
+        const std::string cdir = "/proc/asound/" + c;
+        std::vector<std::string> names;
+        if (!isDirectory(root + cdir) || !listDir(root + cdir, names)) continue;
+        r += formatList(cdir, true, names);
+        dumpFiles(cdir, names);
+        for (const auto& n : names) {                     // pcm0p, pcm0c, ...
+            const std::string sub = cdir + "/" + n;
+            std::vector<std::string> subNames;
+            if (!isDirectory(root + sub) || !listDir(root + sub, subNames)) continue;
+            r += formatList(sub, true, subNames);
+            dumpFiles(sub, subNames);
+            for (const auto& s : subNames) {              // sub0, ...
+                const std::string sub2 = sub + "/" + s;
+                std::vector<std::string> sub2Names;
+                if (!isDirectory(root + sub2) || !listDir(root + sub2, sub2Names)) continue;
+                dumpFiles(sub2, sub2Names);
+            }
+        }
+    }
+    return r;
+}
+
 // Builds the whole report. 'root' is "" on the device; tests can pass a fake root directory.
 inline std::string buildReport(const std::string& root = "")
 {
@@ -93,6 +145,7 @@ inline std::string buildReport(const std::string& root = "")
     dir("/dev", "i2c-");     // names only, never opened
     dir("/dev/snd");         // names only, never opened
     dir("/sys/bus/i2c/devices");
+    r += buildAlsaCardDump(root);   // read-only ALSA card tree (codec info); no amixer, no mixer writes
     {
         // kernel name of every i2c device (sysfs attribute, read-only)
         std::vector<std::string> names;
