@@ -25,7 +25,7 @@ A felhasználó utasítása: ne álljunk meg apró döntés miatt; ha UI-elem ke
 | Tartósan hiányzó minta | Egyszeri, nem blokkoló figyelmeztetés a UI-ban (nem csak napló, nem blokkoló hiba). A napló marad. | DUMMY UI-elem + callback a KickXML-ben (mintánként egyszer); reggeli finomítás |
 | Shift+`<` / Shift+`>` | Ütem-ugrás (Akai-konvenció); a sima `<`/`>` marad a rácsos léptetés | bridge: `seekToBar(±1)` Shift mellett |
 | Review-fix ciklus | Amíg a kör pontosan „Nincs megerősített hiba”-t mond | folyamatban (mentési sample-ág: K3…Q2) |
-| Gomb-LED | A felhasználó javítása: csak STOP világított, a többi nem (az előző „mind világít” megfigyelés téves volt). A kamerás ellenőrzést a felhasználó végzi. | A helyi agent elkészíti a `KICK_AKAI_LED_MODE` buildet; Continuity Camera nem használható |
+| Gomb-LED | A felhasználó javítása: csak STOP világított, a többi nem (az előző „mind világít” megfigyelés téves volt). A kamerás ellenőrzést a felhasználó végzi. | LEZÁRVA: `cc` (`0xB0 <note> <érték>`) az alap, a `KICK_AKAI_LED_MODE` kapcsoló és a `note`/`noteoff0` ág törölve; mérés: `docs/akai_mpc_hardware/KEY61_LED_COLOURS.md` |
 
 ## Egyéb döntések a mentési sample-ágon (autonóm)
 - Hiányzó forrás + hiányzó másolat: a mentés nem blokkol (lecsatolt meghajtó ne akadályozza az autosave-et/bezárást), a mentett út megmarad; naplósor mentésenként (szerkesztés után, 1,5 s debounce).
