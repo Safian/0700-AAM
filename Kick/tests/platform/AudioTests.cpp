@@ -143,7 +143,7 @@ int main() {
         check(done == 4096 && processed == 8 && filled == 256, "variable device callbacks produce fixed engine blocks");
         for (int n = 0; n < 4096; ++n) {
             const float expected = n < 480 ? 0.f : static_cast<float>(n - 479);
-            check(result.getSample(0, n) == expected && result.getSample(1, n) == -expected && result.getSample(2, n) == 0, "device adapter preserves samples, channel isolation and exact pipeline delay");
+            check(result.getSample(0, n) == expected && result.getSample(1, n) == -expected && result.getSample(2, n) == expected, "device adapter preserves samples, wraps extra outputs onto channel 0 (c % channels) and keeps exact pipeline delay");
         }
         input.clear(); output.clear(); filled = 0;
         float* outs[]{result.getWritePointer(0), nullptr};

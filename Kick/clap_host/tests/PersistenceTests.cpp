@@ -9,6 +9,10 @@
  #include <csignal>
  #include <sys/resource.h>
 #endif
+#include "../../modules/common/source/kick_paths.h"
+// kick_xml_manager.cpp asks the application for its data directories; this standalone test
+// does not link the Kick common module, so provide directories that never exist (read-only logic stays inert).
+juce::File getAppDirs(DirType) { return juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("kick-clap-persistence-nonexistent"); }
 using namespace kick::clap;
 static void check(bool ok, const char* why) { if (!ok) { std::cerr << "FAIL: " << why << '\n'; std::exit(1); } }
 static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
