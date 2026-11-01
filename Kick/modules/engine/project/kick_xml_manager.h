@@ -22,6 +22,7 @@
 #pragma once
 #include <juce_data_structures/juce_data_structures.h>
 #include <juce_events/juce_events.h>
+#include <map>
 #include "../../common/source/kick_ValueTreeUtils.h"
 #ifndef KICK_XML_MANAGER_H_INCLUDE
     #define KICK_XML_MANAGER_H_INCLUDE
@@ -82,6 +83,9 @@ namespace mt
         juce::File            xmlFile;
         juce::String          directoryText, lastSaveError;
         juce::ValueTree       vt;
+        // Session-long absolute source -> project copy, recorded only after a successful copy/recognition. Lets a later save
+        // keep a copy's saved reference once its source is gone (unmounted drive); entries whose copy vanished are dropped.
+        std::map<juce::String, juce::File> sessionCopies;
         juce::UndoManager     undo;
         std::atomic<bool> dirty{false}, autosaveDue{false}, saving{false};
 
