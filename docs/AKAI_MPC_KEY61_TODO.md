@@ -186,7 +186,7 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 
 - [ ] **T21** (részben kész: a parsernek van hoston futó tesztje, `Kick/tests/platform/MidiParserTests.cpp`) Hátra: egységteszt a `get_akai_button` / `get_akai_pad_index` táblákra (mind a 45 gomb + 16 pad); ehhez a táblákat ALSA-mentes headerbe kell kiemelni.
 - [ ] **T22** `kick_cmd` `rawmidi` parancs a review szerint, hogy hardver nélkül is lehessen bájtszinten tesztelni.
-- [ ] **T23** Hardveres smoke lista (kézi): minden gomb + Shift-pár, 16 pad, billentyű/kerekek/pedálok, LED-ek, kijelző/érintés, audio-peak.
+- [x] **T23** Hardveres próbalista elkészült: `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` (gombok, Shift-párok, pad/billentyű, transport/seek, LED-ek, hang, döntést hozó próbák, visszavonási commitok).
 
 ## 6. Döntések (2026-11-01)
 
