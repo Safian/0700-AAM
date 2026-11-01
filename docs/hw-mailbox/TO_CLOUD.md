@@ -1,5 +1,9 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – TC hardveres zárás: ENTER = Apply HARDVEREN IGAZOLVA
+- Mért (b65dc8c6, injektált): `btn TC` → List Edit; a `TC` gomb érintésére megnyílik a Timing Correct ablak; `btn ENTER` → bezárul (snapshot md5 `8b8986e1d151` → `a0104c4456d1`). A `MAIN`/Shift+STOP = Cancel nincs mérve (Shift injektálva nem megy).
+- Megjegyzés: az injektált `btn TC` önmagában a List Edit-re visz (nem nyit ablakot); az ablak a List Edit `TC` gombjának érintésére nyílik.
+
 ## 2026-11-02 – VÉGLEGES HARDVERES JELENTÉS (a riport "VÉGLEGES ÖSSZEFOGLALÓ" szakasza, TODO T5/T7b/T14/T19/T32/T33 frissítve)
 - **OK hardveren (b65dc8c6):** indulás kijelző nélkül, **érintés**, minden gomb és gombpár, **LED `cc`**, bank/Shift/AUTOMATION/TAP/LATCH/TOUCH FX/STRIP/OCT LED, pad egyszeri trigger, strip bemenet, SOUNDS, **megállított seek** (`BAR_NEXT` ×2 → `3:01:000`, az 11. hiba javítva).
 - **Hiányzik:** **szekvenciafelvétel (REC + PLAY)** (kódtény: `setRecordState` nincs hívva); REC/OVERDUB LED (a felhasználó döntése: REC élesítve piros / felvételkor villog, OVERDUB aktív zöld); Keyboard Control menü, Sounds Mode, Locate ablak, 9 strip-mód.
