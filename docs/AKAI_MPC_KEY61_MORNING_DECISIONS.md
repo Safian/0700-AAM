@@ -46,3 +46,10 @@ A felhasználó utasítása: ne álljunk meg apró döntés miatt; ha UI-elem ke
 | Két Shift LED | note 49 és 50 együtt (V1) | hardveres próba |
 | KEYBOARD CONTROL → Pad Perform | marad (nincs Keyboard Control menü a Kickben); eltérés dokumentált | felhasználói döntés ha kell |
 | Main Volume gomb | DUMMY: nincs kodek-mixer (`amixer`) vezérlés, amíg a nyers MIDI-mérés nem mutatja, hogy a gomb küld-e eseményt; a gyári MCU/kodek útja `acvs` nélkül hatástalan | felhasználói döntés: kell-e kodek-mixer vezérlés |
+
+## Felhasználói döntések, 2026-11-02 (ébren)
+| Téma | Döntés |
+|---|---|
+| TC ablak hardveres zárása (STOP/ENTER = Apply, Shift+STOP/MAIN = Cancel) | MARAD, mint Kick-specifikus, kijelző nélküli használathoz szükséges kiegészítés (az Akai útmutató csak érintéses zárást ír). Nem Akai-funkcióként dokumentálandó. A hardveres zárás csak akkor hat, ha a TC ablaka a legfelső modális. |
+| Jobb Shift LED tükrözése (note 49 is) | MARAD, a hardveres teszt dönt; a helyi agent mérje meg a firmware viselkedését (bal LED mindig világít, jobb csak Shift-nyomásra). |
+| Review-ciklus kereten belül | Az új funkciókra (Y2/Z1/Y4) a ciklus tovább megy; új funkciót a listán kívül nem veszek fel, csak hibajavítást. |
