@@ -18,3 +18,16 @@ A felhasználó utasítása: ne álljunk meg apró döntés miatt; ha UI-elem ke
 | 2026-11-01 | Pan CC10 mentés közben (R2 follow-up 1) | ELAVULT (J1): a `isSavingProject()` jelző és a CC10-tiltás törölve, mert a mentés már nem ír az élő fába | nincs visszaírás, ezért nincs mit elnyomni | - | - |
 | 2026-11-01 | `isEffectivelyMute` figyelmeztetés (R2 follow-up 2) | A változó törölve a `MTTrack::onTick` régiójában | Nem használta semmi; a némítás-szűrés (`mutefilter::passesWhileMuted`) élő bemenetnél (mt_audio_track.cpp ~783) és az arp-nál már `isTrackEffectivelyMuted()`-ot hív | `Kick/modules/engine/audio_engine/engine/mt_audio_track.cpp` | L |
 | 2026-11-01 | Bridge lebegő `this` a callAsync-ben (R2 follow-up 3) | `std::shared_ptr<std::atomic<bool>> m_alive` (stop() hamisra állítja), a lambdák másolatban fogják; az érintés-lambda is ellenőriz | A `m_stopping` a megsemmisülő objektumban él, a késői lambda felszabadított memóriát olvasna; a megosztott flag túléli a hidat | `Kick/apps/kick/kick_hardware_bridge.h` | L |
+
+## Felhasználói döntések (2026-11-01, ébren)
+| Téma | Döntés | Teendő |
+|---|---|---|
+| Tartósan hiányzó minta | Egyszeri, nem blokkoló figyelmeztetés a UI-ban (nem csak napló, nem blokkoló hiba). A napló marad. | DUMMY UI-elem + callback a KickXML-ben (mintánként egyszer); reggeli finomítás |
+| Shift+`<` / Shift+`>` | Ütem-ugrás (Akai-konvenció); a sima `<`/`>` marad a rácsos léptetés | bridge: `seekToBar(±1)` Shift mellett |
+| Review-fix ciklus | Amíg a kör pontosan „Nincs megerősített hiba”-t mond | folyamatban (mentési sample-ág: K3…Q2) |
+| Gomb-LED | A felhasználó javítása: csak STOP világított, a többi nem (az előző „mind világít” megfigyelés téves volt). A kamerás ellenőrzést a felhasználó végzi. | A helyi agent elkészíti a `KICK_AKAI_LED_MODE` buildet; Continuity Camera nem használható |
+
+## Egyéb döntések a mentési sample-ágon (autonóm)
+- Hiányzó forrás + hiányzó másolat: a mentés nem blokkol (lecsatolt meghajtó ne akadályozza az autosave-et/bezárást), a mentett út megmarad; naplósor mentésenként (szerkesztés után, 1,5 s debounce).
+- PLAY/STOP az üzenetszálon marad (eszközön mérendő); a STOP alatti átmeneti Paused állapot elfogadott.
+- Pitch wheel némított MIDI programon minden értéket átenged; némított sample programnál nincs release-átengedés; az autosave gyakorisága Read módban változatlan.
