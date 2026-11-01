@@ -66,6 +66,13 @@ int main()
     CHECK_EQ( v[0].start, 24 );
     CHECK_EQ( v[0].length, 10 );
     CHECK_EQ( v[1].start, 0 ); // 95 -> 96 -> wraps to 0
+    // F6: the wrap uses the TRACK length (384 = 4 beats here), not a longer sequence: 380 -> 384 -> start 0
+    v = { { 36, 380, 10 } };
+    CHECK_EQ( correct( v, p, 384 ), 1 );
+    CHECK_EQ( v[0].start, 0 );
+    v = { { 36, 380, 10 } };
+    correct( v, p, 1536 ); // a sequence-length argument leaves 384, past the end of a 384-tick track
+    CHECK_EQ( v[0].start, 384 );
     // Not-target notes are left alone
     v = { { 36, 13, 10, false } };
     CHECK_EQ( correct( v, p, 96 ), 0 );

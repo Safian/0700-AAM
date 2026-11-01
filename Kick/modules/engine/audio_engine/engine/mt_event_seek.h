@@ -44,6 +44,42 @@ namespace mt
             return direction < 0 ? previousEvent( starts, current ) : ( direction > 0 ? nextEvent( starts, current ) : -1 );
         }
 
+        // Track-aware variant. `fromSeqTick` is a SEQUENCE tick, `starts` are track-local note starts and the track repeats
+        // every `trackLenTicks` (a track shorter than the sequence loops inside it). Searches the repetition that contains
+        // `fromSeqTick` and returns a SEQUENCE tick (base + local start). Past the last event of this repetition the next
+        // returns the first event of the following repetition; before the first event the previous returns the last event
+        // of the preceding repetition (only if there is one, i.e. base > 0). -1: no event / direction 0. The caller drops
+        // results beyond the sequence end. trackLenTicks <= 0 falls back to the plain findEvent (no repetition).
+        inline long long findEventInTrack( const std::vector<int>& starts, long long fromSeqTick, int direction, int trackLenTicks ) noexcept
+        {
+            if( trackLenTicks <= 0 )
+                return findEvent( starts, (int)fromSeqTick, direction );
+            if( 0 == direction || fromSeqTick < 0 )
+                return -1;
+            std::vector<int> local;
+            local.reserve( starts.size() );
+            for( int s : starts )
+                if( s >= 0 && s < trackLenTicks )
+                    local.push_back( s );
+            if( local.empty() )
+                return -1;
+            const long long base = fromSeqTick - fromSeqTick % trackLenTicks;
+            const int       cur  = (int)( fromSeqTick - base );
+            if( direction > 0 )
+            {
+                const int n = nextEvent( local, cur );
+                if( n >= 0 )
+                    return base + n;
+                return base + trackLenTicks + nextEvent( local, -1 ); // first event of the next repetition
+            }
+            const int p = previousEvent( local, cur );
+            if( p >= 0 )
+                return base + p;
+            if( base <= 0 )
+                return -1;
+            return base - trackLenTicks + previousEvent( local, trackLenTicks ); // last event of the previous repetition
+        }
+
         // Clamp a tick into [0, lengthInTicks - 1] (a length below 1 collapses to 0).
         constexpr int clampTick( long long tick, long long lengthInTicks ) noexcept
         {

@@ -967,7 +967,14 @@ namespace mt
         for( const auto& n : notes )
             starts.push_back( n.start.get() );
 
-        return event_seek::findEvent( starts, FromTick, Direction );
+        // F9: FromTick is a sequence tick, the starts are track-local; a shorter track repeats inside the sequence.
+        const long long r = event_seek::findEventInTrack( starts, FromTick, Direction, t->getLengthTicks() );
+        if( r < 0 )
+            return -1;
+        if( auto* s = manager->getSequence( Selection.sequence ) )
+            if( r >= (long long)s->getLengthInTicks() )
+                return -1; // beyond the sequence end: no event (the caller stays where it is)
+        return (int)r;
     }
 
     void MTAudioInterface::setBBT( int knob, int value )
@@ -1765,7 +1772,7 @@ namespace mt
             return -1;
         tcParams = Info;
         manager->getUndoManager().beginNewTransaction( "Timing Correct" );
-        return t->timingCorrect( Info );
+        return t->timingCorrectLocked( Info );
     }
 
     void MTAudioInterface::setAutomationMode( int Mode ) { manager->setAutomationMode( Mode ); }
@@ -1859,7 +1866,7 @@ namespace mt
             std::set<int> added;
             for( auto vt : t->getNoteListVT() )
                 if( vt.hasType( IDs::NOTE ) && !before.count( (int)vt.getProperty( IDs::id ) ) ) added.insert( (int)vt.getProperty( IDs::id ) );
-            t->timingCorrect( tcParams, &added );
+            t->timingCorrectLocked( tcParams, &added );
         }
         return committed;
     }
