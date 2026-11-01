@@ -17,12 +17,16 @@ namespace AudIO
         return 0;
     }
 
-    int DawInserts::InsertEffects::create( const std::string& Effect )
+    int DawInserts::InsertEffects::create( const std::string& Effect, uint32_t Samplerate, uint32_t Blocksize )
     {
         bypassed.store( true );
         pObj = std::move( CREATE_OBJECT( Effect ) );
         if( pObj.get() )
         {
+            // Effects created after the device started would otherwise keep blockSize()==1 (see Object::_blockSize).
+            // Prepare before un-bypassing, so the audio thread never runs an unprepared effect.
+            if( 0 < Blocksize )
+                pObj->prepareToPlay( Samplerate, Blocksize );
             bypassed.store( false );
             return 0;
         }
@@ -62,7 +66,7 @@ namespace AudIO
             // Remove effect if any exists at this position
             pIns->reset();
             // Create effect
-            return pIns->create( Effect );
+            return pIns->create( Effect, _rate, _block );
         }
         return -1;
     }
@@ -195,6 +199,8 @@ namespace AudIO
 
     void DawInserts::prepareToPlay( uint32_t Samplerate, uint32_t Blocksize )
     {
+        _rate  = Samplerate;
+        _block = Blocksize;
         // Run loop to prepare all inserts...
         for( auto& it : _inserts )
             if( it.pObj.get() )
@@ -204,6 +210,9 @@ namespace AudIO
     void DawInserts::process( Buffer<float>& Buffer )
     {
         if( _bypassAll.load() )
+            return;
+        // Defensive: never run effects on an empty or unprepared block (processReplacing(sampleFrames=0), HW test error 7)
+        if( 0 == _block || 0 == Buffer.getBlockSize() )
             return;
 
         // Run loop to process all inserts...
