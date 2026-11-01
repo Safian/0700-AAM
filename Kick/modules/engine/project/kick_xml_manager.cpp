@@ -20,7 +20,7 @@
  */
 
 #include "kick_xml_manager.h"
-#include "common/common.h"
+#include "../../common/source/kick_paths.h"
 
 namespace {
 // Never hold the document lock while waiting for the message thread. Project
