@@ -172,6 +172,9 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 - [ ] **T12** Touch Strip: gomb (mód-váltás), CC34 LSB, Note 78 érintés.
 - [ ] **T13** LED-bővítés: `HardwareLed` + intenzitás/kétszínű API; aktív mód, SHIFT, LOCATE, ARP, LATCH, COPY… LED; BANK E–H megkülönböztetése.
 - [ ] **T14** (részben kész, `7d06f546`) Pad RGB: a projekt pad-színeit (`kick_PadColor`) használni bank-szín helyett; ütés utáni visszaállás a pad saját színére. Opcionális: egy keretben frissíteni a 16 padot (most padonként 4 SysEx-írás/port, villanásnál és visszaálláskor is).
+  - Feltérképezés (read-only ágens, **nem ellenőrzött általam**): a pad-szín indexek (0..17, `PadColourIds`, `dcl_contracts.h`) a modellben programonként tárolódnak (`padColour[128]`, `mt_audio_interface_types.h`); keygroup/MIDI/plugin/CV programnál a `ae.getKeyGroupPadColour()`-ból jönnek. A hardverre a `KickLEDs` küldi `sendCommandToDcl`-en (`EN_PKT_TYPE_PAD` / `EN_PAD_SET_COLOUR_STATE`, 16 szín + 16 állapot), de az Akai buildben soros port nincs, így a csomag eldobódik, és a bridge nem iratkozik fel rá.
+  - Javasolt terv: a bridge `sendCommandToDcl`-re feliratkozik, a csomagból elmenti a 16 szín-indexet, egy index→RGB táblával (kiindulás: `assets/Default/theme.xml` `PADBUTTON`, `>>1` a 7 bithez, halványítva) hívja a `set_pad_rgb`-t; a küldés a 30 Hz-es Timerben, dirty flaggel, csak a változott padokra. A `on_pad_note_off` a pad saját színére álljon vissza.
+  - Kockázat: szálbiztonság (handler az üzenetszálon, ALSA írás más szálakról), a LED-szín nem fog egyezni a KICK saját LED-jével (vizuális hangolás kell), a `set_pad_rgb` most padonként 4 írás (2 SysEx × 2 port).
 - [ ] **T15** Audio bemenet (INPUT 1/2) a `IAudioAdapter` capture-ággal, ha a Looper/Sampler felvételhez kell.
 
 ### P2 – robusztusság és teljesítmény
