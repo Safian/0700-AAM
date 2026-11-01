@@ -83,6 +83,42 @@ int main()
         CHECK( !mt::releaseNowOnNoteOff( s, true, 60 ) );
         CHECK( s.isHeld( 60 ) );
     }
+    { // AA1a (a): live C3 held by the pedal, sequencer C3 on/off must not release it
+        SustainState s;
+        rel.clear();
+        s.onCC64( 127, R );
+        s.onNoteOn( 60 );
+        CHECK( !mt::releaseNowOnNoteOff( s, true, 60 ) ); // live off, held
+        s.onSeqNoteOn( 60 );
+        CHECK( !mt::releaseNowOnNoteOff( s, false, 60 ) ); // sequencer off: no release while pedal holds it
+        CHECK( s.isHeld( 60 ) && s.seqCount( 60 ) == 0 );
+        s.onCC64( 0, R );
+        CHECK( rel.size() == 1 && rel[0] == 60 );
+    }
+    { // AA1a (b): held C3 + long sequencer C3, pedal up must not cut the sequencer note
+        SustainState s;
+        rel.clear();
+        s.onCC64( 127, R );
+        CHECK( !mt::releaseNowOnNoteOff( s, true, 60 ) );
+        s.onSeqNoteOn( 60 );
+        s.onCC64( 0, R );
+        CHECK( rel.empty() && !s.isHeld( 60 ) );
+        CHECK( mt::releaseNowOnNoteOff( s, false, 60 ) ); // its own note-off releases it
+        CHECK( s.seqCount( 60 ) == 0 );
+    }
+    { // sequencer-only note with the pedal down still releases at once; counter never underflows; clearSeq/allOff reset
+        SustainState s;
+        s.onCC64( 127, R );
+        s.onSeqNoteOn( 62 );
+        CHECK( mt::releaseNowOnNoteOff( s, false, 62 ) );
+        CHECK( mt::releaseNowOnNoteOff( s, false, 62 ) && s.seqCount( 62 ) == 0 );
+        s.onSeqNoteOn( 64 ); s.onSeqNoteOn( 64 );
+        CHECK( s.seqCount( 64 ) == 2 );
+        s.clearSeq();
+        CHECK( s.seqCount( 64 ) == 0 );
+        s.onSeqNoteOn( 65 ); s.onAllOff();
+        CHECK( s.seqCount( 65 ) == 0 );
+    }
     if( g_fail ) return 1;
     std::printf( "SustainTests OK\n" );
     return 0;
