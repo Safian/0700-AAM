@@ -572,8 +572,28 @@ namespace kick_ui
         return d;
     }
 
+    namespace
+    {
+        ListEditTimingCorrect* g_openTimingCorrect = nullptr; // message thread only
+    }
+
+    bool ListEditTimingCorrect::isOpen() { return g_openTimingCorrect != nullptr; }
+
+    bool ListEditTimingCorrect::closeFromHardware( bool apply )
+    {
+        if( !g_openTimingCorrect ) return false;
+        mt::utils::exitDialog( g_openTimingCorrect, apply ? UI::APPLY : UI::CANCEL );
+        return true;
+    }
+
+    ListEditTimingCorrect::~ListEditTimingCorrect()
+    {
+        if( g_openTimingCorrect == this ) g_openTimingCorrect = nullptr;
+    }
+
     ListEditTimingCorrect::ListEditTimingCorrect()
     {
+        g_openTimingCorrect = this;
         mt::utils::addAndMakeVisible( this, globalTC, timeDivisionLabel, timeDivList, triplet, type, events, swing, shiftTiming, window, strength );
 
         mt::utils::setTitleFontHeight( 16, globalTC, type, events, swing, shiftTiming, window, strength );

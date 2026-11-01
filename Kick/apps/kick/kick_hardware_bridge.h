@@ -8,6 +8,7 @@
 #include "hardware/key_transpose.h"
 #include "hardware/strip_modes.h"
 #include "hardware/hw_targets.h"
+#include "hardware/modal_dialog_keys.h"
 #include "hardware/system_probe.h"
 #include "hardware/touch_space.h"
 #include "contracts/dcl/dcl_signals.h"
@@ -59,6 +60,8 @@ private:
     // Generic version for the other Shift-dependent buttons: DCL code sent on press, indexed by HardwareButton.
     struct PressedCodes { std::array<int, 128> v; PressedCodes() { v.fill(-1); } };
     PressedCodes m_pressed_code;
+    // Buttons whose press closed the Timing Correct dialog: their release is swallowed too.
+    std::array<bool, NUM_HW_BUTTONS> m_modal_consumed{};
     // Written on the message thread (button handlers), read by the MIDI reader thread (pad idle colour).
     std::atomic<int> m_current_bank { 0 };
     std::atomic<bool> m_stopping { false };
@@ -747,6 +750,16 @@ public:
     void handleButtonPress(HardwareButton btn)
     {
         auto& ae = mt::getAudioInterface();
+        // The Timing Correct dialog is modal with touch-only buttons: while it is open, ENTER/STOP apply and
+        // Shift+STOP/MAIN cancel it (modal_dialog_keys.h); nothing else of these buttons runs.
+        if (kick_ui::ListEditTimingCorrect::isOpen()) {
+            const auto act = kick_hw::timingCorrectDialogAction(btn, isShiftDown());
+            if (act != kick_hw::ModalDialogAction::None) {
+                if (btn >= 0 && btn < NUM_HW_BUTTONS) m_modal_consumed[(size_t)btn] = true;
+                kick_ui::ListEditTimingCorrect::closeFromHardware(act == kick_hw::ModalDialogAction::Apply);
+                return;
+            }
+        }
         switch (btn)
         {
             case HW_BTN_SHIFT:
@@ -1224,6 +1237,10 @@ public:
 
     void handleButtonRelease(HardwareButton btn)
     {
+        if (btn >= 0 && btn < NUM_HW_BUTTONS && m_modal_consumed[(size_t)btn]) {
+            m_modal_consumed[(size_t)btn] = false; // press closed the Timing Correct dialog: no packet went out
+            return;
+        }
         switch (btn)
         {
             case HW_BTN_SHIFT:
