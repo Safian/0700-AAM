@@ -243,6 +243,9 @@ namespace ui
         void renamePopup();
         void renameImplementation( juce::String );
         void favouriteButtonImplementation();
+        void showNextFavourite();
+        bool favouritesRequested{ false };
+        int  favouriteCursor{ -1 };
         bool boolLoad{ false };
         void setupProvider();
         void selectBtnOnClick();

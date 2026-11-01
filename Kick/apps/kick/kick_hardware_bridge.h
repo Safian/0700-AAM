@@ -736,10 +736,9 @@ public:
             case HW_BTN_SOUNDS:
             {
                 if (isShiftDown()) {
-                    // FAVORITES: the review maps it to EN_NEXT_SEQ (AppHome: EN_NEXT_SEQ -> MenuNextSequence).
-                    // ARCHITECT-CLARIFY: the file browser's favourites are only an in-browser button with no
-                    // external trigger, so this opens the Next Sequence screen as the review specifies.
-                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuNextSequence);
+                    // FAVORITES: open the file browser and jump to the next assigned favourite slot.
+                    kick_ui::signals::sigBrowserShowFavourites();
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
                     break;
                 }
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
@@ -747,9 +746,10 @@ public:
             }
             case HW_BTN_MAIN:
             {
-                // ARCHITECT-CLARIFY: MAIN+Shift = TRACK. The only Track UI is the "Track" tab inside HomeListView
-                // (AppMainmode); no screen enum value or DCL code selects it (HomeGridView is the GRID screen).
-                // Left as plain MAIN until the architect decides.
+                if (isShiftDown()) {
+                    // TRACK: the Track tab (index 1) of HomeListView.
+                    kick_ui::signals::sigMainModeSelectTab(1);
+                }
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
                 break;
             }
