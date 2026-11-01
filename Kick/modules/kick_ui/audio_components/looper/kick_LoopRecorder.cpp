@@ -137,6 +137,10 @@ namespace kick_ui
 
     void LoopRecorder::record( bool Overdub )
     {
+        // Sampled before the flags below are set: a looper that is already recording keeps writing from its
+        // current position, so the sequence must not be restarted under it (phase would split).
+        const bool wasRecording = ae.isLooperRecording();
+
         if( Overdub )
             ae.setLooperOverdub( true );
         else
@@ -148,7 +152,8 @@ namespace kick_ui
         {
             // Same as play(): a playing sequence ignores a plain PLAY (engine guard), so restart it to align the
             // sequence start with the recording start. Stopped: unchanged (plain PLAY keeps a parked seek).
-            ae.setSequencePlay( ae.getSelectedSequence(), ae.isSequencePlaying(), true );
+            // Already recording (OVERDUB / second RECORD press): no restart, the loop is not at its start.
+            ae.setSequencePlay( ae.getSelectedSequence(), ae.isSequencePlaying() && !wasRecording, true );
         }
 
         ae.setLooperDirection( mt::Recorder::FORWARD );
