@@ -44,6 +44,10 @@ target_compile_definitions(kick-keyboard-tests PRIVATE KICK_DESKTOP_KEYBOARD=1 K
 add_test(NAME kick-keyboard COMMAND kick-keyboard-tests)
 set_tests_properties(kick-keyboard PROPERTIES TIMEOUT 10)
 
+add_executable(kick-arpeggiator-tests ArpeggiatorTests.cpp)
+add_test(NAME kick-arpeggiator COMMAND kick-arpeggiator-tests)
+set_tests_properties(kick-arpeggiator PROPERTIES TIMEOUT 10)
+
 add_library(kick-mock-clap-synth MODULE MockClapSynth.cpp)
 target_include_directories(kick-mock-clap-synth PRIVATE ../../clap_host/third_party/clap/include)
 set_target_properties(kick-mock-clap-synth PROPERTIES PREFIX "" SUFFIX ".clap")
