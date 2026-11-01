@@ -39,7 +39,10 @@ bool isAudioFilePath(const juce::String& path) {
     return juce::File(path).hasFileExtension(".wav;bwf;aif;aiff;flac;ogg;mp3;wmv;asf;wm;wma");
 }
 
-void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir) {
+// renameCollisions=false (live tree): children of the project and copies to the sample's own name; a name collision is left
+// absolute, because the asset slice map is keyed by the absolute path and a renamed live source would mute the sample.
+// renameCollisions=true (serialised snapshot only): handles just the collision, as samples/<parent>_<name>.
+void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, bool renameCollisions) {
     if (!projectDir.exists() || !tree.isValid()) return;
 
     static const juce::Identifier idPath("path");
@@ -51,18 +54,23 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir) 
         if (isAudioFilePath(val) && juce::File::isAbsolutePath(val)) {
             juce::File f(val);
             if (f.isAChildOf(projectDir)) {
-                tree.setProperty(prop, f.getRelativePathFrom(projectDir), nullptr);
-            } else if (f.existsAsFile()) {
+                if (!renameCollisions) tree.setProperty(prop, f.getRelativePathFrom(projectDir), nullptr);
+            } else if (renameCollisions || f.existsAsFile()) {
                 auto samplesDir = projectDir.getChildFile("samples");
                 if (!samplesDir.exists() && projectDir.getChildFile("Imported").exists())
                     samplesDir = projectDir.getChildFile("Imported");
-                samplesDir.createDirectory();
 
                 auto dest = samplesDir.getChildFile(f.getFileName());
-                if (dest.existsAsFile() && dest.getFullPathName() != f.getFullPathName()) {
+                const bool collision = dest.existsAsFile() && dest.getFullPathName() != f.getFullPathName();
+                if (collision) {
+                    if (!renameCollisions) return;
                     dest = samplesDir.getChildFile(f.getParentDirectory().getFileName() + "_" + f.getFileName());
+                } else if (renameCollisions) return;
+                if (!dest.existsAsFile()) {
+                    if (!f.existsAsFile()) return;
+                    samplesDir.createDirectory();
+                    f.copyFileTo(dest);
                 }
-                if (!dest.existsAsFile()) f.copyFileTo(dest);
                 tree.setProperty(prop, dest.getRelativePathFrom(projectDir), nullptr);
             }
         }
@@ -73,7 +81,7 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir) 
 
     for (int i = 0; i < tree.getNumChildren(); ++i) {
         auto child = tree.getChild(i);
-        relativizeSamplePaths(child, projectDir);
+        relativizeSamplePaths(child, projectDir, renameCollisions);
     }
 }
 }
@@ -193,9 +201,11 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
 
     // Sample paths stay rewritten in the live document as before: relativizeSamplePaths copies each foreign sample into the
     // project once and is only idempotent because the live path becomes relative (a copy would duplicate files every save).
-    relativizeSamplePaths(vt, xmlFile.getParentDirectory());
+    relativizeSamplePaths(vt, xmlFile.getParentDirectory(), false);
+    // Collisions with an existing samples/<name> are renamed on the serialised copy only; the live source stays absolute.
     // patchSnapshot only ever touches this serialised copy, never the live document (the audio thread reads it).
     auto snapshot = vt.createCopy();
+    relativizeSamplePaths(snapshot, xmlFile.getParentDirectory(), true);
     if (patchSnapshot) patchSnapshot(snapshot);
 
     const auto xml = snapshot.toXmlString();
