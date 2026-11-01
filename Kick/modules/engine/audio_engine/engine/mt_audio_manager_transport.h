@@ -61,6 +61,9 @@ namespace mt
         void updatePlayheads();
 
         void setupSong( MTSongInfo, int );
+        // True from setupSong() until the song ends or the transport is stopped. In song mode the step timeline (playTime) counts
+        // raw clock ticks, so bar/tick seeks (MTAudioInterface::seek*) are rejected while this is set.
+        bool isSongActive() const { return songActive.load(); }
 
         void playSequence( int Sequence );
         void stopSequence();
@@ -101,6 +104,7 @@ namespace mt
             bool fromBegin{ true };
         };
 
+        std::atomic<bool>       songActive{ false };
         int                     stepIndex{ -1 };
         int                     lastSeqTicks{ 0 };
         int                     nextSequenceUpdateTicks{ -1 };
