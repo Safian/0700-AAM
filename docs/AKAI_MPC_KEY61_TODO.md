@@ -189,11 +189,34 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 - [ ] **T22** `kick_cmd` `rawmidi` parancs a review szerint, hogy hardver nélkül is lehessen bájtszinten tesztelni.
 - [ ] **T23** Hardveres smoke lista (kézi): minden gomb + Shift-pár, 16 pad, billentyű/kerekek/pedálok, LED-ek, kijelző/érintés, audio-peak.
 
-## 6. Nyitott kérdések (döntés kell)
+## 6. Döntések (2026-11-01)
 
-1. Mit kell a `>>` gombnak tennie (a review szerint "1 ütem előre")? Van-e erre DCL-szekvencia (`EN_BACK` párja)?
-2. Az ARP gomb valódi arpeggiatort akar, vagy elég a NOTE REPEAT alias?
-3. A METRONOME+Shift `EN_PREF` (Config) legyen, vagy marad `HomeOptions`?
-4. A `Kick` upstream-barát marad (AGENTS.md), vagy ez az adapter helyi, hardver-specifikus réteg? Ez dönti el, mi mehet upstream PR-ba (valószínűleg csak a platformfüggetlen parser/teszt).
-5. Szükséges-e az audio bemenet és a CV/Gate ebben a körben?
-6. A pitch bend csak a keygroup/kromatikus programokra hasson, vagy a dobokra is? Fix ±2 félhang elég, vagy programonkénti beállítás kell?
+**Elv:** először a Behringer (Kick) megoldása; ha ott nincs, az Akai (MPC) szokása; ha ott sincs, az általános (raw MIDI/DAW) konvenció.
+
+| # | Kérdés | Döntés | Alap |
+|---|---|---|---|
+| 1 | `>>` kötése | Ütemugrás (kész: T7b) | Akai |
+| 2 | Upstream-hatókör | Az adapter/bridge/motor-seek helyi réteg marad; upstream-re csak platformfüggetlen, tesztelt darabok (pl. MIDI parser + teszt) | felhasználó |
+| 3 | Pitch bend | Keygroup **és** dobok, fix ±2 félhang | felhasználó |
+| 4 | ARP | Valódi arpeggiator | felhasználó / Akai |
+| 5 | SOUNDS+Shift | Fájlböngésző kedvenc-nézet (új UI-belépési pont) | felhasználó |
+| 6 | METRONOME+Shift | `EN_PREF` (Config) | felhasználó / Akai |
+| 7 | REC+Shift (RECALL) | Új motor-funkció (retro-capture) | felhasználó / Akai |
+| 8 | MAIN+Shift (TRACK) | UI-oldali Track-fül választó | felhasználó / Akai |
+| 9 | TC+Shift, AUTOMATION+Shift (`EN_ON_OFF`) | UI-fogyasztó kell | felhasználó / Akai |
+| 10 | 16 LEVEL+Shift (NOTES) | Marad a mostani `MenuPadPerform` | Kick: az `EN_NOTES` is ezt nyitja |
+| 11 | Audio bemenet, CV/Gate | Igen, kell (T15, T19); előbb hardveres felderítés | Kick: van audio-bemenet és CV |
+| 12 | Shift+STOP „RETURN” | A kijelzett playhead is álljon vissza az elejére (a parkolt seek ezt már tudja: `seekToBar(seq, 0)`) | Akai |
+| 13 | Init SysEx Port 0-ra | Nem döntés, hardveres próba kell (T5) | – |
+
+### Új tételek a döntésekből
+
+- [ ] **T24** Arpeggiator (motor + UI): Akai szokás szerint mód (fel/le/…), ráta, oktáv, LATCH-csel. Nagy, külön tervezés kell; az ARP gomb addig NOTE REPEAT alias.
+- [ ] **T25** SOUNDS+Shift: a fájlböngésző kedvenc-nézetének külső belépési pontja (UI), utána a bridge kötése; a mostani `MenuNextSequence` kötés lecserélendő.
+- [ ] **T26** (=T4) Pitch bend keygroup + dobok, fix ±2 félhang: `bendRatio` atomi a master-ben, szorzás a `pitchRatio`-val (`drum_voice.cpp` ~164, `iSynthVoice.cpp` ~90); sustain (CC64) külön döntés/tétel. Hallgatásos ellenőrzés kell.
+- [ ] **T27** METRONOME+Shift → `EN_PREF`: előbb megnézni, van-e fogyasztója; ha nincs, UI-feladat.
+- [ ] **T28** RECALL (retro-capture) motor-funkció: az élő MIDI-bemenet puffere; REC+Shift ezt hívja.
+- [ ] **T29** MAIN+Shift → Track fül: a HomeListView `tabSelected` külső elérése; bridge-kötés.
+- [ ] **T30** `EN_ON_OFF` UI-fogyasztók a TC (timing correct) és az Automation számára.
+- [ ] **T31** Shift+STOP: stop után `seekToBar(seq, 0)` a kijelzett playhead visszaállításához (kicsi, a seek-munkára épül; hardveren ellenőrizendő).
+- [ ] **T32** Audio bemenet (T15) és CV/Gate (T19) hardveres felderítése: mit ad az Akai Linux (ALSA capture, CV DAC), és mit használ már a `kick_I2c.cpp`.
