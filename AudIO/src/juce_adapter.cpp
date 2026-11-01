@@ -63,10 +63,13 @@ void AudioDevice::audioDeviceIOCallbackWithContext(const float* const* in, int n
                 }
             }
             if (++logCount >= 100) {
+#if KICK_AUDIO_DEBUG
+                // Blocking stdio in the audio callback; debug builds only (default off).
                 if (peakMax > 0.0001f) {
                     printf("[AUDIO] Output streaming: peak=%.4f\n", peakMax);
                     fflush(stdout);
                 }
+#endif
                 logCount = 0;
                 peakMax = 0.0f;
             }
