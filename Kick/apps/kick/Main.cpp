@@ -239,13 +239,18 @@ public:
         w->setTopLeftPosition( 0, 0 );
 #endif
 
+        // Headless (no X server / display, e.g. the MPC framebuffer bridge): JUCE's Linux setKioskComponent()
+        // dereferences getDisplayForRect() unchecked and a native peer cannot be created. The bridge renders
+        // the component tree itself (peer-less touch path), so keep the window hidden and skip kiosk mode.
+        const bool hasDisplay = ! juce::Desktop::getInstance().getDisplays().displays.isEmpty();
+
         // Visibility...
-        w->setVisible(!smoke);
+        w->setVisible(!smoke && hasDisplay);
 
 #if JUCE_IOS
-        if (!smoke) juce::Desktop::getInstance().setKioskModeComponent( w.get(), true );
+        if (!smoke && hasDisplay) juce::Desktop::getInstance().setKioskModeComponent( w.get(), true );
 #elif( JUCE_ANDROID || JUCE_LINUX || __linux__ )
-        if (!smoke) juce::Desktop::getInstance().setKioskModeComponent( w.get(), false );
+        if (!smoke && hasDisplay) juce::Desktop::getInstance().setKioskModeComponent( w.get(), false );
 #endif
 #if JUCE_LINUX || __linux__
         if (!smoke)
