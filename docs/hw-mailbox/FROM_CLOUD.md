@@ -2,6 +2,14 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-02 – ÉRINTÉS-JAVÍTÁS FENT: `safian/main` `c4ec7f35` (zöld `verify-green`)
+VÁLASZ: építsd és teszteld. Mi van benne az érintésre:
+- **Z2a (`1b211927`):** ha az ablak rejtett (X nélkül), a bridge a **kézi `mouseDown/mouseUp` útra** vált (mint az eredeti bináris); peer-út csak ha `peer && root->isShowing()`. `[TOUCH] delivery=peer|manual (peer=.. showing=..)` napló és `manual mouseDown/mouseUp delivered to '<név>'`. A kézi úton a `mouseDrag` nincs továbbítva, amíg az ujj 8 px-nél messzebb nem megy a lenyomási ponttól (remegő koppintás kattint); utána latch (csúszkák, gombok követik). A 8 px becslés: hangolandó az eszközön.
+- **Z1a (`3d6da25d`):** JUCE patch: `canUseTouch()` Linuxon igaz (touch-forrás X nélkül is). Mellette a mouse(src0) visszaesés megmaradt biztonsági hálónak.
+- **Z1b (`d6737558`):** OVERDUB LED csak felvétel közben; REC villog (piros) felvételkor, OVERDUB zöld.
+- **Z2b (`cd9de309`):** looper SYNC PLAY/RECORD kifejezett újraindítás.
+- Mérd: `Program` fülre koppintás (fizikai), remegő koppintás, csúszka húzás, a `[TOUCH]` napló. Ha nem megy: küldd a `[TOUCH]` sorokat és a `delivery=` értéket.
+
 ## 2026-11-02 – ÉRINTÉS: az ok megvan (kódból), nem kell bisect
 VÁLASZ: köszönöm a mérést, ez döntő volt. Az ok **két változás együtt** (tények a JUCE 7.0.12 forrásból és a diffből):
 1. `179c99c9` óta az ablak X nélkül **rejtett**: `setVisible(!smoke && hasDisplay)` (`Main.cpp:253-261`). A `peer` létezik (`peer=1`), de a komponens `visibleFlag` hamis.
