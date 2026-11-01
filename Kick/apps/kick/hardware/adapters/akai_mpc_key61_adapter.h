@@ -253,6 +253,9 @@ private:
                                                  m_logical_w, m_logical_h, ui_x, ui_y);
 
                         if (!slot->was_down) {
+                            printf("[AKAI-TOUCH] down slot=%d raw=(%d,%d) range=%dx%d -> fb=(%d,%d) of %dx%d\n",
+                                   s, slot->raw_x, slot->raw_y, m_range_x, m_range_y, ui_x, ui_y, m_logical_w, m_logical_h);
+                            fflush(stdout);
                             if (m_listener) {
                                 m_listener->on_touch_down(s, ui_x, ui_y);
                             }

@@ -9,6 +9,7 @@
 #include "hardware/strip_modes.h"
 #include "hardware/hw_targets.h"
 #include "hardware/system_probe.h"
+#include "hardware/touch_space.h"
 #include "contracts/dcl/dcl_signals.h"
 #include "contracts/dcl/dcl_contracts.h"
 #include "contracts/dcl/dcl_contracts_helper.h"
@@ -20,6 +21,7 @@
 #include <array>
 #include <cstdint>
 #include <mutex>
+#include <typeinfo>
 
 class KickHardwareBridge : public IHardwareEventListener, private juce::Timer
 {
@@ -28,6 +30,8 @@ private:
     juce::Component* m_root = nullptr;
     juce::DocumentWindow* m_window = nullptr;
     juce::Image m_framebuffer_img;
+    static constexpr int kFbW = 1280; // framebuffer / touch reporting space (see timerCallback, touch()->start)
+    static constexpr int kFbH = 800;
     int m_last_touch_x[10] = { 0 };
     int m_last_touch_y[10] = { 0 };
     juce::Component::SafePointer<juce::Component> m_touch_targets[10];
@@ -359,13 +363,30 @@ private:
             if (m_window != nullptr)
                 if (auto* content = m_window->getContentComponent()) hitRoot = content;
 
+            // The touch (physical and kick_cmd "touch") is reported in the 1280x800 framebuffer space, but the UI
+            // tree is root->getWidth() x getHeight() (1024x600) and painted scaled up to the framebuffer in
+            // timerCallback(). Convert back, otherwise every hit lands 25% (x) / 33% (y) off the control.
             int ix = x;
             int iy = y;
+            kick_hw::probe::fbToUi(x, y, kFbW, kFbH, root->getWidth(), root->getHeight(), ix, iy);
 
             // Search desktop components first (modal dialogs, popups, dropdowns)
             auto* target = juce::Desktop::getInstance().findComponentAt(juce::Point<int>(ix, iy));
             if (!target) target = hitRoot->getComponentAt(hitRoot->getLocalPoint(nullptr, juce::Point<int>(ix, iy)));
             if (!target) target = root;
+
+            // Diagnostics (hardware debugging, down / up only): fb -> UI point, hit root, target, peer.
+            if (is_down || is_up)
+            {
+                auto* b = dynamic_cast<juce::Button*>(target);
+                printf("[TOUCH] %s slot=%d fb=(%d,%d) ui=(%d,%d) root=%s %dx%d hitRoot=%s %dx%d vis=%d target=%s '%s' %dx%d%s peer=%d\n",
+                       is_down ? "down" : "up", slot, x, y, ix, iy,
+                       typeid(*root).name(), root->getWidth(), root->getHeight(),
+                       typeid(*hitRoot).name(), hitRoot->getWidth(), hitRoot->getHeight(), (int)hitRoot->isVisible(),
+                       typeid(*target).name(), target->getName().toRawUTF8(), target->getWidth(), target->getHeight(),
+                       b ? " (Button)" : "", target->getPeer() != nullptr ? 1 : 0);
+                fflush(stdout);
+            }
 
             auto* peer = target->getPeer();
             if (!peer && m_window) peer = m_window->getPeer();
@@ -377,6 +398,7 @@ private:
             auto* top = target->getTopLevelComponent();
             if (peer && top != nullptr && top != root && top->isOnDesktop() && top->getPeer() == peer)
             {
+                if (is_down || is_up) { printf("[TOUCH] popup peer path\n"); fflush(stdout); }
                 peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::touch,
                                        peer->globalToLocal(juce::Point<float>((float)ix, (float)iy)),
                                        mods, 1.0f, 0.0f, juce::Time::currentTimeMillis(), {}, slot);
@@ -388,6 +410,7 @@ private:
             // mouseDown / mouseUp / mouseDrag below is only for the peer-less (headless) window.
             if (peer)
             {
+                if (is_down || is_up) { printf("[TOUCH] native peer path\n"); fflush(stdout); }
                 peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::touch,
                                        peer->globalToLocal(juce::Point<float>((float)ix, (float)iy)),
                                        mods,
@@ -413,6 +436,8 @@ private:
             {
                 if (slot >= 0 && slot < 10) m_touch_targets[slot] = target;
                 target->mouseDown(e);
+                printf("[TOUCH] manual mouseDown delivered to '%s'\n", target->getName().toRawUTF8());
+                fflush(stdout);
             }
             else if (is_up)
             {
@@ -428,6 +453,8 @@ private:
                                            juce::Time::getCurrentTime(),
                                            1, false);
                     effectiveTarget->mouseUp(downE);
+                    printf("[TOUCH] manual mouseUp delivered to '%s'\n", effectiveTarget->getName().toRawUTF8());
+                    fflush(stdout);
                 }
 
                 auto* btn = dynamic_cast<juce::Button*>(effectiveTarget);
@@ -607,7 +634,11 @@ public:
             m_hw->init();
 
             if (m_hw->touch()) {
-                m_hw->touch()->start(this, 1280, 800);
+                m_hw->touch()->start(this, kFbW, kFbH);
+                auto* uiRoot = (m_window != nullptr) ? (juce::Component*)m_window : m_root;
+                printf("[TOUCH] init: framebuffer touch space %dx%d -> UI %dx%d (ui = fb * ui / fb size)\n",
+                       kFbW, kFbH, uiRoot ? uiRoot->getWidth() : 0, uiRoot ? uiRoot->getHeight() : 0);
+                fflush(stdout);
             }
             if (m_hw->control_surface()) {
                 m_hw->control_surface()->start(this);

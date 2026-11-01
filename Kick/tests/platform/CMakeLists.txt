@@ -148,6 +148,11 @@ set_tests_properties(kick-hw-targets PROPERTIES TIMEOUT 10)
 add_executable(kick-mute-filter-tests MuteFilterTests.cpp)
 add_test(NAME kick-mute-filter COMMAND kick-mute-filter-tests)
 set_tests_properties(kick-mute-filter PROPERTIES TIMEOUT 10)
+# Touch coordinate chain raw -> framebuffer 1280x800 -> UI 1024x600; JUCE-free, header only.
+add_executable(kick-touch-space-tests TouchSpaceTests.cpp)
+add_test(NAME kick-touch-space COMMAND kick-touch-space-tests)
+set_tests_properties(kick-touch-space PROPERTIES TIMEOUT 10)
+
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()
