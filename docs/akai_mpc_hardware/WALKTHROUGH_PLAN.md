@@ -63,7 +63,12 @@ Csatorna: `docs/hw-mailbox/` (TO_CLOUD.md / FROM_CLOUD.md), kérdés `KÉRDÉS:`
 3. **E, F, G, H, I, J** olvasása; közben a B–D fejlesztése.
 4. **K** döntés-csomag a végén, a felhasználóval.
 
-## 6. Döntés kell a felhasználótól
+## 6. Döntések (felhasználó, 2026-11-02: mindhárom elfogadva)
+1. **Scope:** a Kick a Behringer KICK funkcióit követi (dob + szekvencer + CV); az MPC-specifikus részek (Keygroup, Plugin track, Arrange, Mod Matrix) `NEM-KICK`. ELFOGADVA.
+2. **A bridge szétbontása** területi fejlécekre engedélyezett (a párhuzamos munka előfeltétele). ELFOGADVA.
+3. **Egy integrátor** (a cloud session) olvaszt `safian/main`-be. ELFOGADVA.
+
+(Az eredeti kérdések:)
 1. A **scope**: a Kick a Behringer KICK funkcióit követi (dob + szekvencer + CV), az MPC-specifikus részek (Keygroup, Plugin track, Arrange, Mod Matrix) `NEM-KICK`, hacsak nem kéri másként.
 2. A **bridge szétbontása** (0/4.) engedélyezett-e: ez a párhuzamosság előfeltétele.
 3. **Egy integrátor** (a cloud session) olvaszt-e `safian/main`-be, a többi ágról.
