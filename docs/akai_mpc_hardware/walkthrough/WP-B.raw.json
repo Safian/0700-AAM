@@ -1,0 +1,642 @@
+[
+ {
+  "seq": 1,
+  "page": null,
+  "topic": "Time Counter",
+  "claim": "Sok MPC módban a Time Counter megjeleníti a lejátszófej aktuális pozícióját Bars:Beats:Ticks formátumban.",
+  "kind": "behavior",
+  "id": "B-001"
+ },
+ {
+  "seq": 2,
+  "page": null,
+  "topic": "Time Counter",
+  "claim": "A Time Counter dupla koppintása megnyitja a Locate ablakot.",
+  "kind": "behavior",
+  "id": "B-002"
+ },
+ {
+  "seq": 3,
+  "page": null,
+  "topic": "Locate window",
+  "claim": "A Locate ablakban beállítható a lejátszófej pozíciója, kezelhetők a loop és felvétel beállítások, valamint ugorhat a projekt specifikus pontjaira.",
+  "kind": "behavior",
+  "id": "B-003"
+ },
+ {
+  "seq": 4,
+  "page": null,
+  "topic": "Locate window",
+  "claim": "A Locate popup két részre van osztva: Time tab és Locators tab.",
+  "kind": "ui",
+  "id": "B-004"
+ },
+ {
+  "seq": 5,
+  "page": null,
+  "topic": "Time tab",
+  "claim": "A Time tab a lejátszófej pozíciójának beállítására, valamint a Loop és Record beállítások módosítására szolgál.",
+  "kind": "behavior",
+  "id": "B-005"
+ },
+ {
+  "seq": 6,
+  "page": null,
+  "topic": "Bars:Beats:Ticks fields",
+  "claim": "A Bars:Beats:Ticks mezőkkel a lejátszófej pozíciója módosítható az elrendezésben.",
+  "kind": "field",
+  "id": "B-006"
+ },
+ {
+  "seq": 7,
+  "page": null,
+  "topic": "Step and Bars arrow buttons",
+  "claim": "A Step és Bars nyíl gombok koppintásával a lejátszófej a megadott mennyiséggel mozdítható el.",
+  "kind": "button",
+  "id": "B-007"
+ },
+ {
+  "seq": 8,
+  "page": null,
+  "topic": "Loop button",
+  "claim": "A Loop gomb koppintása engedélyezi a loop-ot az elrendezésben.",
+  "kind": "button",
+  "id": "B-008"
+ },
+ {
+  "seq": 9,
+  "page": null,
+  "topic": "Loop Start and Loop End fields",
+  "claim": "A Loop Start és Loop End mezőkkel beállítható a loop hossza.",
+  "kind": "field",
+  "id": "B-009"
+ },
+ {
+  "seq": 10,
+  "page": null,
+  "topic": "Locator markers",
+  "claim": "A loop hossza beállítható a timeline Locator markerjei alapján is.",
+  "kind": "behavior",
+  "id": "B-010"
+ },
+ {
+  "seq": 11,
+  "page": null,
+  "topic": "Set Loop Range By Locator",
+  "claim": "Ha a Set Loop Range By Locator beállítás On-ra van állítva, a loop tartománya automatikusan a kiválasztott Locator és a következő Locator közötti hosszúságra igazodik.",
+  "kind": "field",
+  "id": "B-011"
+ },
+ {
+  "seq": 12,
+  "page": null,
+  "topic": "Timeline",
+  "claim": "A jelenlegi loop régió mindig megjelenik az elrendezés timeline-jában, függetlenül attól, hogy aktiválva van-e.",
+  "kind": "ui",
+  "id": "B-012"
+ },
+ {
+  "seq": 13,
+  "page": null,
+  "topic": "Auto Record field",
+  "claim": "Az Auto Record mezővel engedélyezhető az automatikus felvétel a loop indulásakor.",
+  "kind": "field",
+  "id": "B-013"
+ },
+ {
+  "seq": 14,
+  "page": null,
+  "topic": "Auto Record",
+  "claim": "Ha engedélyezve van, a felvétel azonnal elindul, amikor az elrendezés loop-ol.",
+  "kind": "behavior",
+  "id": "B-014"
+ },
+ {
+  "seq": 15,
+  "page": null,
+  "topic": "Locators tab",
+  "claim": "A Locators tab a hat Locator marker szerkesztésére szolgál, amelyek a timeline-ra alkalmazhatók.",
+  "kind": "behavior",
+  "id": "B-015"
+ },
+ {
+  "seq": 16,
+  "page": null,
+  "topic": "Set button",
+  "claim": "A Set gomb koppintása új locator hozzáadására szolgál.",
+  "kind": "button",
+  "id": "B-016"
+ },
+ {
+  "seq": 17,
+  "page": null,
+  "topic": "Keyboard icon",
+  "claim": "A keyboard ikon koppintásával és a billentyűzet használatával átnevezhető egy locator.",
+  "kind": "button",
+  "id": "B-017"
+ },
+ {
+  "seq": 18,
+  "page": null,
+  "topic": "Bars:Beats:Ticks fields (Locators)",
+  "claim": "A Bars:Beats:Ticks mezőkkel a locator pozíciója módosítható.",
+  "kind": "field",
+  "id": "B-018"
+ },
+ {
+  "seq": 19,
+  "page": null,
+  "topic": "Eyedropper icon",
+  "claim": "Az eyedropper ikon koppintásával és a listából való választással szerkeszthető a locator színe.",
+  "kind": "button",
+  "id": "B-019"
+ },
+ {
+  "seq": 20,
+  "page": null,
+  "topic": "X icon",
+  "claim": "Az X ikon koppintása törli a locatort.",
+  "kind": "button",
+  "id": "B-020"
+ },
+ {
+  "seq": 21,
+  "page": null,
+  "topic": "Close button / X / Outside window",
+  "claim": "A Locate ablak bezárásához koppintani kell a Close gombra, a jobb felső sarokban lévő X-re, vagy bárhová az ablak kívülre.",
+  "kind": "button",
+  "id": "B-021"
+ },
+ {
+  "seq": 22,
+  "page": 71,
+  "topic": "Timing Correct (TC) window",
+  "claim": "A Timing Correct ablak különböző beállításokat tartalmaz a projekt eseményeinek kvantizálásához.",
+  "kind": "ui",
+  "id": "B-022"
+ },
+ {
+  "seq": 23,
+  "page": 71,
+  "topic": "Timing Correct",
+  "claim": "Kvantizálhatók a MIDI sávok jegyeseményei vagy az audio sávok régiói (bár nem minden kvantizálási típus alkalmazható audio sávokra).",
+  "kind": "behavior",
+  "id": "B-023"
+ },
+ {
+  "seq": 24,
+  "page": 71,
+  "topic": "TC field (Main/List Edit Mode)",
+  "claim": "Main Mode vagy List Edit Mode-ban a TC ablak megnyitásához koppintani kell a képernyő tetején lévő TC mezőre.",
+  "kind": "field",
+  "id": "B-024"
+ },
+ {
+  "seq": 25,
+  "page": 71,
+  "topic": "TC (Arrange/Step Sequencer/Track Mute Mode)",
+  "claim": "Arrange Mode, Step Sequencer vagy Track Mute Mode-ban a TC ablak megnyitásához koppintani kell a képernyő alján lévő TC-re.",
+  "kind": "button",
+  "id": "B-025"
+ },
+ {
+  "seq": 26,
+  "page": 71,
+  "topic": "Clock icon (Grid View)",
+  "claim": "Grid View-ben a TC ablak megnyitásához koppintani kell a képernyő bal alsó sarkában lévő óra ikonra.",
+  "kind": "button",
+  "id": "B-026"
+ },
+ {
+  "seq": 27,
+  "page": 71,
+  "topic": "TC (Track View)",
+  "claim": "Track View-ben a TC ablak megnyitásához Shift-et kell nyomva tartani és koppintani a képernyő alján lévő TC-re.",
+  "kind": "button",
+  "id": "B-027"
+ },
+ {
+  "seq": 28,
+  "page": 71,
+  "topic": "TC / On/Off button (Hardware)",
+  "claim": "Nyomva lehet tartani a TC / On/Off gombot (csak MPC Live II/One/Key 61/Key 37 modelleken).",
+  "kind": "button",
+  "id": "B-028"
+ },
+ {
+  "seq": 29,
+  "page": 71,
+  "topic": "Global Timing Correct button",
+  "claim": "A Global Timing Correct gomb koppintása engedélyezi vagy letiltja a globális timing correct-ot.",
+  "kind": "button",
+  "id": "B-029"
+ },
+ {
+  "seq": 30,
+  "page": 71,
+  "topic": "Global Timing Correct (Hardware)",
+  "claim": "Shift nyomvatartása és a TC / On/Off gomb megnyomása is engedélyezi vagy letiltja a globális timing correct-ot (csak MPC Live II/One/Key 61/Key 37 modelleken).",
+  "kind": "button",
+  "id": "B-030"
+ },
+ {
+  "seq": 31,
+  "page": 71,
+  "topic": "Do It button",
+  "claim": "A Do It gomb koppintása alkalmazza a kiválasztott beállításokat.",
+  "kind": "button",
+  "id": "B-031"
+ },
+ {
+  "seq": 32,
+  "page": 71,
+  "topic": "Close button (TC)",
+  "claim": "A Close gomb koppintása megszakítja a műveletet és visszaáll az előző képernyőre.",
+  "kind": "button",
+  "id": "B-032"
+ },
+ {
+  "seq": 33,
+  "page": 71,
+  "topic": "Type selector",
+  "claim": "A Type selectorral beállítható, hogyan alkalmazódnak a timing korrekciók.",
+  "kind": "field",
+  "id": "B-033"
+ },
+ {
+  "seq": 34,
+  "page": 71,
+  "topic": "Type: Start",
+  "claim": "Start módban a teljes jegyesemény vagy audio sáv régió előre vagy hátra tolódik, hogy a kezdőpont illeszkedjen a rács legközelebbi időosztási jelölőjéhez.",
+  "kind": "behavior",
+  "id": "B-034"
+ },
+ {
+  "seq": 35,
+  "page": 71,
+  "topic": "Type: Start",
+  "claim": "A Start típus alkalmazható MIDI sávokra és audio sávokra is.",
+  "kind": "behavior",
+  "id": "B-035"
+ },
+ {
+  "seq": 36,
+  "page": 71,
+  "topic": "Type: End",
+  "claim": "End módban a jegyesemények végpontjait meghosszabbítják vagy lerövidítik, hogy illeszkedjenek a rács legközelebbi időosztási jelölőjéhez.",
+  "kind": "behavior",
+  "id": "B-036"
+ },
+ {
+  "seq": 37,
+  "page": 71,
+  "topic": "Type: End",
+  "claim": "End módban a kezdőpontok érintetlenek maradnak.",
+  "kind": "behavior",
+  "id": "B-037"
+ },
+ {
+  "seq": 38,
+  "page": 71,
+  "topic": "Type: End",
+  "claim": "Az End típus csak MIDI sávokra alkalmazható.",
+  "kind": "behavior",
+  "id": "B-038"
+ },
+ {
+  "seq": 39,
+  "page": 71,
+  "topic": "Type: Length",
+  "claim": "Length módban a jegyesemények végpontjait meghosszabbítják vagy lerövidítik, hogy az esemény hossza az időosztás többszöröse legyen.",
+  "kind": "behavior",
+  "id": "B-039"
+ },
+ {
+  "seq": 40,
+  "page": 71,
+  "topic": "Type: Length",
+  "claim": "Length módban a kezdőpontok érintetlenek maradnak.",
+  "kind": "behavior",
+  "id": "B-040"
+ },
+ {
+  "seq": 41,
+  "page": 71,
+  "topic": "Type: Length",
+  "claim": "A Length típus csak MIDI sávokra alkalmazható.",
+  "kind": "behavior",
+  "id": "B-041"
+ },
+ {
+  "seq": 42,
+  "page": 71,
+  "topic": "Type: Legato",
+  "claim": "Legato módban a jegyesemények végpontjait meghosszabbítják vagy lerövidítik, hogy egy hosszú, megszakítás nélküli dallamot hozzanak létre az első jegy kezdőpontjától az utolsó jegy végpontjáig.",
+  "kind": "behavior",
+  "id": "B-042"
+ },
+ {
+  "seq": 43,
+  "page": 71,
+  "topic": "Type: Legato",
+  "claim": "Legato módban minden jegyesemény addig tart, amíg egy másik jegyesemény el nem indul.",
+  "kind": "behavior",
+  "id": "B-043"
+ },
+ {
+  "seq": 44,
+  "page": 71,
+  "topic": "Type: Legato",
+  "claim": "Ha több jegyesemény ugyanakkor indul (és nem az utolsó jegyek), a hosszuk azonos lesz.",
+  "kind": "behavior",
+  "id": "B-044"
+ },
+ {
+  "seq": 45,
+  "page": 71,
+  "topic": "Type: Legato",
+  "claim": "A Legato kiválasztása letiltja az ablak összes többi opcióját.",
+  "kind": "behavior",
+  "id": "B-045"
+ },
+ {
+  "seq": 46,
+  "page": 71,
+  "topic": "Type: Legato",
+  "claim": "A Legato típus csak MIDI sávokra alkalmazható.",
+  "kind": "behavior",
+  "id": "B-046"
+ },
+ {
+  "seq": 47,
+  "page": 72,
+  "topic": "Time Division selector",
+  "claim": "A Time Division selectorral beállítható a kvantizálási érték, amelyhez az események 'rászöknek' a rács időosztásain.",
+  "kind": "field",
+  "id": "B-047"
+ },
+ {
+  "seq": 48,
+  "page": 72,
+  "topic": "Time Division selector",
+  "claim": "A T betű hármas alapú értéket jelöl.",
+  "kind": "ui",
+  "id": "B-048"
+ },
+ {
+  "seq": 49,
+  "page": 72,
+  "topic": "Swing field",
+  "claim": "A Swing mezővel 50% és 75% között beállítható a swing mértéke.",
+  "kind": "field",
+  "id": "B-049"
+ },
+ {
+  "seq": 50,
+  "page": 72,
+  "topic": "Swing",
+  "claim": "A swing lehetővé teszi a ritmusok 'keverését' a finomtól a szélsőségesig.",
+  "kind": "behavior",
+  "id": "B-050"
+ },
+ {
+  "seq": 51,
+  "page": 72,
+  "topic": "Shift Timing field",
+  "claim": "A Shift Timing mezővel minden esemény eltolható órajel tick-ekkel.",
+  "kind": "field",
+  "id": "B-051"
+ },
+ {
+  "seq": 52,
+  "page": 72,
+  "topic": "Window field",
+  "claim": "A Window mezővel beállítható, hány eseményt kvantizáljanak egy kvantizálási érték körül.",
+  "kind": "field",
+  "id": "B-052"
+ },
+ {
+  "seq": 53,
+  "page": 72,
+  "topic": "Window field",
+  "claim": "Ezen tartományon kívüli események nem lesznek kvantizálva, a tartományon belüliek igen.",
+  "kind": "behavior",
+  "id": "B-053"
+ },
+ {
+  "seq": 54,
+  "page": 72,
+  "topic": "Strength field",
+  "claim": "A Strength mezővel beállítható, milyen szigorúan kvantizálódnak az események (azaz mennyire mozdulnak el a kvantizálási érték felé).",
+  "kind": "field",
+  "id": "B-054"
+ },
+ {
+  "seq": 55,
+  "page": 72,
+  "topic": "Strength field",
+  "claim": "Az alacsonyabb értékek kevésbé mozgatják el az eseményeket a legközelebbi kvantizálási érték felé, mechanikusabb érzetet eredményezve, mint a szigorú kvantizálás (magasabb érték).",
+  "kind": "behavior",
+  "id": "B-055"
+ },
+ {
+  "seq": 56,
+  "page": 72,
+  "topic": "Events selector",
+  "claim": "Az Events selectorral beállítható a időkorrekció céltartománya: All note events vagy Selected ones.",
+  "kind": "field",
+  "id": "B-056"
+ },
+ {
+  "seq": 57,
+  "page": 72,
+  "topic": "Note event selection",
+  "claim": "A jegyesemények kiválasztásához használhatók az Event View vagy Region View eszközei, vagy megnyomhatók a padok a kívánt eseményekkel (ha a Hitting Pad Selects All Events beállítás On).",
+  "kind": "behavior",
+  "id": "B-057"
+ },
+ {
+  "seq": 58,
+  "page": 72,
+  "topic": "Note event selection timing",
+  "claim": "A jegyesemények kiválasztását a Timing Correct ablak megnyitása előtt kell elvégezni.",
+  "kind": "behavior",
+  "id": "B-058"
+ },
+ {
+  "seq": 59,
+  "page": 72,
+  "topic": "Range selection",
+  "claim": "Ha a Range van kiválasztva, definiálhatók a kvantizálandó helyek (From és To) valamint a padok vagy billentyűk.",
+  "kind": "behavior",
+  "id": "B-059"
+ },
+ {
+  "seq": 60,
+  "page": 73,
+  "topic": "Click/Metro window",
+  "claim": "A Click/Metro ablak tartalmazza a metronóm (click track) összes beállítását.",
+  "kind": "ui",
+  "id": "B-060"
+ },
+ {
+  "seq": 61,
+  "page": 73,
+  "topic": "Metronome enable/disable (Hardware)",
+  "claim": "A metronóm engedélyezéséhez vagy letiltásához Shift-et kell nyomva tartani és a Play Start gombot megnyomni.",
+  "kind": "button",
+  "id": "B-061"
+ },
+ {
+  "seq": 62,
+  "page": 73,
+  "topic": "Metronome icon (Pull-Down Menu)",
+  "claim": "A metronóm engedélyezhető vagy letiltható a Pull-Down Menüből a Metronome ikon koppintásával is.",
+  "kind": "button",
+  "id": "B-062"
+ },
+ {
+  "seq": 63,
+  "page": 73,
+  "topic": "Metro icon (Main Mode)",
+  "claim": "A metronóm beállításainak megnyitásához koppintani kell a képernyő tetején lévő Metro ikonra Main Mode-ban.",
+  "kind": "button",
+  "id": "B-063"
+ },
+ {
+  "seq": 64,
+  "page": 73,
+  "topic": "Metronome icon (Pull-Down Menu)",
+  "claim": "A metronóm beállításainak megnyitásához koppintva és nyomva tartva a Metronome ikon a Pull-Down Menüből is elérhető.",
+  "kind": "button",
+  "id": "B-064"
+ },
+ {
+  "seq": 65,
+  "page": 73,
+  "topic": "Count-In field",
+  "claim": "A Count-In mezővel beállítható, hogy a metronóm számol-e vagy mikor a felvétel előtt.",
+  "kind": "field",
+  "id": "B-065"
+ },
+ {
+  "seq": 66,
+  "page": 73,
+  "topic": "Count-In: Off",
+  "claim": "Az Off beállítás letiltja a metronóm előszámolást.",
+  "kind": "field",
+  "id": "B-066"
+ },
+ {
+  "seq": 67,
+  "page": 73,
+  "topic": "Count-In: Record",
+  "claim": "A Record beállítás engedélyezi az előszámolást csak felvétel közben.",
+  "kind": "field",
+  "id": "B-067"
+ },
+ {
+  "seq": 68,
+  "page": 73,
+  "topic": "Count-In: Record + Play",
+  "claim": "A Record + Play beállítás engedélyezi az előszámolást felvétel és lejátszás módban is.",
+  "kind": "field",
+  "id": "B-068"
+ },
+ {
+  "seq": 69,
+  "page": 73,
+  "topic": "Enable field",
+  "claim": "Az Enable mezővel beállítható, hogy a metronóm mikor legyen engedélyezve.",
+  "kind": "field",
+  "id": "B-069"
+ },
+ {
+  "seq": 70,
+  "page": 73,
+  "topic": "Enable: Off",
+  "claim": "Az Off beállítás letiltja a metronómot.",
+  "kind": "field",
+  "id": "B-070"
+ },
+ {
+  "seq": 71,
+  "page": 73,
+  "topic": "Enable: Play",
+  "claim": "A Play beállítás engedélyezi a metronóm hangját csak lejátszás közben.",
+  "kind": "field",
+  "id": "B-071"
+ },
+ {
+  "seq": 72,
+  "page": 73,
+  "topic": "Enable: Record",
+  "claim": "A Record beállítás engedélyezi a metronóm hangját csak felvétel közben.",
+  "kind": "field",
+  "id": "B-072"
+ },
+ {
+  "seq": 73,
+  "page": 73,
+  "topic": "Enable: Record + Play",
+  "claim": "A Record + Play beállítás engedélyezi a metronómot felvétel és lejátszás módban is.",
+  "kind": "field",
+  "id": "B-073"
+ },
+ {
+  "seq": 74,
+  "page": 73,
+  "topic": "Rate field",
+  "claim": "A Rate mezővel kiválasztható a metronóm click időosztása: Auto, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32 vagy 1/32T.",
+  "kind": "field",
+  "id": "B-074"
+ },
+ {
+  "seq": 75,
+  "page": 73,
+  "topic": "Rate field",
+  "claim": "A T betű hármas alapú időosztást jelöl.",
+  "kind": "ui",
+  "id": "B-075"
+ },
+ {
+  "seq": 76,
+  "page": 73,
+  "topic": "Rate field: Auto",
+  "claim": "Auto beállításnál a Metronóm automatikusan alkalmazkodik a jelenlegi ütemjelző nevezőjéhez.",
+  "kind": "behavior",
+  "id": "B-076"
+ },
+ {
+  "seq": 77,
+  "page": 73,
+  "topic": "Sound field",
+  "claim": "A Sound mezővel kiválasztható a metronóm hangja: Sidestick 1, Sidestick 2, Clap, Metroclick, Shake, Tambourine, vagy MPC Click.",
+  "kind": "field",
+  "id": "B-077"
+ },
+ {
+  "seq": 78,
+  "page": 73,
+  "topic": "Volume knob",
+  "claim": "A Volume gombbal beállítható a metronóm click hangereje.",
+  "kind": "field",
+  "id": "B-078"
+ },
+ {
+  "seq": 79,
+  "page": 73,
+  "topic": "On/Off button (Metro)",
+  "claim": "Az On/Off gomb koppintása engedélyezi vagy letiltja a metronómot.",
+  "kind": "button",
+  "id": "B-079"
+ },
+ {
+  "seq": 80,
+  "page": 73,
+  "topic": "Output field",
+  "claim": "Az Output mezővel beállítható, melyik kimeneti pár játssza le a metronóm click-et: Out 1,2, Out 3,4 vagy egyedi Out 1–4.",
+  "kind": "field",
+  "id": "B-080"
+ }
+]
