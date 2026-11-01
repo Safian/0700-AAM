@@ -51,5 +51,22 @@ inline void rawToUi(int rawX, int rawY, int rangeX, int rangeY, int fbW, int fbH
     fbToUi(fx, fy, fbW, fbH, uiW, uiH, uiX, uiY);
 }
 
+// Which JUCE mouse input source a peer-path touch event goes to. The multitouch JUCE patch creates touch sources only
+// when the X server offers XInput2 (xi.opcode != 0); without X (headless hardware) MouseInputSourceList::canUseTouch()
+// is false, getOrCreateMouseInputSource(touch) returns nullptr and the event is dropped silently. Then source 0
+// (InputSourceType::mouse, always available) carries finger 0; further fingers cannot be represented and are dropped.
+enum class TouchRoute { Touch, Mouse, Drop };
+
+inline TouchRoute chooseTouchRoute(bool touchSourceAvailable, int slot)
+{
+    if (touchSourceAvailable) return TouchRoute::Touch;
+    return slot == 0 ? TouchRoute::Mouse : TouchRoute::Drop;
+}
+
+inline const char* touchRouteName(TouchRoute r)
+{
+    return r == TouchRoute::Touch ? "touch" : r == TouchRoute::Mouse ? "mouse(src0)" : "drop";
+}
+
 } // namespace probe
 } // namespace kick_hw

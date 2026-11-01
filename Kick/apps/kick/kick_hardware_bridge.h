@@ -36,6 +36,9 @@ private:
     int m_last_touch_x[10] = { 0 };
     int m_last_touch_y[10] = { 0 };
     juce::Component::SafePointer<juce::Component> m_touch_targets[10];
+    // Peer-path touch source (message thread only): probed on the first delivery, see deliverPeerTouch().
+    bool m_touch_src_probed = false;
+    bool m_touch_src_ok     = true;
     std::chrono::steady_clock::time_point m_last_tap_time;
     // Akai MPC convention (T20): the Data Dial edits the tempo only while TAP TEMPO is physically held. The former
     // sticky "tempo edit" mode (set by TAP TEMPO, cleared by ENTER/STOP) hijacked +/- and the dial and is removed.
@@ -348,6 +351,46 @@ private:
         });
     }
 
+    // Peer-path delivery. JUCE only creates touch input sources when XInput2 is present (multitouch patch); without it
+    // (headless hardware) peer->handleMouseEvent(touch, ...) is silently dropped. The first call probes whether JUCE
+    // made a touch source; if not, finger 0 is delivered as InputSourceType::mouse (source 0) from then on. Real XI
+    // touch on a display, macOS and iOS keep the touch type. Message thread only.
+    void deliverPeerTouch(juce::ComponentPeer* peer, int ix, int iy, juce::ModifierKeys mods, int slot, bool log)
+    {
+        using ST = juce::MouseInputSource::InputSourceType;
+        auto send = [&](ST type, int index) {
+            peer->handleMouseEvent(type, peer->globalToLocal(juce::Point<float>((float)ix, (float)iy)), mods,
+                                   1.0f, 0.0f, juce::Time::currentTimeMillis(), {}, index);
+        };
+        auto route = kick_hw::probe::chooseTouchRoute(m_touch_src_ok, slot);
+        if (route == kick_hw::probe::TouchRoute::Touch)
+        {
+            send(ST::touch, slot);
+            if (!m_touch_src_probed)
+            {
+                m_touch_src_probed = true;
+                auto& desk = juce::Desktop::getInstance();
+                bool  have = false;
+                for (int i = 0; i < desk.getNumMouseSources(); ++i)
+                    if (auto* s = desk.getMouseSource(i))
+                        if (s->getType() == ST::touch && s->getIndex() == slot) have = true;
+                if (!have)
+                {
+                    m_touch_src_ok = false;
+                    route = kick_hw::probe::chooseTouchRoute(false, slot);
+                    if (route == kick_hw::probe::TouchRoute::Mouse) send(ST::mouse, 0);
+                }
+            }
+        }
+        else if (route == kick_hw::probe::TouchRoute::Mouse)
+            send(ST::mouse, 0);
+        if (log)
+        {
+            printf("[TOUCH] source=%s slot=%d touchSrcOk=%d\n", kick_hw::probe::touchRouteName(route), slot, (int)m_touch_src_ok);
+            fflush(stdout);
+        }
+    }
+
     void dispatchTouch(int slot, int x, int y, bool is_down, bool is_up)
     {
         if (slot >= 0 && slot < 10) {
@@ -402,9 +445,7 @@ private:
             if (peer && top != nullptr && top != root && top->isOnDesktop() && top->getPeer() == peer)
             {
                 if (is_down || is_up) { printf("[TOUCH] popup peer path\n"); fflush(stdout); }
-                peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::touch,
-                                       peer->globalToLocal(juce::Point<float>((float)ix, (float)iy)),
-                                       mods, 1.0f, 0.0f, juce::Time::currentTimeMillis(), {}, slot);
+                deliverPeerTouch(peer, ix, iy, mods, slot, is_down || is_up);
                 if (is_up && slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
                 return;
             }
@@ -414,14 +455,7 @@ private:
             if (peer)
             {
                 if (is_down || is_up) { printf("[TOUCH] native peer path\n"); fflush(stdout); }
-                peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::touch,
-                                       peer->globalToLocal(juce::Point<float>((float)ix, (float)iy)),
-                                       mods,
-                                       1.0f,
-                                       0.0f,
-                                       juce::Time::currentTimeMillis(),
-                                       {},
-                                       slot);
+                deliverPeerTouch(peer, ix, iy, mods, slot, is_down || is_up);
                 if (is_up && slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
                 return;
             }
