@@ -74,4 +74,5 @@ Host tests (no JUCE/ALSA), from `Kick/tests/platform`: `g++ -std=c++17 -Wall -We
 Headless screenshots (smoke test): `KICK_SMOKE_SHOTS_DIR=<dir> KICK_SMOKE_SCREENS="HomeGridView,MenuPadMixer" KICK_DATA_ROOT=<tmp>
 KICK_RESOURCE_ROOT=$PWD/Kick KICK_NO_AUDIO_DEVICE=1 KICK_NO_SERIAL_DEVICE=1 KICK_NO_HARDWARE=1 xvfb-run -a build-linux/apps/kick/Kick_artefacts/Release/Kick --smoke-test`.
 Per-change compile check without a full build: take the TU command from `build-linux/compile_commands.json`, swap the path
-prefix to your worktree, drop `-o`/`-MD`, add `-fsyntax-only`. Worker template: `.claude/agents/kick-worker.md`.
+prefix to your worktree, drop `-o`/`-MD`, add `-fsyntax-only`. Syntax checks must cover every TU the change reaches (e.g. the `audio_program.cpp` unity TU, `kick_ui.cpp`, `Main.cpp`), not only `audio_engine.cpp`; `verify-green.sh` is the final judge.
+Worker template: `.claude/agents/kick-worker.md`.
