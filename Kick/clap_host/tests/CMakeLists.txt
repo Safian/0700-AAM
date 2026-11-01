@@ -27,7 +27,6 @@ if(TARGET kick_clap_juce)
     set_tests_properties(kick-clap-session PROPERTIES TIMEOUT 30)
 
     add_executable(kick-clap-persistence-tests PersistenceTests.cpp ../../modules/engine/project/kick_xml_manager.cpp)
-    target_include_directories(kick-clap-persistence-tests PRIVATE ../../modules ../../modules/engine ../../../ComProtocol)
     target_link_libraries(kick-clap-persistence-tests PRIVATE kick_clap_juce)
     target_compile_definitions(kick-clap-persistence-tests PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
     add_test(NAME kick-clap-persistence COMMAND kick-clap-persistence-tests $<TARGET_FILE:kick-clap-fixture-normal>)
