@@ -4,6 +4,7 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "hardware/device_factory.h"
 #include "hardware/pad_colour_map.h"
+#include "hardware/key_transpose.h"
 #include "contracts/dcl/dcl_signals.h"
 #include "contracts/dcl/dcl_contracts.h"
 #include "contracts/dcl/dcl_contracts_helper.h"
@@ -41,7 +42,7 @@ private:
     struct PressedCodes { std::array<int, 128> v; PressedCodes() { v.fill(-1); } };
     PressedCodes m_pressed_code;
     int m_current_bank = 0;
-    int m_octave_offset = 0;
+    KeyTranspose m_key_transpose;
     int m_key_pitch_map[128];
 
     // Project pad colours (DCL EN_PAD_SET_COLOUR_STATE). Written by the sendCommandToDcl handler
@@ -153,8 +154,8 @@ private:
     void updateOctaveLeds()
     {
         if (m_hw && m_hw->control_surface()) {
-            m_hw->control_surface()->set_led(HW_LED_OCTAVE_DOWN, m_octave_offset < 0);
-            m_hw->control_surface()->set_led(HW_LED_OCTAVE_UP, m_octave_offset > 0);
+            m_hw->control_surface()->set_led(HW_LED_OCTAVE_DOWN, m_key_transpose.octave() < 0);
+            m_hw->control_surface()->set_led(HW_LED_OCTAVE_UP, m_key_transpose.octave() > 0);
         }
     }
 
@@ -624,21 +625,14 @@ public:
                 break;
             }
             case HW_BTN_OCTAVE_DOWN:
-            {
-                if (m_octave_offset > -3) {
-                    m_octave_offset--;
-                    updateOctaveLeds();
-                    printf("[BRIDGE] Octave transposed to %d\n", m_octave_offset);
-                    fflush(stdout);
-                }
-                break;
-            }
             case HW_BTN_OCTAVE_UP:
             {
-                if (m_octave_offset < 3) {
-                    m_octave_offset++;
+                // OCT-/OCT+ = octave offset, Shift+OCT-/OCT+ = semitone transpose, both together = reset both.
+                // Sounding pitches of held keys are stored at note-on (m_key_pitch_map), so this is safe mid-note.
+                const auto act = m_key_transpose.press(btn == HW_BTN_OCTAVE_UP, isShiftDown());
+                if (act != KeyTranspose::None) {
                     updateOctaveLeds();
-                    printf("[BRIDGE] Octave transposed to %d\n", m_octave_offset);
+                    printf("[BRIDGE] Octave %d, transpose %d semitones\n", m_key_transpose.octave(), m_key_transpose.semitone());
                     fflush(stdout);
                 }
                 break;
@@ -961,6 +955,10 @@ public:
             case HW_BTN_LOCATE:
                 m_locate_pressed = false;
                 break;
+            case HW_BTN_OCTAVE_DOWN:
+            case HW_BTN_OCTAVE_UP:
+                m_key_transpose.release(btn == HW_BTN_OCTAVE_UP);
+                break;
             case HW_BTN_STOP:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_STOP, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
@@ -1149,7 +1147,7 @@ public:
 
     void on_keybed_note_on(int pitch, int vel) override
     {
-        int sounding_pitch = juce::jlimit(0, 127, pitch + m_octave_offset * 12);
+        int sounding_pitch = m_key_transpose.soundingPitch(pitch);
         if (pitch >= 0 && pitch < 128) {
             m_key_pitch_map[pitch] = sounding_pitch;
         }
@@ -1160,7 +1158,7 @@ public:
     {
         int sounding_pitch = (pitch >= 0 && pitch < 128 && m_key_pitch_map[pitch] >= 0)
                              ? m_key_pitch_map[pitch]
-                             : juce::jlimit(0, 127, pitch + m_octave_offset * 12);
+                             : m_key_transpose.soundingPitch(pitch);
         if (pitch >= 0 && pitch < 128) {
             m_key_pitch_map[pitch] = -1;
         }
