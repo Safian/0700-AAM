@@ -29,3 +29,25 @@ Nem eldönthető a kamerából (felbontás/látószög): REC (73) és OVERDUB (8
 
 ## 3. Javaslat a projektnek
 A `KICK_AKAI_LED_MODE` alapértéke legyen `cc`, a `note`/`noteoff0` ág törölhető. Az `akaiLedValue` két színű értékei (0–4) a `cc` módban működnek: az AUTOMATION piros/zöld váltása igazolja, hogy a második szín elérhető.
+
+## 4. Kiegészítés (kamerás és fotós mérés, `cc` mód, 2026-11-01)
+| Gomb | Szín / állapot |
+|---|---|
+| STOP | fehér-kékes, erős |
+| PLAY | zöld (lejátszáskor) |
+| PLAY START | zöld, mindig (a Kick nem vezérli) |
+| `<`, `>`, `<<`, `>>`, `–`, `+` | kék-ciánkék, mindig (a Kick nem vezérli) |
+| REC, OVERDUB | halvány szürke; a Kick soha nem vezérli (hiányzik) |
+| MIX / PAD MIX | fehér / piros |
+| MUTE / PAD MUTE | fehér / piros |
+| GRID / STEP SEQ | világít (a két állapot színe nem különíthető el) |
+| AUTOMATION | zöld = Read, piros = Write, sötét = Off |
+| KEYBOARD CONTROL | rózsaszínes-piros |
+| SAMPLE EDIT / SAMPLER | piros árnyalat / fehér (nem biztos) |
+| Pad bank A–D | mindig csak a kiválasztott, fehér |
+| TAP TEMPO (GLOBAL), LATCH, TOUCH FX, TOUCH STRIP | kékes-fehér, bekapcsolva |
+| OCT + | zöldes-fehér, bekapcsolva |
+| SHIFT | bal mindig világít (piros felirat), jobb csak Shift-nyomásra |
+| Q-Link 1 LED | piros, mindig |
+| Oktáv-kijelző (−3 … +3) | két piros pont (−1, 0), mindig |
+| Kerekek | kék háttérvilágítás, mindig |

@@ -170,3 +170,19 @@ A felhasználó fizikailag megnyomta a `<` és `>` gombot sima és Shift-es form
 | SHIFT (bal / jobb) | bal mindig, jobb csak Shift-nyomásra | csak note 50 | lásd 10. hiba |
 
 Az útmutató (Quickstart v1.2, v3.10) a REC/OVERDUB LED-színt nem írja le (a "lit red/white/amber" csak a Tap Tempónál szerepel), ezért a színeket a cloud sessionnek az eszközön (`KICK_AKAI_LED_MODE=cc`, érték 1..4) kell kipróbálnia. A Shift: az útmutató szerint nyomva tartva működik; a Shift **dupla nyomása** (v3.10, más MPC-knél) "megmutatja, mely gomboknak van másodlagos funkciója: a gombok néhány másodpercre villognak".
+
+## 11. kör – bal oldal: LED-ek kamerával (Photo Booth) és touch strip (nyers MIDI)
+A kamera a bal oldalra (kerekek, bal gombcsoport, pad bank, Main Volume) nézett; a `btn <NÉV>` után a zoomolt kép alapján:
+
+| Gomb | Eredmény a kamerán |
+|---|---|
+| Pad bank A/E, B/F, C/G, D/H | `BANK_A..D`: mindig csak a kiválasztott világít, **fehér**, a C/G és D/H kicsit zöldesebb (kamera-színárnyalat) — OK |
+| TAP TEMPO (GLOBAL) | világít, kékes-fehér |
+| LATCH | világít, kékes-fehér |
+| TOUCH FX (CONFIG) | világít, kékes |
+| TOUCH STRIP (CONFIG) | világít, kékes |
+| OCT + | világít, zöldes-fehér |
+| Oktáv-kijelző (−3 … +3) | két piros pont (−1 és 0 körül) alapból, a firmware alapfénye |
+| Kerekek (pitch/mod) | kék háttérvilágítás, mindig |
+
+**Touch strip** (felhasználó: ujj fel-le csúsztatva): a nyers MIDI-naplóban **1040 új üzenet** (`[AKAI-RAW]` 108 → 1148): `port=1 status=B0 d0=33` (CC33, pozíció MSB) és `d0=34` (CC34, LSB) párokban, pozíció `d1=0..99` tartományban, felemeléskor `d0=33 d1=0`. A kód ezt kezeli (`on_touch_strip`, `on_touch_strip_fine`); a strip funkciója a felhasználó szerint működik. A touch strip LED-sora (a strip melletti ladder) nem lett külön megfigyelve.
