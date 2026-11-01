@@ -343,8 +343,6 @@ namespace mt
     {
         if( automation::Write != manager.getAutomationMode() )
             return;
-        if( manager.isSavingProject() ) // G10: the save writes pan back; that is no take
-            return;
         auto      p    = program.load();
         const int tick = livePlayTick.load( std::memory_order_relaxed );
         if( !isPlaying.load() || tick < 0 || !p || p->isAudio() || !progTree.isValid() )

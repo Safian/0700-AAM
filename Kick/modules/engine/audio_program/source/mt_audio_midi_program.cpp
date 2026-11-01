@@ -91,11 +91,6 @@ namespace mt
             {
                 // Mixer PAN knob -> CC10 on the program's MIDI channel/port (same path as noteProcess). Like the CC/Bank
                 // branches above this runs on the thread that changed the property (message thread for the UI), not the tick thread.
-                // saveProject() (G10) writes the stored pan back for the save and restores the automated one afterwards; neither
-                // is a user move, so send nothing and leave lastPanCC alone: the synth keeps the value it has, which is
-                // exactly what lastPanCC still records, so the restore needs no re-send and nothing is lost.
-                if( ae.isSavingProject() )
-                    return;
                 const int cc = midipan::panToCC10( (double)vTree.getProperty( IDs::pan, PAN::DEFAULT ) );
                 if( cc != lastPanCC )
                 {

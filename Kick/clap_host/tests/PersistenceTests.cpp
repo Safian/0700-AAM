@@ -145,40 +145,50 @@ int main(int argc, char** argv) {
           static_cast<bool>(juce::ValueTree::fromXml(ioFile.loadFileAsString()).getProperty("retried")),
           "failed autosave retries after storage recovers without another edit");
     check(document.close(), "close after automatic recovery");
-    {   // prepareSave/afterSave pair (G10): the file stores the prepared ("base") value, the live tree keeps "auto", and the
-        // restore does not leave the document dirty -- otherwise the next autosave would overwrite the file with "auto".
+    {   // patchSnapshot (G10): the file stores the patched ("base") value while the LIVE tree never leaves "auto" -- not before,
+        // not during prepareSave/patchSnapshot, not after. (The audio thread reads the live tree during a save.)
         const auto pairFile = directory.getChildFile("pair/project.xml");
         mt::KickXML pair("ROOT", ".xml", "1");
-        pair.prepareSave = [&] { pair.getState().setProperty("pan", "base", nullptr); return juce::Result::ok(); };
-        pair.afterSave   = [&] { pair.getState().setProperty("pan", "auto", nullptr); };
-        check(pair.loadOrCreate(pairFile).isValid(), "create prepare/after document");
-        pair.getState().setProperty("pan", "auto", nullptr);
-        check(pair.save(), "save with prepare/after");
-        check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "file holds the prepared value");
-        check(pair.getState().getProperty("pan").toString() == "auto", "tree restored after save");
-        check(!pair.isDirty(), "restore does not leave the document dirty");
+        int patchCalls = 0; bool panSet = false; // panSet: false during loadOrCreate's initial save, which runs before "pan" exists
+        pair.prepareSave = [&] { check(!panSet || pair.getState().getProperty("pan").toString() == "auto", "live tree is auto inside prepareSave"); return juce::Result::ok(); };
+        pair.patchSnapshot = [&](juce::ValueTree& copy) {
+            ++patchCalls;
+            check(!panSet || pair.getState().getProperty("pan").toString() == "auto", "live tree is auto inside patchSnapshot");
+            check(copy != pair.getState(), "patchSnapshot receives a copy, not the live tree");
+            copy.setProperty("pan", "base", nullptr);
+            check(!panSet || pair.getState().getProperty("pan").toString() == "auto", "patching the copy leaves the live tree alone");
+        };
+        check(pair.loadOrCreate(pairFile).isValid(), "create patchSnapshot document");
+        pair.getState().setProperty("pan", "auto", nullptr); panSet = true;
+        check(pair.save(), "save with patchSnapshot");
+        check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "file holds the patched value");
+        check(pair.getState().getProperty("pan").toString() == "auto", "live tree untouched after save");
+        check(!pair.isDirty(), "save does not leave the document dirty");
         pair.setAutoSave(true); pair.setAutoSaveTime(20);
         pump(150);
-        check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "autosave did not overwrite the file with the restored value");
+        check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "no spurious autosave overwrote the file");
         pair.getState().setProperty("other", 1, nullptr);
         pump(150);
         const auto autosaved = juce::ValueTree::fromXml(pairFile.loadFileAsString());
         check(static_cast<int>(autosaved.getProperty("other")) == 1 && autosaved.getProperty("pan").toString() == "base" &&
-              pair.getState().getProperty("pan").toString() == "auto", "autosave runs prepare/after too");
-        check(pair.close(), "close prepare/after document");
-        check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "closing save keeps the prepared value");
-        // Read-only location (demo dir; chmod is unreliable as root): Close succeeds without writing, and the afterSave
-        // restore that re-dirties the tree must not leave isDirty() true after onDirtyChanged(false).
+              pair.getState().getProperty("pan").toString() == "auto", "autosave patches the copy too");
+        check(pair.close(), "close patchSnapshot document");
+        check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "closing save keeps the patched value");
+        check(patchCalls >= 3, "patchSnapshot ran for explicit, autosave and close");
+        // Read-only location (demo dir; chmod is unreliable as root): Autosave/Close succeed without writing, without running
+        // the live-state barrier or the patch, and leave the document clean.
         gTestDemosDir = directory.getChildFile("demos");
         const auto roFile = gTestDemosDir.getChildFile("ro/project.xml");
         check(roFile.create().wasOk() && roFile.replaceWithText("<ROOT version=\"1\"/>"), "seed read-only-location project");
         mt::KickXML ro("ROOT", ".xml", "1");
-        ro.prepareSave = [&] { ro.getState().setProperty("pan", "base", nullptr); return juce::Result::ok(); };
-        ro.afterSave   = [&] { ro.getState().setProperty("pan", "auto", nullptr); };
+        int roCalls = 0;
+        ro.prepareSave = [&] { ++roCalls; return juce::Result::ok(); };
+        ro.patchSnapshot = [&](juce::ValueTree&) { ++roCalls; };
         check(ro.loadOrCreate(roFile).isValid(), "create read-only-location document");
         ro.getState().setProperty("pan", "auto", nullptr);
         const auto roBefore = roFile.loadFileAsString();
-        check(ro.close() && !ro.isDirty() && roFile.loadFileAsString() == roBefore, "read-only close restores pans before clearing dirty and writes nothing");
+        check(ro.close() && !ro.isDirty() && roFile.loadFileAsString() == roBefore, "read-only close writes nothing and is clean");
+        check(roCalls == 0 && ro.getState().getProperty("pan").toString() == "auto", "read-only close runs no prepare/patch and keeps the live tree");
         gTestDemosDir = juce::File();
     }
     directory.deleteRecursively();

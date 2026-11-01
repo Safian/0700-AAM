@@ -41,9 +41,9 @@ namespace mt
         // Every persistence path uses this barrier before serializing live state.
         // Called on the message thread, including saves requested by a loader.
         std::function<juce::Result()> prepareSave;
-        // Runs after every save attempt whose prepareSave succeeded (also on failure paths), on the saving thread; undoes prepareSave's
-        // temporary document changes. Its own tree changes are not counted as dirty after a successful save.
-        std::function<void()> afterSave;
+        // Called on the saving (message) thread with the COPY of the document that is about to be serialised, after the sample
+        // paths were relativized (those still go into the live document). May rewrite the copy; the live document is never touched by it.
+        std::function<void(juce::ValueTree&)> patchSnapshot;
         std::function<void(const juce::String&)> onSaveFailure;
         std::function<void(bool)> onDirtyChanged;
 
