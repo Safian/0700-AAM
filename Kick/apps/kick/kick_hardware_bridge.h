@@ -36,6 +36,7 @@ private:
     // DCL code sent on press of the Shift-dependent TC / AUTOMATION buttons (-1 = none), so the release
     // goes to the same code even if Shift was released first.
     int  m_tc_sent_code = -1;
+    static constexpr int kTcNoPacket = -2; // Shift+TC handled in the engine: no press packet, so no release packet
     int  m_automation_sent_code = -1;
     // Generic version for the other Shift-dependent buttons: DCL code sent on press, indexed by HardwareButton.
     struct PressedCodes { std::array<int, 128> v; PressedCodes() { v.fill(-1); } };
@@ -887,10 +888,16 @@ public:
             }
             case HW_BTN_TC:
             {
-                // +Shift = ON/OFF -> EN_ON_OFF (same as keyboard 'N'). EN_TC opens the Timing Correct dialog (ListEditMode);
-                // EN_ON_OFF has no consumer: the engine has no global timing-correct on/off (see docs T30).
-                m_tc_sent_code = isShiftDown() ? contracts::DeviceControlContracts::BtnLedSequence::EN_ON_OFF : contracts::DeviceControlContracts::BtnLedSequence::EN_TC;
-                sendButtonMsg(m_tc_sent_code, contracts::DeviceControlContracts::BTN_PRESSED);
+                // +Shift = TC ON/OFF: toggles the engine's global timing-correct flag directly (no DCL packet, nothing
+                // consumes EN_ON_OFF); m_tc_sent_code = kTcNoPacket so the release sends nothing either.
+                // Plain TC sends EN_TC, which opens the Timing Correct dialog (ListEditMode).
+                if (isShiftDown()) {
+                    m_tc_sent_code = kTcNoPacket;
+                    ae.toggleTimingCorrectEnabled();
+                } else {
+                    m_tc_sent_code = contracts::DeviceControlContracts::BtnLedSequence::EN_TC;
+                    sendButtonMsg(m_tc_sent_code, contracts::DeviceControlContracts::BTN_PRESSED);
+                }
                 break;
             }
             case HW_BTN_UNDO:
@@ -1030,7 +1037,8 @@ public:
                 sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_COPY);
                 break;
             case HW_BTN_TC:
-                sendButtonMsg(m_tc_sent_code >= 0 ? m_tc_sent_code : (int)contracts::DeviceControlContracts::BtnLedSequence::EN_TC, contracts::DeviceControlContracts::BTN_RELEASED);
+                if (m_tc_sent_code != kTcNoPacket)
+                    sendButtonMsg(m_tc_sent_code >= 0 ? m_tc_sent_code : (int)contracts::DeviceControlContracts::BtnLedSequence::EN_TC, contracts::DeviceControlContracts::BTN_RELEASED);
                 m_tc_sent_code = -1;
                 break;
             case HW_BTN_AUTOMATION:
