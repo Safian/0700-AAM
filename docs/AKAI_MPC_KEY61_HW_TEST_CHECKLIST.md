@@ -33,7 +33,7 @@ Minden gomb: lenyomás → várt funkció; felengedés → **nem ragad be** (T6b
 - [ ] **TIMING CORRECT**: megnyitja a List Edit TC-ablakot, az Apply ténylegesen kvantál (egy undo lépés); **Shift+TC** a globális TC-t kapcsolja (nincs LED-visszajelzés a List Edit-ből).
 - [ ] **REC+Shift = RECALL** (30 s, a kiválasztott trackre; egy undo lépés; TC ki/be hatása). **!** Futó szekvenciánál a note-list verseny kockázata.
 - [ ] UNDO / +Shift REDO.
-- [ ] AUTOMATION: **nincs hatása** (nincs motor-fogalom).
+- [ ] **AUTOMATION**: gomb Read↔Write, Shift = Off; LED Read=3, Write=4. Write módban játszás közben mozgasd a track szintjét (mixer/Q-Link), Read módban a lane visszajátszik; projekt mentése/betöltése megőrzi (**!** tick-szál: figyeld a hangot és a CPU-t). PAN és audio trackek nem automatizáltak.
 
 ## 3. Transport és ütemugrás (**!** a motor lejátszó-magját érinti)
 - [ ] PLAY, PLAY START, STOP, REC, OVERDUB, LED-ek.
@@ -41,6 +41,9 @@ Minden gomb: lenyomás → várt funkció; felengedés → **nem ragad be** (T6b
 - [ ] **LOCATE+`<<`** = 1. ütem, **LOCATE+`>>`** = az utolsó ütem eleje.
 - [ ] **Shift+STOP (RETURN)**: megáll, a kijelzett playhead az 1. ütemre áll; a következő PLAY onnan indul. PLAY START parkolt seek után elölről indul.
 - [ ] **LOCATE+`<` / `>`**: a kiválasztott track előző/következő note-kezdetére ugrik lejátszás közben és megállítva (PLAY a parkolt tickről indul); hosszú hang az ugrás fölött; nincs wrap (az első esemény előtt tick 0).
+
+## 3b. Touch Strip (új módok)
+- [ ] A TOUCH STRIP gomb módot vált: ki = Kick slider, halvány = pitch bend (felengedéskor középre ugrik), teli = mod wheel (CC1). Pitch módban a CC34 (finom) tényleges küldése és az érzet.
 
 ## 4. LED-ek (**!** a kétszínű LED-ek mostantól 3-as szintet kapnak 127 helyett)
 - [ ] PLAY/REC/OVERDUB/BANK A–D teli fénnyel világít (ha halvány vagy rossz színű: `set_led(true)` 127 volt korábban).
@@ -56,7 +59,7 @@ Minden gomb: lenyomás → várt funkció; felengedés → **nem ragad be** (T6b
 - [ ] Audio bemenet (INPUT 1/2, +48V): a Looper/Sampler látja-e (a teljes app a JUCE audioeszközt használja, nem az adaptert).
 
 ## 7. Próbák, amik döntést hoznak (nem hibakeresés)
-Futtasd az MPC-n (root), és küldd el a kimenetet:
+**Egyszerűen:** az app futása közben `echo probe > /data/kick_cmd`, majd küldd el a `/data/kick_probe.txt` tartalmát (csak olvasó rendszerjelentés). Kézzel, ha kell (root):
 ```
 cat /proc/asound/cards; cat /proc/asound/pcm; arecord -l; aplay -l
 arecord -D plughw:1,0 --dump-hw-params -d 1 /dev/null
@@ -66,9 +69,9 @@ i2cdetect -l; ls -l /dev/i2c-*
 ls /sys/bus/i2c/devices; cat /sys/bus/i2c/devices/*/name
 dmesg | grep -i -E "i2c|dac|gpio|acvm|i2s"
 ```
-- **Init SysEx Port 0-ra (T5):** próbáld az adapterben csak a Port 1-re küldéssel; ha a billentyű/pad-duplázódás nem jön vissza és minden működik, a Port 0 írás törölhető.
+- **Init SysEx Port 0-ra (T5):** indítsd az appot `KICK_AKAI_PORT0=0` környezeti változóval (kikapcsolja a Port 0-ra írást: init SysEx és pad RGB); ha a billentyű/pad-duplázódás nem jön vissza és minden működik, a Port 0 írás törölhető.
 - **CV/Gate (T19):** ha nincs `/dev/i2c-*`, a CV valószínűleg az STM32-n megy (SysEx/USB-MIDI) – **ne írjunk vakon I2C eszközre**.
 
 ## Ha valami elromlik – visszavonás
 A motor-érintő munkák külön commitként vannak, egyenként visszavonhatók (`git revert <commit>`; a mellettük levő merge-commit nem kell):
-`904aaf52` + `3e981bf3` + `daf8bd22` (bar seek, a namespace-javítása és a tick-seek/event-seek, **együtt**), `ecfeb260` (pitch bend/sustain), `9fd98db4` (RECALL), `03db3663` (arpeggiator), `d1cd2421` (timing correct). Visszavonás előtt futtasd újra a natív buildet (`ninja -C build-linux Kick`).
+`904aaf52` + `3e981bf3` + `daf8bd22` (bar seek, a namespace-javítása és a tick-seek/event-seek, **együtt**), `ecfeb260` (pitch bend/sustain), `9fd98db4` (RECALL), `03db3663` (arpeggiator), `d1cd2421` (timing correct), `990fdf44` (automation), `490256b6` (touch strip módok; a T5 kapcsoló és a probe ártalmatlan). Visszavonás előtt futtasd újra a natív buildet (`ninja -C build-linux Kick`).
