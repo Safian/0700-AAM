@@ -614,13 +614,28 @@ public:
                 if (isShiftDown()) {
                     kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadPerform);
                 } else {
-                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT);
+                    // Plain ARP toggles the arpeggiator of the selected track (no DCL press -> nothing to release).
+                    // No ARP LED: HardwareLed has no ARP value (T13), so there is no hardware indication yet.
+                    const auto sel = ae.getSelected();
+                    const bool on = !ae.isArpEnabled(sel);
+                    ae.setArpEnabled(sel, on);
+                    printf("[BRIDGE] Arpeggiator %s\n", on ? "ON" : "OFF");
+                    fflush(stdout);
                 }
                 break;
             }
             case HW_BTN_LATCH:
             {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LATCH, contracts::DeviceControlContracts::BTN_PRESSED);
+                const auto sel = ae.getSelected();
+                if (ae.isArpEnabled(sel)) {
+                    // Arp running: LATCH toggles arp latch (no DCL press -> nothing to release).
+                    const bool on = !ae.isArpLatch(sel);
+                    ae.setArpLatch(sel, on);
+                    printf("[BRIDGE] Arp latch %s\n", on ? "ON" : "OFF");
+                    fflush(stdout);
+                } else {
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_LATCH);
+                }
                 break;
             }
             case HW_BTN_OCTAVE_DOWN:
@@ -1012,10 +1027,10 @@ public:
                 sendTrackedRelease(btn, -1); // plain press toggles the click directly (no DCL press) -> release only if EN_PREF was sent
                 break;
             case HW_BTN_ARP:
-                sendTrackedRelease(btn, -1); // Shift variant opens a screen (no press); plain press was never released before
+                sendTrackedRelease(btn, -1); // Shift variant opens a screen and plain press toggles the arp directly: no DCL press to release
                 break;
             case HW_BTN_LATCH:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LATCH, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, -1); // arp-latch toggle sends no press -> release only if EN_LATCH was pressed
                 break;
             case HW_BTN_FULL_LEVEL:
                 sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_FULL_LEVEL);

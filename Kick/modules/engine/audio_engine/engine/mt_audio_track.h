@@ -23,6 +23,7 @@
 
 #include "mt_audio_bar_seek.h"
 #include "mt_live_capture.h"
+#include "mt_arpeggiator.h"
 
 namespace mt
 {
@@ -110,6 +111,21 @@ namespace mt
         // notes committed (0 if nothing was captured). Non-realtime (message thread); the caller owns the undo transaction.
         int recallLiveNotes( int WindowMs );
 
+        // Arpeggiator (per track). Acts on live input only (processIncomingMidiMessage) and is stepped by onTick, so it
+        // runs while the transport plays; with the transport stopped, live notes pass through unchanged. Setters may be
+        // called from any non-realtime thread. Mode/Rate/Octaves: see mt::arp::Mode / Rate / kMaxOct.
+        void setArpEnabled( bool On );
+        bool isArpEnabled() const { return arpOn.load( std::memory_order_relaxed ); }
+        void setArpMode( int Mode );
+        void setArpRate( int Rate );
+        void setArpOctaves( int Octaves );
+        void setArpLatch( bool On );
+        void setArpGate( int Percent );
+        int  getArpMode();
+        int  getArpRate();
+        int  getArpOctaves();
+        bool isArpLatch();
+
         const MTMeterData& getMeter() const { return midiMeter.getMeter(); }
         inline void        processMidiMeter() { midiMeter.process(); }
 
@@ -126,6 +142,12 @@ namespace mt
         inline void reloadMidiMeter( float Level ) { midiMeter.reload( Level ); };
 
     private:
+        // Arpeggiator plumbing. arpFilterLive: true = the live note was taken by the arpeggiator (do not forward).
+        bool arpFilterLive( const juce::MidiMessage& Msg );
+        void arpEmit( const arp::Result& R, juce::Array<juce::MidiMessage>& Out );
+        void arpFlush( const arp::Result& R );
+        void arpPanic();
+
         void        progChangeHandler();
         void        lengthChangeHandler();
         void        recalculateIndex( unsigned int Tick );
@@ -158,6 +180,13 @@ namespace mt
         juce::CriticalSection lock;
 
         std::atomic<bool>         soloMuted{ false };
+        // Arpeggiator state. arpeg is guarded by arpFlag (input thread vs tick thread); arpOn mirrors enabled for the
+        // lock-free fast path; arpSentNote = effective (transposed) pitch currently sounding from the arp, so the
+        // note-off always matches the note-on even if transpose changes meanwhile (-1 = none).
+        arp::Arpeggiator  arpeg{ 0x9E3779B9u, 96 };
+        std::atomic_flag  arpFlag = ATOMIC_FLAG_INIT;
+        std::atomic<bool> arpOn{ false };
+        std::atomic<int>  arpSentNote{ -1 };
         // RECALL capture: per-track ring of live note events (written on the MIDI/UI input thread, see mt_live_capture.h)
         // and a mirror of the post-wrap playhead tick published by onTick (tickPos itself is tick-thread private).
         live::Ring       liveRing;
