@@ -25,6 +25,10 @@ add_executable(kick-pitch-bend-tests PitchBendTests.cpp)
 add_test(NAME kick-pitch-bend COMMAND kick-pitch-bend-tests)
 set_tests_properties(kick-pitch-bend PROPERTIES TIMEOUT 10)
 
+add_executable(kick-live-capture-tests LiveCaptureTests.cpp)
+add_test(NAME kick-live-capture COMMAND kick-live-capture-tests)
+set_tests_properties(kick-live-capture PROPERTIES TIMEOUT 10)
+
 add_executable(kick-bar-seek-tests BarSeekTests.cpp)
 add_test(NAME kick-bar-seek COMMAND kick-bar-seek-tests)
 set_tests_properties(kick-bar-seek PROPERTIES TIMEOUT 10)

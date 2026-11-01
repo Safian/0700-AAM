@@ -455,6 +455,10 @@ namespace mt
         int addLiveMidiMsg( const MTSelected& Selection, const juce::MidiMessage& Msg );
         int addLiveMidiNote( const MTSelected& Selection, int Note, int Velocity );
         int stopLiveMidiNote( const MTSelected& Selection, int Note );
+        // RECALL (retrospective capture): commits the live notes played on the selected track within the last WindowMs
+        // (max 30 s) into its note list as one undo step. Playing: positions follow the track playhead at play time;
+        // stopped: aligned to the sequence start. Returns notes committed, 0 if none captured, -1 if no such track.
+        int recallLiveMidi( const MTSelected& Selection, int WindowMs = 30000 );
         int addLiveMidiNote( const int Program, const int Note, const int Velocity );
         int stopLiveMidiNote( const int Program, const int Note );
 
