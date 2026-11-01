@@ -1,6 +1,6 @@
 # Akai MPC Key 61 – hardverfunkció-audit és TODO
 
-Dátum: 2026-10-31 · Ág: `safian/main` · Vizsgált commit: `d9a48e38`
+Dátum: 2026-10-31 · Ág: `safian/main` · Vizsgált commit: `d9a48e38`; frissítve a `7d06f546`, `c8db754a`, `9ade01df` commitok után
 
 ## 0. Módszer és korlátok (olvasd el először)
 
@@ -28,7 +28,7 @@ Dátum: 2026-10-31 · Ág: `safian/main` · Vizsgált commit: `d9a48e38`
 | Q-Link forgatás / Data Dial | ✅ |
 | Q-Link érintés, Touch Strip mód | ❌ |
 | Gomb-LED-ek | ⚠️ 13 LED, csak ki/be |
-| 16 RGB pad LED | ❌ egyáltalán nincs |
+| 16 RGB pad LED | ⚠️ bank-szín + találati villanás van; projekt pad-színek nincsenek |
 | 7" kijelző + multitouch | ✅ (hardkódolt értékekkel) |
 | Audio kimenet | ⚠️ működik, de a latency-beállítás ellentmond a logüzenetnek |
 | Audio bemenet (INPUT 1/2, +48V) | ❌ |
@@ -113,9 +113,9 @@ Az adapter `get_akai_button()` mind a 45 Note-ot leképezi. A viselkedést a `Ki
 | Transport, OCT, FULL/16 LEVEL, NOTE REPEAT, BANK A–D | ⚠️ | 13 LED (`HardwareLed`), csak `127`/`0` |
 | Aktív mód-gombok (GRID, MIX, MUTE, EDIT…), SHIFT, LOCATE, TC, AUTOMATION, ARP, LATCH, COPY… | ❌ | Nincs `HardwareLed` enum-érték |
 | Halvány (1), kétszínű (1–4) szintek | ❌ | Az API csak bool |
-| BANK E–H | ⚠️ | `b % 4` → ugyanazt a LED-et gyújtja, mint A–D, megkülönböztetés nélkül |
+| BANK E–H (gomb-LED) | ⚠️ | `b % 4` → ugyanazt a LED-et gyújtja, mint A–D; a pad-színek már megkülönböztetik (`7d06f546`) |
 | OCT LED-létra −3..+3 | ⚠️ | Csak "lejjebb/följebb" bool, a mérték nem látszik |
-| 16 RGB pad (SysEx `0x65`) | ❌ | A kódban sehol nincs `0x65`; a projekt pad-színei nem jutnak a hardverre |
+| 16 RGB pad (SysEx `0x65`) | ⚠️ | Kész (`7d06f546`): bank-alapszín, ütéskor fehér villanás. Hiányzik: a projekt pad-színei (`kick_PadColor`) nem jutnak a hardverre; a visszaállás a bank színére megy, nem a pad saját színére |
 
 ### 2.5 Kijelző, érintés, hang, egyéb I/O
 
@@ -127,7 +127,7 @@ Az adapter `get_akai_button()` mind a 45 Note-ot leképezi. A viselkedést a `Ki
 | Audio kimenet hard clip | ⚠️ | ±0.99 vágás, nincs limiter |
 | Audio bemenet INPUT 1/2, +48V | ❌ | `IAudioAdapter`-nek nincs capture ága |
 | Outputs 3/4 | ❌ | Nem szerepel; a 2–3. csatornát Phones-ként használja |
-| CV/Gate 1–8 | ❌ | Van CV program és settings UI, de az adapter nem köti hardverhez ❓ |
+| CV/Gate 1–8 | ❓ | A DAC-írás a `modules/hardware/source/kick_I2c.cpp`-ben van (feszültség-skálázás javítva: `9ade01df`). Az Akai adapterben nincs; hogy ezen a hardveren elérhető-e, nem tudom. A mod wheel CV-hez az adapter CC1-et még mindig eldobja (T9) |
 | DIN MIDI IN/OUT/THRU (Card 3) | ❌ az adapterben | A review szerint a JUCE MIDI manager viszi ❓ |
 | USB-B (gadget MIDI), USB-A | ❌ / ❓ | Nem része az adapternek |
 | Main Volume | – | Analóg potméter, nem küld MIDI-t (nem hiba) |
@@ -150,7 +150,6 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 
 - LOCATE + `<`/`>`/`<<`/`>>` kombinációk
 - OCT mellett Shift = félhang-transzpozíció; OCT− és OCT+ együtt = reset
-- 16 RGB pad egyetlen `0x65` SysEx kerettel
 - CC34 (Touch Strip LSB), Note 78 (strip érintés), poly aftertouch, channel aftertouch, CC1/CC11/CC65
 - BANK dupla nyomás = E–H
 - `/data/kick_cmd` `rawmidi <port> <hex...>` parancs (a `processCommand` nem ismeri)
@@ -177,12 +176,12 @@ A `HARDWARE_REVIEW.md` (§3–§4) és a `d9a48e38` commit-üzenet szerint megva
 - [ ] **T11** Q-Link érintés (`on_encoder_touch`) → pl. paraméter-kijelzés / DCL knob-touch.
 - [ ] **T12** Touch Strip: gomb (mód-váltás), CC34 LSB, Note 78 érintés.
 - [ ] **T13** LED-bővítés: `HardwareLed` + intenzitás/kétszínű API; aktív mód, SHIFT, LOCATE, ARP, LATCH, COPY… LED; BANK E–H megkülönböztetése.
-- [ ] **T14** 16 RGB pad SysEx (`0x65`), a projekt pad-színeiből (`kick_PadColor`), egyetlen kerettel.
+- [ ] **T14** (részben kész, `7d06f546`) Pad RGB: a projekt pad-színeit (`kick_PadColor`) használni bank-szín helyett; ütés utáni visszaállás a pad saját színére. Opcionális: egy keretben frissíteni a 16 padot (most padonként 4 SysEx-írás/port, villanásnál és visszaálláskor is).
 - [ ] **T15** Audio bemenet (INPUT 1/2) a `IAudioAdapter` capture-ággal, ha a Looper/Sampler felvételhez kell.
 
 ### P2 – robusztusság és teljesítmény
 
-- [ ] **T16** `poll()` a `usleep` helyett; zárolás a RawMIDI írásra.
+- [ ] **T16** `poll()` a `usleep` helyett; zárolás a RawMIDI írásra (a `set_pad_rgb` az olvasó szálról, `on_pad_note_on`-ból is ír, így több szál ír ugyanarra a portra). A `set_pad_rgb` a Port 0-ra is küld, ami a T5 szerint némítandó.
 - [ ] **T17** Eszköz- és útvonal-felderítés (`/proc/asound/cards`, `EVIOCGABS`) a hardkódolt `hw:0,0,x` / `event0` / `2048` helyett; a factory ne tippeljen alapértelmezett MPC-t.
 - [ ] **T18** Audio: tényleges `buffer_size` használata, latency-cél egyeztetése a loggal, Phones/Main külön szint, limiter a hard clip helyett. **Eszközön mérendő.**
 - [ ] **T19** CV/Gate 1–8, DIN MIDI, USB-B: döntés, hogy az adapter vagy a JUCE MIDI-réteg felel-e értük.
