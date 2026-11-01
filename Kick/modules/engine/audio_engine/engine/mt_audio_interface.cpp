@@ -921,11 +921,6 @@ namespace mt
         manager->seek( posInTicks );
     }
 
-    bool MTAudioInterface::isSavingProject() const noexcept
-    {
-        return manager != nullptr && manager->isSavingProject();
-    }
-
     int MTAudioInterface::seekToBar( int Sequence, int Bar0 )
     {
         if( manager->isSongActive() ) return -1; // song mode: playTime counts raw clock ticks, a seek would desync it

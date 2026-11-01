@@ -113,9 +113,6 @@ namespace mt
         // non-message thread it answers true (no scan: the sequence list is not safe to walk there); the Read rule
         // below still keeps several lanes from fighting.
         bool isPanLaneOwner( const MTTrack* Track, const MTIProgram* Prog );
-        // True while saveProject() temporarily writes the stored pan back (G10). Pan listeners (take recording, the MIDI
-        // program's CC10 sender) may ignore changes made during that window.
-        inline bool isSavingProject() const noexcept { return savingProject.load( std::memory_order_relaxed ); }
 
     private:
         void interTimerCallbackHandler();
@@ -125,8 +122,6 @@ namespace mt
         // Leaving Read: puts back the pan the programs had before playback overwrote it.
         void restoreAutomatedPans();
         void restoreAutomatedPan( const juce::String& ProgramId ); // one program (lane cleared / reloaded empty)
-        std::atomic<bool> savingProject{ false };
-        std::vector<std::pair<juce::String, double>> savedAutomated; // automated pans parked while a save writes the base values
         std::map<juce::String, double> panBases; // program id -> stored pan before Read touched it (message thread)
 
     private:

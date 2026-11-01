@@ -150,21 +150,6 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
     if (saving.exchange(true)) return failSave("Project save is already in progress", reason);
     struct Transaction { std::atomic<bool>& flag; ~Transaction() { flag.store(false); } } transaction{saving};
     timer.stopTimer(); cancelPendingUpdate(); autosaveDue.store(false);
-    // Snapshot first; neither a failed snapshot nor a failed disk write may
-    // replace the previous recoverable project document.
-    if (prepareSave) {
-        const auto prepared = prepareSave();
-        if (prepared.failed()) return failSave(prepared.getErrorMessage(), reason);
-    }
-    // Undoes prepareSave on every exit path (idempotent with the explicit call on the success path below).
-    struct AfterSaveGuard {
-        std::function<void()>& fn; bool armed;
-        void run() { if (armed) { armed = false; if (fn) fn(); } }
-        ~AfterSaveGuard() { run(); }
-    } afterSaveGuard{afterSave, static_cast<bool>(prepareSave)};
-    const juce::ScopedLock guard(lock);
-    if (!vt.isValid()) return failSave("No valid project document to save", reason);
-
     // Read-only projects (such as factory demos and templates shipped in the read-only application bundle)
     // cannot and should not be saved over. Autosave and Close must succeed cleanly without writing or failing.
     bool isReadOnlyLocation = false;
@@ -184,21 +169,36 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
     if (!isReadOnlyLocation && tempDir.exists() && xmlFile.isAChildOf( tempDir ))
         isReadOnlyLocation = true;
 
-    if (isReadOnlyLocation) {
-        if (reason == SaveReason::Autosave || reason == SaveReason::Close) {
-            // The restore re-dirties the tree; run it before clearing dirty (same as the success path).
-            afterSaveGuard.run();
-            lastSaveError.clear();
-            dirty.store(false);
-            if (onDirtyChanged) onDirtyChanged(false);
-            return true;
-        }
-        return failSave("Cannot save over factory demo/template. Please use Save As to a project folder.", reason);
+    // Nothing is written there, so Autosave/Close skip the live-state barrier entirely.
+    if (isReadOnlyLocation && (reason == SaveReason::Autosave || reason == SaveReason::Close)) {
+        const juce::ScopedLock guard(lock);
+        if (!vt.isValid()) return failSave("No valid project document to save", reason);
+        lastSaveError.clear();
+        dirty.store(false);
+        if (onDirtyChanged) onDirtyChanged(false);
+        return true;
     }
 
-    relativizeSamplePaths(vt, xmlFile.getParentDirectory());
+    // Snapshot first; neither a failed snapshot nor a failed disk write may
+    // replace the previous recoverable project document.
+    if (prepareSave) {
+        const auto prepared = prepareSave();
+        if (prepared.failed()) return failSave(prepared.getErrorMessage(), reason);
+    }
+    const juce::ScopedLock guard(lock);
+    if (!vt.isValid()) return failSave("No valid project document to save", reason);
 
-    const auto xml = vt.toXmlString();
+    if (isReadOnlyLocation)
+        return failSave("Cannot save over factory demo/template. Please use Save As to a project folder.", reason);
+
+    // Sample paths stay rewritten in the live document as before: relativizeSamplePaths copies each foreign sample into the
+    // project once and is only idempotent because the live path becomes relative (a copy would duplicate files every save).
+    relativizeSamplePaths(vt, xmlFile.getParentDirectory());
+    // patchSnapshot only ever touches this serialised copy, never the live document (the audio thread reads it).
+    auto snapshot = vt.createCopy();
+    if (patchSnapshot) patchSnapshot(snapshot);
+
+    const auto xml = snapshot.toXmlString();
     if (xmlFile.loadFileAsString() != xml) {
         juce::TemporaryFile temporary(xmlFile);
         bool written = false;
@@ -215,8 +215,6 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
         if (!written || !temporary.overwriteTargetFileWithTemporary())
             return failSave("Cannot write project: " + xmlFile.getFullPathName(), reason);
     }
-    // The restore re-dirties the tree (saving==true keeps it from scheduling an autosave); that dirt is not a user edit.
-    afterSaveGuard.run();
     lastSaveError.clear(); dirty.store(false);
     if (onDirtyChanged) onDirtyChanged(false);
     return true;
