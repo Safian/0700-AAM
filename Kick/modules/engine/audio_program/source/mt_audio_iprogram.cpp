@@ -258,7 +258,13 @@ namespace mt
         return 0;
     }
 
-    void MTIProgram::noteProcess( juce::Array<juce::MidiMessage>& Msgs )
+    void MTIProgram::resetPerformance()
+    {
+        sustain.onCC64( 0, [this]( int n ) { noteOff( n ); } );
+        pitchBend( 8192 );
+    }
+
+    void MTIProgram::noteProcess( juce::Array<juce::MidiMessage>& Msgs, bool live )
     {
         // Pedal state must track CC64/CC123 even while muted, or a pedal-up swallowed by the mute leaves it stuck down.
         const bool muted = isProgramEffectivelyMuted();
@@ -271,7 +277,10 @@ namespace mt
                 if( it.isController() )
                 {
                     if( it.getControllerNumber() == 64 )
-                        sustain.onCC64( it.getControllerValue(), [this]( int n ) { noteOff( n ); } );
+                    {
+                        if( live ) // Sequencer-played CC64 is ignored: the pedal is live-only.
+                            sustain.onCC64( it.getControllerValue(), [this]( int n ) { noteOff( n ); } );
+                    }
                     else if( it.getControllerNumber() == 123 )
                     {
                         sustain.onAllOff();
@@ -330,12 +339,13 @@ namespace mt
                     case 1: // Modulation Wheel
                         modWheel( controllerValue );
                         break;
-                    case 64: // Sustain pedal
-                        sustain.onCC64( controllerValue, [this]( int n ) { noteOff( n ); } );
+                    case 64: // Sustain pedal (live input only)
+                        if( live )
+                            sustain.onCC64( controllerValue, [this]( int n ) { noteOff( n ); } );
                         break;
                     case 123: // All Notes Off
                         sustain.onAllOff();
-                        noteOffAll(); // Also resets pitch bend.
+                        noteOffAll(); // Pitch bend is centred by resetPerformance() (MTTrack::stop()).
                         break;
                 }
             }
@@ -350,7 +360,10 @@ namespace mt
             }
             else if( it.isPitchWheel() )
             {
-                pitchBend( it.getPitchWheelValue() ); // Per program; fixed +-2 semitones.
+                {
+                if( live ) // Live-only; the sequencer cannot bend (stop() centres via resetPerformance()).
+                    pitchBend( it.getPitchWheelValue() ); // Per program; fixed +-2 semitones.
+            }
             }
             reloadMidiMeter( (float)( midiLevel * MIDI::SCALER ) );
         }

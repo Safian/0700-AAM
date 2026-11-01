@@ -222,6 +222,12 @@ namespace mt
     void MTTrack::clearAutomation( bool Undoable )
     {
         bool levelDone = false, panDone = false;
+        juce::String clearedPanProg; // F7: program whose pan lane is emptied here (its pan must go back to the stored value)
+        {
+            const juce::ScopedLock w( laneWriteLock );
+            if( !lanePan.empty() )
+                clearedPanProg = lanePanProgId;
+        }
         if( Undoable )
         {
             auto ln = findLaneNode( automation::Level );
@@ -254,9 +260,28 @@ namespace mt
             laneRec.reset();
             panRec.reset();
             refreshPanActive();
+            if( !panDone && clearedPanProg.isNotEmpty() )
+            {
+                panRestoreId = clearedPanProg; // undoable path: reloadLaneFromState requests it
+                panRestorePending.store( true );
+            }
         }
         laneApplied.store( -1 );
         panApplied.store( automation::kNoValue );
+    }
+
+    juce::String MTTrack::takePanRestore()
+    {
+        if( !panRestorePending.exchange( false ) )
+            return {};
+        const juce::ScopedLock w( laneWriteLock );
+        return panRestoreId;
+    }
+
+    bool MTTrack::panLaneDrives( const juce::String& Id )
+    {
+        const juce::ScopedLock w( laneWriteLock );
+        return !lanePan.empty() && lanePanProgId == Id;
     }
 
     // Applies the lane values for the (post-wrap) track position. Tick thread, called with `lock` held. No allocation;
@@ -436,12 +461,20 @@ namespace mt
             const auto progId = node.isValid() ? node[IDs::autoProgram].toString() : juce::String();
             if( points != lanePanCommitted || progId != lanePanProgId )
             {
+                const juce::String oldProg = lanePanProgId;
                 lanePanCommitted = points;
                 lanePanProgId    = progId;
                 auto next        = automation::fromString( points.toStdString() );
+                bool nowEmpty    = false;
                 {
                     const juce::ScopedLock sl( lock );
                     lanePan.swap( next );
+                    nowEmpty = lanePan.empty();
+                }
+                if( nowEmpty && oldProg.isNotEmpty() ) // F7: lane gone (undo of a take, clear, empty project): restore the stored pan
+                {
+                    panRestoreId = oldProg;
+                    panRestorePending.store( true );
                 }
                 panRec.reset();
                 panApplied.store( automation::kNoValue );
@@ -506,7 +539,8 @@ namespace mt
         {
             juce::Array<juce::MidiMessage> centre;
             centre.add( juce::MidiMessage::pitchWheel( getMidiOutChannel(), 8192 ) );
-            p->noteProcess( centre );
+            p->noteProcess( centre ); // forwarded by MIDI/CLAP programs; ignored by the sample programs (not live)
+            p->resetPerformance();    // bend centre + sustain release also for muted programs
         }
         isPlaying = false;
         trackPlayhead.clear();
@@ -743,7 +777,7 @@ namespace mt
             else
                 list.insert( -1, Msg );
 
-            pProgram->noteProcess( list );
+            pProgram->noteProcess( list, true ); // live input
         }
         if( !isTrackEffectivelyMuted() )
             reloadMidiMeter( levelScaler );
@@ -797,7 +831,7 @@ namespace mt
         juce::Array<juce::MidiMessage> list;
         arpEmit( R, list );
         if( auto p = program.load(); p && !list.isEmpty() )
-            p->noteProcess( list );
+            p->noteProcess( list, true ); // arp flush is live output
     }
 
     void MTTrack::arpPanic()
@@ -836,7 +870,7 @@ namespace mt
         if( len <= 0 )
             return 0;
         const double ticksPerMs = double( seq.getBPM() ) * defaultPPQN / 60000.0;
-        auto         notes      = live::pairEvents( liveRing.snapshot(), juce::Time::currentTimeMillis(), WindowMs, isPlaying.load(), ticksPerMs, len );
+        auto         notes      = live::pairEvents( liveRing.snapshot(), juce::Time::currentTimeMillis(), WindowMs, ticksPerMs, len );
         int          committed  = 0;
         {
             // F2: the tick thread walks the note HashMap under `lock`; the edits below rebuild that map. Lock order:

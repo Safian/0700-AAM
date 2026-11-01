@@ -10,7 +10,7 @@ public:
     MTClapProgram(AudIO::DawEngine&, juce::ValueTree&, juce::UndoManager* = nullptr);
     ~MTClapProgram() override;
     std::shared_ptr<kick::clap::PluginSession> getPluginSession() const { return session; }
-    void noteProcess(juce::Array<juce::MidiMessage>&) override;
+    void noteProcess(juce::Array<juce::MidiMessage>&, bool live = false) override;
     void noteOn(int note, int velocity) override;
     void noteOff(int note) override;
     void noteOffAll() override { session->panic(); }

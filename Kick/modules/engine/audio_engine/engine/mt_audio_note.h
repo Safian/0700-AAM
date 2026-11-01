@@ -27,11 +27,19 @@ namespace mt
 {
     using allNotesChanedFn = std::function<void()>;
 
+    // Playback map vs. ValueTree: `notes` (start -> id -> MTNote) is derived from the NOTELIST ValueTree and is read by the tick
+    // thread (MTTrack::fillMidiMessages -> getNotesAtPos) under MTTrack::lock. The list's own edits keep both in sync by hand
+    // (guarded by EditGuard); changes that arrive from anywhere else (undo/redo, copies between sequences) are picked up by the
+    // ValueTree::Listener below. LOCK ORDER: MTTrack::lock (registered with setReaderLock) -> MTNoteList::lock. The listener takes
+    // them in that order and only for foreign changes; own edits return before locking.
     class MTNoteList : public juce::AsyncUpdater
     {
     public:
         explicit MTNoteList( const juce::ValueTree& VT, juce::UndoManager* UM, MTSequence& Seq );
-        virtual ~MTNoteList() = default;
+        virtual ~MTNoteList();
+
+        // The lock the tick thread holds while it reads getNotesAtPos() (MTTrack::lock). Set once, right after construction.
+        void setReaderLock( juce::CriticalSection* L ) { readerLock = L; }
 
         allNotesChanedFn onAllNotesChanedFn;
 
@@ -189,6 +197,33 @@ namespace mt
         bool isValidNudge( double Length, double TotalTicks, bool Snap );
 
     private:
+        // ValueTree listener on NOTELIST (a member, not a base: MTTrack is already a ValueTree::Listener): keeps `notes` in step
+        // with undo/redo and other foreign edits.
+        struct MapListener : public juce::ValueTree::Listener
+        {
+            explicit MapListener( MTNoteList& O ) : owner( O ) {}
+            void valueTreeChildAdded( juce::ValueTree& P, juce::ValueTree& C ) override { owner.onChildAdded( P, C ); }
+            void valueTreeChildRemoved( juce::ValueTree& P, juce::ValueTree& C, int ) override { owner.onChildRemoved( P, C ); }
+            void valueTreePropertyChanged( juce::ValueTree& T, const juce::Identifier& I ) override { owner.onPropertyChanged( T, I ); }
+            void valueTreeRedirected( juce::ValueTree& T ) override { owner.onRedirected( T ); }
+            MTNoteList& owner;
+        };
+        void onChildAdded( juce::ValueTree& Parent, juce::ValueTree& Child );
+        void onChildRemoved( juce::ValueTree& Parent, juce::ValueTree& Child );
+        void onPropertyChanged( juce::ValueTree& Tree, const juce::Identifier& Property );
+        void onRedirected( juce::ValueTree& Tree );
+
+        struct EditGuard
+        {
+            explicit EditGuard( juce::ThreadLocalValue<int>& D ) : depth( D ) { ++depth.get(); }
+            ~EditGuard() { --depth.get(); }
+            juce::ThreadLocalValue<int>& depth;
+        };
+        bool    isOwnEdit() { return editDepth.get() > 0; }
+        MTNote* takeFromMap( int Id, int HintStart ); // removes + returns the map entry for Id (nullptr if none); caller deletes
+        void    putIntoMap( int Start, int Id, MTNote* N );
+        void    rebuildMap();                           // caller holds the locks
+
         void sort();
         int  selectNote( juce::ValueTree Note, bool Select );
         int  updateNote( MTNote& Note, int Start, int Length = 0 );
@@ -204,6 +239,9 @@ namespace mt
         MTSequence&           seq;
         juce::UndoManager*    um{ nullptr };
         juce::CriticalSection lock;
+        juce::CriticalSection* readerLock{ nullptr };
+        juce::ThreadLocalValue<int> editDepth;
+        MapListener                 mapListener{ *this };
         juce::ValueTree       parent;
         juce::ValueTree       vTree;
 

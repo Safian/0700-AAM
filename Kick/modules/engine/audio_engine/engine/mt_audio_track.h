@@ -164,6 +164,11 @@ namespace mt
         // writes, so drum/clip/keygroup voices and the MIDI program's CC10 path react exactly as to a manual move.
         bool isPlayingProgram( const MTIProgram* P ) const { return isPlaying.load() && livePlayTick.load( std::memory_order_relaxed ) >= 0 && program.load() == P; }
         int takePanTarget(){ return panTarget.exchange( automation::kNoValue ); }
+        // F7 (pan): set when the pan lane of a program became empty (clear / reload); the message thread collects the
+        // program id (MTAudioManager::applyAutomatedPans) and restores the stored pan. Empty string: nothing pending.
+        juce::String takePanRestore();
+        // True while this track's non-empty pan lane belongs to program Id (message thread).
+        bool panLaneDrives( const juce::String& Id );
 
         // Solo Mute; don't call this API's directly without careful analysis.
         inline void setSoloMute( bool Mute ) { soloMuted = Mute; }
@@ -226,6 +231,8 @@ namespace mt
         automation::Lane      lanePan;
         automation::RecState  panRec;                  // laneWriteLock
         juce::String          lanePanCommitted;        // laneWriteLock
+        std::atomic<bool>     panRestorePending{ false };
+        juce::String          panRestoreId;           // laneWriteLock
         juce::String          lanePanProgId;           // program id the lane belongs to; laneWriteLock
         juce::ValueTree       progTree;                // the played program's tree (listened to for pan moves in Write mode)
         std::atomic<bool>     lanePanActive{ false };  // lane non-empty and its program id == the track's program id
