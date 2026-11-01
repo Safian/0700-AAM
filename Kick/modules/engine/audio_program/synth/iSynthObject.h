@@ -56,6 +56,7 @@ namespace mt
         virtual void noteOff( int Note );
         virtual void noteOff( std::vector<int>& Notes );
         virtual void noteOffAll();
+        void         pitchBend( int Value ) override { master.setPitchBend( Value ); }
         virtual void noteMute( int Note, bool Mute );
         virtual void noteReset( int Note );
         virtual void noteReset( std::vector<int>& Notes );

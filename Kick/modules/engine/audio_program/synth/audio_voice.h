@@ -40,7 +40,7 @@ namespace mt
             if( isRunning() )
             {
                 const auto numSamples = Buffer.getNumSamples();
-                ASliceRenderer::getNextBlock( tempBuffer, master.pitchRatio.load() * pitchRatio );
+                ASliceRenderer::getNextBlock( tempBuffer, master.pitchRatio.load() * master.bendRatio.load() * pitchRatio );
                 gain.applyGain( tempBuffer, numSamples );
                 Buffer.addFrom( 0, 0, tempBuffer, 0, 0, numSamples );
                 Buffer.addFrom( 1, 0, tempBuffer, 1, 0, numSamples );

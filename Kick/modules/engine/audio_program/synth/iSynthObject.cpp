@@ -163,6 +163,7 @@ namespace mt
 
     void ISynthObject::noteOffAll()
     {
+        master.resetPitchBend();
         for( auto& it : voices )
             it->noteOff();
     }

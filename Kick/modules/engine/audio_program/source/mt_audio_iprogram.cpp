@@ -279,6 +279,7 @@ namespace mt
                     {
                         case SamplePlayType::ONE_SHOT:
                         case SamplePlayType::NOTE_ON:
+                            sustainHeld[(size_t)noteNo] = false; // Re-struck: no pending pedal release.
                             noteOn( noteNo, midiLevel );
                             //DBG( "Note On----" << noteNo );
                             break;
@@ -293,7 +294,10 @@ namespace mt
                     switch( playType )
                     {
                         case SamplePlayType::NOTE_ON:
-                            noteOff( noteNo );
+                            if( sustainDown ) // Pedal down: defer the release until pedal-up.
+                                sustainHeld[(size_t)noteNo] = true;
+                            else
+                                noteOff( noteNo );
                             //DBG( "Note Off----" << noteNo );
                         case SamplePlayType::ONE_SHOT: // Nothing to be done here.
                             break;
@@ -314,8 +318,22 @@ namespace mt
                     case 1: // Modulation Wheel
                         modWheel( controllerValue );
                         break;
+                    case 64: // Sustain pedal
+                    {
+                        const bool down = controllerValue >= 64;
+                        if( sustainDown && !down )
+                            for( size_t n = 0; n < sustainHeld.size(); ++n )
+                                if( sustainHeld[n] )
+                                {
+                                    sustainHeld[n] = false;
+                                    noteOff( (int)n );
+                                }
+                        sustainDown = down;
+                        break;
+                    }
                     case 123: // All Notes Off
-                        noteOffAll();
+                        sustainHeld.fill( false );
+                        noteOffAll(); // Also resets pitch bend.
                         break;
                 }
             }
@@ -330,6 +348,7 @@ namespace mt
             }
             else if( it.isPitchWheel() )
             {
+                pitchBend( it.getPitchWheelValue() ); // Per program; fixed +-2 semitones.
             }
             reloadMidiMeter( (float)( midiLevel * MIDI::SCALER ) );
         }

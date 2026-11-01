@@ -161,7 +161,7 @@ namespace mt
         {
             update(); // Update parameters...
 
-            const auto masterPitchRatio = master.pitchRatio.load();
+            const auto masterPitchRatio = master.pitchRatio.load() * master.bendRatio.load();
             const auto masterGainL      = master.gainL.load();
             const auto masterGainR      = master.gainR.load();
             const auto numSamples       = Buffer.getNumSamples();
