@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "hardware/device_factory.h"
+#include "hardware/pad_colour_map.h"
 #include "contracts/dcl/dcl_signals.h"
 #include "contracts/dcl/dcl_contracts.h"
 #include "contracts/dcl/dcl_contracts_helper.h"
@@ -10,6 +11,8 @@
 #include "kick_ui_controls/source/kick_Theme.h"
 #include "audio_engine/audio_engine.h"
 #include <chrono>
+#include <atomic>
+#include <cstdint>
 
 class KickHardwareBridge : public IHardwareEventListener, private juce::Timer
 {
@@ -35,6 +38,70 @@ private:
     int m_octave_offset = 0;
     int m_key_pitch_map[128];
 
+    // Project pad colours (DCL EN_PAD_SET_COLOUR_STATE). Written by the sendCommandToDcl handler
+    // (any thread), read by the timer (message thread) and the MIDI reader thread. Lock-free.
+    static_assert(contracts::DeviceControlContracts::EN_PAD_SET_COLOUR_STATE == 6, "pad colour packet command");
+    static_assert(contracts::DeviceControlContracts::PadColourTrans == kick_hw::kPadColourTrans, "pad colour ids");
+    static_assert(contracts::DeviceControlContracts::padColourDarkRed == 0 &&
+                  contracts::DeviceControlContracts::PadColourNeutralGrey == kick_hw::kPadColourCount - 1, "pad colour ids");
+    static_assert(contracts::DeviceControlContracts::StateOff == kick_hw::kPadStateOff &&
+                  contracts::DeviceControlContracts::StateOn == kick_hw::kPadStateOn &&
+                  contracts::DeviceControlContracts::StateSampleAssigned == kick_hw::kPadStateSampleAssigned &&
+                  contracts::DeviceControlContracts::StateSampleNotAssigned == kick_hw::kPadStateSampleNotAssigned &&
+                  contracts::DeviceControlContracts::StateOnBlink == kick_hw::kPadStateOnBlink &&
+                  contracts::DeviceControlContracts::StateOffBlink == kick_hw::kPadStateOffBlink, "pad states");
+    std::atomic<uint8_t> m_pad_colour_id[16] = {};
+    std::atomic<uint8_t> m_pad_state[16] = {};
+    std::atomic<uint16_t> m_pad_dirty { 0 };      // pads whose project colour changed, to be written by the timer
+    std::atomic<uint16_t> m_pad_held { 0 };       // pads currently flashing (hit); the timer must not overwrite them
+    std::atomic<bool> m_have_project_colours { false };
+    sigslot::connection m_pad_colour_conn;
+
+    void onDclCommand(std::shared_ptr<ipc::MTIPCJson> message)
+    {
+        CPktMgr::HWMsg_t msg;
+        if (!contracts::DclContractsHelper::ipcMessageToHWMessage(message, msg)) return;
+        if (msg.pktType != CPktMgr::EN_PKT_TYPE_PAD ||
+            msg.pktCmd != contracts::DeviceControlContracts::EN_PAD_SET_COLOUR_STATE) return;
+        if (msg.data.size() < 32) return; // [16 x colour id][16 x state]
+        uint16_t changed = 0;
+        for (int i = 0; i < 16; ++i) {
+            const auto id = static_cast<uint8_t>(msg.data[i]);
+            const auto st = static_cast<uint8_t>(msg.data[16 + i]);
+            if (m_pad_colour_id[i].exchange(id) != id) changed |= uint16_t(1u << i);
+            if (m_pad_state[i].exchange(st) != st) changed |= uint16_t(1u << i);
+        }
+        m_pad_dirty.fetch_or(changed);
+        // First packet: write all pads once, even if they equal the zero-initialised arrays.
+        if (!m_have_project_colours.exchange(true)) m_pad_dirty.fetch_or(0xFFFF);
+    }
+
+    // Idle colour of a pad: project colour once a packet has been received (known id), else the bank colour.
+    void getPadIdleColor(int pad, uint8_t& r, uint8_t& g, uint8_t& b) const
+    {
+        if (m_have_project_colours.load()) {
+            kick_hw::PadRgb7 c;
+            if (kick_hw::padColourToRgb7(m_pad_colour_id[pad].load(), m_pad_state[pad].load(), c)) {
+                r = c.r; g = c.g; b = c.b;
+                return;
+            }
+        }
+        getBankColor(m_current_bank, r, g, b);
+    }
+
+    void flushDirtyPadColors()
+    {
+        uint16_t dirty = m_pad_dirty.exchange(0);
+        dirty &= static_cast<uint16_t>(~m_pad_held.load());
+        if (!dirty || !m_hw || !m_hw->control_surface()) return;
+        for (int i = 0; i < 16; ++i) {
+            if (!(dirty & (1u << i))) continue;
+            uint8_t r, g, b;
+            getPadIdleColor(i, r, g, b);
+            m_hw->control_surface()->set_pad_rgb(i, r, g, b);
+        }
+    }
+
     bool isShiftDown() const { return m_shift_pressed; }
     bool isLocateDown() const { return m_locate_pressed; }
 
@@ -56,9 +123,10 @@ private:
     void refreshPadColors()
     {
         if (m_hw && m_hw->control_surface()) {
-            uint8_t r, g, b;
-            getBankColor(m_current_bank, r, g, b);
+            m_pad_dirty.store(0); // everything is written below
             for (int i = 0; i < 16; ++i) {
+                uint8_t r, g, b;
+                getPadIdleColor(i, r, g, b);
                 m_hw->control_surface()->set_pad_rgb(i, r, g, b);
             }
         }
@@ -220,6 +288,7 @@ private:
     void timerCallback() override
     {
         pollCommands();
+        flushDirtyPadColors();
 
         if (!m_hw || !m_root || !m_hw->display()) return;
 
@@ -346,6 +415,12 @@ public:
                 updateBankLeds();
             }
 
+            m_have_project_colours = false;
+            if (!m_pad_colour_conn.connected()) {
+                m_pad_colour_conn = contracts::DclSignals::sendCommandToDcl.connect(
+                    [this](std::shared_ptr<ipc::MTIPCJson> message) { onDclCommand(std::move(message)); });
+            }
+
             mt::signals::playStateChanged.connect([this](mt::TransportState state) {
                 bool isPlaying = (state == mt::TransportState::Playing);
                 if (m_hw && m_hw->control_surface()) {
@@ -369,6 +444,7 @@ public:
 
     void stop()
     {
+        m_pad_colour_conn.disconnect();
         stopTimer();
         if (m_cmd_fd >= 0) { close(m_cmd_fd); m_cmd_fd = -1; }
         if (m_cmd_fd_w >= 0) { close(m_cmd_fd_w); m_cmd_fd_w = -1; }
@@ -1005,6 +1081,7 @@ public:
     {
         if (pad_num >= 0 && pad_num < 16)
         {
+            m_pad_held.fetch_or(uint16_t(1u << pad_num));
             if (m_hw && m_hw->control_surface()) {
                 // Flash pad bright white/cyan on hit!
                 m_hw->control_surface()->set_pad_rgb(pad_num, 127, 127, 127);
@@ -1025,10 +1102,11 @@ public:
     {
         if (pad_num >= 0 && pad_num < 16)
         {
+            m_pad_held.fetch_and(static_cast<uint16_t>(~(1u << pad_num)));
             if (m_hw && m_hw->control_surface()) {
-                // Restore pad to bank idle color
+                // Restore pad to its own idle colour (project colour, or bank colour before the first packet)
                 uint8_t r = 35, g = 15, b = 0;
-                getBankColor(m_current_bank, r, g, b);
+                getPadIdleColor(pad_num, r, g, b);
                 m_hw->control_surface()->set_pad_rgb(pad_num, r, g, b);
             }
 
