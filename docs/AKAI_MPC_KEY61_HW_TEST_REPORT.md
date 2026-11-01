@@ -81,3 +81,23 @@ Build: `-g`, `-DKICK_TOUCH_SINGLE_TAP_LISTBOX=ON`; a docker-build `-j4`-nél mem
 | LED alap mód | még `note` (a `cc` alapra állítás ebben a buildben nincs) | `[AKAI-CONTROLLER] LED mode: note (KICK_AKAI_LED_MODE=<unset>)` |
 
 Az érintésnél a fizikai próba még nem történt meg (a felhasználó nincs otthon). Gyanú: a `1024x600`-as UI (`[BRIDGE] rendering 1024x600 to 1280x800`) és a touch `1280x800` koordinátái között nincs skálázás a `dispatchTouch`-ban, de a skálázott koordináta sem hatott, ezért a hit-test vagy a peer nélküli kézi `mouseDown` útja is gyanús. Ellenőrizni kell, hogy a kézi eseményút egyáltalán eljut-e a `KickButton`-ig (napló a `dispatchTouch`-ban).
+
+## 6. kör – a jobb oldali gombcsoport (EDIT/XYFX … UNDO/REDO), injektált (szoftveres) út
+`btn <NÉV>` + `snapshot` (`safian/main` `ea7f2d68`, `-g` build). A fizikai nyomást a felhasználó külön végigpróbálta, de a leképezett gombokat az adapter nem naplózza (csak az unmapped-et), ezért az a naplóból nem igazolható; a Shift-kombinációk (XYFX, MIDI CTRL, ON/OFF, REDO, OFF) nem injektálhatók.
+
+| Gomb (btn név) | Képernyő a snapshotban | Az útmutató szerint | Állapot |
+|---|---|---|---|
+| EDIT (`PROG_EDIT`) | **List Edit** | Program Edit Mode | **eltér** |
+| GRID (`GRID`) | Grid View | Grid View | OK |
+| STEP SEQ (`STEP_SEQ`) | Step Sequencer | Step Sequencer | OK |
+| MIX (`TRACK_MIX`) | Track Mixer | Track Mixer | OK |
+| PAD MIX (`PAD_MIX`) | Pad Mixer | Pad Mixer | OK |
+| MUTE (`TRACK_MUTE`) | Track Mute | Track Mute | OK |
+| PAD MUTE (`PAD_MUTE`) | Pad Mute | Pad Mute | OK |
+| KEYBOARD CONTROL (`KEYBOARD_CONTROL`) | **Pad Notes (Pad Perform)** | Keyboard Control menü (billentyűzet és kerekek: sebesség, útvonal, MIDI, tartományok) | **eltér** |
+| SAMPLE EDIT (`SAMPLE_EDIT`) | Sample Editor | Sample Edit Mode | OK |
+| SAMPLER (`SAMPLER`) | Sampler | Sampler | OK |
+| TIMING CORRECT (`TC`) | List Edit marad (md5 = UNDO utáni állapot) | Timing Correct ablak | **nem látható hatás** |
+| UNDO (`UNDO`) | nincs képernyőváltás | Undo | OK (hatás nem ellenőrizve) |
+
+Eltérések a cloud sessionnek: az EDIT a Kick List Edit képernyőjére megy (az útmutató szerint Program Edit lenne, Shift+EDIT XYFX); a KEYBOARD CONTROL a Pad Perform-ot nyitja, a Kickben nincs "Keyboard Control" menü; a TC gombnyomás hatása a snapshotban nem látszik (a Timing Correct ablak nem nyílik meg, vagy a globális TC csak a LED-et váltja).
