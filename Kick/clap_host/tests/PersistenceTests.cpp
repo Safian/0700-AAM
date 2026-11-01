@@ -257,6 +257,57 @@ int main(int argc, char** argv) {
         }
         check(same.close(), "close identical-content document");
     }
+    {   // N2: samples/kick.wav is taken, /Kit1/Kicks/kick.wav and /Kit2/Kicks/kick.wav both map to Kicks_kick.wav: three separate
+        // files (Kit2 gets Kicks_kick_2.wav), stable on re-save. A second project does the same with identical bytes.
+        for (int variant = 0; variant < 2; ++variant) {
+            const auto root = directory.getChildFile("n2v" + juce::String(variant));
+            const auto projFile = root.getChildFile("proj/project.xml");
+            const auto samples = projFile.getParentDirectory().getChildFile("samples");
+            const auto k1 = root.getChildFile("Kit1/Kicks/kick.wav"), k2 = root.getChildFile("Kit2/Kicks/kick.wav");
+            check(samples.getChildFile("kick.wav").create().wasOk() && samples.getChildFile("kick.wav").replaceWithText("own"), "seed taken sample");
+            check(k1.create().wasOk() && k1.replaceWithText("kit1") && k2.create().wasOk() && k2.replaceWithText(variant ? "kit1" : "kit2"), "seed kit sources");
+            mt::KickXML doc("ROOT", ".xml", "1");
+            check(doc.loadOrCreate(projFile).isValid(), "create N2 document");
+            juce::ValueTree l1("LAYER"), l2("LAYER");
+            l1.setProperty("source", k1.getFullPathName(), nullptr); l2.setProperty("source", k2.getFullPathName(), nullptr);
+            doc.getState().appendChild(l1, nullptr); doc.getState().appendChild(l2, nullptr);
+            auto savedAt = [&](int i) { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(i).getProperty("source").toString(); };
+            for (int round = 0; round < 3; ++round) {
+                check(doc.save(), "save N2 document");
+                check(savedAt(0) == "samples/Kicks_kick.wav" && savedAt(1) == "samples/Kicks_kick_2.wav", "N2: two kits -> two distinct saved sources");
+                check(samples.getChildFile("Kicks_kick.wav").loadFileAsString() == "kit1" &&
+                      samples.getChildFile("Kicks_kick_2.wav").loadFileAsString() == (variant ? "kit1" : "kit2") &&
+                      samples.getChildFile("kick.wav").loadFileAsString() == "own", "N2: contents belong to their sources");
+                check(samples.findChildFiles(juce::File::findFiles, false, "*.wav").size() == 3, "N2: exactly three sample files, stable on re-save");
+                doc.getState().setProperty("touch", round, nullptr);
+            }
+            check(doc.close(), "close N2 document");
+        }
+    }
+    {   // N1: /Packs/Zeta/kick.wav and /Packs/Alpha/kick.wav, empty samples/. Rewriting only Zeta to the relative samples/kick.wav
+        // would make the asset manager's file-name fallback (first sliceMap key named kick.wav = Alpha) give Zeta's layer Alpha's
+        // slice. Both live sources must therefore stay absolute (exact slice-map keys); the saved file maps them to distinct copies.
+        const auto projFile = directory.getChildFile("n1/project.xml");
+        const auto samples = projFile.getParentDirectory().getChildFile("samples");
+        const auto zeta = directory.getChildFile("Packs/Zeta/kick.wav"), alpha = directory.getChildFile("Packs/Alpha/kick.wav");
+        check(zeta.create().wasOk() && zeta.replaceWithText("zeta") && alpha.create().wasOk() && alpha.replaceWithText("alpha"), "seed N1 sources");
+        mt::KickXML doc("ROOT", ".xml", "1");
+        check(doc.loadOrCreate(projFile).isValid(), "create N1 document");
+        juce::ValueTree lz("LAYER"), la("LAYER");
+        lz.setProperty("source", zeta.getFullPathName(), nullptr); la.setProperty("source", alpha.getFullPathName(), nullptr);
+        doc.getState().appendChild(lz, nullptr); doc.getState().appendChild(la, nullptr);
+        auto savedAt = [&](int i) { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(i).getProperty("source").toString(); };
+        for (int round = 0; round < 2; ++round) {
+            check(doc.save(), "save N1 document");
+            check(lz.getProperty("source").toString() == zeta.getFullPathName() && la.getProperty("source").toString() == alpha.getFullPathName(),
+                  "N1: same-named live sources both stay absolute");
+            check(savedAt(0) == "samples/kick.wav" && savedAt(1) == "samples/Alpha_kick.wav", "N1: saved sources are distinct relative copies");
+            check(samples.getChildFile("kick.wav").loadFileAsString() == "zeta" && samples.getChildFile("Alpha_kick.wav").loadFileAsString() == "alpha" &&
+                  samples.findChildFiles(juce::File::findFiles, false, "*.wav").size() == 2, "N1: contents match, no duplicates");
+            doc.getState().setProperty("touch", round, nullptr);
+        }
+        check(doc.close(), "close N1 document");
+    }
     directory.deleteRecursively();
     std::cout << "PASS: actual KickXML autosave, close, worker save, bounded snapshots, failed/unsupported state, dirty/error reporting and retry\n";
 }
