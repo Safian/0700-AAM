@@ -242,7 +242,11 @@ namespace mt
             const juce::ScopedLock w( laneWriteLock );
             {
                 const juce::ScopedLock sl( lock );
-                if( !levelDone ) laneLevel.swap( emptyL );
+                if( !levelDone )
+                {
+                    laneLevel.swap( emptyL );
+                    levelScaler = ( MTITrackData::level.get() * MIDI::SCALER ); // F7: back to the stored level
+                }
                 if( !panDone ) lanePan.swap( emptyP );
             }
             if( !levelDone ) laneCommitted = "";
@@ -419,6 +423,8 @@ namespace mt
                 {
                     const juce::ScopedLock sl( lock );
                     laneLevel.swap( next );
+                    if( laneLevel.empty() ) // F7: no lane: do not stay on the last automated level
+                        levelScaler = ( MTITrackData::level.get() * MIDI::SCALER );
                 }
                 laneRec.reset();
                 laneApplied.store( -1 );
@@ -496,6 +502,12 @@ namespace mt
         if (auto* p = program.load()) p->updatePluginTransport(seq.getBPM(), 0, false);
         arpPanic();
         stopAllMidiNotes();
+        if( auto* p = program.load() ) // F16: all-notes-off no longer centres the pitch bend; only a real stop does
+        {
+            juce::Array<juce::MidiMessage> centre;
+            centre.add( juce::MidiMessage::pitchWheel( getMidiOutChannel(), 8192 ) );
+            p->noteProcess( centre );
+        }
         isPlaying = false;
         trackPlayhead.clear();
         trackPlayhead.bnb.bar = seq.isLooping.get() ? juce::jmax<int>( 0, seq.getLoopStart() - 1 ) : 0;
@@ -767,6 +779,8 @@ namespace mt
             {
                 if( isTrackEffectivelyMuted() )
                     continue; // keep stepping while muted, just stay silent
+                if( getEffectiveNoteVelocity( e.velocity ) <= 0 )
+                    continue; // track level 0 (or automated to 0): silent, like the sequence notes (no jlimit up to 1)
                 const int eff = juce::jlimit( 0, 127, getEffectiveNoteNo( e.note ) );
                 const int vel = juce::jlimit( 1, 127, getEffectiveNoteVelocity( e.velocity ) );
                 Out.insert( -1, juce::MidiMessage::noteOn( getMidiOutChannel(), eff, (juce::uint8)vel ) );
@@ -824,11 +838,22 @@ namespace mt
         const double ticksPerMs = double( seq.getBPM() ) * defaultPPQN / 60000.0;
         auto         notes      = live::pairEvents( liveRing.snapshot(), juce::Time::currentTimeMillis(), WindowMs, isPlaying.load(), ticksPerMs, len );
         int          committed  = 0;
-        for( const auto& n : notes )
-            if( 0 == addOrModifyNote( n.note, n.startTick, n.lengthTicks, n.velocity ) )
-                ++committed;
+        {
+            // F2: the tick thread walks the note HashMap under `lock`; the edits below rebuild that map. Lock order:
+            // MTTrack::lock, then MTNoteList::lock (see timingCorrectLocked).
+            const juce::ScopedLock sl( lock );
+            for( const auto& n : notes )
+                if( 0 == addOrModifyNote( n.note, n.startTick, n.lengthTicks, n.velocity ) )
+                    ++committed;
+        }
         if( committed ) liveRing.clear(); // each captured note is committed once
         return committed;
+    }
+
+    int MTTrack::timingCorrectLocked( const track::timingCorrectInfo& Info, const std::set<int>* OnlyIds )
+    {
+        const juce::ScopedLock sl( lock ); // see the lock order in the header
+        return MTNoteList::timingCorrect( Info, OnlyIds, (int)lengthInTicks.load() );
     }
 
     int MTTrack::processIncomingMidiMessage( const MTMidiMessage& Msg )
