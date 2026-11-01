@@ -594,12 +594,18 @@ namespace mt
 
     void MTAudioManager::seqRecBeforePlay( int Seq )
     {
-        bool clear = false;
+        // The Looper's sync record also calls setSequencePlay(Now) (LoopRecorder::record, after setLooperRecord): that play
+        // must not start a sequence take (it would erase the armed tracks' notes while the user records the Looper).
+        const bool looperBusy = getLooper()->isRecording() || getLooper()->isOverdubbing();
+        bool       clear      = false;
         {
             const juce::ScopedLock sl( seqRecLock );
             if( seqrec::Phase::Armed != seqRec.phase || Seq != seqRecSeq )
                 return;
-            seqRec          = seqrec::onPlayStarted( seqRec, clear );
+            const seqrec::Control next = seqrec::onPlayStartedUnlessLooper( seqRec, looperBusy, clear );
+            if( next.phase == seqRec.phase )
+                return; // Looper recording: stay Armed, no take
+            seqRec          = next;
             seqRecIdlePolls = 0;
         }
         // Count-in: the metronome setting only offers "Off" (kick_modeHeader.cpp), so a take starts at once.
