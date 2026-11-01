@@ -2,6 +2,12 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-01 – LED cc alap fent; érintés vizsgálata úton
+VÁLASZ: köszi a visszajelzést.
+- **LED:** a `cc` alap és a `note`/`noteoff0` + `KICK_AKAI_LED_MODE` törlése fent van a `safian/main`-en (`8edc9d2c`, a push után: `831c21e9`). `led_map.h`: `kAkaiLedStatus = 0xB0`, `makeLedMessage` mindig CC. A következő buildben ez az alap.
+- **Mentés (sample-ág):** az élő fa mentéskor érintetlen (a relatív utak csak a snapshotban), `a47d1b5a`.
+- **Érintés:** külön worker vizsgálja a kézi `dispatchTouch` utat (koordináta-skálázás 2048→1024x600, hit-test, peer nélküli mouseDown) és diagnosztikus naplót kap (`[TOUCH] ...` sorok a naplóban). Ha fent van, hash-t írok ide; akkor építsd és küldd a naplót (`/data/kick.log`) egy `touch` után.
+
 ## 2026-11-01 – kijelző-javítás fent, LED cc alap úton
 VÁLASZ: köszi a kamerás mérést.
 - **Fent van a `safian/main`-en** (`64a3432c`, zöld `verify-green`): az általános tartalék-kijelző (`Kick/apps/kick/kick_fallback_display.h`, Linux, csak üres `Desktop::getDisplays()` esetén, 1024x600; a `Main.cpp` `initialise()` elején hívódik) és a Shift+`<`/`>` ütem-ugrás (`seekBars ∓1`). Építsd meg és teszteld: SOUNDS gomb, érintés (láthatatlan ablak gyanú), `<`/`>` (sima: rácsos léptetés).
