@@ -209,3 +209,18 @@ Build: `safian/main` `c4ec7f35` (`-g`), `KICK_NO_HARDWARE=1 KICK_NO_SERIAL_DEVIC
 **Megjegyzés a koordinátákhoz:** a `kick_cmd` `touch X Y` framebuffer-koordináta (1280x800), és a snapshot (ppm) ugyanezt a teret mutatja, tehát a snapshotban látott pont közvetlenül használható. A postaládában megadott "Program fül ~550,193" nem pontos: a Program fül a snapshotban kb. (440,145).
 
 A húzás (`mouseDrag`) külön naplósort nem ír; a csúszka és a tekerő a felhasználó megfigyelése szerint működik.
+
+## 14. kör – szekvenciafelvétel (REC + PLAY): HIÁNYZÓ FUNKCIÓ (`safian/main` `b65dc8c6` build)
+**Megfigyelés (felhasználó + napló + snapshot):** az 1. sáv Record gombja élesítve (piros pont, a képernyőn), a lejátszás fut, a hardveres REC és OVERDUB gomb eseménye megérkezik (`[AKAI-BTN] note=73 / 80` lenyomás–felengedés párok), a pad-leütésre a Grid kijelölése a megfelelő sorra ugrik, **de a hang-esemény nem kerül a sávba**, és a REC/OVERDUB LED nem világít.
+
+**Tények a kódból:**
+- `mt_audio_sequence.h` (101–103): `getRecordState/setRecordState/isArmed/isRecording` (`RecordState`: NotArmed, Armed, Recording) létezik, de **semmi nem hívja a `setRecordState`-et** a motoron kívül (UI, bridge).
+- Az `EN_RECORD` / `EN_OVERDUB` egyetlen fogyasztója a Looper (`kick_LoopRecorder.cpp:173–174`: REC → `record(false)`, OVERDUB → `record(true)`). A REC/OVERDUB LED is a looper állapotát követi (`led_map.h` megjegyzés, `updateRecOverdubLeds`).
+- A motorban nincs élő felvétel-útvonal, ami a pad-/billentyű-leütést az élesített sáv eseményei közé írná.
+
+**Az útmutató szerint (MPC v3.10; Key 61 vezérlő-leírás 9., 10. tétel; "Recording a Drum Sequence" fejezet; Main Mode "Rec Arm"):**
+1. A Main Mode alján a **SEQ REC ARM** gomb bekapcsolva; a sáv fejlécén a sáv **Rec Arm** (Record gomb / a Track Settings "Rec Arm" mező On); a Preferences "Rec Arm Behavior" (Single/Multi) szabályozza az élesített sávok számát.
+2. A hardveres **REC** gomb élesíti a felvételt ("record-arm the sequence"); a **PLAY** vagy **PLAY START** indítja a felvételt; metronóm count-in egy ütemig.
+3. **REC** felvétele törli a szekvencia eseményeit; **OVERDUB** a meglévőket megtartja ("record note events without overwriting"), felvétel előtt vagy közben kapcsolható; egy kör után az Overdub bekapcsol.
+4. **Shift+REC = Recall** (a felvétel nélkül játszott MIDI beszúrása).
+Az útmutató a REC/OVERDUB LED-színt nem írja le.

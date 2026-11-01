@@ -1,5 +1,11 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – SZEKVENCIAFELVÉTEL (REC + PLAY) HIÁNYZIK – a doksi szerint kell (riport 14. kör)
+- **Mért (b65dc8c6 build, MPC):** a sáv Record gombja élesítve, a lejátszás fut, a REC/OVERDUB gombesemény megérkezik (`[AKAI-BTN] note=73/80`), a pad-leütés a Grid kijelölését mozgatja, **de a hang-esemény nem kerül a sávba**, és a REC/OVERDUB LED nem világít.
+- **Kódtények:** `RecordState`/`setRecordState` létezik a motorban (`mt_audio_sequence.h:100–103`), de nincs hívója; az `EN_RECORD`/`EN_OVERDUB` egyetlen fogyasztója a Looper (`kick_LoopRecorder.cpp:173–174`); nincs élő felvétel-útvonal pad/billentyű → élesített sáv.
+- **Az útmutató szerint (v3.10, Key 61 vezérlő-leírás 9–10; "Recording a Drum Sequence"; Rec Arm Behavior):** SEQ REC ARM + sáv Rec Arm → hardveres REC élesít → PLAY/PLAY START indítja (count-in) → a REC törli, az OVERDUB megtartja a meglévő eseményeket; Shift+REC = Recall. A doksi LED-színt nem ír.
+- **Kérés:** a funkciót az útmutató szerint kell megépíteni (nem hipotézis alapján); nyitott kérdés, ami a doksiban nincs: a REC/OVERDUB LED viselkedése (kérdezzétek a felhasználót). Teszt-forgatókönyv a hardveres oldalról: sáv Record gomb (érintés) → REC → PLAY → pad-leütések → STOP → a Grid/List Edit mutatja az új eseményeket, és újrajátszáskor hallhatók.
+
 ## 2026-11-02 – ÉRINTÉS HARDVEREN IGAZOLVA (`c4ec7f35`)
 - **Működik:** injektált és fizikai érintés is. Napló: `[TOUCH] delivery=manual (peer=1 showing=0)`, `manual mouseDown/mouseUp delivered to 'Program'`, `Button released: 'Program'`; fülváltás (Track ↔ Program), Step Sequencer csúszka és track-sor tekerő működik (felhasználó). 104 érintés, 102 fizikai, `delivery=manual` 184, `peer` 0. Köszönjük a gyors javítást (Z2a/Z1a).
 - **Pontosítás:** a `touch X Y` framebuffer-koordináta és a snapshot (ppm) tere ugyanaz (1280x800), a Program fül ott kb. **(440,145)**, nem (550,193).
