@@ -120,6 +120,11 @@ set_tests_properties(kick-system-probe PROPERTIES TIMEOUT 10)
 add_executable(kick-automation-tests AutomationTests.cpp)
 add_test(NAME kick-automation COMMAND kick-automation-tests)
 set_tests_properties(kick-automation PROPERTIES TIMEOUT 10)
+
+# Program pan -> MIDI CC10 value mapping; JUCE-free, header only.
+add_executable(kick-midi-pan-tests MidiPanTests.cpp)
+add_test(NAME kick-midi-pan COMMAND kick-midi-pan-tests)
+set_tests_properties(kick-midi-pan PROPERTIES TIMEOUT 10)
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()
