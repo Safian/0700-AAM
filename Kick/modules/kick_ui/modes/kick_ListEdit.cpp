@@ -267,6 +267,7 @@ namespace kick_ui
                 case contracts::DeviceControlContracts::EN_PLAY: ae.setSequencePlay( aeSel.sequence, false, true ); break;
                 case contracts::DeviceControlContracts::EN_PLAYSTART: ae.setSequencePlay( aeSel.sequence, true, true ); break;
                 case contracts::DeviceControlContracts::EN_STOP: ae.setSequencePause(); break;
+                case contracts::DeviceControlContracts::EN_TC: tcButton.onClick(); break;
             }
         }
         tableView->enableSelectMode( false );

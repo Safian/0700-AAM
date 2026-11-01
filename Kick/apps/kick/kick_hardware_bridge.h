@@ -848,7 +848,8 @@ public:
             }
             case HW_BTN_AUTOMATION:
             {
-                // +Shift = OFF -> EN_ON_OFF (same as keyboard 'N'). Note: no UI code consumes EN_ON_OFF yet.
+                // +Shift = OFF -> EN_ON_OFF (same as keyboard 'N'). Note: no UI code consumes EN_ON_OFF / EN_AUTOMATION yet:
+                // the engine has no automation read/write/off mode (see docs T30).
                 m_automation_sent_code = isShiftDown() ? contracts::DeviceControlContracts::BtnLedSequence::EN_ON_OFF : contracts::DeviceControlContracts::BtnLedSequence::EN_AUTOMATION;
                 sendButtonMsg(m_automation_sent_code, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
@@ -878,7 +879,8 @@ public:
             }
             case HW_BTN_TC:
             {
-                // +Shift = ON/OFF -> EN_ON_OFF (same as keyboard 'N'). Note: no UI code consumes EN_ON_OFF / EN_TC yet.
+                // +Shift = ON/OFF -> EN_ON_OFF (same as keyboard 'N'). EN_TC opens the Timing Correct dialog (ListEditMode);
+                // EN_ON_OFF has no consumer: the engine has no global timing-correct on/off (see docs T30).
                 m_tc_sent_code = isShiftDown() ? contracts::DeviceControlContracts::BtnLedSequence::EN_ON_OFF : contracts::DeviceControlContracts::BtnLedSequence::EN_TC;
                 sendButtonMsg(m_tc_sent_code, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
