@@ -58,6 +58,8 @@ Minden gomb: lenyomás → várt funkció; felengedés → **nem ragad be** (T6b
 - [ ] A kimenet peak ~0 dBFS körül (korábbi −54 dBFS hiba javítva); Main és Phones.
 - [ ] Audio bemenet (INPUT 1/2, +48V): a Looper/Sampler látja-e (a teljes app a JUCE audioeszközt használja, nem az adaptert).
 
+- [ ] **MIDI program PAN → CC10** (`def27ac2`): egy MIDI programnál a mixer PAN-gombja CC10-et küld a külső portra (bal szélső 0, közép 64, jobb szélső 127; azonos értéknél nem ismétel); **projekt betöltésekor ne menjen ki felesleges CC10**.
+
 ## 7. Próbák, amik döntést hoznak (nem hibakeresés)
 **Egyszerűen:** az app futása közben `echo probe > /data/kick_cmd`, majd küldd el a `/data/kick_probe.txt` tartalmát (csak olvasó rendszerjelentés). Kézzel, ha kell (root):
 ```
