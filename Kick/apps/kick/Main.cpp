@@ -25,6 +25,7 @@
 #include "kick_audio_engine_adapter.h"
 #include "kick_audio_interface.h"
 #include "kick_mobile_t_layout.h"
+#include "kick_fallback_display.h"
 #if JUCE_MAC
  #include "kick_hardware_chassis.h"
 #endif
@@ -199,6 +200,9 @@ public:
         adapter.reset( new KickDeviceAdapter() );
         // This method is where you should put your application's initialisation code ...
         const bool smoke = commandLine.contains("--smoke-test");
+        // Headless hardware (no X server): register a fallback display before any UI is built, so the many
+        // parent-less setBoundsRelative() calls do not dereference a null Display (hardware issue 8).
+        const bool usingFallbackDisplay = kick_app::ensureFallbackDisplay();
 #if ! JUCE_IOS
         if (!smoke) juce::Desktop::getInstance().getMainMouseSource().enableUnboundedMouseMovement(true, true);
 #endif
@@ -244,7 +248,9 @@ public:
         // Headless (no X server / display, e.g. the MPC framebuffer bridge): JUCE's Linux setKioskComponent()
         // dereferences getDisplayForRect() unchecked and a native peer cannot be created. The bridge renders
         // the component tree itself (peer-less touch path), so keep the window hidden and skip kiosk mode.
-        const bool hasDisplay = ! juce::Desktop::getInstance().getDisplays().displays.isEmpty();
+        // The fallback display registered above makes the list non-empty, so use its return value instead:
+        // a real display exists only if ensureFallbackDisplay() found one already there (behaviour as before).
+        const bool hasDisplay = ! usingFallbackDisplay;
 
         // Visibility...
         w->setVisible(!smoke && hasDisplay);
