@@ -939,6 +939,37 @@ namespace mt
         return -1;
     }
 
+    int MTAudioInterface::seekToTick( int Sequence, int Tick )
+    {
+        if( auto s = manager->getSequence( Sequence ) ) return s->seekToTick( Tick );
+        return -1;
+    }
+
+    int MTAudioInterface::getSequenceSeekTick( int Sequence )
+    {
+        if( auto s = manager->getSequence( Sequence ) ) return s->getSeekTick();
+        return -1;
+    }
+
+    int MTAudioInterface::findEventTick( const MTSelected& Selection, int FromTick, int Direction )
+    {
+        auto t = manager->getTrack( Selection );
+        if( !t || 0 == Direction )
+            return -1;
+
+        // Copy the start ticks out first (the ValueTree-backed notes are only valid on the thread that edits them).
+        std::vector<MTNote> notes;
+        if( 0 != t->getNotesInRange( notes, NotesInRange{} ) ) // default range: every note number, whole timeline
+            return -1;
+
+        std::vector<int> starts;
+        starts.reserve( notes.size() );
+        for( const auto& n : notes )
+            starts.push_back( n.start.get() );
+
+        return event_seek::findEvent( starts, FromTick, Direction );
+    }
+
     void MTAudioInterface::setBBT( int knob, int value )
     {
         manager->getSequence()->setBBT( knob, value );
