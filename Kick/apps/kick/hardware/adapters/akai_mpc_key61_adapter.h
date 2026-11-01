@@ -2,6 +2,7 @@
 
 #include "../hardware_adapter.h"
 #include "../midi_parser.h"
+#include "../led_map.h"
 #include <alsa/asoundlib.h>
 #include <linux/input.h>
 #include <fcntl.h>
@@ -266,6 +267,7 @@ class AkaiMpcKey61ControlSurfaceAdapter : public IControlSurfaceAdapter {
 private:
     snd_rawmidi_t *m_in0, *m_in1, *m_in2;
     snd_rawmidi_t *m_out0, *m_out1, *m_out2;
+    kick_hw::LedLevelCache m_led_cache; // last level per button LED (only changes are written)
     pthread_t m_thread;
     volatile bool m_running;
     IHardwareEventListener* m_listener;
@@ -565,6 +567,7 @@ public:
         // until verified on a device; then drop the Port 0 write if it is not needed.
         if (m_out0) snd_rawmidi_write(m_out0, akai_init, sizeof(akai_init));
         snd_rawmidi_write(m_out1, akai_init, sizeof(akai_init));
+        m_led_cache.reset(); // after the mode set the device state is unknown: the next write of each LED goes out
 
         m_running = true;
         pthread_create(&m_thread, NULL, thread_entry, this);
@@ -572,30 +575,22 @@ public:
         return true;
     }
 
+    // Both go through the level based path: the last level per LED is cached, only changes reach ALSA.
+    // Called from several threads (message thread, timer, MIDI reader); the 3-byte snd_rawmidi_write is not
+    // locked (see T16) - kept cheap, not made thread-safe here.
     void set_led(HardwareLed led, bool on, uint32_t rgb = 0) override {
         (void)rgb;
+        set_led_level(led, on ? kick_hw::kLedFullA : kick_hw::kLedOff);
+    }
+
+    void set_led_level(HardwareLed led, int level) override {
         if (!m_out1) return;
-        int note = -1;
-        switch (led) {
-            case HW_LED_PLAY: note = 82; break;
-            case HW_LED_STOP: note = 81; break;
-            case HW_LED_REC: note = 73; break;
-            case HW_LED_OVERDUB: note = 80; break;
-            case HW_LED_OCTAVE_DOWN: note = 7; break;
-            case HW_LED_OCTAVE_UP: note = 10; break;
-            case HW_LED_FULL_LEVEL: note = 39; break;
-            case HW_LED_16_LEVELS: note = 40; break;
-            case HW_LED_NOTE_REPEAT: note = 11; break;
-            case HW_LED_BANK_A: note = 35; break;
-            case HW_LED_BANK_B: note = 36; break;
-            case HW_LED_BANK_C: note = 37; break;
-            case HW_LED_BANK_D: note = 38; break;
-            default: break;
-        }
-        if (note != -1) {
-            uint8_t msg[3] = { (uint8_t)0x90, (uint8_t)note, (uint8_t)(on ? 127 : 0) };
-            snd_rawmidi_write(m_out1, msg, 3);
-        }
+        bool twoColour = false;
+        const int note = kick_hw::akaiLedNote(led, twoColour);
+        if (note < 0) return;
+        if (!m_led_cache.update(led, level)) return;
+        uint8_t msg[3] = { (uint8_t)0x90, (uint8_t)note, kick_hw::akaiLedValue(twoColour, level) };
+        snd_rawmidi_write(m_out1, msg, 3);
     }
 
     void set_touch_strip_leds(int val) override {

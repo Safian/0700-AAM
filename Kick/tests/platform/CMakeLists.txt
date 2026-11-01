@@ -91,6 +91,10 @@ endif()
 # Timing correct (note quantize) logic; JUCE-free, header only.
 add_executable(kick-timing-correct-tests TimingCorrectTests.cpp)
 add_test(NAME kick-timing-correct COMMAND kick-timing-correct-tests)
+# Button LED helpers (note map, levels, write cache); JUCE-free, header only.
+add_executable(kick-led-map-tests LedMapTests.cpp)
+add_test(NAME kick-led-map COMMAND kick-led-map-tests)
+set_tests_properties(kick-led-map PROPERTIES TIMEOUT 10)
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()
