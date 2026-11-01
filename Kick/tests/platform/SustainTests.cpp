@@ -3,6 +3,8 @@
 #include "../../modules/engine/audio_program/source/mt_sustain.h"
 #include <cstdio>
 #include <vector>
+#include <thread>
+#include <atomic>
 
 static int g_fail = 0;
 #define CHECK( c ) do { if( !( c ) ) { std::printf( "FAIL %s:%d  %s\n", __FILE__, __LINE__, #c ); ++g_fail; } } while( 0 )
@@ -118,6 +120,30 @@ int main()
         CHECK( s.seqCount( 64 ) == 0 );
         s.onSeqNoteOn( 65 ); s.onAllOff();
         CHECK( s.seqCount( 65 ) == 0 );
+    }
+    { // two-thread stress: pedal toggles vs sequencer note on/off on the same pitch (+ a live note held by the pedal).
+      // Invariant at the end: pedal up and no sequencer note active -> nothing is held (no stuck voice).
+        SustainState s;
+        std::atomic<int> relCount{ 0 };
+        auto Rel = [&]( int ) { ++relCount; };
+        std::thread a( [&] {
+            for( int i = 0; i < 200000; ++i )
+            {
+                s.onCC64( 127, Rel );
+                s.onNoteOff( 60 ); // live note-off while pedal down: held
+                s.onCC64( 0, Rel );
+            }
+        } );
+        std::thread b( [&] {
+            for( int i = 0; i < 200000; ++i )
+            {
+                s.onSeqNoteOn( 60 );
+                (void)mt::releaseNowOnNoteOff( s, false, 60 );
+            }
+        } );
+        a.join(); b.join();
+        s.onCC64( 0, Rel );
+        CHECK( !s.isDown() && !s.isHeld( 60 ) && s.seqCount( 60 ) == 0 );
     }
     if( g_fail ) return 1;
     std::printf( "SustainTests OK\n" );

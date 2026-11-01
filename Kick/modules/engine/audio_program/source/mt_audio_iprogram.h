@@ -304,7 +304,7 @@ namespace mt
 
         MTMidiMeter midiMeter{ 40 };
 
-        // Sustain pedal (CC64). Only touched from noteProcess/resetPerformance (MIDI/audio thread).
+        // Sustain pedal (CC64). noteProcess/resetPerformance run on several threads (tick, message, ALSA reader); SustainState locks internally.
         SustainState sustain;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( MTIProgram )
