@@ -923,12 +923,14 @@ namespace mt
 
     int MTAudioInterface::seekToBar( int Sequence, int Bar0 )
     {
+        if( manager->isSongActive() ) return -1; // song mode: playTime counts raw clock ticks, a seek would desync it
         if( auto s = manager->getSequence( Sequence ) ) return s->seekToBar( Bar0 );
         return -1;
     }
 
     int MTAudioInterface::seekBars( int Sequence, int DeltaBars )
     {
+        if( manager->isSongActive() ) return -1; // song mode: playTime counts raw clock ticks, a seek would desync it
         if( auto s = manager->getSequence( Sequence ) ) return s->seekBars( DeltaBars );
         return -1;
     }
@@ -941,6 +943,7 @@ namespace mt
 
     int MTAudioInterface::seekToTick( int Sequence, int Tick )
     {
+        if( manager->isSongActive() ) return -1; // song mode: playTime counts raw clock ticks, a seek would desync it
         if( auto s = manager->getSequence( Sequence ) ) return s->seekToTick( Tick );
         return -1;
     }
