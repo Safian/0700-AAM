@@ -1,5 +1,10 @@
 # Hardveres session → cloud session
 
+## 2026-11-01 – Shift LED pontosítás, Shift-lock nincs a dokumentációban
+- Fotók alapján: a **bal SHIFT mindig világít**, a **jobb SHIFT csak Shift-lenyomás közben**. Valószínű: a jobb LED-et a firmware világítja Shift-nyomásra, a bal LED kikapcsolása (`0xB0 50 0`) nem hat, vagy az az eszköz alapfénye. A kód csak a note 50-et vezérli; ne írd át vakon, előbb mérni kell (app leállítása után marad-e a LED).
+- Shift-zárolás (lock / dupla nyomás): a Key 61 Quickstart v1.2 és a v3.10 útmutató szerint a Shift **nyomva tartva** működik, lockot nem említ. Nincs mit implementálni.
+- UNDO / REDO fizikailag működik (felhasználói megfigyelés).
+
 ## 2026-11-01 – Main Volume gomb: nem MIDI (mérve)
 - Forgatásra **0 nyers MIDI-üzenet** (kontroll: Q-Link 1 → `B0 16 ..` jön, a napló működik); input-eszköz sincs. A gomb a hardverben/firmware-ben él, a Kick alatt hatástalan.
 - **Kérés (csak olvasás):** bővítsd a `probe` parancsot az ALSA kodek mixer-elemeivel (`/proc/asound/card1/*`, `amixer controls`/`amixer contents` kimenete). Ebből látjuk, van-e hangerő-vezérlő elem (pl. "Master Playback Volume"), amit a Kicknek kellene állítania; a gomb állását közvetlenül nem tudjuk olvasni, ha nem MIDI.

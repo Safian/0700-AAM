@@ -122,7 +122,8 @@ A felhasználó a fizikai gombokat (alap és Shift) megnyomta, és fotót küld�
 ### 9. hiba – Timing Correct ablak modális, hardverrel nem zárható (érintés nélkül "lefagy")
 A TC gomb megnyitja a Timing Correct ablakot. Mivel az érintés nem működik, a Cancel, Apply és X nem érhető el, és a hardveres gombok (MAIN, Shift+TC / ON/OFF) nem zárják be (a snapshot szerint az ablak MAIN után is nyitva marad, a háttér vált). Az app közben él (renderel, a `kick_cmd` válaszol, nincs coredump), a felhasználó mégis "lefagyásként" éli meg. Javítás: hardveres gomb zárja be az ablakot (pl. STOP/ENTER = Apply, SHIFT+STOP vagy Back = Cancel), és az érintés működjön. Újraindítással oldottam meg.
 
-### 10. hiba – a két Shift LED nem szinkronos
+### 10. hiba – a két Shift LED nem szinkronos (pontosítva a felhasználó fotói alapján)
+Megfigyelés: a **bal SHIFT mindig világít**, a **jobb SHIFT csak akkor, ha valamelyik Shift le van nyomva**; a működés mindkettőnél rendben. A Key 61 útmutató szerint a Shift **nyomva tartva** működik ("Press and hold this button ..."), Shift-zárolást (lock / dupla nyomás) sem a Quickstart v1.2, sem a v3.10 útmutató nem említ. Lehetséges ok: a jobb Shift LED-et a firmware világítja (nem a Kick), a bal LED kikapcsolása nem hat. Az eredeti leírás:
 `led_map.h`: `HW_LED_SHIFT → note 50` ("left Shift; the right Shift (49) is not driven"). A bal Shift világít, a jobb nem; a felhasználó szerint a két Shift világítása nem szinkronos, a működés viszont igen. Javítás: a LED-et mindkét notera (49 és 50) írni.
 
 ### Main Volume
