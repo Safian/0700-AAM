@@ -4,6 +4,7 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "hardware/device_factory.h"
 #include "hardware/pad_colour_map.h"
+#include "hardware/key_transpose.h"
 #include "contracts/dcl/dcl_signals.h"
 #include "contracts/dcl/dcl_contracts.h"
 #include "contracts/dcl/dcl_contracts_helper.h"
@@ -41,7 +42,7 @@ private:
     struct PressedCodes { std::array<int, 128> v; PressedCodes() { v.fill(-1); } };
     PressedCodes m_pressed_code;
     int m_current_bank = 0;
-    int m_octave_offset = 0;
+    KeyTranspose m_key_transpose;
     int m_key_pitch_map[128];
 
     // Project pad colours (DCL EN_PAD_SET_COLOUR_STATE). Written by the sendCommandToDcl handler
@@ -61,12 +62,20 @@ private:
     std::atomic<uint16_t> m_pad_dirty { 0 };      // pads whose project colour changed, to be written by the timer
     std::atomic<uint16_t> m_pad_held { 0 };       // pads currently flashing (hit); the timer must not overwrite them
     std::atomic<bool> m_have_project_colours { false };
+    std::atomic<bool> m_pad_aftertouch_enabled { false }; // set by the UI via EN_PAD_SET_AFTER_TOUCH
+    std::atomic<uint8_t> m_pad_last_vel[16] = {};         // note-on velocity of the held pad (aftertouch packet field 3)
     sigslot::connection m_pad_colour_conn;
 
     void onDclCommand(std::shared_ptr<ipc::MTIPCJson> message)
     {
         CPktMgr::HWMsg_t msg;
         if (!contracts::DclContractsHelper::ipcMessageToHWMessage(message, msg)) return;
+        if (msg.pktType == CPktMgr::EN_PKT_TYPE_PAD &&
+            msg.pktCmd == contracts::DeviceControlContracts::EN_PAD_SET_AFTER_TOUCH && !msg.data.empty()) {
+            // The UI (Hardware settings) switches pad aftertouch reports on/off, as it does on the Kick hardware.
+            m_pad_aftertouch_enabled = msg.data[0] != 0;
+            return;
+        }
         if (msg.pktType != CPktMgr::EN_PKT_TYPE_PAD ||
             msg.pktCmd != contracts::DeviceControlContracts::EN_PAD_SET_COLOUR_STATE) return;
         if (msg.data.size() < 32) return; // [16 x colour id][16 x state]
@@ -153,8 +162,8 @@ private:
     void updateOctaveLeds()
     {
         if (m_hw && m_hw->control_surface()) {
-            m_hw->control_surface()->set_led(HW_LED_OCTAVE_DOWN, m_octave_offset < 0);
-            m_hw->control_surface()->set_led(HW_LED_OCTAVE_UP, m_octave_offset > 0);
+            m_hw->control_surface()->set_led(HW_LED_OCTAVE_DOWN, m_key_transpose.octave() < 0);
+            m_hw->control_surface()->set_led(HW_LED_OCTAVE_UP, m_key_transpose.octave() > 0);
         }
     }
 
@@ -624,21 +633,14 @@ public:
                 break;
             }
             case HW_BTN_OCTAVE_DOWN:
-            {
-                if (m_octave_offset > -3) {
-                    m_octave_offset--;
-                    updateOctaveLeds();
-                    printf("[BRIDGE] Octave transposed to %d\n", m_octave_offset);
-                    fflush(stdout);
-                }
-                break;
-            }
             case HW_BTN_OCTAVE_UP:
             {
-                if (m_octave_offset < 3) {
-                    m_octave_offset++;
+                // OCT-/OCT+ = octave offset, Shift+OCT-/OCT+ = semitone transpose, both together = reset both.
+                // Sounding pitches of held keys are stored at note-on (m_key_pitch_map), so this is safe mid-note.
+                const auto act = m_key_transpose.press(btn == HW_BTN_OCTAVE_UP, isShiftDown());
+                if (act != KeyTranspose::None) {
                     updateOctaveLeds();
-                    printf("[BRIDGE] Octave transposed to %d\n", m_octave_offset);
+                    printf("[BRIDGE] Octave %d, transpose %d semitones\n", m_key_transpose.octave(), m_key_transpose.semitone());
                     fflush(stdout);
                 }
                 break;
@@ -961,6 +963,10 @@ public:
             case HW_BTN_LOCATE:
                 m_locate_pressed = false;
                 break;
+            case HW_BTN_OCTAVE_DOWN:
+            case HW_BTN_OCTAVE_UP:
+                m_key_transpose.release(btn == HW_BTN_OCTAVE_UP);
+                break;
             case HW_BTN_STOP:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_STOP, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
@@ -1106,11 +1112,33 @@ public:
                                                juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
     }
 
+    void on_channel_aftertouch(int val) override
+    {
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::channelPressureChange(1, val));
+    }
+    void on_mod_wheel(int val) override
+    {
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::controllerEvent(1, 1, val));
+    }
+    void on_expression(int val) override
+    {
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::controllerEvent(1, 11, val));
+    }
+    void on_footswitch2(bool down) override
+    {
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::controllerEvent(1, 65, down ? 127 : 0));
+    }
+
     void on_pad_note_on(int pad_num, int vel) override
     {
         if (pad_num >= 0 && pad_num < 16)
         {
             m_pad_held.fetch_or(uint16_t(1u << pad_num));
+            m_pad_last_vel[pad_num] = static_cast<uint8_t>(vel);
             if (m_hw && m_hw->control_surface()) {
                 // Flash pad bright white/cyan on hit!
                 m_hw->control_surface()->set_pad_rgb(pad_num, 127, 127, 127);
@@ -1123,6 +1151,23 @@ public:
             // The sound is started by the active screen's handleCommand() (Grid, PadMixer, PadPerform,
             // PadColor, FileBrowser, MainMode) from this DCL packet. Do not also start the note here,
             // otherwise those screens trigger every hit twice.
+            contracts::DclSignals::dispatchHardwareInput(msg);
+        }
+    }
+
+    void on_pad_aftertouch(int pad_num, int val) override
+    {
+        // Kick reports pad pressure as the 4th field of EN_PAD_STATE (see DclContractsHelper::getPadAftertouch).
+        // That packet also starts the sound in several screens, so (like the Kick hardware, which only reports
+        // it after EN_PAD_SET_AFTER_TOUCH) send it only when enabled and while the pad is held.
+        if (pad_num >= 0 && pad_num < 16 && m_pad_aftertouch_enabled.load() &&
+            (m_pad_held.load() & (1u << pad_num)) != 0)
+        {
+            CPktMgr::HWMsg_t msg;
+            msg.pktType = CPktMgr::EN_PKT_TYPE_PAD;
+            msg.pktCmd = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
+            msg.data = { pad_num, contracts::DeviceControlContracts::BTN_PRESSED, (int)m_pad_last_vel[pad_num].load(),
+                         juce::jlimit(0, 127, val) };
             contracts::DclSignals::dispatchHardwareInput(msg);
         }
     }
@@ -1149,7 +1194,7 @@ public:
 
     void on_keybed_note_on(int pitch, int vel) override
     {
-        int sounding_pitch = juce::jlimit(0, 127, pitch + m_octave_offset * 12);
+        int sounding_pitch = m_key_transpose.soundingPitch(pitch);
         if (pitch >= 0 && pitch < 128) {
             m_key_pitch_map[pitch] = sounding_pitch;
         }
@@ -1160,7 +1205,7 @@ public:
     {
         int sounding_pitch = (pitch >= 0 && pitch < 128 && m_key_pitch_map[pitch] >= 0)
                              ? m_key_pitch_map[pitch]
-                             : juce::jlimit(0, 127, pitch + m_octave_offset * 12);
+                             : m_key_transpose.soundingPitch(pitch);
         if (pitch >= 0 && pitch < 128) {
             m_key_pitch_map[pitch] = -1;
         }
