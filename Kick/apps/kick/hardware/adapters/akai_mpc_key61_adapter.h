@@ -334,6 +334,12 @@ private:
     bool m_port0_writes = true;
     std::atomic<int> m_strip_msb { 0 };   // last CC33 / CC34 of the touch strip (14-bit position)
     std::atomic<int> m_strip_lsb { 0 };
+    // LED wire format (hw test report (a): LEDs stay lit although 0x90 <note> 0x00 goes out). Set once in start()
+    // from KICK_AKAI_LED_MODE = note (default) | cc | noteoff0. Test on the device:
+    //   KICK_AKAI_LED_MODE=cc ./Kick     (or noteoff0) and watch whether the STOP/PLAY LEDs go off at start.
+    kick_hw::LedWire m_led_wire = kick_hw::LedWire::Note;
+    std::atomic<bool> m_out1_err_logged { false }; // first snd_rawmidi_write error per output handle
+    std::atomic<bool> m_out0_err_logged { false };
     kick_hw::LedLevelCache m_led_cache; // last level per button LED (only changes are written)
     pthread_t m_thread;
     volatile bool m_running;
@@ -350,9 +356,18 @@ private:
     std::mutex m_out1_mutex;
 
     // The write is the only thing under the lock (plus the LED cache update that has to stay ordered with it).
-    static inline void locked_write(std::mutex& mx, snd_rawmidi_t* out, const uint8_t* data, size_t len) {
+    inline void locked_write(std::mutex& mx, snd_rawmidi_t* out, const uint8_t* data, size_t len) {
         std::lock_guard<std::mutex> lock(mx);
-        snd_rawmidi_write(out, data, len);
+        const ssize_t r = snd_rawmidi_write(out, data, len);
+        if (r < 0) log_write_error(out, r);
+    }
+
+    // Logs only the first write error per output handle (out0 / out1; others share the out1 flag).
+    void log_write_error(snd_rawmidi_t* out, ssize_t r) {
+        std::atomic<bool>& flag = (out == m_out0) ? m_out0_err_logged : m_out1_err_logged;
+        if (flag.exchange(true)) return;
+        fprintf(stderr, "[AKAI-CONTROLLER] snd_rawmidi_write error on %s: %zd (%s)\n",
+                out == m_out0 ? "Port 0" : "Port 1", r, snd_strerror((int)r));
     }
 
     struct ParsedMsg { uint8_t s, d0, d1; };
@@ -609,6 +624,15 @@ public:
             fflush(stdout);
         }
 
+        {
+            const char* e = getenv("KICK_AKAI_LED_MODE");
+            bool known = true;
+            m_led_wire = kick_hw::parseLedWire(e, &known);
+            printf("[AKAI-CONTROLLER] LED mode: %s%s (KICK_AKAI_LED_MODE=%s)\n", kick_hw::ledWireName(m_led_wire),
+                   known ? "" : " (unknown value, default used)", e ? e : "<unset>");
+            fflush(stdout);
+        }
+
         // Mode 0x41: Port 1 Private enabled, Port 0 Public disabled, transport MMC disabled
         uint8_t akai_init[] = { 0xF0, 0x47, 0x7F, 0x4B, 0x60, 0x00, 0x01, 0x41, 0xF7 };
         // ARCHITECT-CLARIFY: the review says the mode SysEx should reach Port 1 only, but the
@@ -642,8 +666,10 @@ public:
         // Cache update and write under one lock so the cache never disagrees with what reached the device.
         std::lock_guard<std::mutex> lock(m_out1_mutex);
         if (!m_led_cache.update(led, level)) return;
-        uint8_t msg[3] = { (uint8_t)0x90, (uint8_t)note, kick_hw::akaiLedValue(twoColour, level) };
-        snd_rawmidi_write(m_out1, msg, 3);
+        uint8_t msg[3];
+        kick_hw::makeLedMessage(m_led_wire, note, kick_hw::akaiLedValue(twoColour, level), msg);
+        const ssize_t r = snd_rawmidi_write(m_out1, msg, 3);
+        if (r < 0) log_write_error(m_out1, r);
     }
 
     void set_touch_strip_leds(int val) override {
