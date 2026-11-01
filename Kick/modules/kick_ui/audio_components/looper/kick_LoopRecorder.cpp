@@ -116,7 +116,12 @@ namespace kick_ui
     {
         stopB.setToggleState( true, juce::dontSendNotification );
         if( syncB.getToggleState() )
-            ae.setSequencePlay( ae.getSelectedSequence(), start, true );
+        {
+            // looperPlayback() restarts the loop at 0. A plain PLAY on a sequence that already plays is a no-op in the
+            // engine (guard against the doubled hardware PLAY), so with SYNC the sequence has to be restarted
+            // explicitly, or loop and sequence run out of phase. Stopped: unchanged (a parked seek survives PLAY).
+            ae.setSequencePlay( ae.getSelectedSequence(), start || ae.isSequencePlaying(), true );
+        }
 
         ae.looperPlayback();
     }
@@ -140,7 +145,11 @@ namespace kick_ui
         stopB.setToggleState( true, juce::dontSendNotification );
         auto sync = syncB.getToggleState();
         if( sync )
-            ae.setSequencePlay( ae.getSelectedSequence(), false, true );
+        {
+            // Same as play(): a playing sequence ignores a plain PLAY (engine guard), so restart it to align the
+            // sequence start with the recording start. Stopped: unchanged (plain PLAY keeps a parked seek).
+            ae.setSequencePlay( ae.getSelectedSequence(), ae.isSequencePlaying(), true );
+        }
 
         ae.setLooperDirection( mt::Recorder::FORWARD );
         ae.looperStart( false, sync );
