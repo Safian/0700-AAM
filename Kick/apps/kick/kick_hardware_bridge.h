@@ -1138,13 +1138,19 @@ public:
             {
                 // LOCATE + button = jump to the previous event, plain = one grid step back (G7). Neither sends
                 // EN_MINUS, so the tracked release sends nothing (CURSOR_LEFT / RIGHT keep EN_MINUS / EN_PLUS).
-                if (isLocateDown()) locateToEvent(-1); else stepPlayhead(-1);
+                // Shift + button = one bar back (same bar step as "<<"; handleButtonPress already runs on the message thread).
+                if (isLocateDown()) locateToEvent(-1);
+                else if (isShiftDown()) ae.seekBars(ae.getSelectedSequence(), -1);
+                else stepPlayhead(-1);
                 break;
             }
             case HW_BTN_STEP_NEXT:
             {
                 // LOCATE + button = jump to the next event, plain = one grid step forward (G7); no EN_PLUS.
-                if (isLocateDown()) locateToEvent(1); else stepPlayhead(1);
+                // Shift + button = one bar forward (same bar step as ">>").
+                if (isLocateDown()) locateToEvent(1);
+                else if (isShiftDown()) ae.seekBars(ae.getSelectedSequence(), 1);
+                else stepPlayhead(1);
                 break;
             }
             case HW_BTN_BAR_PREV:
