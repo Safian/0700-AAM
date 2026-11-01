@@ -86,6 +86,107 @@ namespace mt
         }
 
         deSelectAllNotes();
+        vTree.addListener( &mapListener );
+    }
+
+    MTNoteList::~MTNoteList()
+    {
+        vTree.removeListener( &mapListener );
+    }
+
+    MTNote* MTNoteList::takeFromMap( int Id, int HintStart )
+    {
+        auto take = [this, Id]( int start ) -> MTNote*
+        {
+            if( !notes.contains( start ) ) return nullptr;
+            auto* inner = notes[start];
+            if( inner == nullptr || !inner->contains( Id ) ) return nullptr;
+            MTNote* p = ( *inner )[Id];
+            inner->remove( Id );
+            if( inner->size() == 0 )
+            {
+                notes.remove( start );
+                delete inner;
+            }
+            return p;
+        };
+        if( auto* p = take( HintStart ) ) return p;
+        int found = 0;
+        bool have = false;
+        for( juce::HashMap<int, juce::HashMap<int, MTNote*>*>::Iterator it( notes ); it.next(); )
+            if( it.getValue() != nullptr && it.getValue()->contains( Id ) )
+            {
+                found = it.getKey();
+                have  = true;
+                break;
+            }
+        return have ? take( found ) : nullptr;
+    }
+
+    void MTNoteList::putIntoMap( int Start, int Id, MTNote* N )
+    {
+        if( !notes.contains( Start ) || notes[Start] == nullptr )
+            notes.set( Start, new juce::HashMap<int, MTNote*>() );
+        notes[Start]->set( Id, N );
+    }
+
+    void MTNoteList::rebuildMap()
+    {
+        for( juce::HashMap<int, juce::HashMap<int, MTNote*>*>::Iterator it( notes ); it.next(); )
+        {
+            if( auto* inner = it.getValue() )
+            {
+                for( juce::HashMap<int, MTNote*>::Iterator j( *inner ); j.next(); )
+                    delete j.getValue();
+                delete inner;
+            }
+        }
+        notes.clear();
+        for( auto it : vTree )
+            if( it.hasType( IDs::NOTE ) )
+                putIntoMap( it.getProperty( IDs::start ), it.getProperty( IDs::id ), new MTNote( it ) );
+    }
+
+    void MTNoteList::onChildAdded( juce::ValueTree& Parent, juce::ValueTree& Child )
+    {
+        if( isOwnEdit() || Parent != vTree || !Child.hasType( IDs::NOTE ) ) return;
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock );
+        const juce::ScopedLock sl( lock );
+        const int              id = Child.getProperty( IDs::id ), start = Child.getProperty( IDs::start );
+        delete takeFromMap( id, start ); // drop any stale entry for this id
+        putIntoMap( start, id, new MTNote( Child ) );
+        if( id > uniqueNoteId ) uniqueNoteId = id;
+        triggerAsyncUpdate();
+    }
+
+    void MTNoteList::onChildRemoved( juce::ValueTree& Parent, juce::ValueTree& Child )
+    {
+        if( isOwnEdit() || Parent != vTree || !Child.hasType( IDs::NOTE ) ) return;
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock );
+        const juce::ScopedLock sl( lock );
+        delete takeFromMap( Child.getProperty( IDs::id ), Child.getProperty( IDs::start ) );
+        selected.removeAllInstancesOf( Child );
+        triggerAsyncUpdate();
+    }
+
+    void MTNoteList::onPropertyChanged( juce::ValueTree& Tree, const juce::Identifier& Property )
+    {
+        if( isOwnEdit() || Property != IDs::start || !Tree.hasType( IDs::NOTE ) || Tree.getParent() != vTree ) return;
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock );
+        const juce::ScopedLock sl( lock );
+        const int              id = Tree.getProperty( IDs::id ), start = Tree.getProperty( IDs::start );
+        MTNote*                p  = takeFromMap( id, start );
+        putIntoMap( start, id, p != nullptr ? p : new MTNote( Tree ) );
+        triggerAsyncUpdate();
+    }
+
+    void MTNoteList::onRedirected( juce::ValueTree& Tree )
+    {
+        if( isOwnEdit() || Tree != vTree ) return;
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock );
+        const juce::ScopedLock sl( lock );
+        rebuildMap();
+        triggerAsyncUpdate();
     }
 
     void MTNoteList::sort()
@@ -432,6 +533,7 @@ namespace mt
     {
         if( NoteVT.isValid() )
         {
+            EditGuard eg( editDepth );
             vTree.addChild( NoteVT, -1, um );
             MTNote* n     = new MTNote( NoteVT );
             int     start = n->start;
@@ -531,18 +633,9 @@ namespace mt
     {
         if( NoteVT.getNumProperties() )
         {
-            int     start  = NoteVT.getProperty( IDs::start );
-            int     id     = NoteVT.getProperty( IDs::id );
-            MTNote* p      = ( *notes[start] )[id];
-            int     number = p->number.get();
-            notes[start]->remove( id );
-            delete p;
-            if( notes[start]->size() == 0 )
-            {
-                juce::HashMap<int, MTNote*>* map = notes[start];
-                notes.remove( start );
-                delete map;
-            }
+            EditGuard eg( editDepth );
+            // A map entry may be missing (e.g. after an undo on an older build); never dereference it blindly.
+            delete takeFromMap( NoteVT.getProperty( IDs::id ), NoteVT.getProperty( IDs::start ) );
             selected.removeAllInstancesOf( NoteVT );
             vTree.removeChild( NoteVT, um );
             triggerAsyncUpdate();
@@ -670,6 +763,7 @@ namespace mt
     int MTNoteList::deleteAllNotes()
     {
         juce::ScopedLock sl( lock );
+        EditGuard        eg( editDepth );
         selected.clearQuick();
         vTree.removeAllChildren( um );
         notes.clear();
@@ -680,20 +774,10 @@ namespace mt
     int MTNoteList::deleteSelectedNotes()
     {
         juce::ScopedLock sl( lock );
+        EditGuard        eg( editDepth );
         for( auto it : selected )
         {
-            int     start  = it.getProperty( IDs::start );
-            int     id     = it.getProperty( IDs::id );
-            MTNote* p      = ( *notes[start] )[id];
-            int     number = p->number.get();
-            notes[start]->remove( id );
-            delete p;
-            if( notes[start]->size() == 0 )
-            {
-                juce::HashMap<int, MTNote*>* map = notes[start];
-                notes.remove( start );
-                delete map;
-            }
+            delete takeFromMap( it.getProperty( IDs::id ), it.getProperty( IDs::start ) );
             vTree.removeChild( it, um );
         }
         selected.clearQuick();
@@ -1237,8 +1321,9 @@ namespace mt
             if( 0 >= Note.length.get() ) Note.length = 1;
         }
 
-        auto prevStart = Note.start.get();
-        Note.start     = NewStart;
+        EditGuard eg( editDepth );
+        auto      prevStart = Note.start.get();
+        Note.start          = NewStart;
         if( auto* innerMap = notes[prevStart] )
         {
             if( auto* keyNote = ( *innerMap )[Note.id.get()] )
