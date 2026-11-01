@@ -705,7 +705,6 @@ namespace mt
         tickCtr += diffTick;
         tickPos += diffTick;
         trackPlayhead.bnb.tick += diffTick;
-        auto isEffectivelyMute   = isTrackEffectivelyMuted();
         auto trackMidiOutChannel = getMidiOutChannel();
 
         const juce::ScopedLock sl( lock );
