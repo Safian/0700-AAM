@@ -186,3 +186,6 @@ A kamera a bal oldalra (kerekek, bal gombcsoport, pad bank, Main Volume) nézett
 | Kerekek (pitch/mod) | kék háttérvilágítás, mindig |
 
 **Touch strip** (felhasználó: ujj fel-le csúsztatva): a nyers MIDI-naplóban **1040 új üzenet** (`[AKAI-RAW]` 108 → 1148): `port=1 status=B0 d0=33` (CC33, pozíció MSB) és `d0=34` (CC34, LSB) párokban, pozíció `d1=0..99` tartományban, felemeléskor `d0=33 d1=0`. A kód ezt kezeli (`on_touch_strip`, `on_touch_strip_fine`); a strip funkciója a felhasználó szerint működik. A touch strip LED-sora (a strip melletti ladder) nem lett külön megfigyelve.
+
+### 12. hiba – a touch strip LED-sora nem világít
+A strip melletti kis LED-sor a kamerán sötét maradt: `strip 0`, `strip 64`, `strip 127` (a bridge `set_touch_strip_leds(val)` → `0xB0 0x21 <val>`, Port 1) és érintés (a felhasználó ujja a stripen) közben is. A strip pozíció-bemenete működik (1040 nyers üzenet CC33/CC34). Gyanú: az Akai nem a CC33-ra (0x21) várja a LED-sor írását (a CC33 a bemeneti pozíció száma is), vagy a `cc` LED-mód `0xB0 <note> <érték>` konvenciójához más szám tartozik; az útmutató a strip LED-sorának vezérlését nem írja le. Mérés: a CC-szám és az érték-tartomány kipróbálása (pl. 0xB0 0x20..0x23, 0x45, érték 0..127, vagy a strip-módonként eltérő) a `ledraw` típusú parancs bővítésével kamera mellett.
