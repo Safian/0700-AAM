@@ -261,6 +261,7 @@ namespace mt
     void MTIProgram::resetPerformance()
     {
         // Only exception to "SustainState is written by live input only": stop() releases pedal-held notes (also muted).
+        sustain.clearSeq(); // stop: no sequencer note stays active, so the release below covers every pitch
         sustain.onCC64( 0, [this]( int n ) { noteOff( n ); } );
         pitchBend( 8192 );
     }
@@ -305,6 +306,8 @@ namespace mt
                         case SamplePlayType::NOTE_ON:
                             if( live )
                                 sustain.onNoteOn( noteNo ); // Re-struck: no pending pedal release.
+                            else if( playType == SamplePlayType::NOTE_ON )
+                                sustain.onSeqNoteOn( noteNo ); // Sequencer note: counted, the pedal must not release it.
                             noteOn( noteNo, midiLevel );
                             //DBG( "Note On----" << noteNo );
                             break;
