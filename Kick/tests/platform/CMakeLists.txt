@@ -135,6 +135,11 @@ set_tests_properties(kick-cv-scale PROPERTIES TIMEOUT 10)
 add_executable(kick-sustain-tests SustainTests.cpp)
 add_test(NAME kick-sustain COMMAND kick-sustain-tests)
 set_tests_properties(kick-sustain PROPERTIES TIMEOUT 10)
+
+# Bridge helpers: two-Shift counter, note/bend/sustain target tables; JUCE-free, header only.
+add_executable(kick-hw-targets-tests HwTargetsTests.cpp)
+add_test(NAME kick-hw-targets COMMAND kick-hw-targets-tests)
+set_tests_properties(kick-hw-targets PROPERTIES TIMEOUT 10)
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()
