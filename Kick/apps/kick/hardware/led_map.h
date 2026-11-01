@@ -42,7 +42,7 @@ inline int akaiLedNote(HardwareLed led, bool& twoColour)
         case HW_LED_BANK_D:           twoColour = true; return 38;
         case HW_LED_ARP:              return 118;
         case HW_LED_LATCH:            return 119;
-        case HW_LED_SHIFT:            return 50; // left Shift; the right Shift (49) is not driven
+        case HW_LED_SHIFT:            return 50; // left Shift; the right Shift (49) is mirrored, see akaiLedMirrorNote()
         case HW_LED_LOCATE:           return 70;
         case HW_LED_TIMING_CORRECT:   return 12;
         case HW_LED_AUTOMATION:       twoColour = true; return 75;
@@ -66,6 +66,13 @@ inline int akaiLedNote(HardwareLed led, bool& twoColour)
         case NUM_HW_LEDS:
         default:                      return -1;
     }
+}
+
+// Second LED note that has to show the same level as the LED's main note (-1 = none). Shift has one button per
+// side (akai_map.h: notes 49 right / 50 left, both HW_BTN_SHIFT), so both LEDs follow the single Shift state.
+inline int akaiLedMirrorNote(HardwareLed led)
+{
+    return led == HW_LED_SHIFT ? 49 : -1;
 }
 
 // HAL level -> value of the LED Control Change data byte.

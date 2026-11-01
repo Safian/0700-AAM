@@ -23,6 +23,11 @@ int main()
         }
         bool two = false;
         check(akaiLedNote((HardwareLed)NUM_HW_LEDS, two) == -1, "out of range LED has no note");
+        // Shift: left LED 50 is the main note, right LED 49 is mirrored; no other LED has a mirror note
+        check(akaiLedNote(HW_LED_SHIFT, two) == 50 && !two, "SHIFT main note 50");
+        check(akaiLedMirrorNote(HW_LED_SHIFT) == 49, "SHIFT mirrors to 49");
+        check(akaiLedMirrorNote(HW_LED_PLAY) == -1 && akaiLedMirrorNote((HardwareLed)NUM_HW_LEDS) == -1, "only SHIFT mirrors");
+        check(notes.count(49) == 0, "mirror note 49 is not the main note of any LED");
         // notes of the pre-T13 LEDs must not change
         check(akaiLedNote(HW_LED_PLAY, two) == 82 && two, "PLAY 82 two-colour");
         check(akaiLedNote(HW_LED_STOP, two) == 81 && !two, "STOP 81 single");
