@@ -186,6 +186,8 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
 
     if (isReadOnlyLocation) {
         if (reason == SaveReason::Autosave || reason == SaveReason::Close) {
+            // The restore re-dirties the tree; run it before clearing dirty (same as the success path).
+            afterSaveGuard.run();
             lastSaveError.clear();
             dirty.store(false);
             if (onDirtyChanged) onDirtyChanged(false);

@@ -12,7 +12,11 @@
 #include "../../modules/common/source/kick_paths.h"
 // kick_xml_manager.cpp asks the application for its data directories; this standalone test
 // does not link the Kick common module, so provide directories that never exist (read-only logic stays inert).
-juce::File getAppDirs(DirType) { return juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("kick-clap-persistence-nonexistent"); }
+static juce::File gTestDemosDir; // set by the read-only-location case; empty keeps every directory nonexistent
+juce::File getAppDirs(DirType type) {
+    if (type == MTDemos && gTestDemosDir != juce::File()) return gTestDemosDir;
+    return juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("kick-clap-persistence-nonexistent");
+}
 using namespace kick::clap;
 static void check(bool ok, const char* why) { if (!ok) { std::cerr << "FAIL: " << why << '\n'; std::exit(1); } }
 static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
@@ -163,6 +167,19 @@ int main(int argc, char** argv) {
               pair.getState().getProperty("pan").toString() == "auto", "autosave runs prepare/after too");
         check(pair.close(), "close prepare/after document");
         check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "closing save keeps the prepared value");
+        // Read-only location (demo dir; chmod is unreliable as root): Close succeeds without writing, and the afterSave
+        // restore that re-dirties the tree must not leave isDirty() true after onDirtyChanged(false).
+        gTestDemosDir = directory.getChildFile("demos");
+        const auto roFile = gTestDemosDir.getChildFile("ro/project.xml");
+        check(roFile.create().wasOk() && roFile.replaceWithText("<ROOT version=\"1\"/>"), "seed read-only-location project");
+        mt::KickXML ro("ROOT", ".xml", "1");
+        ro.prepareSave = [&] { ro.getState().setProperty("pan", "base", nullptr); return juce::Result::ok(); };
+        ro.afterSave   = [&] { ro.getState().setProperty("pan", "auto", nullptr); };
+        check(ro.loadOrCreate(roFile).isValid(), "create read-only-location document");
+        ro.getState().setProperty("pan", "auto", nullptr);
+        const auto roBefore = roFile.loadFileAsString();
+        check(ro.close() && !ro.isDirty() && roFile.loadFileAsString() == roBefore, "read-only close restores pans before clearing dirty and writes nothing");
+        gTestDemosDir = juce::File();
     }
     directory.deleteRecursively();
     std::cout << "PASS: actual KickXML autosave, close, worker save, bounded snapshots, failed/unsupported state, dirty/error reporting and retry\n";

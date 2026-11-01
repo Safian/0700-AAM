@@ -261,9 +261,25 @@ namespace mt
         // Persist while the programs still exist. On failure the active project,
         // playback and selection remain available for recovery and retry.
         if (!projectManager::close()) return false;
-        internalTimer.stopTimer();
+        // loadProject runs on a worker (LoadProjectAndAnimation::run). The 25 Hz timer callback (applyAutomatedPans) mutates
+        // panBases on the message thread, so stop the timer and clear panBases there too. No lock is held here, and
+        // projectManager::close() above already marshals to the message thread from this same worker, so this adds no new
+        // blocking dependency.
+        {
+            auto stopAndClear = [this] {
+                internalTimer.stopTimer();
+                panBases.clear(); // the project (and its programs) goes away; nothing to restore
+            };
+            auto* mm = juce::MessageManager::getInstanceWithoutCreating();
+            if( !mm || mm->isThisTheMessageThread() )
+                stopAndClear();
+            else
+                mm->callFunctionOnMessageThread( []( void* ctx ) -> void* {
+                    ( *static_cast<decltype( stopAndClear )*>( ctx ) )();
+                    return nullptr;
+                }, &stopAndClear );
+        }
         projectLoaded = false;
-        panBases.clear(); // the project (and its programs) goes away; nothing to restore
         MTAudioTransportManager::close();
 
         // Call listeners
