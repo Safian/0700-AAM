@@ -155,3 +155,18 @@ A felhasználó fizikailag megnyomta a `<` és `>` gombot sima és Shift-es form
 | lejátszás közben `STEP_NEXT` | változik (a pozíció ugrik) |
 
 **11. hiba:** megállított állapotban a seek (`<`, `>`, `<<`, `>>`, Shift+`<`/`>`) sem megjelenik a kijelzőn, sem a következő PLAY-nél nem érvényesül; lejátszás közben működik. Az első helyi próbánál (`hw-local-patches`, `4605b75e` alap) a megállított `BAR_NEXT` még frissítette a kijelzőt (`1:04:057` → `2:01:000`; a rawmidi-injektált `>` is `1:01:048`), tehát a `main`-ben valószínűleg regresszió van a megállított állapotú seekben (`MTSequence::showBar/showTick` és a footer frissítése, vagy a `seekBars` parkolt célja).
+
+## 10. kör – LED-vezérlés hiányai (felhasználói közeli fotók + kód), `cc` LED-mód
+
+| Gomb | Fotón | Kód | Megjegyzés |
+|---|---|---|---|
+| STOP | fehér-kékes, erős | vezérelve (`HW_LED_STOP`) | OK |
+| PLAY | zöld (lejátszáskor), különben halvány | vezérelve (`HW_LED_PLAY`) | OK |
+| **REC** | halvány szürke pont, akkor is, ha a REC élesítve van (`btn REC` háromszor, a harmadik után) | **soha nincs vezérelve** (a `HW_BTN_REC` csak `EN_RECORD` csomagot küld) | **hiányzik** |
+| **OVERDUB** | halvány szürke | **soha nincs vezérelve** (`EN_OVERDUB` csomag) | **hiányzik** |
+| `<`, `>`, `<<`, `>>`, `–`, `+` | kék-ciánkék, mindig | nincs a LED-táblában (`led_map.h`) | a firmware alapfénye; az app nem kapcsolja ki |
+| PLAY START | zöld, mindig | nincs a LED-táblában | a firmware alapfénye |
+| Q-Link 1 LED | piros | – | a firmware alapfénye |
+| SHIFT (bal / jobb) | bal mindig, jobb csak Shift-nyomásra | csak note 50 | lásd 10. hiba |
+
+Az útmutató (Quickstart v1.2, v3.10) a REC/OVERDUB LED-színt nem írja le (a "lit red/white/amber" csak a Tap Tempónál szerepel), ezért a színeket a cloud sessionnek az eszközön (`KICK_AKAI_LED_MODE=cc`, érték 1..4) kell kipróbálnia. A Shift: az útmutató szerint nyomva tartva működik; a Shift **dupla nyomása** (v3.10, más MPC-knél) "megmutatja, mely gomboknak van másodlagos funkciója: a gombok néhány másodpercre villognak".
