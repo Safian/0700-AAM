@@ -558,9 +558,13 @@ public:
             }
             case HW_BTN_REC:
             {
-                // ARCHITECT-CLARIFY: REC+Shift = RECALL (retrospective MIDI recall) has no engine/UI function
-                // (no recall/retro-capture code in Kick). Shift is ignored here; plain RECORD is sent.
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD, contracts::DeviceControlContracts::BTN_PRESSED);
+                if (isShiftDown()) {
+                    // REC+Shift = RECALL: commit the live notes captured on the selected track. Engine-only, no DCL packet
+                    // (so no matching release is sent either, see sendTrackedRelease(btn, -1) below).
+                    ae.recallLiveMidi(ae.getSelected());
+                } else {
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD);
+                }
                 break;
             }
             case HW_BTN_OVERDUB:
@@ -960,7 +964,7 @@ public:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLAYSTART, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             case HW_BTN_REC:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendTrackedRelease(btn, -1); // RECALL (Shift) sent no press -> nothing to release
                 break;
             case HW_BTN_OVERDUB:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_OVERDUB, contracts::DeviceControlContracts::BTN_RELEASED);

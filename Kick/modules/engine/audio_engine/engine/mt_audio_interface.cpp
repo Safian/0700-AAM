@@ -1784,6 +1784,16 @@ namespace mt
         return addLiveMidiMsg( Selection, msg );
     }
 
+    int MTAudioInterface::recallLiveMidi( const MTSelected& Selection, int WindowMs )
+    {
+        auto t = manager->getTrack( Selection );
+        if( !t )
+            return -1;
+        auto& um = manager->getUndoManager();
+        um.beginNewTransaction( "Recall" );
+        return t->recallLiveNotes( WindowMs );
+    }
+
     int MTAudioInterface::addLiveMidiNote( const int Program, const int Note, const int Velocity )
     {
         if( auto prog = manager->getProgram( Program ) )
