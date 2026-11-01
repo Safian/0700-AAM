@@ -743,6 +743,8 @@ namespace mt
             arpEmit( ar, midiMsgs );
         }
         livePlayTick.store( (int)tickPos, std::memory_order_relaxed );
+        if( recCapturing.load( std::memory_order_relaxed ) ) // sequence recording: where the take stands (closes held notes)
+            recLastTick.store( (int)tickPos, std::memory_order_relaxed );
         // add logic to compute normalized playhead position using lengthInTicks
         pProgram->updatePluginTransport(seq.getBPM(), double(tickPos) / defaultPPQN, true);
         if( !midiMsgs.isEmpty() )
@@ -770,6 +772,22 @@ namespace mt
             e.channel  = (uint8_t)juce::jlimit( 0, 15, Msg.getChannel() - 1 );
             e.on       = Msg.isNoteOn();
             liveRing.push( e );
+            // SEQUENCE RECORDING: an armed track in a running take keeps the raw note at the playhead tick. Lock free and
+            // allocation free (own spin flag, O(1)); only while the track plays, so a stopped transport records nothing.
+            if( recCapturing.load( std::memory_order_relaxed ) && isPlaying.load() )
+            {
+                const int t = livePlayTick.load( std::memory_order_relaxed );
+                if( t >= 0 )
+                {
+                    seqrec::Event r;
+                    r.tick     = t;
+                    r.note     = e.note;
+                    r.velocity = e.velocity;
+                    r.channel  = e.channel;
+                    r.on       = e.on;
+                    recCap.push( r );
+                }
+            }
         }
         if( Msg.isNoteOnOrOff() && arpFilterLive( Msg ) ) // arpeggiator takes the note; its output is emitted by onTick
             return 0;
@@ -904,6 +922,32 @@ namespace mt
                     ++committed;
         }
         if( committed ) liveRing.clear(); // each captured note is committed once
+        return committed;
+    }
+
+    void MTTrack::recBegin()
+    {
+        recCap.clear();
+        recLastTick.store( 0, std::memory_order_relaxed );
+        recCapturing.store( true );
+    }
+
+    int MTTrack::recFlush( bool CloseOpen, std::vector<seqrec::Note>& Scratch )
+    {
+        Scratch.clear();
+        if( CloseOpen )
+            recCapturing.store( false ); // end of the take: no new events after this (a push in flight is cleared by the next recBegin)
+        const int len = (int)lengthInTicks.load();
+        if( 0 == recCap.drain( Scratch, len, recLastTick.load( std::memory_order_relaxed ), CloseOpen ) )
+            return 0;
+        int committed = 0;
+        {
+            // Same rule as recallLiveNotes: the tick thread walks the note HashMap under `lock`; the edits rebuild it.
+            const juce::ScopedLock sl( lock );
+            for( const auto& n : Scratch )
+                if( 0 == addOrModifyNote( n.note, n.startTick, n.lengthTicks, n.velocity ) )
+                    ++committed;
+        }
         return committed;
     }
 

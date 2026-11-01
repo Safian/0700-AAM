@@ -22,6 +22,7 @@
 #pragma once
 
 #include "mt_audio_metronome.h"
+#include "mt_seq_record.h"
 #include "mt_audio_recorder.h"
 #include "mt_audio_manager_program.h"
 #include "mt_audio_manager_sequence.h"
@@ -113,6 +114,33 @@ namespace mt
         // non-message thread it answers true (no scan: the sequence list is not safe to walk there); the Read rule
         // below still keeps several lanes from fighting.
         bool isPanLaneOwner( const MTTrack* Track, const MTIProgram* Prog );
+
+        // SEQUENCE RECORDING (hardware REC / OVERDUB + PLAY; logic in mt_seq_record.h). All of this runs on the message
+        // thread (button handlers, the 25 Hz timer); only the per-track capture (MTTrack::recCap) is touched by the MIDI
+        // input thread, lock free. REC arms the selected sequence, PLAY (setSequencePlay) starts the take on the tracks
+        // whose Record button is armed, STOP / pause / the end of the sequence ends it. A plain REC take erases the armed
+        // tracks' notes at its start, an OVERDUB take keeps them. The finished notes are committed to the note lists
+        // about every 40 ms while the take runs (so they are heard from the next pass on) and once more at its end; the
+        // whole take is one undo step as long as nothing else opens an undo transaction meanwhile.
+        void                seqRecPressed();
+        void                seqOverdubPressed();
+        seqrec::Control     getSeqRecControl() const;
+        void                seqRecBeforePlay( int Seq ); // called by MTAudioInterface::setSequencePlay before the transport starts
+        // Set by MTAudioInterface: applies the global timing correct to the notes a flush added (ids in the set).
+        std::function<void( MTTrack*, const std::set<int>& )> recordedNotesHook;
+
+    private:
+        void pollSequenceRecording();
+        void seqRecBeginTake( MTSequence* S, bool Clear );
+        void seqRecFlush( MTSequence* S, bool CloseOpen );
+        void seqRecEnd( MTSequence* S );
+        void seqRecSyncState( MTSequence* S );
+
+        mutable juce::CriticalSection seqRecLock; // guards seqRec / seqRecSeq (non-realtime threads only)
+        seqrec::Control               seqRec;
+        int                           seqRecSeq{ -1 };
+        int                           seqRecIdlePolls{ 0 };
+        std::vector<seqrec::Note>     seqRecScratch; // message thread
 
     private:
         void interTimerCallbackHandler();

@@ -313,6 +313,18 @@ namespace mt
         int  setSequenceStop();
         bool isSequencePlaying();
 
+        // SEQUENCE RECORDING (hardware REC / OVERDUB + PLAY). The track's Record button arms the track
+        // (setTrackRecordArm); hardware REC arms the selected sequence (a plain take erases the armed tracks' notes when
+        // PLAY starts it), OVERDUB switches to / arms an overdub take (keeps them); PLAY / PLAY START starts the take,
+        // STOP ends it (see MTAudioManager). Message thread. The state getters feed the REC / OVERDUB LEDs.
+        void setTrackRecordArm( int Sequence, int Track, bool Armed );
+        bool isTrackRecordArmed( int Sequence, int Track );
+        void sequenceRecPressed();
+        void sequenceOverdubPressed();
+        bool isSequenceRecArmed();
+        bool isSequenceRecording();
+        bool isSequenceOverdub();
+
         void seqAddTrackToGroup( const int Sequence, const int Track, const int Group );
         void seqRemoveTrackFromGroup( const int Sequence, const int Track );
 

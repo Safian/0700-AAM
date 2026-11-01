@@ -544,6 +544,162 @@ namespace mt
     }
 
     ////////////////////////////
+    //// Sequence recording (REC / OVERDUB + PLAY), see mt_seq_record.h and the declaration in mt_audio_manager.h
+    ////////////////////////////
+    seqrec::Control MTAudioManager::getSeqRecControl() const
+    {
+        const juce::ScopedLock sl( seqRecLock );
+        return seqRec;
+    }
+
+    void MTAudioManager::seqRecSyncState( MTSequence* S )
+    {
+        if( !S )
+            return;
+        const auto c = getSeqRecControl();
+        S->setRecordState( seqrec::Phase::Recording == c.phase ? RecordState::Recording : ( seqrec::Phase::Armed == c.phase ? RecordState::Armed : RecordState::NotArmed ) );
+    }
+
+    void MTAudioManager::seqRecPressed()
+    {
+        seqrec::Control before, after;
+        int             idx;
+        {
+            const juce::ScopedLock sl( seqRecLock );
+            before = seqRec;
+            if( seqrec::Phase::Off == before.phase )
+                seqRecSeq = getSelectedSequence(); // REC arms the sequence that is selected now
+            seqRec = seqrec::onRecPressed( before );
+            after  = seqRec;
+            idx    = seqRecSeq;
+        }
+        auto* S = getSequence( idx );
+        if( seqrec::Phase::Recording == before.phase && seqrec::Phase::Off == after.phase )
+            seqRecEnd( S ); // punch out: playback goes on
+        seqRecSyncState( S );
+    }
+
+    void MTAudioManager::seqOverdubPressed()
+    {
+        int idx;
+        {
+            const juce::ScopedLock sl( seqRecLock );
+            if( seqrec::Phase::Off == seqRec.phase )
+                seqRecSeq = getSelectedSequence();
+            seqRec = seqrec::onOverdubPressed( seqRec );
+            idx    = seqRecSeq;
+        }
+        seqRecSyncState( getSequence( idx ) );
+    }
+
+    void MTAudioManager::seqRecBeforePlay( int Seq )
+    {
+        bool clear = false;
+        {
+            const juce::ScopedLock sl( seqRecLock );
+            if( seqrec::Phase::Armed != seqRec.phase || Seq != seqRecSeq )
+                return;
+            seqRec          = seqrec::onPlayStarted( seqRec, clear );
+            seqRecIdlePolls = 0;
+        }
+        // Count-in: the metronome setting only offers "Off" (kick_modeHeader.cpp), so a take starts at once.
+        seqRecBeginTake( getSequence( Seq ), clear );
+    }
+
+    // Start of a take: one undo transaction, a plain REC take erases the notes of the armed tracks, then their capture starts.
+    // deleteAllNotes() takes the track's reader lock first (the tick thread walks the notes under it), so it is safe while playing.
+    void MTAudioManager::seqRecBeginTake( MTSequence* S, bool Clear )
+    {
+        if( !S )
+            return;
+        undoManager.beginNewTransaction( "Record" );
+        S->forAllTracks( [&]( MTTrack* T ) {
+            if( !T->isRecArmed() )
+                return;
+            if( Clear )
+                T->deleteAllNotes();
+            T->recBegin();
+        } );
+        seqRecSyncState( S );
+    }
+
+    void MTAudioManager::seqRecFlush( MTSequence* S, bool CloseOpen )
+    {
+        if( !S )
+            return;
+        S->forAllTracks( [&]( MTTrack* T ) {
+            if( !T->isRecCapturing() )
+                return;
+            if( !T->recHasPending() )
+            {
+                if( CloseOpen )
+                    T->recStop();
+                return;
+            }
+            std::set<int> before;
+            const bool    tc = static_cast<bool>( recordedNotesHook );
+            if( tc )
+                for( auto vt : T->getNoteListVT() )
+                    if( vt.hasType( IDs::NOTE ) )
+                        before.insert( (int)vt.getProperty( IDs::id ) );
+            const int committed = T->recFlush( CloseOpen, seqRecScratch );
+            if( committed > 0 && tc )
+            {
+                std::set<int> added;
+                for( auto vt : T->getNoteListVT() )
+                    if( vt.hasType( IDs::NOTE ) && !before.count( (int)vt.getProperty( IDs::id ) ) )
+                        added.insert( (int)vt.getProperty( IDs::id ) );
+                recordedNotesHook( T, added ); // global timing correct, only the new notes
+            }
+        } );
+    }
+
+    void MTAudioManager::seqRecEnd( MTSequence* S )
+    {
+        seqRecFlush( S, true );
+        if( S )
+            S->forAllTracks( [&]( MTTrack* T ) { T->recStop(); } );
+        {
+            const juce::ScopedLock sl( seqRecLock );
+            seqRec = seqrec::onTransportStopped( seqRec );
+        }
+        seqRecSyncState( S );
+    }
+
+    // 25 Hz, message thread. While a take runs: commit the finished notes; when the transport is no longer playing
+    // (STOP, pause, end of a non-looping sequence) for two polls in a row, end the take. The two-poll debounce covers the
+    // gap between seqRecBeforePlay() and the transport state becoming Playing.
+    void MTAudioManager::pollSequenceRecording()
+    {
+        seqrec::Control c;
+        int             idx;
+        {
+            const juce::ScopedLock sl( seqRecLock );
+            c   = seqRec;
+            idx = seqRecSeq;
+        }
+        if( seqrec::Phase::Recording != c.phase )
+            return;
+        auto* S = getSequence( idx );
+        if( !S )
+        {
+            const juce::ScopedLock sl( seqRecLock );
+            seqRec = seqrec::Control{};
+            return;
+        }
+        if( isPlaying() )
+        {
+            seqRecIdlePolls = 0;
+            seqRecFlush( S, false );
+        }
+        else if( ++seqRecIdlePolls >= 2 )
+        {
+            seqRecIdlePolls = 0;
+            seqRecEnd( S );
+        }
+    }
+
+    ////////////////////////////
     //// Bank
     ////////////////////////////
     void MTAudioManager::interTimerCallbackHandler()
@@ -552,6 +708,7 @@ namespace mt
         MTAudioSequenceManager::processMidiMeters();
         MTAudioProgramManager::processMidiMeters();
         applyAutomatedPans();
+        pollSequenceRecording();
 
         listeners.call( [&]( MTAudioInterfaceListener& l ) { l.onPlayHeadChanged( MTAudioSequenceManager::getPlayhead().bnb ); } );
         listeners.call( [&]( MTAudioInterfaceListener& l ) { l.onTrackMetersUpdated(); } );
