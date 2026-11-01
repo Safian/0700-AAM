@@ -211,6 +211,21 @@ private:
         if (m_hw && m_hw->control_surface()) m_hw->control_surface()->set_led_level(led, level);
     }
 
+    // REC / OVERDUB LEDs follow the looper state (the consumer of EN_RECORD / EN_OVERDUB), polled from the 30 Hz timer on
+    // the message thread like kick_LoopRecorder does. The state getters read std::atomic<bool> flags of the recorder.
+    // The adapter cache drops unchanged writes, so the per-tick call costs nothing on the wire.
+    void updateRecOverdubLeds()
+    {
+        if (!m_hw || !m_hw->control_surface()) return;
+        auto& ae = mt::getAudioInterface();
+        if (!ae.isProjectLoaded()) return;
+        const long long ms = (long long)juce::Time::getMillisecondCounter();
+        int rec = 0, od = 0;
+        kick_hw::recOverdubLedLevels(ae.isLooperRecording(), ae.isLooperOverdubbing(), kick_hw::blinkPhase(ms), rec, od);
+        setLed(HW_LED_REC, rec);
+        setLed(HW_LED_OVERDUB, od);
+    }
+
     // Mode button of a screen, as the original Kick lights it (kick_leds.cpp: onScreenLoaded -> setLEDON), but with
     // the Akai panel's buttons: Shift-alternates of a button get the second colour (two-colour LED) or dim.
     struct ModeLed { HardwareLed led; int level; };
@@ -554,6 +569,7 @@ private:
     {
         pollCommands();
         flushDirtyPadColors();
+        updateRecOverdubLeds();
 
         if (!m_hw || !m_root || !m_hw->display()) return;
 
