@@ -94,8 +94,7 @@ namespace mt
                 // saveProject() (G10) writes the stored pan back for the save and restores the automated one afterwards; neither
                 // is a user move, so send nothing and leave lastPanCC alone: the synth keeps the value it has, which is
                 // exactly what lastPanCC still records, so the restore needs no re-send and nothing is lost.
-                auto* mgr = ae.getManager();
-                if( mgr && mgr->isSavingProject() )
+                if( ae.isSavingProject() )
                     return;
                 const int cc = midipan::panToCC10( (double)vTree.getProperty( IDs::pan, PAN::DEFAULT ) );
                 if( cc != lastPanCC )
