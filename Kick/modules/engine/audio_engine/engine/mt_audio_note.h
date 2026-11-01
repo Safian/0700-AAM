@@ -20,6 +20,8 @@
  */
 
 #pragma once
+#include <set>
+#include "mt_timing_correct.h"
 
 namespace mt
 {
@@ -130,6 +132,8 @@ namespace mt
         int splitNotes( const track::splitInfo& Info );
         int splitSelectedNotes( const track::splitInfo& Info );
         int humanizeNotes( const track::humanizeInfo& Info );
+        // Timing correct: all notes or the selected ones (Info.events); onlyIds != nullptr restricts to notes with these ids.
+        int timingCorrect( const track::timingCorrectInfo& Info, const std::set<int>* onlyIds = nullptr );
         int humanizeNotes( const track::humanizeInfo& Info, juce::ValueTree& vTree, juce::Random& r, bool& isSort );
         int randomNotes( const track::randomEventsInfo& Info );
         int pitchQuantizeNotes( const track::pitchQuantizeInfo& Info );

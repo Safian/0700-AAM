@@ -440,6 +440,16 @@ namespace mt
         int splitNotes( const MTSelected& Selection, const track::splitInfo& Info );
         int splitSelectedNotes( const MTSelected& Selection, const track::splitInfo& Info );
         int humanizeNotes( const MTSelected& Selection, const track::humanizeInfo& Info );
+        // TIMING CORRECT (note quantize) of the selected track as ONE undo step. Returns notes changed, -1 if no such
+        // track or unsupported Events::Range.
+        int timingCorrect( const MTSelected& Selection, const track::timingCorrectInfo& Info );
+        // Global TC flag (MPC "Timing Correct on"): when on, notes committed by RECALL are corrected with the stored
+        // params (the last ones passed to setTimingCorrectParams / timingCorrect). Session-only, not persisted.
+        void                        setTimingCorrectEnabled( bool On ) { tcEnabled.store( On ); }
+        bool                        isTimingCorrectEnabled() const { return tcEnabled.load(); }
+        bool                        toggleTimingCorrectEnabled() { const bool n = !tcEnabled.load(); tcEnabled.store( n ); return n; } // UI thread
+        void                        setTimingCorrectParams( const track::timingCorrectInfo& Info ) { tcParams = Info; }
+        const track::timingCorrectInfo& getTimingCorrectParams() const { return tcParams; }
         int randomNotes( const MTSelected& Selection, const track::randomEventsInfo& Info );
         int pitchQuantizeNotes( const MTSelected& Selection, const track::pitchQuantizeInfo& Info );
         int explode( const MTSelected& Selection );
@@ -623,6 +633,8 @@ namespace mt
     private:
         std::unique_ptr<MTAudioManager> manager;
         MTPadColors                     keyGroupPadColour;
+        std::atomic<bool>               tcEnabled{ false };
+        track::timingCorrectInfo        tcParams; // message thread only
     }; // Class MTAudioInterface
 
     /// @brief This function returns global audio interface.
