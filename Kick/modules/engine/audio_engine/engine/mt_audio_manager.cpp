@@ -34,6 +34,19 @@ namespace mt
     {
         juce::ignoreUnused( PrjName, PrjManufacturer, PrjVersion );
         prepareSave = [this] {
+            // G10: in Read mode the programs' pan holds the automated value; the project must store the pre-automation one.
+            // Runs for every save (explicit, autosave, close); afterSave restores. Message thread only (ValueTree writes).
+            savedAutomated.clear();
+            if( !panBases.empty() && juce::MessageManager::getInstance()->isThisTheMessageThread() )
+            {
+                savingProject.store( true );
+                for( const auto& b : panBases )
+                    if( auto* p = getProgramById( b.first ) )
+                    {
+                        savedAutomated.emplace_back( b.first, (double)p->getPan() );
+                        p->vTree.setProperty( IDs::pan, b.second, nullptr );
+                    }
+            }
             juce::String failures;
             forAllPrograms([&](MTIProgram* program) {
                 if (!program->prepareToSave()) {
@@ -43,6 +56,13 @@ namespace mt
                 }
             });
             return failures.isEmpty() ? juce::Result::ok() : juce::Result::fail(failures);
+        };
+        afterSave = [this] {
+            for( const auto& a : savedAutomated )
+                if( auto* p = getProgramById( a.first ) )
+                    p->vTree.setProperty( IDs::pan, a.second, nullptr );
+            savedAutomated.clear();
+            savingProject.store( false );
         };
         onSaveFailure = [this](const juce::String& reason) {
             listeners.call([&](MTAudioInterfaceListener& listener) { listener.onProjectSaveFailed(reason); });
@@ -172,7 +192,7 @@ namespace mt
         // Base destruction happens after the live program manager is gone.
         // A failed shutdown save must not be replaced with stale XML later.
         detachWithoutSaving();
-        prepareSave = {}; onSaveFailure = {}; onDirtyChanged = {};
+        prepareSave = {}; afterSave = {}; onSaveFailure = {}; onDirtyChanged = {};
     }
 
     ////////////////////////////
@@ -276,24 +296,7 @@ namespace mt
 
     bool MTAudioManager::saveProject()
     {
-        // G10: in Read mode the programs' pan holds the automated value; the project must store the pre-automation one.
-        // Message thread only (ValueTree writes); elsewhere the plain save runs.
-        if( panBases.empty() || !juce::MessageManager::getInstance()->isThisTheMessageThread() )
-            return projectManager::save();
-        std::vector<std::pair<juce::String, double>> automated;
-        savingProject.store( true );
-        for( const auto& b : panBases )
-            if( auto* p = getProgramById( b.first ) )
-            {
-                automated.emplace_back( b.first, (double)p->getPan() );
-                p->vTree.setProperty( IDs::pan, b.second, nullptr );
-            }
-        const bool ok = projectManager::save();
-        for( const auto& a : automated )
-            if( auto* p = getProgramById( a.first ) )
-                p->vTree.setProperty( IDs::pan, a.second, nullptr );
-        savingProject.store( false );
-        return ok;
+        return projectManager::save(); // G10 pan write-back lives in prepareSave/afterSave (all save paths)
     }
     ////////////////////////////
     //// Undo/Redo..

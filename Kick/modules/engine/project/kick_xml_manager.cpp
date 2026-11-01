@@ -156,6 +156,12 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
         const auto prepared = prepareSave();
         if (prepared.failed()) return failSave(prepared.getErrorMessage(), reason);
     }
+    // Undoes prepareSave on every exit path (idempotent with the explicit call on the success path below).
+    struct AfterSaveGuard {
+        std::function<void()>& fn; bool armed;
+        void run() { if (armed) { armed = false; if (fn) fn(); } }
+        ~AfterSaveGuard() { run(); }
+    } afterSaveGuard{afterSave, static_cast<bool>(prepareSave)};
     const juce::ScopedLock guard(lock);
     if (!vt.isValid()) return failSave("No valid project document to save", reason);
 
@@ -207,6 +213,8 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
         if (!written || !temporary.overwriteTargetFileWithTemporary())
             return failSave("Cannot write project: " + xmlFile.getFullPathName(), reason);
     }
+    // The restore re-dirties the tree (saving==true keeps it from scheduling an autosave); that dirt is not a user edit.
+    afterSaveGuard.run();
     lastSaveError.clear(); dirty.store(false);
     if (onDirtyChanged) onDirtyChanged(false);
     return true;

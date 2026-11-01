@@ -126,6 +126,7 @@ namespace mt
         void restoreAutomatedPans();
         void restoreAutomatedPan( const juce::String& ProgramId ); // one program (lane cleared / reloaded empty)
         std::atomic<bool> savingProject{ false };
+        std::vector<std::pair<juce::String, double>> savedAutomated; // automated pans parked while a save writes the base values
         std::map<juce::String, double> panBases; // program id -> stored pan before Read touched it (message thread)
 
     private:
