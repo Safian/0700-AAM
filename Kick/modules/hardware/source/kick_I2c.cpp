@@ -20,6 +20,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "kick_I2c.h"
+#include "kick_cv_scale.h"
 
 #if( JUCE_LINUX || __linux__ )
     #include <iostream>
@@ -185,20 +186,18 @@ namespace mt
         if( juce::isPositiveAndBelow( channel, MaxCVPorts ) )
         {
             uint8_t buffer[3];
-            if( step > 0 )
-            {
-                int bufVal = juce::jlimit( 0, 4095, ( step * 4095 ) / 127 );
-                buffer[0]  = ( 0x30 | ( toChannelmap( channel ) ) );
-                buffer[1]  = ( bufVal >> 4 ) & 0xFF;
-                buffer[2]  = ( bufVal << 4 ) & 0xF0;
+            // step 0 must write 0 V (velocity release / mod wheel at rest).
+            int bufVal = stepToDac( step );
+            buffer[0]  = ( 0x30 | ( toChannelmap( channel ) ) );
+            buffer[1]  = ( bufVal >> 4 ) & 0xFF;
+            buffer[2]  = ( bufVal << 4 ) & 0xF0;
 
-                if( !i2c.writeBytes( buffer, sizeof( buffer ) ) )
-                {
-                    DBG( "setVoltage Failed to set Voltage Channel->" << channel );
-                    return false;
-                }
-                return true;
+            if( !i2c.writeBytes( buffer, sizeof( buffer ) ) )
+            {
+                DBG( "setVoltage Failed to set Voltage Channel->" << channel );
+                return false;
             }
+            return true;
         }
         return false;
     }
