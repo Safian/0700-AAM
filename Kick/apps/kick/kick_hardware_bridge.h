@@ -68,7 +68,11 @@ private:
     // the kick_cmd injector on the message thread both reach the on_* callbacks).
     std::mutex m_target_mutex;
     kick_hw::NoteTargets<mt::MTSelected> m_key_target;
-    kick_hw::HeldTarget<mt::MTSelected>  m_bend_target;
+    kick_hw::HeldTarget<mt::MTSelected>  m_bend_target;       // pitch wheel (on_pitch_bend)
+    kick_hw::HeldTarget<mt::MTSelected>  m_strip_bend_target; // touch strip in pitch bend mode (own target, G16)
+    kick_hw::HeldTarget<mt::MTSelected>  m_cc1_target;        // mod wheel
+    kick_hw::HeldTarget<mt::MTSelected>  m_strip_cc1_target;  // touch strip in mod wheel mode
+    kick_hw::HeldTarget<mt::MTSelected>  m_cc11_target;       // expression
     kick_hw::HeldTarget<mt::MTSelected>  m_sustain_target;
 
     // Project pad colours (DCL EN_PAD_SET_COLOUR_STATE). Written by the sendCommandToDcl handler
@@ -316,6 +320,23 @@ private:
         });
     }
 
+    // G7: "<" / ">" step the playhead by one grid step (Akai MPC convention): the TIMING CORRECT grid, 24 ticks (1/16)
+    // when it is 0 (= one bar) or unset. Relative to the pending/parked seek or the live playhead; the engine clamps
+    // the tick. Runs on the message thread (like locateToEvent); the seek itself is applied on the tick thread.
+    void stepPlayhead(int direction)
+    {
+        juce::MessageManager::callAsync([this, direction]() {
+            if (m_stopping.load()) return;
+            auto&      ae   = mt::getAudioInterface();
+            const int  seq  = ae.getSelectedSequence();
+            const int  from = ae.getSequenceSeekTick(seq);
+            if (from < 0) return;
+            const int grid = ae.getTimingCorrectParams().gridTicks;
+            const int step = grid > 0 ? grid : 24;
+            ae.seekToTick(seq, from + direction * step);
+        });
+    }
+
     void dispatchTouch(int slot, int x, int y, bool is_down, bool is_up)
     {
         if (slot >= 0 && slot < 10) {
@@ -326,13 +347,19 @@ private:
         juce::MessageManager::callAsync([this, slot, x, y, is_down, is_up]() {
             auto* root = (m_window != nullptr) ? (juce::Component*)m_window : m_root;
             if (!root) return;
+            // G3: an invisible (headless, no display) window is skipped by Component::getComponentAt(), so the hit
+            // test starts at the content component, which keeps its own visible flag. Coordinates are converted
+            // from the screen / desktop space the touch is reported in.
+            juce::Component* hitRoot = root;
+            if (m_window != nullptr)
+                if (auto* content = m_window->getContentComponent()) hitRoot = content;
 
             int ix = x;
             int iy = y;
 
             // Search desktop components first (modal dialogs, popups, dropdowns)
             auto* target = juce::Desktop::getInstance().findComponentAt(juce::Point<int>(ix, iy));
-            if (!target) target = root->getComponentAt(ix, iy);
+            if (!target) target = hitRoot->getComponentAt(hitRoot->getLocalPoint(nullptr, juce::Point<int>(ix, iy)));
             if (!target) target = root;
 
             auto* peer = target->getPeer();
@@ -352,6 +379,8 @@ private:
                 return;
             }
 
+            // G15: with a native peer the peer dispatches the event to the right component itself; the manual
+            // mouseDown / mouseUp / mouseDrag below is only for the peer-less (headless) window.
             if (peer)
             {
                 peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::touch,
@@ -362,6 +391,8 @@ private:
                                        juce::Time::currentTimeMillis(),
                                        {},
                                        slot);
+                if (is_up && slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
+                return;
             }
 
             auto localPt = target->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
@@ -1094,16 +1125,15 @@ public:
             }
             case HW_BTN_STEP_PREV:
             {
-                // LOCATE + button = jump to the previous event; no EN_MINUS press, so the tracked release sends nothing.
-                if (isLocateDown()) { locateToEvent(-1); break; }
-                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS);
+                // LOCATE + button = jump to the previous event, plain = one grid step back (G7). Neither sends
+                // EN_MINUS, so the tracked release sends nothing (CURSOR_LEFT / RIGHT keep EN_MINUS / EN_PLUS).
+                if (isLocateDown()) locateToEvent(-1); else stepPlayhead(-1);
                 break;
             }
             case HW_BTN_STEP_NEXT:
             {
-                // LOCATE + button = jump to the next event; no EN_PLUS press, so the tracked release sends nothing.
-                if (isLocateDown()) { locateToEvent(1); break; }
-                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS);
+                // LOCATE + button = jump to the next event, plain = one grid step forward (G7); no EN_PLUS.
+                if (isLocateDown()) locateToEvent(1); else stepPlayhead(1);
                 break;
             }
             case HW_BTN_BAR_PREV:
@@ -1296,21 +1326,31 @@ public:
 
     // T12: pitch wheel back to the centre (strip finger left / mode left).
     // Pitch bend: the track that received the first off-centre value gets the spring-back too (F5).
-    void sendPitchBend(int val)
+    void sendPitchBend(kick_hw::HeldTarget<mt::MTSelected>& held, int val)
     {
         auto& ae = mt::getAudioInterface();
         mt::MTSelected target;
         {
             std::lock_guard<std::mutex> lk(m_target_mutex);
-            const mt::MTSelected cur = ae.getSelected();
-            target = (val == kick_hw::strip::kPitchCentre) ? m_bend_target.end(cur) : m_bend_target.begin(cur);
+            target = kick_hw::routeBend(held, val, ae.getSelected());
         }
         ae.addLiveMidiMsg(target, juce::MidiMessage::pitchWheel(1, val));
+    }
+    // CC1 / CC11: the value-0 message ends on the track that got the first non-zero value (G16).
+    void sendHeldCc(kick_hw::HeldTarget<mt::MTSelected>& held, int cc, int val)
+    {
+        auto& ae = mt::getAudioInterface();
+        mt::MTSelected target;
+        {
+            std::lock_guard<std::mutex> lk(m_target_mutex);
+            target = kick_hw::routeCc(held, val, ae.getSelected());
+        }
+        ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, cc, val));
     }
     void stripPitchSpringBack()
     {
         if (!m_strip_pitch_sent.exchange(false)) return;
-        sendPitchBend(kick_hw::strip::pitchSpringBackTarget());
+        sendPitchBend(m_strip_bend_target, kick_hw::strip::pitchSpringBackTarget());
     }
     void on_touch_strip_touch(bool down) override
     {
@@ -1320,7 +1360,7 @@ public:
     {
         if (m_strip_mode.load() != kick_hw::strip::kPitchBend) return;
         m_strip_pitch_sent.store(true);
-        sendPitchBend(kick_hw::strip::pitchFromPosition(pos14));
+        sendPitchBend(m_strip_bend_target, kick_hw::strip::pitchFromPosition(pos14));
     }
     void on_touch_strip(int val) override
     {
@@ -1328,8 +1368,7 @@ public:
         if (mode == kick_hw::strip::kPitchBend) return; // pitch bend uses on_touch_strip_fine (14 bit)
         if (mode == kick_hw::strip::kModWheel)
         {
-            mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
-                                                   juce::MidiMessage::controllerEvent(1, 1, kick_hw::strip::modWheelFromPosition(val)));
+            sendHeldCc(m_strip_cc1_target, 1, kick_hw::strip::modWheelFromPosition(val));
             return;
         }
         CPktMgr::HWMsg_t msg;
@@ -1344,7 +1383,7 @@ public:
     }
     void on_pitch_bend(int val) override
     {
-        sendPitchBend(val);
+        sendPitchBend(m_bend_target, val);
     }
     void on_sustain_pedal(bool down) override
     {
@@ -1366,13 +1405,11 @@ public:
     }
     void on_mod_wheel(int val) override
     {
-        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
-                                               juce::MidiMessage::controllerEvent(1, 1, val));
+        sendHeldCc(m_cc1_target, 1, val);
     }
     void on_expression(int val) override
     {
-        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
-                                               juce::MidiMessage::controllerEvent(1, 11, val));
+        sendHeldCc(m_cc11_target, 11, val);
     }
     void on_footswitch2(bool down) override
     {
