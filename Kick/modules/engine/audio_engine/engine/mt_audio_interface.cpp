@@ -1768,6 +1768,21 @@ namespace mt
         return t->timingCorrect( Info );
     }
 
+    void MTAudioInterface::setAutomationMode( int Mode ) { manager->setAutomationMode( Mode ); }
+    int  MTAudioInterface::getAutomationMode() { return manager->getAutomationMode(); }
+
+    int MTAudioInterface::clearAutomation( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        if( !t )
+            return -1;
+        manager->getUndoManager().beginNewTransaction( "Clear Automation" );
+        t->clearAutomation( true );
+        return 0;
+    }
+
+    void MTAudioInterface::clearAllAutomation() { manager->clearAutomation( 2 ); }
+
     int MTAudioInterface::humanizeNotes( const MTSelected& Selection, const track::humanizeInfo& Info )
     {
         if( auto t = manager->getTrack( Selection ) )
