@@ -38,6 +38,19 @@ int main()
     check(chooseTouchRoute(false, 0) == TouchRoute::Mouse, "no XI: finger 0 mouse");
     check(chooseTouchRoute(false, 1) == TouchRoute::Drop, "no XI: finger 1 dropped");
 
+    // Delivery path: a hidden window (no X) has a peer but the peer hit-test finds nothing -> manual.
+    check(chooseDeliveryPath(true, false) == DeliveryPath::Manual, "peer=1 showing=0 -> manual");
+    check(chooseDeliveryPath(true, true) == DeliveryPath::Peer, "peer=1 showing=1 -> peer");
+    check(chooseDeliveryPath(false, false) == DeliveryPath::Manual, "peer=0 -> manual");
+    check(chooseDeliveryPath(false, true) == DeliveryPath::Manual, "peer=0 showing=1 -> manual");
+
+    // Touch slop (manual path): 1-3 px jitter is not a drag, a real move is.
+    check(!exceedsTouchSlop(100, 100, 100, 100), "slop: no move");
+    check(!exceedsTouchSlop(100, 100, 102, 101), "slop: jitter");
+    check(!exceedsTouchSlop(100, 100, 108, 100), "slop: exactly 8 px");
+    check(exceedsTouchSlop(100, 100, 109, 100), "slop: 9 px");
+    check(exceedsTouchSlop(100, 100, 106, 106), "slop: diagonal");
+
     // Whole chain from the raw 2048x2048 range (rotated mount: UI x from inverted raw Y, UI y from raw X).
     rawToUi(0, 0, 2048, 2048, 1280, 800, 1024, 600, x, y);
     check(x == 1023 && y == 0, "raw (0,0) -> top right");
