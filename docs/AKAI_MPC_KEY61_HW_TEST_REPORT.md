@@ -68,3 +68,16 @@ Próba reggelre (az MPC-n a telepített build futásidőben kapcsol, nincs kül�
 
 ### LED-protokoll: a kamerás mérés eredménye (4. kör)
 Photo Booth kamerával, `btn PLAY` utáni LED-változással (STOP-nak ki, PLAY-nek be kell kapcsolnia): **`KICK_AKAI_LED_MODE=cc` működik; `note` (alap) és `noteoff0` nem** (a STOP nem aludt ki). A gombok LED-jét tehát `0xB0 <gomb-note> <érték>` vezérli. A `note` módban a gombok a firmware állapotában ragadnak (a korábbi "minden világít" ebből). Részletek és színek: `docs/akai_mpc_hardware/KEY61_LED_COLOURS.md`. **Javaslat: az alap legyen `cc`.**
+
+## 5. kör (`safian/main` `ea7f2d68`, `-g` build, tartalék kijelzővel)
+Build: `-g`, `-DKICK_TOUCH_SINGLE_TAP_LISTBOX=ON`; a docker-build `-j4`-nél memóriahiány miatt megszakadt (`Killed signal terminated program cc1plus`, `audio_core.cpp`), `-j2`-vel lefutott. Indítás: `KICK_NO_HARDWARE=1 KICK_NO_SERIAL_DEVICE=1`.
+
+| Tétel | Állapot | Bizonyíték |
+|---|---|---|
+| Indulás kijelző nélkül | OK | `[HAL] KickHardwareBridge fully operational (Display 1280x800 @ 30FPS, Touch, ControlSurface, CmdFIFO)` |
+| 8. hiba: SOUNDS gomb | **JAVÍTVA** | `btn SOUNDS` után az app él (pid 24043), nincs új coredump, a snapshot a File Browsert mutatja |
+| `btn MAIN` | OK | a snapshot md5 változik (`ba5adb80ea7f` → `ea52dd499aba`), a Home/Track képernyő jön |
+| Injektált érintés | **MÉG ROSSZ** | négy érvényes célpont (Program fül, Sequence fül, Mix ikon, Program fül skálázott koordinátával `352 116`): a snapshot md5 mindig `ea52dd499aba`, nem változik; a naplóban `[CMD] touch ...` megjelenik |
+| LED alap mód | még `note` (a `cc` alapra állítás ebben a buildben nincs) | `[AKAI-CONTROLLER] LED mode: note (KICK_AKAI_LED_MODE=<unset>)` |
+
+Az érintésnél a fizikai próba még nem történt meg (a felhasználó nincs otthon). Gyanú: a `1024x600`-as UI (`[BRIDGE] rendering 1024x600 to 1280x800`) és a touch `1280x800` koordinátái között nincs skálázás a `dispatchTouch`-ban, de a skálázott koordináta sem hatott, ezért a hit-test vagy a peer nélküli kézi `mouseDown` útja is gyanús. Ellenőrizni kell, hogy a kézi eseményút egyáltalán eljut-e a `KickButton`-ig (napló a `dispatchTouch`-ban).
