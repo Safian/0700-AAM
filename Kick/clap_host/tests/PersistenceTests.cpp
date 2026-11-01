@@ -141,6 +141,29 @@ int main(int argc, char** argv) {
           static_cast<bool>(juce::ValueTree::fromXml(ioFile.loadFileAsString()).getProperty("retried")),
           "failed autosave retries after storage recovers without another edit");
     check(document.close(), "close after automatic recovery");
+    {   // prepareSave/afterSave pair (G10): the file stores the prepared ("base") value, the live tree keeps "auto", and the
+        // restore does not leave the document dirty -- otherwise the next autosave would overwrite the file with "auto".
+        const auto pairFile = directory.getChildFile("pair/project.xml");
+        mt::KickXML pair("ROOT", ".xml", "1");
+        pair.prepareSave = [&] { pair.getState().setProperty("pan", "base", nullptr); return juce::Result::ok(); };
+        pair.afterSave   = [&] { pair.getState().setProperty("pan", "auto", nullptr); };
+        check(pair.loadOrCreate(pairFile).isValid(), "create prepare/after document");
+        pair.getState().setProperty("pan", "auto", nullptr);
+        check(pair.save(), "save with prepare/after");
+        check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "file holds the prepared value");
+        check(pair.getState().getProperty("pan").toString() == "auto", "tree restored after save");
+        check(!pair.isDirty(), "restore does not leave the document dirty");
+        pair.setAutoSave(true); pair.setAutoSaveTime(20);
+        pump(150);
+        check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "autosave did not overwrite the file with the restored value");
+        pair.getState().setProperty("other", 1, nullptr);
+        pump(150);
+        const auto autosaved = juce::ValueTree::fromXml(pairFile.loadFileAsString());
+        check(static_cast<int>(autosaved.getProperty("other")) == 1 && autosaved.getProperty("pan").toString() == "base" &&
+              pair.getState().getProperty("pan").toString() == "auto", "autosave runs prepare/after too");
+        check(pair.close(), "close prepare/after document");
+        check(juce::ValueTree::fromXml(pairFile.loadFileAsString()).getProperty("pan").toString() == "base", "closing save keeps the prepared value");
+    }
     directory.deleteRecursively();
     std::cout << "PASS: actual KickXML autosave, close, worker save, bounded snapshots, failed/unsupported state, dirty/error reporting and retry\n";
 }
