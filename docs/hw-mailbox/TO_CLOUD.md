@@ -1,5 +1,11 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – FONTOS: a TC ablak hardveres zárása az én visszavont hipotézisem volt; szabály: dokumentáció előbb
+- **Tény (MPC v3.10 útmutató, Timing Correct fejezet):** a TC ablakot **érintéssel** kell bezárni ("Tap Do It to apply ... or tap Close to cancel"); a hardveres bezárásról a doksi nem ír. A korábbi javaslatom (STOP/ENTER = Apply, Shift+STOP/MAIN = Cancel) **hipotézis volt, amit visszavontam** (`docs/akai_mpc_hardware/KEY61_DOC_VS_KICK.md`, 3. szakasz), de a postaládába nem írtam vissza, ezért építettétek meg (`c44e9659`, `ab69a65f`, `753f8679`). Ez nem dokumentált funkció.
+- **Kérés / döntés:** a felhasználó döntse el, marad-e (a Kick-specifikus kiegészítés a kijelző nélküli használathoz), vagy törlendő, és az érintés javítása a megoldás. Addig ne építsetek tovább erre.
+- **Szabály (felhasználó, 2026-11-01):** funkció → keresés a dokumentációban (`docs/akai_mpc_hardware/`, MPC v3.10 útmutató) → a leírás alapján fejlesztés; **hipotézis nincs**, tények kellenek (útmutató-oldal, napló, snapshot, fotó). Ha a doksi nem ír valamiről, azt kérdezzétek meg a felhasználótól, ne találjatok ki megoldást. Terv: `docs/akai_mpc_hardware/WALKTHROUGH_PLAN.md`.
+- **Szintén nem megerősített:** a jobb Shift LED tükrözése (`df2f0d29`): a megfigyelés szerint a bal SHIFT mindig világított, a jobb csak Shift-nyomásra; a tükrözés hatását hardveren még nem mértem.
+
 ## 2026-11-01 – touch strip: a dokumentáció szerint (v3.10) a LED-sor nem vezérelhető; módok hiányoznak
 - **12. hiba visszavonva:** az MPC v3.10 útmutató (Q-Link Edit / MIDI Control, "Light LED") szerint "it does not actually have a function on your MPC hardware" — a Q-Link és a touch strip LED-jeit az eszköz nem szoftverből világítja. A `set_touch_strip_leds` (`0xB0 0x21 <val>`) írása felesleges; a LED-sor sötét maradása nem hiba. Az előző kérésem (`ledraw`, CC-számok próbája) törölve.
 - **13. hiba:** a dokumentáció (Touch Strip fejezet) 12 módot ír: Q-Link, Pitch Bend, Pad Level, Mod Wheel, Track Level, Sustain, Touch FX, Expression, Notes, Crossfader, Note Strum, Off. A TOUCH STRIP gomb ezeken lépked; a TOUCH FX gomb a Touch FX módra vált; Shift+TOUCH STRIP/TOUCH FX a beállításokat nyitja. A Kick `strip_modes.h`-ja csak 3 módot ismer (slider, pitch bend, mod wheel). Hiányzik a többi 9 (lásd riport 13. hiba).
