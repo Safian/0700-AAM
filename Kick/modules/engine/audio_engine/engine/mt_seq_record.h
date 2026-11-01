@@ -62,6 +62,17 @@ namespace mt::seqrec
         return c;
     }
 
+    // The sequence play of the Looper (LoopRecorder::record in sync mode) also goes through setSequencePlay(Now).
+    // While the Looper records/overdubs that play is NOT a sequence-recording PLAY: an Armed sequence must stay
+    // Armed and must not erase the armed tracks' notes. looperBusy = looper isRecording() || isOverdubbing().
+    inline Control onPlayStartedUnlessLooper( Control c, bool looperBusy, bool& clearExisting )
+    {
+        clearExisting = false;
+        if( looperBusy )
+            return c;
+        return onPlayStarted( c, clearExisting );
+    }
+
     // STOP / pause / end of the sequence while recording: the take is finished.
     inline Control onTransportStopped( Control c )
     {

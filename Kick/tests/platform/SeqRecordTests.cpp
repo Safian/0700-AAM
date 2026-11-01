@@ -133,6 +133,14 @@ int main()
         total += c.drain( n, 960, 0, true );
         check( total == kNotes, "every pair came out exactly once" );
     }
+    { // The Looper's sync-play must not start a sequence take (round 29)
+        Control c   = onRecPressed( Control{} );
+        bool    clr = true;
+        Control r   = onPlayStartedUnlessLooper( c, true, clr );
+        check( r.phase == Phase::Armed && !clr, "Armed + looper recording: no take, stays Armed" );
+        r = onPlayStartedUnlessLooper( c, false, clr );
+        check( r.phase == Phase::Recording && clr, "Armed + looper idle: the take starts and clears" );
+    }
     std::puts( "OK" );
     return 0;
 }
