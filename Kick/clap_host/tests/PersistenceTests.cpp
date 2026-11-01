@@ -396,6 +396,26 @@ int main(int argc, char** argv) {
         }
         check(doc.close(), "close O1 document");
     }
+    {   // Q2: A is a live relative reference (samples/kick.wav) whose file is missing. A new external source with the same file name
+        // must not be given that name: A would silently play the new source's audio.
+        const auto projFile = directory.getChildFile("q2/project.xml");
+        const auto samples = projFile.getParentDirectory().getChildFile("samples");
+        const auto z = directory.getChildFile("Elsewhere/Q2/kick.wav");
+        check(z.create().wasOk() && z.replaceWithText("zzz"), "seed Q2 source");
+        mt::KickXML doc("ROOT", ".xml", "1");
+        check(doc.loadOrCreate(projFile).isValid(), "create Q2 document");
+        juce::ValueTree la("LAYER"), lz("LAYER");
+        la.setProperty("source", "samples/kick.wav", nullptr);
+        lz.setProperty("source", z.getFullPathName(), nullptr);
+        doc.getState().appendChild(la, nullptr); doc.getState().appendChild(lz, nullptr);
+        auto savedAt = [&](int i) { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(i).getProperty("source").toString(); };
+        check(doc.save(), "Q2: save succeeds");
+        check(la.getProperty("source").toString() == "samples/kick.wav" && savedAt(0) == "samples/kick.wav", "Q2: A's path untouched");
+        check(savedAt(1) != "samples/kick.wav" && savedAt(1).startsWith("samples/"), "Q2: Z gets another name");
+        check(!samples.getChildFile("kick.wav").existsAsFile(), "Q2: A's missing file was not created");
+        check(samples.getChildFile(savedAt(1).fromLastOccurrenceOf("/", false, false)).loadFileAsString() == "zzz", "Q2: Z's bytes are in its own file");
+        check(doc.close(), "close Q2 document");
+    }
     {   // O2: a failed sample copy must fail the save (dirty, error), leave the source absolute and the file untouched.
         const auto projFile = directory.getChildFile("o2/project.xml");
         const auto src = directory.getChildFile("Packs/C/snare.wav");
