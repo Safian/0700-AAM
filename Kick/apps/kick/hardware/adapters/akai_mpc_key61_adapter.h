@@ -673,13 +673,6 @@ public:
         }
     }
 
-    void set_touch_strip_leds(int val) override {
-        if (!m_out1) return;
-        // CC33 (0x21) feedback to physical LED ladder (0..127)
-        uint8_t msg[3] = { 0xB0, 0x21, (uint8_t)(val & 0x7F) };
-        locked_write(m_out1_mutex, m_out1, msg, 3);
-    }
-
     void set_pad_rgb(int pad, uint8_t r, uint8_t g, uint8_t b) override {
         if (pad < 0 || pad > 15) return;
         uint8_t p = (uint8_t)(pad & 0x0F);
