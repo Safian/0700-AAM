@@ -1,0 +1,98 @@
+=== /proc/asound/cards ===
+ 0 [M61            ]: USB-Audio - MPC Key 61
+                      Akai Pro MPC Key 61 at usb-ff540000.usb-1, full speed
+ 1 [ACVM           ]: ACVM - ACVM
+                      ACVM
+=== /proc/asound/pcm ===
+01-00: ACVM PCM inmusic,acvm-audio-codec-0 : ACVM PCM inmusic,acvm-audio-codec-0 : playback 1 : capture 1
+=== /proc/bus/input/devices ===
+I: Bus=0018 Vendor=0000 Product=0000 Version=0000
+N: Name="ILI2117 Touchscreen"
+P: Phys=
+S: Sysfs=/devices/platform/ff160000.i2c/i2c-4/4-0026/input/input0
+U: Uniq=
+H: Handlers=event0 
+B: PROP=0
+B: EV=b
+B: KEY=400 0 0 0 0 0 0 0 0 0 0
+B: ABS=2608000 3
+
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name="gpio-keys"
+P: Phys=gpio-keys/input0
+S: Sysfs=/devices/platform/gpio-keys/input/input1
+U: Uniq=
+H: Handlers=kbd event1 
+B: PROP=0
+B: EV=3
+B: KEY=100000 0 0 0
+
+=== /etc/asound.conf ===
+pcm.quad_slave {
+    type hw
+    card 1
+    device 0
+    channels 4
+}
+
+pcm.quad_route {
+    type route
+    slave.pcm "quad_slave"
+    ttable.0.0 1.0
+    ttable.1.1 1.0
+    ttable.0.2 1.0
+    ttable.1.3 1.0
+}
+
+pcm.!default {
+    type plug
+    slave.pcm "quad_route"
+}
+
+ctl.!default {
+    type hw
+    card 1
+}
+=== /dev/i2c-* ===
+i2c-0
+i2c-1
+i2c-4
+i2c-5
+=== /dev/snd ===
+by-id
+by-path
+controlC0
+controlC1
+midiC0D0
+pcmC1D0c
+pcmC1D0p
+seq
+timer
+=== /sys/bus/i2c/devices ===
+0-0040
+0-0041
+0-0051
+0-005a
+1-002d
+4-0026
+4-0062
+i2c-0
+i2c-1
+i2c-4
+i2c-5
+=== /sys/bus/i2c/devices/*/name ===
+0-0040: syr827
+0-0041: syr828
+0-0051: hym8563
+0-005a: act8846
+1-002d: usb5537b
+4-0026: ili2117
+4-0062: dummy
+i2c-0: rk3x-i2c
+i2c-1: rk3x-i2c
+i2c-4: rk3x-i2c
+i2c-5: rk3x-i2c
+=== adapter discovery (recomputed, same functions as the adapter) ===
+rawmidi card: found=0 -> used 0 (fallback 0), ports hw:0,0,0 hw:0,0,1 hw:0,0,2
+audio card (ACVM): found=1 -> used 1 (fallback 1), pcm plughw:1,0
+touch device (ILI2117) in /proc/bus/input/devices: event0 -> used /dev/input/event0 (fallback /dev/input/event0 or /sys scan)
