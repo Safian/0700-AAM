@@ -237,6 +237,26 @@ int main(int argc, char** argv) {
         check(samples.findChildFiles(juce::File::findFiles, false, "*").size() == 1 && samples.getChildFile("kick.wav").loadFileAsString() == "dupsample", "exactly one sample file created");
         check(dup.close(), "close shared-source document");
     }
+    {   // Two different external files with identical bytes (separate FILE nodes): different assets, so never merged into one samples/ file.
+        const auto projFile = directory.getChildFile("same/project.xml");
+        const auto samples = projFile.getParentDirectory().getChildFile("samples");
+        const auto a = directory.getChildFile("A/kick.wav"), b = directory.getChildFile("B/kick.wav");
+        check(a.create().wasOk() && a.replaceWithText("identical") && b.create().wasOk() && b.replaceWithText("identical"), "seed identical-content sources");
+        mt::KickXML same("ROOT", ".xml", "1");
+        check(same.loadOrCreate(projFile).isValid(), "create identical-content document");
+        juce::ValueTree la("LAYER"), lb("LAYER");
+        la.setProperty("source", a.getFullPathName(), nullptr); lb.setProperty("source", b.getFullPathName(), nullptr);
+        same.getState().appendChild(la, nullptr); same.getState().appendChild(lb, nullptr);
+        auto savedAt = [&](int i) { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(i).getProperty("source").toString(); };
+        for (int round = 0; round < 2; ++round) {
+            check(same.save(), "save identical-content document");
+            check(savedAt(0) == "samples/kick.wav" && savedAt(1) == "samples/B_kick.wav", "identical bytes, different sources -> two saved sources");
+            check(samples.findChildFiles(juce::File::findFiles, false, "*.wav").size() == 2, "two separate sample files, no duplicates on re-save");
+            check(lb.getProperty("source").toString() == b.getFullPathName(), "live colliding source stays absolute");
+            same.getState().setProperty("touch", round, nullptr);
+        }
+        check(same.close(), "close identical-content document");
+    }
     directory.deleteRecursively();
     std::cout << "PASS: actual KickXML autosave, close, worker save, bounded snapshots, failed/unsupported state, dirty/error reporting and retry\n";
 }

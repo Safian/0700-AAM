@@ -21,6 +21,7 @@
 
 #include "kick_xml_manager.h"
 #include "../../common/source/kick_paths.h"
+#include <map>
 
 namespace {
 // Never hold the document lock while waiting for the message thread. Project
@@ -42,7 +43,10 @@ bool isAudioFilePath(const juce::String& path) {
 // renameCollisions=false (live tree): children of the project and copies to the sample's own name; a name collision is left
 // absolute, because the asset slice map is keyed by the absolute path and a renamed live source would mute the sample.
 // renameCollisions=true (serialised snapshot only): handles just the collision, as samples/<parent>_<name>.
-void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, bool renameCollisions) {
+// copied: per save, absolute source path -> destination it was copied to. The same source may share its destination (two layers
+// on one external file); a different source with identical bytes is a different asset and must not be merged (separate slice maps).
+using CopiedMap = std::map<juce::String, juce::File>;
+void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, bool renameCollisions, CopiedMap& copied) {
     if (!projectDir.exists() || !tree.isValid()) return;
 
     static const juce::Identifier idPath("path");
@@ -61,10 +65,10 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
                     samplesDir = projectDir.getChildFile("Imported");
 
                 auto dest = samplesDir.getChildFile(f.getFileName());
-                // An existing samples/<name> with identical bytes is the same sample (e.g. a second layer using the same external
-                // file after the first one copied it), not a collision; it is shared instead of duplicated as <parent>_<name>.
+                // An existing samples/<name> is only shared when this very source was copied there earlier in this save.
+                const auto done = copied.find(f.getFullPathName());
                 const bool collision = dest.existsAsFile() && dest.getFullPathName() != f.getFullPathName() &&
-                                       !(f.existsAsFile() && dest.hasIdenticalContentTo(f));
+                                       !(done != copied.end() && done->second == dest);
                 if (collision) {
                     if (!renameCollisions) return;
                     dest = samplesDir.getChildFile(f.getParentDirectory().getFileName() + "_" + f.getFileName());
@@ -74,6 +78,7 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
                     samplesDir.createDirectory();
                     f.copyFileTo(dest);
                 }
+                copied[f.getFullPathName()] = dest;
                 tree.setProperty(prop, dest.getRelativePathFrom(projectDir), nullptr);
             }
         }
@@ -84,7 +89,7 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
 
     for (int i = 0; i < tree.getNumChildren(); ++i) {
         auto child = tree.getChild(i);
-        relativizeSamplePaths(child, projectDir, renameCollisions);
+        relativizeSamplePaths(child, projectDir, renameCollisions, copied);
     }
 }
 }
@@ -204,11 +209,12 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
 
     // Sample paths stay rewritten in the live document as before: relativizeSamplePaths copies each foreign sample into the
     // project once and is only idempotent because the live path becomes relative (a copy would duplicate files every save).
-    relativizeSamplePaths(vt, xmlFile.getParentDirectory(), false);
+    CopiedMap copied;
+    relativizeSamplePaths(vt, xmlFile.getParentDirectory(), false, copied);
     // Collisions with an existing samples/<name> are renamed on the serialised copy only; the live source stays absolute.
     // patchSnapshot only ever touches this serialised copy, never the live document (the audio thread reads it).
     auto snapshot = vt.createCopy();
-    relativizeSamplePaths(snapshot, xmlFile.getParentDirectory(), true);
+    relativizeSamplePaths(snapshot, xmlFile.getParentDirectory(), true, copied);
     if (patchSnapshot) patchSnapshot(snapshot);
 
     const auto xml = snapshot.toXmlString();
