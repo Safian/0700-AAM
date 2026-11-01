@@ -141,3 +141,17 @@ A koordináta-átvitel (nyers → framebuffer → UI) és a hit-test **helyes**;
 
 ### Main Volume gomb – mérés (nyers MIDI, `[AKAI-RAW]`)
 A gomb forgatására (oda-vissza) **0 nyers MIDI-üzenet** érkezett (sem Port 0, 1, 2 felől). Kontroll: a Q-Link 1 forgatása `[AKAI-RAW] port=1 status=B0 d0=16 d1=1` (relatív CC16), 108 sor, tehát a naplózás működik. A gomb input-eszköz sem (`/proc/bus/input/devices`: csak ILI2117 és `gpio-keys`). Következtetés: a Main Volume **nem MIDI és nem input-esemény**; a hangerőt a hardver/firmware kezeli (kodek vagy analóg fokozat), a Kick alatt (a gyári `acvs` nélkül) hatástalan, a felhasználó szerint a hangerő a gomb forgatására nem változik. Következő lépés (csak olvasás): a `probe` parancs bővítése az ALSA kodek mixer-elemeinek listázásával (`/proc/asound/card1/*`, `amixer controls`), hogy kiderüljön, van-e hangerő-vezérlő elem, amit a Kicknek kell állítania.
+
+## 9. kör – `<`/`>` és Shift+`<`/`>` (fizikai és injektált), `fd2480de` + `[AKAI-RAW]`
+A felhasználó fizikailag megnyomta a `<` és `>` gombot sima és Shift-es formában, **megállított állapotban** (nem indított lejátszást): semmi nem történt. Az injektált út ugyanezt mutatja a footer BAR:BEAT:TICK kijelzőjén:
+
+| Lépés (injektált) | BAR:BEAT:TICK |
+|---|---|
+| kiinduló (megállítva) | `0:01:000` |
+| 2× `STEP_NEXT` | `0:01:000` |
+| `BAR_NEXT`, `STEP_PREV` | `0:01:000` |
+| Home: 2× `BAR_NEXT` | `0:01:000` |
+| `PLAY` (+4,5 s) | `3:01:083` (a kezdetről indult: 4,5 s ≈ 2,25 ütem; a parkolt +2 ütem **nem érvényesült**) |
+| lejátszás közben `STEP_NEXT` | változik (a pozíció ugrik) |
+
+**11. hiba:** megállított állapotban a seek (`<`, `>`, `<<`, `>>`, Shift+`<`/`>`) sem megjelenik a kijelzőn, sem a következő PLAY-nél nem érvényesül; lejátszás közben működik. Az első helyi próbánál (`hw-local-patches`, `4605b75e` alap) a megállított `BAR_NEXT` még frissítette a kijelzőt (`1:04:057` → `2:01:000`; a rawmidi-injektált `>` is `1:01:048`), tehát a `main`-ben valószínűleg regresszió van a megállított állapotú seekben (`MTSequence::showBar/showTick` és a footer frissítése, vagy a `seekBars` parkolt célja).
