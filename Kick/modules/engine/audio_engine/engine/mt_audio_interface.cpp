@@ -1794,6 +1794,62 @@ namespace mt
         return t->recallLiveNotes( WindowMs );
     }
 
+    int MTAudioInterface::setArpEnabled( const MTSelected& Selection, bool On )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpEnabled( On ); return 0; }
+        return -1;
+    }
+    bool MTAudioInterface::isArpEnabled( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t && t->isArpEnabled();
+    }
+    int MTAudioInterface::setArpMode( const MTSelected& Selection, int Mode )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpMode( Mode ); return 0; }
+        return -1;
+    }
+    int MTAudioInterface::setArpRate( const MTSelected& Selection, int Rate )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpRate( Rate ); return 0; }
+        return -1;
+    }
+    int MTAudioInterface::setArpOctaves( const MTSelected& Selection, int Octaves )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpOctaves( Octaves ); return 0; }
+        return -1;
+    }
+    int MTAudioInterface::setArpLatch( const MTSelected& Selection, bool On )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpLatch( On ); return 0; }
+        return -1;
+    }
+    int MTAudioInterface::setArpGate( const MTSelected& Selection, int Percent )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpGate( Percent ); return 0; }
+        return -1;
+    }
+    bool MTAudioInterface::isArpLatch( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t && t->isArpLatch();
+    }
+    int MTAudioInterface::getArpMode( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t ? t->getArpMode() : -1;
+    }
+    int MTAudioInterface::getArpRate( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t ? t->getArpRate() : -1;
+    }
+    int MTAudioInterface::getArpOctaves( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t ? t->getArpOctaves() : -1;
+    }
+
     int MTAudioInterface::addLiveMidiNote( const int Program, const int Note, const int Velocity )
     {
         if( auto prog = manager->getProgram( Program ) )
