@@ -1479,9 +1479,8 @@ public:
         msg.pktDir  = CPktMgr::enumPacketDir::EN_PKT_REQUEST;
         msg.data    = { juce::jlimit(0, 100, (int)std::round(val * 100.0f / 127.0f)) };
         contracts::DclSignals::dispatchHardwareInput(msg);
-
-        if (m_hw && m_hw->control_surface())
-            m_hw->control_surface()->set_touch_strip_leds(val);
+        // No touch strip LED write: the MPC manual (Q-Link Edit / MIDI Control, "Light LED") says the strip / Q-Link
+        // LED row has no function on the hardware, so it stays dark by design.
     }
     void on_pitch_bend(int val) override
     {

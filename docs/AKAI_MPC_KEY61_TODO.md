@@ -89,7 +89,7 @@ Az adapter `get_akai_button()` mind a 45 Note-ot leképezi. A viselkedést a `Ki
 | Q-Link 1–4 érintés (Note 84–87) | ❌ | `on_encoder_touch()` üres a hídban |
 | Data Dial forgatás (CC100) | ✅ | CC száma a review-ra támaszkodik ❓ |
 | Touch Strip pozíció | ⚠️ | Csak CC33 (MSB) megy át; CC34 (LSB) eldobva, Note 78 (érintés) üres ág; a `CC69` ágnak nincs forrása a dokumentációban |
-| Touch Strip LED-létra | ⚠️ | A bejövő érték visszhangzik CC33-ra (`set_touch_strip_leds`); nincs külön LED-logika |
+| Touch Strip LED-létra | n/a | Az MPC v3.10 útmutató szerint nincs szoftveres funkciója ("Light LED"); a Kick nem ír rá (a `set_touch_strip_leds` törölve), a sötét sor nem hiba |
 
 ### 2.3 Pad és billentyűzet
 
