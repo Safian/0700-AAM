@@ -45,3 +45,21 @@ A Port 1-re először mind a 36 LED-re `0x90 <note> 0x00` megy (led=0..35, `valu
 
 ### (c) Pad-tartás ismétlése
 A bridge aftertouch-kapuja (`m_pad_aftertouch_enabled`) kódban alapból `false`, a UI Hardware beállítása kapcsolja be. `echo "aftertouch 0|1" > /data/kick_cmd` ideiglenes parancs kész (`[CMD] aftertouch gate=0` a naplóban), de a nyomva tartott pad fizikai nyomás nélkül nem szimulálható. **Fizikai próba kell** (előbb kapu `0`, utána `1`, és figyelni, hogy a gyors ismétlés megszűnik-e).
+
+## 3. kör (build `b8ee63a6`, saját patch nélkül, recept szerint)
+Build: `docs/AKAI_MPC_KEY61_BUILD_RECIPE.md` (Release, `-DKICK_ENABLE_HARDWARE=ON -DKICK_TOUCH_SINGLE_TAP_LISTBOX=ON`, 16 MB). Indítás: `KICK_NO_HARDWARE=1 KICK_NO_SERIAL_DEVICE=1`. A build `1024x600`-ból skáláz `1280x800`-ra (`[BRIDGE] rendering 1024x600 to 1280x800`), az elrendezés ezért más, mint a korábbi buildeken (pl. a Program fül kb. x=440, y=145).
+
+| Tétel | Állapot | Bizonyíték |
+|---|---|---|
+| Indulás kijelző nélkül, tmp patch nélkül | **OK** (az `179c99c9` guard működik) | folyamat fut, `[AKAI-CONTROLLER] LED mode: note (KICK_AKAI_LED_MODE=<unset>)`, `/data/kick_cmd` létrejött |
+| SOUNDS gomb | **ROSSZ, összeomlik** (8. hiba) | lent |
+| Injektált érintés | **ROSSZ** | `touch 440 145` (a Program fülön) után a két snapshot md5 azonos (`7a722d1fcbf3`); a korábbi `touch 351 109` az új elrendezésben nem találat volt, nem érvényes próba |
+| `KICK_AKAI_LED_MODE` `cc` / `noteoff0` | **fizikai próba kell** (kamera reggel) | `note` mód naplózva; a másik két mód hatása csak szemmel/kamerával ellenőrizhető |
+| `Aura::processReplacing` (7. hiba) újrateszt | **nem eldönthető** | az új buildnek még csak percnyi futása van, a korábbi összeomlás ~25 perc üresjárat után jött |
+
+### 8. hiba – SOUNDS gomb összeomlás kijelző nélkül (`b8ee63a6` is)
+`btn SOUNDS` (és a fizikai SOUNDS, note 121) után SIGSEGV. Backtrace (Release, szimbólum nélküli frame-ek, de a függvénynevek olvashatók):
+`juce::Component::getParentMonitorArea() const` ← `setBoundsRelative(float×4)` ← `ui::FileLeftEntry::resized()` ← `FileBrowser::setupProvider()` lambda ← `KickTableView::refresh()` ← `FileBrowser::visibilityChanged()` ← `Component::setVisible` ← `KickHome::handleAsyncUpdate()`. Ugyanaz a gyökérok, mint az indulásnál: üres `Desktop::getDisplays()`, null dereferencia. Az `179c99c9` guard csak a `Main.cpp`-t védi. Régebbi `-g` buildnél ugyanez: `kick_fileBrowser.cpp:1650`.
+
+### LED-megfigyelés (felhasználói fénykép, `KICK_AKAI_LED_MODE=note`, alapértelmezett)
+Az app indításkor `0x90 <note> 0`-t küld mind a 36 LED-re, majd bekapcsolja a STOP-ot (127), az A bankot (3) és a MAIN-t (127). A fotón (a fényesebb, "csillogó" gombok a világítók, a halvány színesek az eszköz alapfénye) fényes még: FULL LEVEL, TAP TEMPO/GLOBAL, TOUCH FX/STRIP, SOUNDS/FAVORITES, UNDO is. Ezekre az app csak `value=0`-t küldött, tehát a `0x90 <note> 0` nem alszik. `ledraw 80 <note> 00` (Note Off) küldve FULL LEVEL (0x27), TAP TEMPO (0x35), SOUNDS (0x79), TOUCH FX (0x2A) LED-re: a hatás nem lett megfigyelve. A kamerás ellenőrzés a felhasználóra vár.
