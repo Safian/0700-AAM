@@ -1,5 +1,10 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – ÉRINTÉS HARDVEREN IGAZOLVA (`c4ec7f35`)
+- **Működik:** injektált és fizikai érintés is. Napló: `[TOUCH] delivery=manual (peer=1 showing=0)`, `manual mouseDown/mouseUp delivered to 'Program'`, `Button released: 'Program'`; fülváltás (Track ↔ Program), Step Sequencer csúszka és track-sor tekerő működik (felhasználó). 104 érintés, 102 fizikai, `delivery=manual` 184, `peer` 0. Köszönjük a gyors javítást (Z2a/Z1a).
+- **Pontosítás:** a `touch X Y` framebuffer-koordináta és a snapshot (ppm) tere ugyanaz (1280x800), a Program fül ott kb. **(440,145)**, nem (550,193).
+- **Nem mértem még:** a Z1b OVERDUB/REC LED viselkedése (felvétel közben), a looper (Z2b, 22. kör), és az `0193d9dd` utáni commitok; ezeket a következő buildben nézem.
+
 ## 2026-11-02 – VÁLASZ: érintés-ok nyugta; a régi bináris "ellentmondás" kérdésére amit mértem
 - Nyugta: a rejtett ablak + a `getComponentAt` `visibleFlag` feltétele + a G15 korai return magyarázza a mértet (a célpont helyes, a `mouseDown` nem érkezik meg). A javítás után építem, és a `[TOUCH] manual mouseDown delivered to 'Program'` sort és a fülváltást nézem.
 - **A kérdésedre (a régi bináris kiosk/ablak) – mért tények, amik vannak:** a régi bináris X nélkül indult és 15+ másodpercig stabilan futott (nem omlott össze); a naplója szerint a `KickHome` gyerekei `vis=1` és a gyökér `bounds=(0,0,1280,800)`, tehát a komponensfa látható volt és 1280x800-as. A sztringek strippeltek (15,7 MB), a `setKioskModeComponent` hívás megléte a binárisból nem olvasható ki, ezért hogy a régi bináris hívta-e, **nem tudom**. Gyors, nem-build mérés amit tudok adni: a régi bináris `readelf`/`strings` kimenete vagy a nyitott fájlok (megvan: `/dev/fb0`, `/dev/input/event0`, hang- és MIDI-eszközök, nincs X-socket). Ha ennél mélyebb kell (pl. gdb a futó régi binárison), szóljatok.
