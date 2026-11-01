@@ -6,6 +6,8 @@
 #include "hardware/pad_colour_map.h"
 #include "hardware/led_map.h"
 #include "hardware/key_transpose.h"
+#include "hardware/strip_modes.h"
+#include "hardware/system_probe.h"
 #include "contracts/dcl/dcl_signals.h"
 #include "contracts/dcl/dcl_contracts.h"
 #include "contracts/dcl/dcl_contracts_helper.h"
@@ -38,6 +40,9 @@ private:
     int m_cmd_fd_w = -1;
     std::string m_cmd_buf;
     bool m_shift_pressed = false;
+    // T12 touch strip mode (kick_hw::strip::Mode): 0 Kick slider, 1 pitch bend (spring back), 2 mod wheel (CC1).
+    std::atomic<int>  m_strip_mode { 0 };
+    std::atomic<bool> m_strip_pitch_sent { false };  // a pitch value was sent and not yet sprung back to centre
     bool m_locate_pressed = false;
     // DCL code sent on press of the Shift-dependent TC / AUTOMATION buttons (-1 = none), so the release
     // goes to the same code even if Shift was released first.
@@ -800,6 +805,15 @@ public:
             }
             case HW_BTN_TOUCH_STRIP:
             {
+                // T12 (Akai convention, Kick has no strip modes): cycle slider -> pitch bend -> mod wheel.
+                const int old_mode = m_strip_mode.load();
+                const int new_mode = kick_hw::strip::nextMode(old_mode);
+                m_strip_mode.store(new_mode);
+                if (old_mode == kick_hw::strip::kPitchBend) stripPitchSpringBack();
+                if (m_hw && m_hw->control_surface())
+                    m_hw->control_surface()->set_led_level(HW_LED_TOUCH_STRIP, kick_hw::strip::modeLedLevel(new_mode));
+                printf("[STRIP] mode %d (0 slider, 1 pitch bend, 2 mod wheel)\n", new_mode);
+                fflush(stdout);
                 break;
             }
             case HW_BTN_TOUCH_FX:
@@ -1205,9 +1219,41 @@ public:
         }
     }
 
+    // T11 (investigated, deliberately empty): Kick has no knob-touch DCL message. A zero-count Q-Link packet is
+    // NOT harmless: it passes isValidHardwareInput and reaches linkRotated(ID, 0) of the Q-Link pages, where
+    // PadMixer/ProgramMixer do `mute.setToggleState(value > 0); solo.setToggleState(value <= 0)` (flips the
+    // mute/solo toggle state), and number controls call knobRotated(0) -> setValue(val_ + 0). Nothing highlights
+    // the assigned parameter. So the touch is not forwarded.
     void on_encoder_touch(int /*encoder_idx*/, bool /*touched*/) override {}
+
+    // T12: pitch wheel back to the centre (strip finger left / mode left).
+    void stripPitchSpringBack()
+    {
+        if (!m_strip_pitch_sent.exchange(false)) return;
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::pitchWheel(1, kick_hw::strip::pitchSpringBackTarget()));
+    }
+    void on_touch_strip_touch(bool down) override
+    {
+        if (!down && m_strip_mode.load() == kick_hw::strip::kPitchBend) stripPitchSpringBack();
+    }
+    void on_touch_strip_fine(int pos14) override
+    {
+        if (m_strip_mode.load() != kick_hw::strip::kPitchBend) return;
+        m_strip_pitch_sent.store(true);
+        mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                               juce::MidiMessage::pitchWheel(1, kick_hw::strip::pitchFromPosition(pos14)));
+    }
     void on_touch_strip(int val) override
     {
+        const int mode = m_strip_mode.load();
+        if (mode == kick_hw::strip::kPitchBend) return; // pitch bend uses on_touch_strip_fine (14 bit)
+        if (mode == kick_hw::strip::kModWheel)
+        {
+            mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),
+                                                   juce::MidiMessage::controllerEvent(1, 1, kick_hw::strip::modWheelFromPosition(val)));
+            return;
+        }
         CPktMgr::HWMsg_t msg;
         msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_SLIDER;
         msg.pktCmd  = contracts::DeviceControlContracts::SliderCmd::EN_SLIDER_TOUCH_INPUT;
@@ -1382,9 +1428,30 @@ public:
             m_hw->control_surface()->inject_bytes((int)port, bytes.data(), bytes.size());
     }
 
+    // kick_cmd "probe": READ-ONLY system facts (/proc, /sys, /etc text files and directory listings, plus what the
+    // adapter discovery picks) to stdout and /data/kick_probe.txt. No shell, no ioctl, no /dev node is opened
+    // (/dev/i2c-* and /dev/snd are only listed by name). Answers the T32 / T19 checklist with one command:
+    //   echo probe > /data/kick_cmd
+    void processProbeCommand()
+    {
+        const std::string report = kick_hw::sysprobe::buildReport();
+        printf("[PROBE] begin\n%s[PROBE] end\n", report.c_str());
+        fflush(stdout);
+        FILE* f = fopen("/data/kick_probe.txt", "w");
+        if (f) {
+            fputs(report.c_str(), f);
+            fclose(f);
+            printf("[PROBE] written to /data/kick_probe.txt\n");
+        } else {
+            printf("[PROBE] cannot write /data/kick_probe.txt\n");
+        }
+        fflush(stdout);
+    }
+
     void processCommand(const std::string& cmd)
     {
         if (cmd.compare(0, 8, "rawmidi ") == 0) { processRawMidiCommand(cmd); return; }
+        if (cmd == "probe") { processProbeCommand(); return; }
         char op[64] = { 0 };
         int a1 = 0, a2 = 0;
         char sval[128] = { 0 };

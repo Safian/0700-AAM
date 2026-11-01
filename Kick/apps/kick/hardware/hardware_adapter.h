@@ -131,6 +131,10 @@ public:
     virtual void on_encoder_turn(int encoder_idx, int delta) = 0;
     virtual void on_encoder_touch(int encoder_idx, bool touched) = 0;
     virtual void on_touch_strip(int val) = 0;
+    // Touch strip finger down / up (Akai Note 78). Optional.
+    virtual void on_touch_strip_touch(bool /*down*/) {}
+    // Touch strip 14-bit position 0..16383 (CC33 MSB + last CC34 LSB). Optional, fires in addition to on_touch_strip.
+    virtual void on_touch_strip_fine(int /*pos14*/) {}
     virtual void on_pitch_bend(int val) = 0;
     virtual void on_sustain_pedal(bool down) = 0;
     // Optional keybed / wheel / pedal inputs (0..127); adapters without them need not implement these.
