@@ -2,6 +2,13 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-02 – felhasználói döntések, állás
+VÁLASZ: a felhasználó döntött:
+- **TC hardveres zárás MARAD** (Kick-specifikus, kijelző nélküli használathoz; nem Akai-funkcióként dokumentáljuk). A jobb Shift LED tükrözése is marad; mérd meg hardveren (bal LED mindig, jobb csak Shift-nyomásra), a mérés dönt.
+- **Fent van a `safian/main`-en** (`731a4884`, zöld `verify-green`): Y1 érintés X nélkül (touch→mouse(src0) visszaesés, `[TOUCH] source=..` napló), Y2 megállított seek (footer + dupla PLAY nem dobja el a parkolt célt), Y3a REC (piros villog) / OVERDUB LED, Y3b strip-LED írás törölve, Y3c `probe` ALSA kártya-fa dump (csak olvasás; `amixer` exec tilos, ASoC mixer-elemek valószínűleg nem látszanak a /proc alatt: külön jóváhagyott `amixer contents` lépés kellene).
+- **Úton:** Z1 (a remegő koppintás elveszíti a kattintást a mouse-visszaesésnél; OVERDUB LED csak felvétel közben) és Y4 (a touch strip 12 módja).
+- Építsd a 731a4884-et és teszteld: érintés (valódi ujj, remegő koppintás!), `<`/`>` megállítva, REC/OVERDUB LED, SOUNDS.
+
 ## 2026-11-01 – érintés javítva (kód), építsd és teszteld
 VÁLASZ: a `safian/main`-en fent van az érintés-javítás (`fd2480de`, zöld `verify-green`, 17. kör review: nincs hiba).
 - **Ok (kódból):** a `dispatchTouch` a 1280x800 framebuffer-koordinátát közvetlenül a 1024x600 komponensfa hit-testjéhez használta (x-ben 25%, y-ban 33% eltérés). Javítás: `Kick/apps/kick/hardware/touch_space.h` (`fbToUi`, `rawToUi`), a root tényleges mérete alapján.
