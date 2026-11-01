@@ -106,6 +106,65 @@ int main()
     CHECK_EQ( clampMode( 7 ), Write );
     CHECK_EQ( clampMode( -1 ), Off );
 
+    // --- PAN lane ---
+    CHECK_EQ( (int)Level, 0 ); // persisted ids: never reorder
+    CHECK_EQ( (int)Pan, 1 );
+    CHECK_EQ( (int)Count, 2 );
+    CHECK_EQ( panToValue( 0.0 ), 0 );
+    CHECK_EQ( panToValue( -1.0 ), -1000 );
+    CHECK_EQ( panToValue( 1.0 ), 1000 );
+    CHECK_EQ( panToValue( 0.25 ), 250 );
+    CHECK_EQ( panToValue( -0.0004 ), 0 );
+    CHECK_EQ( panToValue( -0.0006 ), -1 );
+    CHECK_EQ( panToValue( 7.0 ), 1000 );   // clamped
+    CHECK_EQ( panToValue( -7.0 ), -1000 );
+    CHECK_EQ( panToValue( 0.0 / 0.0 ), 0 ); // NaN -> centre
+    CHECK_EQ( valueToPan( 500 ) == 0.5, true );
+    CHECK_EQ( valueToPan( -5000 ) == -1.0, true );
+    for( int v = -1000; v <= 1000; ++v ) // round trip is exact
+        CHECK_EQ( panToValue( valueToPan( v ) ), v );
+
+    // backward compatible persistence: a node without autoParam is a Level lane
+    CHECK_EQ( paramFromStored( false, 0 ), (int)Level );
+    CHECK_EQ( paramFromStored( false, 1 ), (int)Level ); // value ignored when the property is absent
+    CHECK_EQ( paramFromStored( true, 0 ), (int)Level );
+    CHECK_EQ( paramFromStored( true, 1 ), (int)Pan );
+    CHECK_EQ( paramFromStored( true, 2 ), -1 );  // unknown (future) param: not ours
+    CHECK_EQ( paramFromStored( true, -1 ), -1 );
+
+    // negative pan values survive the text form; interpolation through the centre
+    Lane pl;
+    setPoint( pl, 0, -1000 );
+    setPoint( pl, 96, 1000 );
+    setPoint( pl, 192, 0 );
+    CHECK_EQ( toString( pl ) == "0:-1000,96:1000,192:0", true );
+    CHECK_EQ( fromString( toString( pl ) ) == pl, true );
+    CHECK_EQ( valueAt( pl, 48, 0 ), 0 );
+    CHECK_EQ( valueAt( pl, 144, 0 ), 500 );
+    CHECK_EQ( valueAt( pl, 500, 0 ), 0 );
+    // an old project (Level-only text) parses unchanged
+    CHECK_EQ( fromString( "0:100,96:127" ).size(), 2 );
+
+    // recording a pan sweep thins like level
+    Lane        rp;
+    RecState    rs;
+    CHECK_EQ( (int)recordMove( rp, rs, 10, panToValue( -0.5 ) ), (int)RecResult::Recorded );
+    CHECK_EQ( (int)recordMove( rp, rs, 10, panToValue( -0.5 ) ), (int)RecResult::Unchanged );
+    CHECK_EQ( (int)recordMove( rp, rs, 12, panToValue( -0.4 ) ), (int)RecResult::Recorded ); // < kMinGapTicks: replaces tick 10
+    CHECK_EQ( rp.size(), 1 );
+    CHECK_EQ( rp[0].tick, 12 );
+    CHECK_EQ( rp[0].value, -400 );
+
+    // deterministic owner: lowest order wins, ties -> first listed, none -> -1
+    {
+        const int o1[] = { 2003, 1002, 1005 };
+        CHECK_EQ( pickPanOwner( o1, 3 ), 1 );
+        const int o2[] = { 5, 5 };
+        CHECK_EQ( pickPanOwner( o2, 2 ), 0 );
+        CHECK_EQ( pickPanOwner( o2, 0 ), -1 );
+    }
+    CHECK_EQ( kNoValue < -kPanScale, true ); // sentinel can never be a lane value
+
     if( g_fail )
     {
         std::printf( "%d failure(s)\n", g_fail );

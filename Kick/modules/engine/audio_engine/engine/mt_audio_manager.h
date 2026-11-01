@@ -108,9 +108,20 @@ namespace mt
         void       setAutomationMode( int Mode );
         // Clears the level lane of the tracks in Scope (0 = selected track, 1 = selected sequence, 2 = all). One undo step.
         void clearAutomation( int Scope );
+        // PAN lane arbitration (message thread). True when Track is the lowest-ordered (sequence index, track index)
+        // track that is playing Prog: the only one that records a pan take for it in Write mode. Called from a
+        // non-message thread it answers true (no scan: the sequence list is not safe to walk there); the Read rule
+        // below still keeps several lanes from fighting.
+        bool isPanLaneOwner( const MTTrack* Track, const MTIProgram* Prog );
 
     private:
         void interTimerCallbackHandler();
+        // Read mode, message thread (25 Hz timer): applies the pan values the tick threads published (MTTrack::
+        // takePanTarget) to the program's pan property. Per program the lowest (sequence, track) publisher wins this pass.
+        void applyAutomatedPans();
+        // Leaving Read: puts back the pan the programs had before playback overwrote it.
+        void restoreAutomatedPans();
+        std::map<juce::String, double> panBases; // program id -> stored pan before Read touched it (message thread)
 
     private:
         AudIO::DawEngine engine{ AUDIO_NUM_INPUTS, AUDIO_NUM_OUTPUTS, AUDIO_NUM_SEND_RETURNS, AUDIO_NUM_SUBMIX, AUDIO_NUM_AUX };
