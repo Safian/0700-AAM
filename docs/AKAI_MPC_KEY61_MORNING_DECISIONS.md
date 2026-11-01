@@ -37,3 +37,12 @@ A felhasználó utasítása: ne álljunk meg apró döntés miatt; ha UI-elem ke
 - Mentési sample-ág (K3…S1), végső elv: **a mentés az élő fát nem módosítja**; a samples/ alá másolás és a relatív utak csak a mentési snapshotban (`KickXML::patchSnapshot` a pan-nél, `relativizeSamplePaths` a snapshoton). Ismert korlát: ha egy külső forrás tartalma két mentés között változik, a már rögzített másolat nem frissül.
 - Tartósan hiányzó minta: a mentés nem blokkol, a mentett út megmarad, naplósor; felhasználói jelzés (egyszeri, nem blokkoló) még DUMMY/teendő.
 - Hardveres visszajelzés: tartalék Desktop-display (SOUNDS összeomlás) javítva és eszközön igazolt; LED `cc` alap; érintés vizsgálat folyamatban (U1).
+
+## Hardveres session 6–7. kör (autonóm döntések)
+| Téma | Döntés | Teendő |
+|---|---|---|
+| `kick_cmd touch X Y` | framebuffer-koordináta (1280x800, a snapshot ppm tere); nyers érintés: `rawToUi` | a régi UI-koordinátás próbák átszámítandók |
+| TC modális ablak | hardveres zárás: STOP/ENTER = Apply, SHIFT+STOP/Back = Cancel (V1 worker); érintés külön (U1) | hardveres próba |
+| Két Shift LED | note 49 és 50 együtt (V1) | hardveres próba |
+| KEYBOARD CONTROL → Pad Perform | marad (nincs Keyboard Control menü a Kickben); eltérés dokumentált | felhasználói döntés ha kell |
+| Main Volume gomb | DUMMY: nincs kodek-mixer (`amixer`) vezérlés, amíg a nyers MIDI-mérés nem mutatja, hogy a gomb küld-e eseményt; a gyári MCU/kodek útja `acvs` nélkül hatástalan | felhasználói döntés: kell-e kodek-mixer vezérlés |
