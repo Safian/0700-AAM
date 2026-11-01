@@ -5,6 +5,8 @@
 #include "../led_map.h"
 #include "../akai_map.h"
 #include "../device_probe.h"
+#include "../strip_modes.h"
+#include <atomic>
 #include <dirent.h>
 #include <mutex>
 #include <string>
@@ -327,6 +329,11 @@ class AkaiMpcKey61ControlSurfaceAdapter : public IControlSurfaceAdapter {
 private:
     snd_rawmidi_t *m_in0, *m_in1, *m_in2;
     snd_rawmidi_t *m_out0, *m_out1, *m_out2;
+    // T5 runtime switch: false = no Port 0 writes at all (init SysEx + pad RGB). Set once in start() from the
+    // environment variable KICK_AKAI_PORT0 (value "0" disables; unset / anything else = current behaviour, writes on).
+    bool m_port0_writes = true;
+    std::atomic<int> m_strip_msb { 0 };   // last CC33 / CC34 of the touch strip (14-bit position)
+    std::atomic<int> m_strip_lsb { 0 };
     kick_hw::LedLevelCache m_led_cache; // last level per button LED (only changes are written)
     pthread_t m_thread;
     volatile bool m_running;
@@ -389,7 +396,8 @@ private:
                     if (note >= 84 && note <= 87) {
                         m_listener->on_encoder_touch(note - 84, vel > 0);
                     } else if (note == 78) {
-                        // Touch strip finger touch
+                        // Touch strip finger touch (127) / release (0)
+                        m_listener->on_touch_strip_touch(vel > 0);
                     } else {
                         HardwareButton btn = get_akai_button(note);
                         if (btn != HW_BTN_NONE) {
@@ -404,6 +412,8 @@ private:
                     int note = d0;
                     if (note >= 84 && note <= 87) {
                         m_listener->on_encoder_touch(note - 84, false);
+                    } else if (note == 78) {
+                        m_listener->on_touch_strip_touch(false);
                     } else {
                         HardwareButton btn = get_akai_button(note);
                         if (btn != HW_BTN_NONE) {
@@ -420,7 +430,17 @@ private:
                         // Data Dial relative rotary (CC 100 on MPC Key 61!)
                         int delta = (cc_val < 64) ? cc_val : (cc_val - 128);
                         m_listener->on_jog_dial(delta);
-                    } else if (cc_num == 33 || cc_num == 69) {
+                    } else if (cc_num == 33) {
+                        // Touch strip position MSB. The 0..127 path is unchanged; the 14-bit value (with the last
+                        // CC34 LSB) is offered additionally for the pitch bend mode.
+                        m_strip_msb = cc_val;
+                        m_listener->on_touch_strip(cc_val);
+                        m_listener->on_touch_strip_fine(kick_hw::strip::combine14(m_strip_msb, m_strip_lsb));
+                    } else if (cc_num == 34) {
+                        // Touch strip position LSB: only refines the 14-bit value, no 0..127 event.
+                        m_strip_lsb = cc_val;
+                        m_listener->on_touch_strip_fine(kick_hw::strip::combine14(m_strip_msb, m_strip_lsb));
+                    } else if (cc_num == 69) {
                         m_listener->on_touch_strip(cc_val);
                     }
                 }
@@ -580,12 +600,22 @@ public:
             for (auto& pr : m_parser) pr.reset();
         }
 
+        {
+            // T5: runtime switch to test on the device without rebuilding (KICK_AKAI_PORT0=0 -> never write Port 0).
+            const char* e = getenv("KICK_AKAI_PORT0");
+            m_port0_writes = !(e && strcmp(e, "0") == 0);
+            printf("[AKAI-CONTROLLER] Port 0 writes (init SysEx, pad RGB): %s (KICK_AKAI_PORT0=%s)\n",
+                   m_port0_writes ? "ENABLED (default)" : "DISABLED", e ? e : "<unset>");
+            fflush(stdout);
+        }
+
         // Mode 0x41: Port 1 Private enabled, Port 0 Public disabled, transport MMC disabled
         uint8_t akai_init[] = { 0xF0, 0x47, 0x7F, 0x4B, 0x60, 0x00, 0x01, 0x41, 0xF7 };
         // ARCHITECT-CLARIFY: the review says the mode SysEx should reach Port 1 only, but the
         // hardware-verified build also writes it to Port 0 (the host command port?). Keep both
-        // until verified on a device; then drop the Port 0 write if it is not needed.
-        if (m_out0) locked_write(m_out0_mutex, m_out0, akai_init, sizeof(akai_init));
+        // until verified on a device; then drop the Port 0 write if it is not needed. Test with
+        // KICK_AKAI_PORT0=0 (see m_port0_writes). The CLARIFY stays until the hardware confirms.
+        if (m_out0 && m_port0_writes) locked_write(m_out0_mutex, m_out0, akai_init, sizeof(akai_init));
         locked_write(m_out1_mutex, m_out1, akai_init, sizeof(akai_init));
         m_led_cache.reset(); // after the mode set the device state is unknown: the next write of each LED goes out
 
@@ -638,7 +668,7 @@ public:
             locked_write(m_out1_mutex, m_out1, sysex_all, sizeof(sysex_all));
             locked_write(m_out1_mutex, m_out1, sysex_dev, sizeof(sysex_dev));
         }
-        if (m_out0) {
+        if (m_out0 && m_port0_writes) {
             locked_write(m_out0_mutex, m_out0, sysex_all, sizeof(sysex_all));
             locked_write(m_out0_mutex, m_out0, sysex_dev, sizeof(sysex_dev));
         }
