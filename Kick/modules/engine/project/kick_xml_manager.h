@@ -43,7 +43,7 @@ namespace mt
         // Called on the message thread, including saves requested by a loader.
         std::function<juce::Result()> prepareSave;
         // Called on the saving (message) thread with the COPY of the document that is about to be serialised, after the sample
-        // paths were relativized (those still go into the live document). May rewrite the copy; the live document is never touched by it.
+        // paths were relativized (also only in this copy: a save never modifies the live document). May rewrite the copy.
         std::function<void(juce::ValueTree&)> patchSnapshot;
         std::function<void(const juce::String&)> onSaveFailure;
         std::function<void(bool)> onDirtyChanged;
