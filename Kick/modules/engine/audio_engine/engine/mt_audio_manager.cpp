@@ -241,6 +241,7 @@ namespace mt
         if (!projectManager::close()) return false;
         internalTimer.stopTimer();
         projectLoaded = false;
+        panBases.clear(); // the project (and its programs) goes away; nothing to restore
         MTAudioTransportManager::close();
 
         // Call listeners
@@ -298,11 +299,83 @@ namespace mt
     void MTAudioManager::setAutomationMode( int Mode )
     {
         Mode = automation::clampMode( Mode );
-        if( Mode == automationMode.exchange( Mode ) )
+        const int old = automationMode.load();
+        if( Mode == old )
             return;
+        if( automation::Read == old )
+        {
+            // Leaving Read: the programs get their stored pan back. Done with the mode momentarily Off so that the
+            // restore itself is never recorded when the new mode is Write.
+            automationMode.store( automation::Off );
+            restoreAutomatedPans();
+        }
+        automationMode.store( Mode );
         forAllSequences( [Mode]( MTSequence* S ) {
             S->forAllTracks( [Mode]( MTTrack* T ) { T->automationModeChanged( Mode ); } );
         } );
+    }
+
+    bool MTAudioManager::isPanLaneOwner( const MTTrack* Track, const MTIProgram* Prog )
+    {
+        auto* mm = juce::MessageManager::getInstanceWithoutCreating();
+        if( !mm || !mm->isThisTheMessageThread() )
+            return true;
+        int mine = -1, lowestOther = -1;
+        forAllSequences( [&]( MTSequence* S ) {
+            const int si = getSequenceIndex( S );
+            S->forAllTracks( [&]( MTTrack* T ) {
+                const int order = si * 1000 + T->getIndex();
+                if( T == Track )
+                    mine = order;
+                else if( T->isPlayingProgram( Prog ) && ( lowestOther < 0 || order < lowestOther ) )
+                    lowestOther = order;
+            } );
+        } );
+        return lowestOther < 0 || mine <= lowestOther;
+    }
+
+    void MTAudioManager::applyAutomatedPans()
+    {
+        struct Claim
+        {
+            MTIProgram* prog;
+            int         value;
+            int         order;
+        };
+        std::vector<Claim> claims; // message thread: allocation is fine here
+        forAllSequences( [&]( MTSequence* S ) {
+            const int si = getSequenceIndex( S );
+            S->forAllTracks( [&]( MTTrack* T ) {
+                const int v = T->takePanTarget(); // always consumed, so nothing stale survives a mode change
+                if( automation::kNoValue != v )
+                    if( auto* p = T->getProgram() )
+                        claims.push_back( { p, v, si * 1000 + T->getIndex() } );
+            } );
+        } );
+        if( automation::Read != getAutomationMode() )
+            return;
+        for( const auto& c : claims )
+        {
+            bool wins = true;
+            for( const auto& o : claims )
+                if( o.prog == c.prog && o.order < c.order )
+                    wins = false;
+            if( !wins )
+                continue;
+            const double target = automation::valueToPan( c.value );
+            if( std::abs( (double)c.prog->getPan() - target ) < 1e-6 )
+                continue;
+            panBases.emplace( c.prog->id.get(), (double)c.prog->getPan() ); // keeps the first (pre-automation) value
+            c.prog->vTree.setProperty( IDs::pan, target, nullptr ); // same property the mixer knob writes; not undoable
+        }
+    }
+
+    void MTAudioManager::restoreAutomatedPans()
+    {
+        for( const auto& b : panBases )
+            if( auto* p = getProgramById( b.first ) )
+                p->vTree.setProperty( IDs::pan, b.second, nullptr );
+        panBases.clear();
     }
 
     void MTAudioManager::clearAutomation( int Scope )
@@ -421,6 +494,7 @@ namespace mt
         MTAudioTransportManager::updatePlayheads();
         MTAudioSequenceManager::processMidiMeters();
         MTAudioProgramManager::processMidiMeters();
+        applyAutomatedPans();
 
         listeners.call( [&]( MTAudioInterfaceListener& l ) { l.onPlayHeadChanged( MTAudioSequenceManager::getPlayhead().bnb ); } );
         listeners.call( [&]( MTAudioInterfaceListener& l ) { l.onTrackMetersUpdated(); } );

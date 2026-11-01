@@ -458,9 +458,11 @@ namespace mt
         bool                        toggleTimingCorrectEnabled() { const bool n = !tcEnabled.load(); tcEnabled.store( n ); return n; } // UI thread
         void                        setTimingCorrectParams( const track::timingCorrectInfo& Info ) { tcParams = Info; }
         const track::timingCorrectInfo& getTimingCorrectParams() const { return tcParams; }
-        // AUTOMATION (track LEVEL lanes; track pan has no consumer in the engine, so it is not automatable).
-        // Mode (0 Off, 1 Read, 2 Write; global, session-only, not persisted): Read plays the lanes back on the tick thread,
-        // Write records level moves made while the track plays, Off ignores lanes. Lanes persist with the project.
+        // AUTOMATION: per track a LEVEL lane and a PAN lane. The track's own pan has no consumer, so the PAN lane is keyed
+        // to the PROGRAM the track plays (it drives/records the program's pan, the property the mixer knob writes).
+        // Mode (0 Off, 1 Read, 2 Write; global, session-only, not persisted): Read plays the lanes back (level on the tick
+        // thread, pan handed to the message thread), Write records level and program-pan moves made while the track plays,
+        // Off ignores lanes. Lanes persist with the project. Clearing removes both lanes.
         void setAutomationMode( int Mode );
         int  getAutomationMode();
         // Clears the lane of the track in Selection as one undo step. Returns 0, -1 if no such track.
