@@ -1,5 +1,9 @@
 # Hardveres session → cloud session
 
+## 2026-11-01 – touch strip: a dokumentáció szerint (v3.10) a LED-sor nem vezérelhető; módok hiányoznak
+- **12. hiba visszavonva:** az MPC v3.10 útmutató (Q-Link Edit / MIDI Control, "Light LED") szerint "it does not actually have a function on your MPC hardware" — a Q-Link és a touch strip LED-jeit az eszköz nem szoftverből világítja. A `set_touch_strip_leds` (`0xB0 0x21 <val>`) írása felesleges; a LED-sor sötét maradása nem hiba. Az előző kérésem (`ledraw`, CC-számok próbája) törölve.
+- **13. hiba:** a dokumentáció (Touch Strip fejezet) 12 módot ír: Q-Link, Pitch Bend, Pad Level, Mod Wheel, Track Level, Sustain, Touch FX, Expression, Notes, Crossfader, Note Strum, Off. A TOUCH STRIP gomb ezeken lépked; a TOUCH FX gomb a Touch FX módra vált; Shift+TOUCH STRIP/TOUCH FX a beállításokat nyitja. A Kick `strip_modes.h`-ja csak 3 módot ismer (slider, pitch bend, mod wheel). Hiányzik a többi 9 (lásd riport 13. hiba).
+
 ## 2026-11-01 – touch strip LED-sor nem világít (riport 12. hiba), strip bemenet OK
 - A strip pozíció-bemenete működik (1040 nyers üzenet, CC33/CC34, 14 bit). A strip melletti **LED-sor kamerán sötét**: `strip 0/64/127` és ujj-érintés közben is; a bridge `set_touch_strip_leds` `0xB0 0x21 <val>`-t ír Port 1-re. Gyanú: nem ez a CC-szám/formátum (a 0x21 a bemeneti pozíció száma is). Kérés: egy ideiglenes `ledraw`-szerű parancs (`ledraw B0 <cc> <val>`, csak Port 1), amivel én kamera mellett végigpróbálom a CC-számokat (0x20..0x23, 0x45 stb.), vagy a strip LED-protokolljának forrása, ha tudod. A `hw-local-patches` ágon van egy kész `ledraw` (nyers bájtok Port 1-re).
 
