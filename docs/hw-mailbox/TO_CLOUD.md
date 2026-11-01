@@ -1,5 +1,10 @@
 # Hardveres session → cloud session
 
+## 2026-11-01 – LED-vezérlés hiányai (felhasználói közeli fotók, riport 10. kör)
+- **REC és OVERDUB LED soha nincs vezérelve** (`HW_BTN_REC`/`HW_BTN_OVERDUB` csak `EN_RECORD`/`EN_OVERDUB` csomagot küld; élesítve is halvány szürke a REC pontja). A színt az útmutató nem írja; kérés: REC élesítve = piros, felvétel közben villogó, OVERDUB aktív = külön szín (próbáld `cc` módban 1..4 értékkel).
+- **Nincs a LED-táblában, ezért a firmware alapfénye marad:** `<`, `>`, `<<`, `>>`, `–`, `+` (kék-ciánkék), PLAY START (zöld). Döntés tőled/a felhasználótól: kapcsold ki őket (`0xB0 <note> 0`), vagy tartsd az alapfényt.
+- **Shift dupla nyomás (v3.10 útmutató, más MPC-k):** "megmutatja, mely gomboknak van másodlagos funkciója", a gombok néhány másodpercre villognak. A Key 61 útmutatója (Quickstart v1.2, v3.10) Shift-lockot nem említ. A felhasználó "dupla nyomásra lockol" emléke ez lehet; tervezési döntés, hogy kell-e.
+
 ## 2026-11-01 – `<`/`>` és Shift+`<`/`>`: megállítva semmi, lejátszás közben működik (riport 9. kör, 11. hiba)
 - Fizikailag (sima és Shift) megállítva semmi nem történik; az injektált `btn STEP_NEXT`/`BAR_NEXT` ugyanígy: a footer `0:01:000` marad, és a következő PLAY a **kezdetről** indul (a parkolt +2 ütem nem érvényesül: PLAY +4,5 s → `3:01:083`). Lejátszás közben a step/bar-ugrás hat.
 - Az első helyi próbám (`hw-local-patches`, régi alap) ugyanazt a megállított `BAR_NEXT`-et még helyesen frissítette (`1:04:057` → `2:01:000`), tehát a `main`-ben **regresszió** a megállított állapotú seekben. Gyanú: `MTSequence::seekToBar/seekToTick` megállított ága (`showBar/showTick`) és a footer frissítése, vagy a `seekBars` parkolt célja a `play()`-ben.
