@@ -4,6 +4,8 @@ A felhasználó utasítása: ne álljunk meg apró döntés miatt; ha UI-elem ke
 
 | Dátum | Terület | Döntés / dummy | Indok | Hol (fájl) | Reggeli teendő |
 |---|---|---|---|---|---|
+| r2 A | Mentes / pan (G10) | `saveProject` Read modban a tarolt pant irja vissza mentes idejere, utana az automatizaltat; `MTAudioManager::isSavingProject()` jelzo | A MIDI program CC10 agat (group B fajl) ez nem zarja ki: mentes alatt rovid CC10 loket mehet a szintinek | `mt_audio_manager.cpp/.h` | B: `MTMidiProgram` pan agban `if( manager.isSavingProject() ) return;` (ha elerheto) vagy elfogadni |
+| r2 A | Nemitott track (G5) | Mute mellett note-off, pitch wheel, CC64, CC123 atmegy (`mt_mute_filter.h`) | Ne ragadjon hang/pedal mute kozben | `mt_audio_track.cpp`, `mt_mute_filter.h` | Jovahagyas |
 
 ## Már meghozott döntések (round 1)
 - Sustain és pitch bend csak az élő bemenetre hat (Behringer-elv): megvalósítva (`noteProcess(msgs, live)`).

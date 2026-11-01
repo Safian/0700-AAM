@@ -40,6 +40,7 @@ namespace mt
             vTree.setProperty( IDs::name, ( "Track " + juce::String( gTrackCtr ) ), nullptr );
 
         vTree.addListener( this );
+        MTNoteList::setReaderLock( &lock ); // G2: foreign note-map edits (undo/redo) exclude the tick thread; order lock -> MTNoteList::lock
 
         // Locate midi file for this track...
         /*
@@ -342,6 +343,8 @@ namespace mt
     {
         if( automation::Write != manager.getAutomationMode() )
             return;
+        if( manager.isSavingProject() ) // G10: the save writes pan back; that is no take
+            return;
         auto      p    = program.load();
         const int tick = livePlayTick.load( std::memory_order_relaxed );
         if( !isPlaying.load() || tick < 0 || !p || p->isAudio() || !progTree.isValid() )
@@ -414,6 +417,12 @@ namespace mt
     // are set BEFORE the ValueTree writes so that the listener's reloadLaneFromState sees our own commit and skips.
     void MTTrack::commitPanLane( const juce::String& Points, const juce::String& ProgramId )
     {
+        struct Guard // G14: our own ValueTree writes below must not bounce back into reloadLaneFromState (laneWriteLock held)
+        {
+            explicit Guard( bool& F ) : f( F ) { f = true; }
+            ~Guard() { f = false; }
+            bool& f;
+        } inCommit( inPanCommit );
         lanePanCommitted = Points;
         lanePanProgId    = ProgramId;
         if( !findLaneNode( automation::Level ).isValid() )
@@ -438,6 +447,8 @@ namespace mt
     void MTTrack::reloadLaneFromState()
     {
         const juce::ScopedLock w( laneWriteLock );
+        if( inPanCommit ) // G14: the listener fired from our own commitPanLane
+            return;
         {
             const auto node   = findLaneNode( automation::Level );
             const auto points = node.isValid() ? node[IDs::autoPoints].toString() : juce::String();
@@ -535,12 +546,16 @@ namespace mt
         if (auto* p = program.load()) p->updatePluginTransport(seq.getBPM(), 0, false);
         arpPanic();
         stopAllMidiNotes();
+        const bool bendWasMoved = liveBendActive.exchange( false ); // G12: centre only if a live bend was actually moved
         if( auto* p = program.load() ) // F16: all-notes-off no longer centres the pitch bend; only a real stop does
         {
-            juce::Array<juce::MidiMessage> centre;
-            centre.add( juce::MidiMessage::pitchWheel( getMidiOutChannel(), 8192 ) );
-            p->noteProcess( centre ); // forwarded by MIDI/CLAP programs; ignored by the sample programs (not live)
-            p->resetPerformance();    // bend centre + sustain release also for muted programs
+            if( bendWasMoved )
+            {
+                juce::Array<juce::MidiMessage> centre;
+                centre.add( juce::MidiMessage::pitchWheel( getMidiOutChannel(), 8192 ) );
+                p->noteProcess( centre ); // forwarded by MIDI/CLAP programs; ignored by the sample programs (not live)
+            }
+            p->resetPerformance(); // bend centre + sustain release also for muted programs
         }
         isPlaying = false;
         trackPlayhead.clear();
@@ -735,8 +750,13 @@ namespace mt
         pProgram->updatePluginTransport(seq.getBPM(), double(tickPos) / defaultPPQN, true);
         if( !midiMsgs.isEmpty() )
         {
-            reloadMidiMeter( levelScaler );
-            pProgram->noteProcess( midiMsgs );
+            for( const auto& m : midiMsgs ) // G8: only note-ons move the meter
+                if( m.isNoteOn() )
+                {
+                    reloadMidiMeter( levelScaler );
+                    break;
+                }
+            pProgram->noteProcess( midiMsgs ); // sequence + arp output: not live (decision 7)
             midiMsgs.clearQuick();
         }
     }
@@ -756,8 +776,13 @@ namespace mt
         }
         if( Msg.isNoteOnOrOff() && arpFilterLive( Msg ) ) // arpeggiator takes the note; its output is emitted by onTick
             return 0;
-        auto pProgram = program.load();
-        if( pProgram && !isTrackEffectivelyMuted() )
+        if( Msg.isPitchWheel() ) // G12: remember a moved live bend so stop() centres only then
+            liveBendActive.store( Msg.getPitchWheelValue() != 8192, std::memory_order_relaxed );
+        auto       pProgram = program.load();
+        const bool muted    = isTrackEffectivelyMuted();
+        // G5: a muted track starts nothing new but still lets go (note-off, pitch wheel, CC64, CC123)
+        const bool pass = !muted || mutefilter::passesWhileMuted( Msg.getRawData()[0], Msg.getRawDataSize() > 1 ? Msg.getRawData()[1] : 0 );
+        if( pProgram && pass )
         {
             juce::Array<juce::MidiMessage> list;
 
@@ -779,7 +804,7 @@ namespace mt
 
             pProgram->noteProcess( list, true ); // live input
         }
-        if( !isTrackEffectivelyMuted() )
+        if( !muted && Msg.isNoteOn() ) // G8
             reloadMidiMeter( levelScaler );
 
         return 0;
@@ -831,7 +856,7 @@ namespace mt
         juce::Array<juce::MidiMessage> list;
         arpEmit( R, list );
         if( auto p = program.load(); p && !list.isEmpty() )
-            p->noteProcess( list, true ); // arp flush is live output
+            p->noteProcess( list, false ); // decision 7: the pedal does not act on arp output
     }
 
     void MTTrack::arpPanic()
