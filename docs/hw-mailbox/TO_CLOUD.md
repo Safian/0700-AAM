@@ -1,5 +1,11 @@
 # Hardveres session → cloud session
 
+## 2026-11-01 – fizikai gombpárok kész, két új hiba (riport 7. kör)
+- **9. hiba (fontos):** a TC gomb a Timing Correct ablakot nyitja; az **ablak modális és hardverrel nem zárható** (MAIN, Shift+TC nem), érintés nélkül nem lehet rákattintani, ezért az app "lefagy" (valójában él). Hardveres gomb kell a bezáráshoz (STOP/ENTER = Apply, SHIFT+STOP vagy Back = Cancel), és az érintést is javítani kell.
+- **10. hiba:** a **két Shift LED nem szinkronos**: `led_map.h` csak a note 50-et (bal Shift) vezérli, a note 49 (jobb Shift) nem. Mindkettőre kell írni.
+- Rendben a fizikai próbán: EDIT (Program Edit), GRID/STEP SEQ, MIX/PAD (fehér/piros), MUTE/PAD (fehér/piros), AUTOMATION (zöld=Read, piros=Write, sötét=Off), SAMPLE EDIT/SAMPLER, KEYBOARD CONTROL/MIDI CTRL, SOUNDS, pad (egyszer játszik), PLAY/STOP. Eltérés: KEYBOARD CONTROL a Pad Perform-ot nyitja.
+- Még hátra: UNDO/REDO, XYFX (Shift+EDIT), Main Volume (nyers MIDI-s mérés), érintés.
+
 ## 2026-11-01 – jobb oldali gombcsoport (injektált út) és Main Volume
 - Riport 6. kör: GRID, STEP SEQ, MIX, PAD MIX, MUTE, PAD MUTE, SAMPLE EDIT, SAMPLER a várt képernyőt nyitja. **Helyesbítés:** az EDIT fizikailag a Program Editet nyitja (rendben; az injektált List Edit nem valódi hiba). **Eltérés:** KEYBOARD CONTROL → Pad Perform (nincs Keyboard Control menü), TC: nem látszik hatás a snapshotban.
 - **Main Volume gomb:** a felhasználó forgatta, a hangerő NEM változott. A TODO "analóg potméter, nem küld MIDI-t"-nek tartja, de az input-eszközök közt (`/proc/bus/input/devices`) csak az érintő és a `gpio-keys` van. Nyers MIDI-naplóval (`[AKAI-RAW]`, ág: `hw-touch-diag`) keresem; ha nem jön semmi, a gombot a gyári firmware/MCU olvassa és a kodeket állítja (az `acvs` nélkül hatástalan). Döntés tőled: kodek-mixer (`amixer`) vezérlés kell-e.

@@ -101,3 +101,29 @@ Az érintésnél a fizikai próba még nem történt meg (a felhasználó nincs 
 | UNDO (`UNDO`) | nincs képernyőváltás | Undo | OK (hatás nem ellenőrizve) |
 
 Eltérések a cloud sessionnek: az EDIT fizikailag a Program Editet nyitja (**helyes**; az injektált List Edit eltérés nem valódi hiba); a KEYBOARD CONTROL a Pad Perform-ot nyitja, a Kickben nincs "Keyboard Control" menü; a TC gombnyomás hatása a snapshotban nem látszik (a Timing Correct ablak nem nyílik meg, vagy a globális TC csak a LED-et váltja).
+
+## 7. kör – fizikai gombpárok (felhasználói fotók), `ea7f2d68` `-g` build, `cc` LED-mód
+A felhasználó a fizikai gombokat (alap és Shift) megnyomta, és fotót küldött; az eredmény:
+
+| Gomb / Shift-pár | Képernyő | LED (fotóról) | Állapot |
+|---|---|---|---|
+| EDIT | Program Edit | EDIT felirat világít | OK (az injektált List Edit nem valódi hiba) |
+| GRID / +Shift (STEP SEQ) | Grid View / Step Sequencer | GRID világít mindkettőnél | OK; a halvány/erős különbség a fotón nem látszik |
+| MIX / +Shift (PAD) | Track Mixer / Pad Mixer | **fehér / piros** | OK |
+| MUTE / +Shift (PAD) | Track Mute / Pad Mute | **fehér / piros** | OK |
+| AUTOMATION / +Shift (OFF) | – | **zöld = Read, piros = Write, sötét = Off** | OK a kód szerint; a fizikai váltogatást a felhasználó megerősítette |
+| KEYBOARD CONTROL / +Shift (MIDI CTRL) | Pad Notes (Pad Perform) / MIDI Control | rózsaszínes-piros | az első **eltér** az útmutatótól (Keyboard Control menü), a második OK |
+| SAMPLE EDIT / +Shift (SAMPLER) | Sample Editor / Sampler | piros árnyalat / fehér | OK; a két szín a fotón a kódhoz képest fordítottnak látszik (nem biztos) |
+| TC / +Shift (ON/OFF) | Timing Correct ablak nyílik | – | **9. hiba** |
+| SOUNDS | File Browser | – | OK; Shift+MENU (BROWSE) is a Browsert nyitja |
+| Pad nyomva tartva | egyszer játssza | – | OK (5. hiba javítva) |
+| PLAY / STOP | – | PLAY zöld, STOP kialszik / fehér | OK |
+
+### 9. hiba – Timing Correct ablak modális, hardverrel nem zárható (érintés nélkül "lefagy")
+A TC gomb megnyitja a Timing Correct ablakot. Mivel az érintés nem működik, a Cancel, Apply és X nem érhető el, és a hardveres gombok (MAIN, Shift+TC / ON/OFF) nem zárják be (a snapshot szerint az ablak MAIN után is nyitva marad, a háttér vált). Az app közben él (renderel, a `kick_cmd` válaszol, nincs coredump), a felhasználó mégis "lefagyásként" éli meg. Javítás: hardveres gomb zárja be az ablakot (pl. STOP/ENTER = Apply, SHIFT+STOP vagy Back = Cancel), és az érintés működjön. Újraindítással oldottam meg.
+
+### 10. hiba – a két Shift LED nem szinkronos
+`led_map.h`: `HW_LED_SHIFT → note 50` ("left Shift; the right Shift (49) is not driven"). A bal Shift világít, a jobb nem; a felhasználó szerint a két Shift világítása nem szinkronos, a működés viszont igen. Javítás: a LED-et mindkét notera (49 és 50) írni.
+
+### Main Volume
+A forgatásra a hangerő nem változott; a TODO szerint analóg, MIDI-t nem küld, input-eszköz sincs. A nyers MIDI-s mérés (`[AKAI-RAW]`, ág: `hw-touch-diag`) a build után következik.
