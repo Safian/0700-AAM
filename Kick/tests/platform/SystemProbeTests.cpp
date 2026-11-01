@@ -42,6 +42,12 @@ int main()
     put(r + "/dev/i2c-0", "");
     put(r + "/dev/ttyS0", "");
     put(r + "/proc/asound/cards", " 0 [M61            ]: USB-Audio - MPC Key 61\n                      Akai at usb\n 1 [ACVM           ]: ACVM\n");
+    mkdir((r + "/proc/asound/card1").c_str(), 0755);
+    mkdir((r + "/proc/asound/card1/pcm0p").c_str(), 0755);
+    mkdir((r + "/proc/asound/card1/pcm0p/sub0").c_str(), 0755);
+    put(r + "/proc/asound/card1/id", "ACVM\n");
+    put(r + "/proc/asound/card1/pcm0p/info", "name: test pcm\n");
+    put(r + "/proc/asound/card1/pcm0p/sub0/hw_params", "closed\n");
     put(r + "/proc/bus/input/devices", "I: Bus=0018\nN: Name=\"ILI2117 Touch\"\nH: Handlers=mouse1 event3\n");
 
     std::vector<std::string> n;
@@ -56,6 +62,9 @@ int main()
     check(rep.find("rawmidi card: found=0 -> used 0") != std::string::npos, "midi card discovery");
     check(rep.find("audio card (ACVM): found=1 -> used 1") != std::string::npos, "audio card discovery");
     check(rep.find("event3") != std::string::npos, "touch discovery");
+    check(rep.find("=== /proc/asound/card1/id ===\nACVM") != std::string::npos, "card file dumped");
+    check(rep.find("=== /proc/asound/card1/pcm0p/info ===\nname: test pcm") != std::string::npos, "pcm info dumped");
+    check(rep.find("=== /proc/asound/card1/pcm0p/sub0/hw_params ===\nclosed") != std::string::npos, "substream dumped");
     std::printf("system probe tests passed\n");
     return 0;
 }
