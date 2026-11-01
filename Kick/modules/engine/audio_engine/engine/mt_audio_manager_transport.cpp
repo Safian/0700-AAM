@@ -203,6 +203,12 @@ namespace mt
     {
         if( Now )
         {
+            // A plain PLAY on a sequence that already plays is a no-op. The hardware PLAY runs this twice (bridge and
+            // the screen's EN_PLAY handler); the second call used to restart the sequence at the beginning and threw
+            // away the seek the first call had just consumed (seek while stopped, then PLAY started at bar 1).
+            if( !FromBeginning && isPlaying() && playingSequence && playingSequence == getSequence( Seq ) )
+                return 0;
+
             // A bar parked by seekToBar() survives a plain PLAY but not "play from beginning".
             if( FromBeginning )
                 if( auto s = getSequence( Seq ) )
@@ -322,11 +328,15 @@ namespace mt
 
     void MTAudioTransportManager::updatePlayheads()
     {
-        if( playingSequence )
+        // While playing/paused the footer follows the playing sequence; otherwise (never played, or stopped) it follows
+        // the selected one, so a seek parked while stopped is shown right away.
+        MTSequence* shown = ( playingSequence && ( isPlaying() || isPaused() ) ) ? playingSequence : getSequence();
+        if( !shown ) shown = playingSequence;
+        if( shown )
         {
-            playingSequence->playheadLocalToGlobal();
+            shown->playheadLocalToGlobal();
 
-            if( MTTrack* pTrack = playingSequence->getSelectedTrackPtr() )
+            if( MTTrack* pTrack = shown->getSelectedTrackPtr() )
                 MTAudioSequenceManager::getTrackPlayhead() = pTrack->playhead();
         }
     }
