@@ -423,6 +423,9 @@ private:
                         else m_listener->on_pad_note_off(pad_idx);
                     } else if (type == 0x80) {
                         m_listener->on_pad_note_off(pad_idx);
+                    } else if (type == 0xA0) {
+                        // Polyphonic key pressure = pad aftertouch (d0 = note, d1 = pressure)
+                        m_listener->on_pad_aftertouch(pad_idx, d1);
                     }
                 }
             } else if (ch == 15) {
@@ -435,10 +438,18 @@ private:
                 } else if (type == 0xE0) {
                     int lsb = d0, msb = d1;
                     m_listener->on_pitch_bend((msb << 7) | lsb);
+                } else if (type == 0xD0) {
+                    m_listener->on_channel_aftertouch(d0);
                 } else if (type == 0xB0) {
                     int cc_num = d0, cc_val = d1;
                     if (cc_num == 64) {
                         m_listener->on_sustain_pedal(cc_val >= 64);
+                    } else if (cc_num == 1) {
+                        m_listener->on_mod_wheel(cc_val);
+                    } else if (cc_num == 11) {
+                        m_listener->on_expression(cc_val);
+                    } else if (cc_num == 65) {
+                        m_listener->on_footswitch2(cc_val >= 64);
                     }
                 }
             }

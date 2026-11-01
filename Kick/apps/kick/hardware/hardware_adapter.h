@@ -109,6 +109,13 @@ public:
     virtual void on_touch_strip(int val) = 0;
     virtual void on_pitch_bend(int val) = 0;
     virtual void on_sustain_pedal(bool down) = 0;
+    // Optional keybed / wheel / pedal inputs (0..127); adapters without them need not implement these.
+    virtual void on_channel_aftertouch(int /*val*/) {}
+    virtual void on_mod_wheel(int /*val*/) {}
+    virtual void on_expression(int /*val*/) {}
+    virtual void on_footswitch2(bool /*down*/) {}
+    // Polyphonic pad pressure after the initial hit (pad 0..15, value 0..127).
+    virtual void on_pad_aftertouch(int /*pad_num*/, int /*val*/) {}
 
     // Musical performance inputs
     virtual void on_keybed_note_on(int pitch, int vel) = 0;
