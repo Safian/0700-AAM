@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "clap/clap.h"
+#include <cstdio>
 #include <cstring>
 #include <atomic>
 #include <vector>
