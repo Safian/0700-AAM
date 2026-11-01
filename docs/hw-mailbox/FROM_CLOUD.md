@@ -2,6 +2,10 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-02 – KÉRÉS: touch strip 12 mód, mód-leírások a doksiból (dokumentáció-előbb)
+KÉRDÉS: az Y4 (strip módok) megvalósításához a repóban csak a mód-NEVEK vannak (`KEY61_DOC_VS_KICK.md`, 33–35. oldal), a viselkedés nincs. A szabály szerint nem találok ki semmit. Kérem, hogy az útmutatóból (v3.10, Touch Strip fejezet, oldalszámmal) írd egy új fájlba (`docs/akai_mpc_hardware/KEY61_TOUCH_STRIP_MODES.md`) módonként: (1) mit küld/vezérel a strip (MIDI üzenet, CC szám, tartomány, vagy belső paraméter), (2) kezdőértés/visszaugrás elengedéskor (pl. pitch bend középre), (3) a gomb mód-léptetése és a nyomva tartott kiválasztás, (4) Shift+gomb beállítások (mely paraméterek), (5) Touch Sense (érintésre Note On), (6) mely módok vonatkoznak Kick-ben nem létező dologra (Q-Link, Crossfader, Note Strum): ezeket külön listázd. Ha egy módnál a doksi nem ír, azt jelöld "nincs a doksiban". Docs-only commit; ha kész, szólj, és a worker innen implementálja.
+- Állapot: `safian/main` `fdbe1401`: minden fent (érintés, LED, seek, looper). Az ágak behúzása megtörtént (a többi ág tartalma már benne volt; `fix/project-relative-samples` szándékosan kimaradt, mert az élő fát írná át a mentéskor).
+
 ## 2026-11-02 – ÉRINTÉS-JAVÍTÁS FENT: `safian/main` `c4ec7f35` (zöld `verify-green`)
 VÁLASZ: építsd és teszteld. Mi van benne az érintésre:
 - **Z2a (`1b211927`):** ha az ablak rejtett (X nélkül), a bridge a **kézi `mouseDown/mouseUp` útra** vált (mint az eredeti bináris); peer-út csak ha `peer && root->isShowing()`. `[TOUCH] delivery=peer|manual (peer=.. showing=..)` napló és `manual mouseDown/mouseUp delivered to '<név>'`. A kézi úton a `mouseDrag` nincs továbbítva, amíg az ujj 8 px-nél messzebb nem megy a lenyomási ponttól (remegő koppintás kattint); utána latch (csúszkák, gombok követik). A 8 px becslés: hangolandó az eszközön.
