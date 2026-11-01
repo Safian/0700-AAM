@@ -78,12 +78,15 @@ namespace mt::live
     };
 
     // Pair note-on/off (per channel+note), drop orphans (off without on; on never released; on re-struck while held),
-    // trim by age (windowMs, capped at kMaxAgeMs) and convert to ticks.
-    //  useTicks=true  (playing): start = tick stored at note-on (events with tick<0 are skipped); start wraps into
-    //                            [0,loopLen) when loopLen>0.
-    //  useTicks=false (stopped) : start = (onMs - earliest kept onMs) * ticksPerMs, i.e. aligned to the sequence start.
-    // length = (offMs-onMs)*ticksPerMs, min 1, capped at loopLen when loopLen>0. Result is sorted by start, then note.
-    inline std::vector<Note> pairEvents( const std::vector<Event>& ev, int64_t nowMs, int64_t windowMs, bool useTicks,
+    // trim by age (windowMs, capped at kMaxAgeMs) and convert to ticks. Every event carries BOTH the sequence tick
+    // (-1 when the transport was stopped) and the wall-clock time; alignment is decided per note, never per buffer:
+    //  - on-event captured while playing (tick>=0): start = that tick, wrapped into [0,loopLen) when loopLen>0.
+    //  - on-event captured while stopped (tick<0): start = (onMs - earliest stopped-captured onMs) * ticksPerMs, i.e.
+    //    the stopped take starts at tick 0, then folded into the track with `% loopLen`. A stopped take longer than
+    //    the track therefore wraps around and may overlap its own start (notes are not dropped).
+    // Mixed buffers keep both groups. length = (offMs-onMs)*ticksPerMs, min 1, capped at loopLen when loopLen>0.
+    // Result is sorted by start, then note.
+    inline std::vector<Note> pairEvents( const std::vector<Event>& ev, int64_t nowMs, int64_t windowMs,
                                          double ticksPerMs, int loopLenTicks )
     {
         struct Open
@@ -93,6 +96,7 @@ namespace mt::live
         };
         std::vector<Note>    notes;
         std::vector<int64_t> onMs;
+        std::vector<bool>    stopped;
         std::vector<Open>    held( 16 * 128 );
         const int64_t        oldest = nowMs - std::min<int64_t>( windowMs, kMaxAgeMs );
 
@@ -102,7 +106,7 @@ namespace mt::live
             auto& h = held[size_t( e.channel ) * 128 + e.note];
             if( e.on && e.velocity > 0 )
             {
-                h.open = !( useTicks && e.tick < 0 ); // a re-strike while held replaces (drops) the earlier unterminated on
+                h.open = true; // a re-strike while held replaces (drops) the earlier unterminated on
                 h.on   = e;
             }
             else if( h.open )
@@ -114,19 +118,20 @@ namespace mt::live
                 n.channel     = e.channel;
                 n.lengthTicks = std::max( 1, int( double( e.timeMs - h.on.timeMs ) * ticksPerMs + 0.5 ) );
                 if( loopLenTicks > 0 ) n.lengthTicks = std::min( n.lengthTicks, loopLenTicks );
-                n.startTick = useTicks ? h.on.tick : 0;
+                n.startTick = h.on.tick;
                 notes.push_back( n );
                 onMs.push_back( h.on.timeMs );
+                stopped.push_back( h.on.tick < 0 );
             }
         }
         if( notes.empty() ) return notes;
 
-        if( !useTicks )
-        {
-            const int64_t first = *std::min_element( onMs.begin(), onMs.end() );
-            for( size_t i = 0; i < notes.size(); ++i )
-                notes[i].startTick = int( double( onMs[i] - first ) * ticksPerMs + 0.5 );
-        }
+        int64_t first = 0;
+        bool    any   = false;
+        for( size_t i = 0; i < notes.size(); ++i )
+            if( stopped[i] && ( !any || onMs[i] < first ) ) { first = onMs[i]; any = true; }
+        for( size_t i = 0; i < notes.size(); ++i )
+            if( stopped[i] ) notes[i].startTick = int( double( onMs[i] - first ) * ticksPerMs + 0.5 );
         if( loopLenTicks > 0 )
             for( auto& n : notes ) n.startTick %= loopLenTicks;
         std::sort( notes.begin(), notes.end(), []( const Note& a, const Note& b ) {
