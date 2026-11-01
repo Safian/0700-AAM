@@ -58,6 +58,9 @@ private:
     // Written on the message thread (button handlers), read by the MIDI reader thread (pad idle colour).
     std::atomic<int> m_current_bank { 0 };
     std::atomic<bool> m_stopping { false };
+    // Pending callAsync lambdas capture this shared flag (by copy), not only `this`: it outlives the bridge, so a lambda
+    // that runs after destruction sees false and returns without touching the freed object (m_stopping dies with it).
+    std::shared_ptr<std::atomic<bool>> m_alive { std::make_shared<std::atomic<bool>>(true) };
     // Written on the message thread (OCT buttons), read by the MIDI reader thread (keybed note-on / note-off).
     std::mutex   m_transpose_mutex;
     KeyTranspose m_key_transpose;
@@ -325,8 +328,8 @@ private:
     // the tick. Runs on the message thread (like locateToEvent); the seek itself is applied on the tick thread.
     void stepPlayhead(int direction)
     {
-        juce::MessageManager::callAsync([this, direction]() {
-            if (m_stopping.load()) return;
+        juce::MessageManager::callAsync([this, alive = m_alive, direction]() {
+            if (!alive->load()) return;
             auto&      ae   = mt::getAudioInterface();
             const int  seq  = ae.getSelectedSequence();
             const int  from = ae.getSequenceSeekTick(seq);
@@ -344,7 +347,8 @@ private:
             m_last_touch_y[slot] = y;
         }
 
-        juce::MessageManager::callAsync([this, slot, x, y, is_down, is_up]() {
+        juce::MessageManager::callAsync([this, alive = m_alive, slot, x, y, is_down, is_up]() {
+            if (!alive->load()) return;
             auto* root = (m_window != nullptr) ? (juce::Component*)m_window : m_root;
             if (!root) return;
             // G3: an invisible (headless, no display) window is skipped by Component::getComponentAt(), so the hit
@@ -644,6 +648,7 @@ public:
     void stop()
     {
         m_stopping.store(true);
+        m_alive->store(false);
         m_pad_colour_conn.disconnect();
         m_screen_conn.disconnect();
         stopTimer();
@@ -679,15 +684,15 @@ public:
     // on the message thread) calls the handle* bodies directly.
     void on_button_press(HardwareButton btn) override
     {
-        juce::MessageManager::callAsync([this, btn]() { if (m_stopping.load()) return; handleButtonPress(btn); });
+        juce::MessageManager::callAsync([this, alive = m_alive, btn]() { if (!alive->load()) return; handleButtonPress(btn); });
     }
     void on_button_release(HardwareButton btn) override
     {
-        juce::MessageManager::callAsync([this, btn]() { if (m_stopping.load()) return; handleButtonRelease(btn); });
+        juce::MessageManager::callAsync([this, alive = m_alive, btn]() { if (!alive->load()) return; handleButtonRelease(btn); });
     }
     void on_jog_dial(int delta) override
     {
-        juce::MessageManager::callAsync([this, delta]() { if (m_stopping.load()) return; handleJogDial(delta); });
+        juce::MessageManager::callAsync([this, alive = m_alive, delta]() { if (!alive->load()) return; handleJogDial(delta); });
     }
 
     void handleButtonPress(HardwareButton btn)
