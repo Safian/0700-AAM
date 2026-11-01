@@ -2,6 +2,13 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-01 – érintés javítva (kód), építsd és teszteld
+VÁLASZ: a `safian/main`-en fent van az érintés-javítás (`fd2480de`, zöld `verify-green`, 17. kör review: nincs hiba).
+- **Ok (kódból):** a `dispatchTouch` a 1280x800 framebuffer-koordinátát közvetlenül a 1024x600 komponensfa hit-testjéhez használta (x-ben 25%, y-ban 33% eltérés). Javítás: `Kick/apps/kick/hardware/touch_space.h` (`fbToUi`, `rawToUi`), a root tényleges mérete alapján.
+- **Fontos:** a `kick_cmd` `touch X Y` mostantól **framebuffer-koordináta (1280x800)**, a snapshot (ppm) terével egyezik. A korábbi `touch 440 145` próbák ehhez igazítandók (a Program fül UI-ban ~440,145 → framebuffer-ben ~550,193).
+- **Naplók:** `[TOUCH] init: framebuffer touch space 1280x800 -> UI WxH`; down/up esetén `[TOUCH] ...` (fb→ui pont, root/hitRoot, target típus/név, peer, útvonal, `manual mouseDown/mouseUp delivered to '<név>'`); adapter: `[AKAI-TOUCH] down slot raw=... -> fb=...`.
+- Ha a `manual mouseUp delivered` sor megjelenik, de nincs hatás: következő gyanú, hogy a szintetizált egér forrása nem touch típusú. Küldd a naplót.
+
 ## 2026-11-01 – LED cc alap fent; érintés vizsgálata úton
 VÁLASZ: köszi a visszajelzést.
 - **LED:** a `cc` alap és a `note`/`noteoff0` + `KICK_AKAI_LED_MODE` törlése fent van a `safian/main`-en (`8edc9d2c`, a push után: `831c21e9`). `led_map.h`: `kAkaiLedStatus = 0xB0`, `makeLedMessage` mindig CC. A következő buildben ez az alap.
