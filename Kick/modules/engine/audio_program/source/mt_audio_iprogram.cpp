@@ -260,6 +260,7 @@ namespace mt
 
     void MTIProgram::resetPerformance()
     {
+        // Only exception to "SustainState is written by live input only": stop() releases pedal-held notes (also muted).
         sustain.onCC64( 0, [this]( int n ) { noteOff( n ); } );
         pitchBend( 8192 );
     }
@@ -302,7 +303,8 @@ namespace mt
                     {
                         case SamplePlayType::ONE_SHOT:
                         case SamplePlayType::NOTE_ON:
-                            sustain.onNoteOn( noteNo ); // Re-struck: no pending pedal release.
+                            if( live )
+                                sustain.onNoteOn( noteNo ); // Re-struck: no pending pedal release.
                             noteOn( noteNo, midiLevel );
                             //DBG( "Note On----" << noteNo );
                             break;
@@ -317,7 +319,7 @@ namespace mt
                     switch( playType )
                     {
                         case SamplePlayType::NOTE_ON:
-                            if( sustain.onNoteOff( noteNo ) ) // Pedal down: release deferred until pedal-up.
+                            if( !live || sustain.onNoteOff( noteNo ) ) // Pedal holds live notes only; sequencer notes release at once.
                                 noteOff( noteNo );
                             //DBG( "Note Off----" << noteNo );
                         case SamplePlayType::ONE_SHOT: // Nothing to be done here.
@@ -365,7 +367,8 @@ namespace mt
                     pitchBend( it.getPitchWheelValue() ); // Per program; fixed +-2 semitones.
             }
             }
-            reloadMidiMeter( (float)( midiLevel * MIDI::SCALER ) );
+            if( it.isNoteOn() )
+                reloadMidiMeter( (float)( midiLevel * MIDI::SCALER ) );
         }
     }
 
