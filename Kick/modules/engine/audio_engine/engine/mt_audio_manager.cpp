@@ -55,6 +55,8 @@ namespace mt
                                 (plugin.isEmpty() ? juce::String{} : " (" + plugin + ")") + ": " + program->saveError() + "\n";
                 }
             });
+            if( failures.isNotEmpty() )
+                afterSave(); // failed prepare: the save guard is not armed, so undo the pan write-back here
             return failures.isEmpty() ? juce::Result::ok() : juce::Result::fail(failures);
         };
         afterSave = [this] {
