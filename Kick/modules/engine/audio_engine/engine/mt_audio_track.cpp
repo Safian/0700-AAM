@@ -836,7 +836,7 @@ namespace mt
         if( len <= 0 )
             return 0;
         const double ticksPerMs = double( seq.getBPM() ) * defaultPPQN / 60000.0;
-        auto         notes      = live::pairEvents( liveRing.snapshot(), juce::Time::currentTimeMillis(), WindowMs, isPlaying.load(), ticksPerMs, len );
+        auto         notes      = live::pairEvents( liveRing.snapshot(), juce::Time::currentTimeMillis(), WindowMs, ticksPerMs, len );
         int          committed  = 0;
         {
             // F2: the tick thread walks the note HashMap under `lock`; the edits below rebuild that map. Lock order:
