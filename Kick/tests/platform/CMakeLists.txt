@@ -158,6 +158,11 @@ add_executable(kick-modal-dialog-keys-tests ModalDialogKeysTests.cpp)
 add_test(NAME kick-modal-dialog-keys COMMAND kick-modal-dialog-keys-tests)
 set_tests_properties(kick-modal-dialog-keys PROPERTIES TIMEOUT 10)
 
+# Sequence recording (REC/OVERDUB + PLAY): arm/record state machine, erase rule, capture buffer + pairing; JUCE-free, header only.
+add_executable(kick-seq-record-tests SeqRecordTests.cpp)
+add_test(NAME kick-seq-record COMMAND kick-seq-record-tests)
+set_tests_properties(kick-seq-record PROPERTIES TIMEOUT 20)
+
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()

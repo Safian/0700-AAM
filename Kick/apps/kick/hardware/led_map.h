@@ -141,6 +141,26 @@ inline void recOverdubLedLevels(bool recording, bool overdubbing, bool blinkOn, 
         recLevel = blinkOn ? kLedFullB : kLedOff;
 }
 
+// REC / OVERDUB LEDs with the SEQUENCE recording state included (user decision, hw-mailbox 2026-11-02):
+// REC armed = steady red (colour B), recording = blinking red, OVERDUB mode (armed/recording) = steady green (colour A).
+// The looper keeps priority while it records (its screen owns EN_RECORD / EN_OVERDUB), so nothing changes for it.
+inline void recOverdubLedLevels(bool looperRecording, bool looperOverdubbing, bool seqArmed, bool seqRecording,
+                                bool seqOverdub, bool blinkOn, int& recLevel, int& overdubLevel)
+{
+    if (looperRecording) {
+        recOverdubLedLevels(looperRecording, looperOverdubbing, blinkOn, recLevel, overdubLevel);
+        return;
+    }
+    recLevel     = kLedOff;
+    overdubLevel = kLedOff;
+    if (seqRecording)
+        recLevel = blinkOn ? kLedFullB : kLedOff;
+    else if (seqArmed)
+        recLevel = kLedFullB;
+    if ((seqArmed || seqRecording) && seqOverdub)
+        overdubLevel = kLedFullA;
+}
+
 // Blink clock: 2 Hz (250 ms on / 250 ms off) from a millisecond counter.
 inline bool blinkPhase(long long ms) { return ((ms / 250) & 1) == 0; }
 
