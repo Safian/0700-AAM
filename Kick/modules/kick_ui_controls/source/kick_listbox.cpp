@@ -612,7 +612,17 @@ namespace ui
         if( checker.shouldBailOut() )
             return;
 
+#if KICK_TOUCH_SINGLE_TAP_LISTBOX
+        // Touch-only builds (Akai MPC bridge): a single tap opens the list.
         knobClicked();
+#else
+        auto currentTime = juce::Time::getCurrentTime();
+
+        if( ( currentTime - lastClickTime ).inMilliseconds() <= doubleClickTimeoutMs && currentTime != lastClickTime )
+            mouseDoubleClick( event );
+        else
+            lastClickTime = currentTime;
+#endif
     }
 
     void KickListBox::resized()

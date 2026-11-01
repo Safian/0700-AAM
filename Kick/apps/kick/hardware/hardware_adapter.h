@@ -87,6 +87,30 @@ enum HardwareLed {
     HW_LED_BANK_B,
     HW_LED_BANK_C,
     HW_LED_BANK_D,
+    // T13 (append only): further button LEDs
+    HW_LED_ARP,
+    HW_LED_LATCH,
+    HW_LED_SHIFT,
+    HW_LED_LOCATE,
+    HW_LED_TIMING_CORRECT,
+    HW_LED_AUTOMATION,
+    HW_LED_COPY,
+    HW_LED_ERASE,
+    HW_LED_EDIT,            // PROG EDIT
+    HW_LED_GRID,
+    HW_LED_MIX,
+    HW_LED_MUTE,
+    HW_LED_KEYBOARD_CONTROL,
+    HW_LED_SAMPLE_EDIT,
+    HW_LED_UNDO,
+    HW_LED_MENU,
+    HW_LED_SOUNDS,
+    HW_LED_MAIN,
+    HW_LED_TOUCH_FX,
+    HW_LED_TOUCH_STRIP,
+    HW_LED_METRONOME,
+    HW_LED_TAP_TEMPO,
+    HW_LED_QLINK,
     NUM_HW_LEDS
 };
 
@@ -107,11 +131,22 @@ public:
     virtual void on_encoder_turn(int encoder_idx, int delta) = 0;
     virtual void on_encoder_touch(int encoder_idx, bool touched) = 0;
     virtual void on_touch_strip(int val) = 0;
+    // Touch strip finger down / up (Akai Note 78). Optional.
+    virtual void on_touch_strip_touch(bool /*down*/) {}
+    // Touch strip 14-bit position 0..16383 (CC33 MSB + last CC34 LSB). Optional, fires in addition to on_touch_strip.
+    virtual void on_touch_strip_fine(int /*pos14*/) {}
     virtual void on_pitch_bend(int val) = 0;
     virtual void on_mod_wheel(int /*val*/) {}
     virtual void on_expression_pedal(int /*val*/) {}
     virtual void on_aftertouch(int /*val*/) {}
     virtual void on_sustain_pedal(bool down) = 0;
+    // Optional keybed / wheel / pedal inputs (0..127); adapters without them need not implement these.
+    virtual void on_channel_aftertouch(int /*val*/) {}
+    virtual void on_mod_wheel(int /*val*/) {}
+    virtual void on_expression(int /*val*/) {}
+    virtual void on_footswitch2(bool /*down*/) {}
+    // Polyphonic pad pressure after the initial hit (pad 0..15, value 0..127).
+    virtual void on_pad_aftertouch(int /*pad_num*/, int /*val*/) {}
 
     // Musical performance inputs
     virtual void on_keybed_note_on(int pitch, int vel) = 0;
@@ -145,8 +180,14 @@ public:
     virtual ~IControlSurfaceAdapter() = default;
     virtual bool start(IHardwareEventListener* listener) = 0;
     virtual void set_led(HardwareLed led, bool on, uint32_t rgb = 0) = 0;
+    // Level based LED: 0 = off, 1 = dim A, 2 = dim B, 3 = full A, 4 = full B (see hardware/led_map.h).
+    // Default: no-op, so adapters without intensity / second colour need not implement it.
+    virtual void set_led_level(HardwareLed /*led*/, int /*level*/) {}
     virtual void set_touch_strip_leds(int /*val*/) {}
     virtual void set_pad_rgb(int /*pad*/, uint8_t /*r*/, uint8_t /*g*/, uint8_t /*b*/) {}
+    // Feeds raw MIDI bytes through the same parser + dispatch path as the hardware port 'port' (0..2), so byte level
+    // tests need no hardware (kick_cmd "rawmidi"). Default: no-op.
+    virtual void inject_bytes(int /*port*/, const uint8_t* /*data*/, size_t /*len*/) {}
     virtual void stop() = 0;
 };
 

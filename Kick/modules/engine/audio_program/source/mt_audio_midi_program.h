@@ -54,5 +54,6 @@ namespace mt
         const MTSelected& aeSel{ ae.getSelected() };
 
         MTMidiMeter outMidiMeter{ 40 };
+        int         lastPanCC{ -1 }; // last CC10 value sent (message thread only), avoids duplicate CC for the 0.01 pan steps
     };
 } // namespace MT

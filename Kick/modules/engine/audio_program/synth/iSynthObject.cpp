@@ -163,6 +163,7 @@ namespace mt
 
     void ISynthObject::noteOffAll()
     {
+        // Pitch bend is NOT reset here (seek / CC123 also land here); MTTrack::stop() centres it.
         for( auto& it : voices )
             it->noteOff();
     }

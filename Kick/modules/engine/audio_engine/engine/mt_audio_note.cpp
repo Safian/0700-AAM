@@ -1565,6 +1565,61 @@ namespace mt
         return 0;
     }
 
+    int MTNoteList::timingCorrect( const track::timingCorrectInfo& Info, const std::set<int>* onlyIds, int trackLenTicks )
+    {
+        using E = track::timingCorrectInfo::Events;
+        using T = track::timingCorrectInfo::Type;
+        if( Info.events == E::Range ) // no range selection exists in Kick
+            return -1;
+
+        tc::Params p;
+        p.gridTicks   = Info.gridTicks > 0 ? Info.gridTicks : seq.getTicksPerBar( 0 );
+        p.swingPct    = Info.swingPct;
+        p.shiftTicks  = Info.shiftTicks;
+        p.windowPct   = Info.windowPct;
+        p.strengthPct = Info.strengthPct;
+        p.type        = Info.type == T::Start ? tc::Type::Start : Info.type == T::End ? tc::Type::End : Info.type == T::Length ? tc::Type::Length : tc::Type::Legato;
+
+        std::vector<tc::Note>        v;
+        std::vector<juce::ValueTree> vts;
+        for( auto vt : vTree )
+        {
+            if( !vt.hasType( IDs::NOTE ) )
+                continue;
+            MTNote n( vt, um );
+            bool   target = onlyIds ? onlyIds->count( n.id.get() ) > 0 : ( Info.events == E::All || selected.contains( vt ) );
+            v.push_back( { n.number.get(), n.start.get(), n.length.get(), target } );
+            vts.push_back( vt );
+        }
+        const auto orig    = v;
+        const int  changed = tc::correct( v, p, trackLenTicks > 0 ? trackLenTicks : (int)seq.getLengthInTicks() );
+        if( changed <= 0 )
+            return 0;
+
+        // Apply the changes (undoable through um), then drop notes that now duplicate another (same pitch/start/length).
+        std::set<std::array<int, 3>> seen;
+        for( size_t i = 0; i < v.size(); ++i )
+            if( v[i].start == orig[i].start && v[i].length == orig[i].length )
+                seen.insert( { v[i].number, v[i].start, v[i].length } );
+        std::vector<juce::ValueTree> duplicates;
+        for( size_t i = 0; i < v.size(); ++i )
+        {
+            if( v[i].start == orig[i].start && v[i].length == orig[i].length )
+                continue;
+            MTNote n( vts[i], um );
+            if( v[i].start != orig[i].start )
+                updateNote( n, v[i].start, v[i].length );
+            else
+                n.length = v[i].length;
+            if( !seen.insert( { v[i].number, v[i].start, v[i].length } ).second )
+                duplicates.push_back( vts[i] );
+        }
+        for( auto& d : duplicates )
+            eraseNote( d );
+        sort();
+        return changed;
+    }
+
     int MTNoteList::randomNotes( const track::randomEventsInfo& Info )
     {
         juce::Random r;

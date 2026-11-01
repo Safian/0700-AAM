@@ -260,12 +260,26 @@ namespace mt
 
     void MTIProgram::noteProcess( juce::Array<juce::MidiMessage>& Msgs )
     {
-        if( isProgramEffectivelyMuted() )
-            return;
+        // Pedal state must track CC64/CC123 even while muted, or a pedal-up swallowed by the mute leaves it stuck down.
+        const bool muted = isProgramEffectivelyMuted();
 
         float midiLevel;
         for( auto& it : Msgs )
         {
+            if( muted )
+            {
+                if( it.isController() )
+                {
+                    if( it.getControllerNumber() == 64 )
+                        sustain.onCC64( it.getControllerValue(), [this]( int n ) { noteOff( n ); } );
+                    else if( it.getControllerNumber() == 123 )
+                    {
+                        sustain.onAllOff();
+                        noteOffAll();
+                    }
+                }
+                continue;
+            }
             midiLevel = level.get();
             if( it.isNoteOnOrOff() )
             {
@@ -279,6 +293,7 @@ namespace mt
                     {
                         case SamplePlayType::ONE_SHOT:
                         case SamplePlayType::NOTE_ON:
+                            sustain.onNoteOn( noteNo ); // Re-struck: no pending pedal release.
                             noteOn( noteNo, midiLevel );
                             //DBG( "Note On----" << noteNo );
                             break;
@@ -293,7 +308,8 @@ namespace mt
                     switch( playType )
                     {
                         case SamplePlayType::NOTE_ON:
-                            noteOff( noteNo );
+                            if( sustain.onNoteOff( noteNo ) ) // Pedal down: release deferred until pedal-up.
+                                noteOff( noteNo );
                             //DBG( "Note Off----" << noteNo );
                         case SamplePlayType::ONE_SHOT: // Nothing to be done here.
                             break;
@@ -314,8 +330,12 @@ namespace mt
                     case 1: // Modulation Wheel
                         modWheel( controllerValue );
                         break;
+                    case 64: // Sustain pedal
+                        sustain.onCC64( controllerValue, [this]( int n ) { noteOff( n ); } );
+                        break;
                     case 123: // All Notes Off
-                        noteOffAll();
+                        sustain.onAllOff();
+                        noteOffAll(); // Also resets pitch bend.
                         break;
                 }
             }
@@ -330,6 +350,7 @@ namespace mt
             }
             else if( it.isPitchWheel() )
             {
+                pitchBend( it.getPitchWheelValue() ); // Per program; fixed +-2 semitones.
             }
             reloadMidiMeter( (float)( midiLevel * MIDI::SCALER ) );
         }
