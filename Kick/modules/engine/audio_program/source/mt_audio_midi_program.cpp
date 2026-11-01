@@ -107,7 +107,7 @@ namespace mt
     }
 
     // this is not a reentrant function, calling from multiple threads simultaneously may result in incorrect results.
-    void MTMidiProgram::noteProcess( juce::Array<juce::MidiMessage>& Msgs )
+    void MTMidiProgram::noteProcess( juce::Array<juce::MidiMessage>& Msgs, bool /*live*/ ) // CC64/pitch wheel are forwarded in both paths
     {
         if( isProgramEffectivelyMuted() )
             return;

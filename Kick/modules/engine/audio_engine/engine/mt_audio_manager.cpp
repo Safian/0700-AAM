@@ -352,6 +352,15 @@ namespace mt
                         claims.push_back( { p, v, si * 1000 + T->getIndex() } );
             } );
         } );
+        std::vector<juce::String> restores; // F7: pan lanes that became empty since the last pass
+        forAllSequences( [&]( MTSequence* S ) {
+            S->forAllTracks( [&]( MTTrack* T ) {
+                if( auto id = T->takePanRestore(); id.isNotEmpty() )
+                    restores.push_back( id );
+            } );
+        } );
+        for( const auto& id : restores )
+            restoreAutomatedPan( id );
         if( automation::Read != getAutomationMode() )
             return;
         for( const auto& c : claims )
@@ -368,6 +377,23 @@ namespace mt
             panBases.emplace( c.prog->id.get(), (double)c.prog->getPan() ); // keeps the first (pre-automation) value
             c.prog->vTree.setProperty( IDs::pan, target, nullptr ); // same property the mixer knob writes; not undoable
         }
+    }
+
+    // Message thread. Puts back the stored pan of one program, unless another track's pan lane still drives it.
+    void MTAudioManager::restoreAutomatedPan( const juce::String& ProgramId )
+    {
+        const auto it = panBases.find( ProgramId );
+        if( it == panBases.end() )
+            return;
+        bool driven = false;
+        forAllSequences( [&]( MTSequence* S ) {
+            S->forAllTracks( [&]( MTTrack* T ) { driven = driven || T->panLaneDrives( ProgramId ); } );
+        } );
+        if( driven )
+            return;
+        if( auto* p = getProgramById( ProgramId ) )
+            p->vTree.setProperty( IDs::pan, it->second, nullptr );
+        panBases.erase( it );
     }
 
     void MTAudioManager::restoreAutomatedPans()

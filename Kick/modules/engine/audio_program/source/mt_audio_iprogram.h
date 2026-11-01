@@ -47,7 +47,8 @@ namespace mt
     struct IMidiMsgProcessor
     {
         // Pure virtual functions to be implemented by derived classes...
-        virtual void noteProcess( juce::Array<juce::MidiMessage>& Msg ) = 0;
+        // live: true for MIDI input played by the user (and the arpeggiator), false for the sequencer; CC64 and pitch wheel act on live input only.
+        virtual void noteProcess( juce::Array<juce::MidiMessage>& Msg, bool live = false ) = 0;
 
         virtual void noteOn( int Note, int Velocity ) { return; };
         virtual void noteOff( int Note ) { return; };
@@ -113,7 +114,9 @@ namespace mt
         void removeSample( int KeyNote, const juce::String& Source );
 
         // Virtual functions...
-        virtual void noteProcess( juce::Array<juce::MidiMessage>& Msgs );
+        virtual void noteProcess( juce::Array<juce::MidiMessage>& Msgs, bool live = false );
+        // Releases pedal-held notes and centres the pitch bend; works on muted programs too (MTTrack::stop()).
+        virtual void resetPerformance();
         virtual void refresh() {}
         virtual bool prepareToSave() { return true; }
         virtual juce::String saveError() const { return "Program state could not be saved"; }
@@ -301,7 +304,7 @@ namespace mt
 
         MTMidiMeter midiMeter{ 40 };
 
-        // Sustain pedal (CC64). Only touched from noteProcess (MIDI/audio thread).
+        // Sustain pedal (CC64). Only touched from noteProcess/resetPerformance (MIDI/audio thread).
         SustainState sustain;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( MTIProgram )

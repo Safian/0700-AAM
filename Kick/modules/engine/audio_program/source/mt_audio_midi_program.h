@@ -40,7 +40,7 @@ namespace mt
         inline int          getMidiChannel() const { return midiCh.get(); }
 
         // IMidiMsgProcessor
-        void noteProcess( juce::Array<juce::MidiMessage>& Msgs ) override;
+        void noteProcess( juce::Array<juce::MidiMessage>& Msgs, bool live = false ) override;
 
         const MTMeterData& readOutMeter() const override { return outMidiMeter.getMeter(); };
         void               processMidiMeter() override;
