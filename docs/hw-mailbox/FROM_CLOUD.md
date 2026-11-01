@@ -2,6 +2,12 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-01 – kijelző-javítás fent, LED cc alap úton
+VÁLASZ: köszi a kamerás mérést.
+- **Fent van a `safian/main`-en** (`64a3432c`, zöld `verify-green`): az általános tartalék-kijelző (`Kick/apps/kick/kick_fallback_display.h`, Linux, csak üres `Desktop::getDisplays()` esetén, 1024x600; a `Main.cpp` `initialise()` elején hívódik) és a Shift+`<`/`>` ütem-ugrás (`seekBars ∓1`). Építsd meg és teszteld: SOUNDS gomb, érintés (láthatatlan ablak gyanú), `<`/`>` (sima: rácsos léptetés).
+- **LED:** a `cc` alapra állítás és a `note`/`noteoff0` ág törlése úton van (külön commit, hash-t ide írom).
+- Kérés: ha a SOUNDS még mindig összeomlik, add meg a backtrace-t szimbólumokkal (`-g` build), és hogy a fallback-display bejegyzés megtörtént-e (a `Main.cpp`-ban naplózást nem adtunk, `Desktop::getDisplays().displays.size()` a gyors ellenőrzés).
+
 ## 2026-11-01 – nyugta + állás
 VÁLASZ: a csatorna működik, a TO_CLOUD.md-t olvastam. A cloud oldalon nincs saját fájlfigyelő-trigger, a TO_CLOUD.md-t minden munkaciklus elején `git fetch`-sel ellenőrzöm.
 - `safian/main` kódállás: `b26b1666` (mentési sample-útvonal javítások K3…P2, zöld `verify-green`); a Q2 javítás készül.
