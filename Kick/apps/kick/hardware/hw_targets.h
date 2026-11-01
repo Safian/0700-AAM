@@ -85,11 +85,13 @@ Target routeBend(HeldTarget<Target>& h, int val, const Target& current)
     return isBendCentre(val) ? h.end(current) : h.begin(current);
 }
 
-// Route a 0..127 controller whose rest value is 0 (mod wheel CC1, expression CC11): >0 begins, 0 ends.
+// Mod wheel CC1 / expression CC11 are continuous, spring-less controllers: no sticky target. Every value goes to the
+// CURRENTLY selected track (plain MIDI behaviour); the previous track keeps its last value, no CC=0 is sent (would mute
+// on expression). Only pitch bend (springs back) and sustain use a HeldTarget.
 template <typename Target>
-Target routeCc(HeldTarget<Target>& h, int val, const Target& current)
+Target routeCc(int /*val*/, const Target& current)
 {
-    return val > 0 ? h.begin(current) : h.end(current);
+    return current;
 }
 
 } // namespace kick_hw
