@@ -87,6 +87,30 @@ enum HardwareLed {
     HW_LED_BANK_B,
     HW_LED_BANK_C,
     HW_LED_BANK_D,
+    // T13 (append only): further button LEDs
+    HW_LED_ARP,
+    HW_LED_LATCH,
+    HW_LED_SHIFT,
+    HW_LED_LOCATE,
+    HW_LED_TIMING_CORRECT,
+    HW_LED_AUTOMATION,
+    HW_LED_COPY,
+    HW_LED_ERASE,
+    HW_LED_EDIT,            // PROG EDIT
+    HW_LED_GRID,
+    HW_LED_MIX,
+    HW_LED_MUTE,
+    HW_LED_KEYBOARD_CONTROL,
+    HW_LED_SAMPLE_EDIT,
+    HW_LED_UNDO,
+    HW_LED_MENU,
+    HW_LED_SOUNDS,
+    HW_LED_MAIN,
+    HW_LED_TOUCH_FX,
+    HW_LED_TOUCH_STRIP,
+    HW_LED_METRONOME,
+    HW_LED_TAP_TEMPO,
+    HW_LED_QLINK,
     NUM_HW_LEDS
 };
 
@@ -149,6 +173,9 @@ public:
     virtual ~IControlSurfaceAdapter() = default;
     virtual bool start(IHardwareEventListener* listener) = 0;
     virtual void set_led(HardwareLed led, bool on, uint32_t rgb = 0) = 0;
+    // Level based LED: 0 = off, 1 = dim A, 2 = dim B, 3 = full A, 4 = full B (see hardware/led_map.h).
+    // Default: no-op, so adapters without intensity / second colour need not implement it.
+    virtual void set_led_level(HardwareLed /*led*/, int /*level*/) {}
     virtual void set_touch_strip_leds(int /*val*/) {}
     virtual void set_pad_rgb(int /*pad*/, uint8_t /*r*/, uint8_t /*g*/, uint8_t /*b*/) {}
     virtual void stop() = 0;
