@@ -55,7 +55,11 @@ private:
     // Generic version for the other Shift-dependent buttons: DCL code sent on press, indexed by HardwareButton.
     struct PressedCodes { std::array<int, 128> v; PressedCodes() { v.fill(-1); } };
     PressedCodes m_pressed_code;
-    int m_current_bank = 0;
+    // Written on the message thread (button handlers), read by the MIDI reader thread (pad idle colour).
+    std::atomic<int> m_current_bank { 0 };
+    std::atomic<bool> m_stopping { false };
+    // Written on the message thread (OCT buttons), read by the MIDI reader thread (keybed note-on / note-off).
+    std::mutex   m_transpose_mutex;
     KeyTranspose m_key_transpose;
     int m_key_pitch_map[128];
 
@@ -124,7 +128,7 @@ private:
                 return;
             }
         }
-        getBankColor(m_current_bank, r, g, b);
+        getBankColor(m_current_bank.load(), r, g, b);
     }
 
     void flushDirtyPadColors()
@@ -174,10 +178,10 @@ private:
     {
         if (m_hw && m_hw->control_surface()) {
             // Banks A..D: full colour A of their LED; E..H: full colour B of the LED of (bank % 4).
-            setLed(HW_LED_BANK_A, kick_hw::bankLedLevel(m_current_bank, 0));
-            setLed(HW_LED_BANK_B, kick_hw::bankLedLevel(m_current_bank, 1));
-            setLed(HW_LED_BANK_C, kick_hw::bankLedLevel(m_current_bank, 2));
-            setLed(HW_LED_BANK_D, kick_hw::bankLedLevel(m_current_bank, 3));
+            setLed(HW_LED_BANK_A, kick_hw::bankLedLevel(m_current_bank.load(), 0));
+            setLed(HW_LED_BANK_B, kick_hw::bankLedLevel(m_current_bank.load(), 1));
+            setLed(HW_LED_BANK_C, kick_hw::bankLedLevel(m_current_bank.load(), 2));
+            setLed(HW_LED_BANK_D, kick_hw::bankLedLevel(m_current_bank.load(), 3));
             refreshPadColors();
         }
     }
@@ -608,6 +612,7 @@ public:
 
     void stop()
     {
+        m_stopping.store(true);
         m_pad_colour_conn.disconnect();
         m_screen_conn.disconnect();
         stopTimer();
@@ -637,7 +642,24 @@ public:
         dispatchTouch(slot, m_last_touch_x[slot], m_last_touch_y[slot], false, true);
     }
 
+    // G1: the adapter calls these listener methods from the ALSA reader thread. The button / dial bodies touch UI
+    // signals (sigScreenClose), the undo manager, BPM, bank and arp state, so they all run on the message thread.
+    // callAsync is FIFO, so the order of presses / releases / dial steps is preserved. The kick_cmd injector (already
+    // on the message thread) calls the handle* bodies directly.
     void on_button_press(HardwareButton btn) override
+    {
+        juce::MessageManager::callAsync([this, btn]() { if (m_stopping.load()) return; handleButtonPress(btn); });
+    }
+    void on_button_release(HardwareButton btn) override
+    {
+        juce::MessageManager::callAsync([this, btn]() { if (m_stopping.load()) return; handleButtonRelease(btn); });
+    }
+    void on_jog_dial(int delta) override
+    {
+        juce::MessageManager::callAsync([this, delta]() { if (m_stopping.load()) return; handleJogDial(delta); });
+    }
+
+    void handleButtonPress(HardwareButton btn)
     {
         auto& ae = mt::getAudioInterface();
         switch (btn)
@@ -786,7 +808,11 @@ public:
             {
                 // OCT-/OCT+ = octave offset, Shift+OCT-/OCT+ = semitone transpose, both together = reset both.
                 // Sounding pitches of held keys are stored at note-on (m_key_pitch_map), so this is safe mid-note.
-                const auto act = m_key_transpose.press(btn == HW_BTN_OCTAVE_UP, isShiftDown());
+                KeyTranspose::Action act;
+                {
+                    std::lock_guard<std::mutex> lk(m_transpose_mutex);
+                    act = m_key_transpose.press(btn == HW_BTN_OCTAVE_UP, isShiftDown());
+                }
                 if (act != KeyTranspose::None) {
                     updateOctaveLeds();
                     printf("[BRIDGE] Octave %d, transpose %d semitones\n", m_key_transpose.octave(), m_key_transpose.semitone());
@@ -1102,10 +1128,10 @@ public:
                 break;
             }
             case HW_BTN_CURSOR_UP:
-                on_jog_dial(1);
+                handleJogDial(1);
                 break;
             case HW_BTN_CURSOR_DOWN:
-                on_jog_dial(-1);
+                handleJogDial(-1);
                 break;
             case HW_BTN_CURSOR_LEFT:
                 sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS);
@@ -1118,7 +1144,7 @@ public:
         }
     }
 
-    void on_button_release(HardwareButton btn) override
+    void handleButtonRelease(HardwareButton btn)
     {
         switch (btn)
         {
@@ -1224,7 +1250,7 @@ public:
         }
     }
 
-    void on_jog_dial(int delta) override
+    void handleJogDial(int delta)
     {
         auto& ae = mt::getAudioInterface();
         if (m_tap_tempo_held)
@@ -1424,7 +1450,11 @@ public:
 
     void on_keybed_note_on(int pitch, int vel) override
     {
-        int sounding_pitch = m_key_transpose.soundingPitch(pitch);
+        int sounding_pitch;
+        {
+            std::lock_guard<std::mutex> lk(m_transpose_mutex);
+            sounding_pitch = m_key_transpose.soundingPitch(pitch);
+        }
         if (pitch >= 0 && pitch < 128) {
             m_key_pitch_map[pitch] = sounding_pitch;
         }
@@ -1439,9 +1469,13 @@ public:
 
     void on_keybed_note_off(int pitch) override
     {
-        int sounding_pitch = (pitch >= 0 && pitch < 128 && m_key_pitch_map[pitch] >= 0)
-                             ? m_key_pitch_map[pitch]
-                             : m_key_transpose.soundingPitch(pitch);
+        int sounding_pitch;
+        if (pitch >= 0 && pitch < 128 && m_key_pitch_map[pitch] >= 0) {
+            sounding_pitch = m_key_pitch_map[pitch];
+        } else {
+            std::lock_guard<std::mutex> lk(m_transpose_mutex);
+            sounding_pitch = m_key_transpose.soundingPitch(pitch);
+        }
         if (pitch >= 0 && pitch < 128) {
             m_key_pitch_map[pitch] = -1;
         }
@@ -1623,14 +1657,14 @@ public:
                 else if (strcmp(sval, "BAR_PREV") == 0) b = HW_BTN_BAR_PREV;
                 else if (strcmp(sval, "BAR_NEXT") == 0) b = HW_BTN_BAR_NEXT;
                 if (b != HW_BTN_NONE) {
-                    on_button_press(b);
-                    on_button_release(b);
+                    handleButtonPress(b);
+                    handleButtonRelease(b);
                 }
             } else if (strcmp(op, "jog") == 0) {
                 int delta = atoi(sval);
                 printf("[CMD] jog %d\n", delta);
                 fflush(stdout);
-                on_jog_dial(delta);
+                handleJogDial(delta);
             } else if (strcmp(op, "strip") == 0) {
                 int val = atoi(sval);
                 printf("[CMD] strip %d\n", val);
