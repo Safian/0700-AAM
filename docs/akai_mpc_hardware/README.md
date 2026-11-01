@@ -28,5 +28,7 @@ try d.string!.write(toFile: CommandLine.arguments[2], atomically: true, encoding
 - Pad-színek: némított pad narancs, kijelölt pad zöld, hozzárendelt minta fényes sárga, hozzárendelés nélküli halvány sárga, felvétel alatt villogó piros.
 - Gombfunkciók (`<`/`>` egy lépés, Locate+ előző/következő esemény, `<<`/`>>` egy ütem, Locate+ eleje/vége) a Quickstartban.
 
+- **Main Volume** (Quickstart v1.2, 45. pont; v3.10 útmutató): a gomb a kimenetek és a fejhallgató-kimenet közös hangerejét állítja. A dokumentáció nem mondja, hogy analóg, MIDI vagy szoftveres. Műszaki adatok: (4) TRS kimenet (2 sztereó pár), (1) sztereó fejhallgató-kimenet, (8) CV/Gate. Mérés: nem MIDI és nem input-esemény (lásd a riportot), a Kick alatt nem hat.
+
 ## Mért viselkedés
 - [KEY61_LED_COLOURS.md](KEY61_LED_COLOURS.md): a gombok LED-protokollja és színei (kamerás mérés, 2026-11-01).
