@@ -124,4 +124,23 @@ inline int bankLedLevel(int bank, int ledIndex)
     return (bank % 4 == ledIndex) ? (bank < 4 ? kLedFullA : kLedFullB) : kLedOff;
 }
 
+// REC / OVERDUB button LEDs from the looper state (the only consumer of EN_RECORD / EN_OVERDUB is the looper).
+// Colour A (3) = green, colour B (4) = red is proven for AUTOMATION (Read green, Write red, KEY61_LED_COLOURS.md);
+// that REC / OVERDUB use the same A/B colours is NOT verified (the camera could not tell, section 2). Dummy choice:
+//   recording (not overdubbing): REC blinks red (colour B), OVERDUB dark;
+//   overdubbing: OVERDUB steady colour A, REC dark;
+//   idle: both dark. The engine has no "armed" state (REC starts the looper at once), so nothing is lit steady.
+inline void recOverdubLedLevels(bool recording, bool overdubbing, bool blinkOn, int& recLevel, int& overdubLevel)
+{
+    recLevel     = kLedOff;
+    overdubLevel = kLedOff;
+    if (overdubbing)
+        overdubLevel = kLedFullA;
+    else if (recording)
+        recLevel = blinkOn ? kLedFullB : kLedOff;
+}
+
+// Blink clock: 2 Hz (250 ms on / 250 ms off) from a millisecond counter.
+inline bool blinkPhase(long long ms) { return ((ms / 250) & 1) == 0; }
+
 } // namespace kick_hw
