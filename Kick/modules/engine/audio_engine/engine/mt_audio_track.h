@@ -22,6 +22,7 @@
 #pragma once
 
 #include "mt_audio_bar_seek.h"
+#include "mt_live_capture.h"
 
 namespace mt
 {
@@ -105,6 +106,9 @@ namespace mt
         void stopAllMidiNotes();
         int  processIncomingMidiMessage( const juce::MidiMessage& Msg );
         int  processIncomingMidiMessage( const MTMidiMessage& Msg );
+        // RECALL: commit the last WindowMs of captured live notes into this track's note list. Returns the number of
+        // notes committed (0 if nothing was captured). Non-realtime (message thread); the caller owns the undo transaction.
+        int recallLiveNotes( int WindowMs );
 
         const MTMeterData& getMeter() const { return midiMeter.getMeter(); }
         inline void        processMidiMeter() { midiMeter.process(); }
@@ -154,6 +158,10 @@ namespace mt
         juce::CriticalSection lock;
 
         std::atomic<bool>         soloMuted{ false };
+        // RECALL capture: per-track ring of live note events (written on the MIDI/UI input thread, see mt_live_capture.h)
+        // and a mirror of the post-wrap playhead tick published by onTick (tickPos itself is tick-thread private).
+        live::Ring       liveRing;
+        std::atomic<int> livePlayTick{ -1 };
         std::atomic<unsigned int> lengthInTicks{ 0 };
         std::atomic<double>       lengthFactor{ 0 };
         //unsigned int              count;
