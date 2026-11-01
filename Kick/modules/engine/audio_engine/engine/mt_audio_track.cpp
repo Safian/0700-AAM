@@ -210,12 +210,14 @@ namespace mt
     {
         isPlaying = false;
         if (auto* p = program.load()) p->updatePluginTransport(seq.getBPM(), double(tickPos) / defaultPPQN, false);
+        arpPanic();
         stopAllMidiNotes();
     }
 
     void MTTrack::stop()
     {
         if (auto* p = program.load()) p->updatePluginTransport(seq.getBPM(), 0, false);
+        arpPanic();
         stopAllMidiNotes();
         isPlaying = false;
         trackPlayhead.clear();
@@ -393,6 +395,15 @@ namespace mt
         }
 
         updateTrackPlayhead( tickPos );
+        if( arpOn.load( std::memory_order_relaxed ) ) // arpeggiator step (tick thread); events go out with this tick's messages
+        {
+            arp::Result ar;
+            {
+                arp::SpinGuard g( arpFlag );
+                arpeg.tick( (int64_t)tickCtr, ar );
+            }
+            arpEmit( ar, midiMsgs );
+        }
         livePlayTick.store( (int)tickPos, std::memory_order_relaxed );
         // add logic to compute normalized playhead position using lengthInTicks
         pProgram->updatePluginTransport(seq.getBPM(), double(tickPos) / defaultPPQN, true);
@@ -417,6 +428,8 @@ namespace mt
             e.on       = Msg.isNoteOn();
             liveRing.push( e );
         }
+        if( Msg.isNoteOnOrOff() && arpFilterLive( Msg ) ) // arpeggiator takes the note; its output is emitted by onTick
+            return 0;
         auto pProgram = program.load();
         if( pProgram && !isTrackEffectivelyMuted() )
         {
@@ -445,6 +458,83 @@ namespace mt
 
         return 0;
     }
+
+    bool MTTrack::arpFilterLive( const juce::MidiMessage& Msg )
+    {
+        if( !arpOn.load( std::memory_order_relaxed ) )
+            return false;
+        auto       p      = program.load();
+        const bool active = isPlaying.load() && p && !p->isAudio() && 0 != lengthInTicks.load(); // same conditions as onTick stepping
+        const int  note   = Msg.getNoteNumber();
+        arp::SpinGuard g( arpFlag );
+        if( Msg.isNoteOn() )
+        {
+            if( !active )
+                return false; // transport stopped: play the note directly
+            arpeg.noteOn( note, Msg.getVelocity() );
+            return true;
+        }
+        const bool ours = arpeg.noteOff( note ); // always keep key state in sync
+        return active && ours;
+    }
+
+    void MTTrack::arpEmit( const arp::Result& R, juce::Array<juce::MidiMessage>& Out )
+    {
+        for( int i = 0; i < R.n; ++i )
+        {
+            const auto& e = R.ev[(size_t)i];
+            if( e.on )
+            {
+                if( isTrackEffectivelyMuted() )
+                    continue; // keep stepping while muted, just stay silent
+                const int eff = juce::jlimit( 0, 127, getEffectiveNoteNo( e.note ) );
+                const int vel = juce::jlimit( 1, 127, getEffectiveNoteVelocity( e.velocity ) );
+                Out.insert( -1, juce::MidiMessage::noteOn( getMidiOutChannel(), eff, (juce::uint8)vel ) );
+                arpSentNote.store( eff );
+            }
+            else if( const int n = arpSentNote.exchange( -1 ); n >= 0 )
+                Out.insert( -1, juce::MidiMessage::noteOff( getMidiOutChannel(), n ) );
+        }
+    }
+
+    // Non-tick-thread output (enable/disable/panic): straight to the program, like the other live input paths.
+    void MTTrack::arpFlush( const arp::Result& R )
+    {
+        juce::Array<juce::MidiMessage> list;
+        arpEmit( R, list );
+        if( auto p = program.load(); p && !list.isEmpty() )
+            p->noteProcess( list );
+    }
+
+    void MTTrack::arpPanic()
+    {
+        arp::Result r;
+        {
+            arp::SpinGuard g( arpFlag );
+            arpeg.panic( r );
+        }
+        arpFlush( r );
+    }
+
+    void MTTrack::setArpEnabled( bool On )
+    {
+        arp::Result r;
+        {
+            arp::SpinGuard g( arpFlag );
+            arpeg.setEnabled( On, r );
+            arpOn.store( On );
+        }
+        arpFlush( r );
+    }
+    void MTTrack::setArpMode( int Mode ) { arp::SpinGuard g( arpFlag ); arpeg.setMode( Mode ); }
+    void MTTrack::setArpRate( int Rate ) { arp::SpinGuard g( arpFlag ); arpeg.setRate( Rate ); }
+    void MTTrack::setArpOctaves( int Octaves ) { arp::SpinGuard g( arpFlag ); arpeg.setOctaves( Octaves ); }
+    void MTTrack::setArpLatch( bool On ) { arp::SpinGuard g( arpFlag ); arpeg.setLatch( On ); }
+    void MTTrack::setArpGate( int Percent ) { arp::SpinGuard g( arpFlag ); arpeg.setGatePercent( Percent ); }
+    int  MTTrack::getArpMode() { arp::SpinGuard g( arpFlag ); return arpeg.getMode(); }
+    int  MTTrack::getArpRate() { arp::SpinGuard g( arpFlag ); return arpeg.getRate(); }
+    int  MTTrack::getArpOctaves() { arp::SpinGuard g( arpFlag ); return arpeg.getOctaves(); }
+    bool MTTrack::isArpLatch() { arp::SpinGuard g( arpFlag ); return arpeg.isLatch(); }
 
     int MTTrack::recallLiveNotes( int WindowMs )
     {

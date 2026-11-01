@@ -459,6 +459,23 @@ namespace mt
         // (max 30 s) into its note list as one undo step. Playing: positions follow the track playhead at play time;
         // stopped: aligned to the sequence start. Returns notes committed, 0 if none captured, -1 if no such track.
         int recallLiveMidi( const MTSelected& Selection, int WindowMs = 30000 );
+
+        // Arpeggiator (per track; the app drives the selected track: pass getSelected()). Works on live input and is
+        // clocked by the transport, so it arpeggiates while the sequence plays; stopped transport = notes pass through.
+        // Mode: 0 Up, 1 Down, 2 UpDown, 3 Random. Rate: 0 1/4, 1 1/8, 2 1/16 (default), 3 1/32, 4-7 the triplets
+        // 1/4T 1/8T 1/16T 1/32T. Octaves 1-4. Gate 5-100 %. Out-of-range values are clamped. Set* return 0, or -1 if
+        // there is no such track; is*/get* return false/-1 then.
+        int  setArpEnabled( const MTSelected& Selection, bool On );
+        bool isArpEnabled( const MTSelected& Selection );
+        int  setArpMode( const MTSelected& Selection, int Mode );
+        int  setArpRate( const MTSelected& Selection, int Rate );
+        int  setArpOctaves( const MTSelected& Selection, int Octaves );
+        int  setArpLatch( const MTSelected& Selection, bool On );
+        int  setArpGate( const MTSelected& Selection, int Percent );
+        bool isArpLatch( const MTSelected& Selection );
+        int  getArpMode( const MTSelected& Selection );
+        int  getArpRate( const MTSelected& Selection );
+        int  getArpOctaves( const MTSelected& Selection );
         int addLiveMidiNote( const int Program, const int Note, const int Velocity );
         int stopLiveMidiNote( const int Program, const int Note );
 
