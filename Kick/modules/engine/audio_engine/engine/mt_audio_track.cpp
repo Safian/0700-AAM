@@ -780,7 +780,8 @@ namespace mt
         auto       pProgram = program.load();
         const bool muted    = isTrackEffectivelyMuted();
         // G5: a muted track starts nothing new but still lets go (note-off, pitch wheel, CC64, CC123)
-        const bool pass = !muted || mutefilter::passesWhileMuted( Msg.getRawData()[0], Msg.getRawDataSize() > 1 ? Msg.getRawData()[1] : 0 );
+        const bool pass = !muted || mutefilter::passesWhileMuted( Msg.getRawData()[0], Msg.getRawDataSize() > 1 ? Msg.getRawData()[1] : 0,
+                                                                       Msg.getRawDataSize() > 2 ? Msg.getRawData()[2] : 0 );
         if( pProgram && pass )
         {
             juce::Array<juce::MidiMessage> list;
