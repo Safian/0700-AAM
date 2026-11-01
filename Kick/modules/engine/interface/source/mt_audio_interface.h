@@ -647,6 +647,7 @@ namespace mt
 
         // Manager...
         inline MTAudioManager* getManager() { return manager.get(); }
+        bool                   isSavingProject() const noexcept; // true while saveProject() writes the pan write-back (G10); defined in the engine where MTAudioManager is complete
         MTAudioAssetManager&   getAssetManager();
 
     private:
