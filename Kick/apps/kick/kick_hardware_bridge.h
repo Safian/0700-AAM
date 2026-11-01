@@ -28,7 +28,11 @@ private:
     int m_last_touch_y[10] = { 0 };
     juce::Component::SafePointer<juce::Component> m_touch_targets[10];
     std::chrono::steady_clock::time_point m_last_tap_time;
-    bool m_tempo_edit_active = false;
+    // Akai MPC convention (T20): the Data Dial edits the tempo only while TAP TEMPO is physically held. The former
+    // sticky "tempo edit" mode (set by TAP TEMPO, cleared by ENTER/STOP) hijacked +/- and the dial and is removed.
+    // The original Kick UI has no consumer of EN_TAP_TEMPO (only MIDI-control mapping / hardware drawer), so the
+    // bridge keeps the BPM handling itself.
+    bool m_tap_tempo_held = false;
     int m_frame_counter = 0;
     int m_cmd_fd = -1;
     int m_cmd_fd_w = -1;
@@ -623,7 +627,6 @@ public:
                 for (int ch = 1; ch <= 16; ++ch) {
                     ae.addLiveMidiMsg(sel, juce::MidiMessage::allNotesOff(ch));
                 }
-                m_tempo_edit_active = false;
                 if (m_hw && m_hw->control_surface()) {
                     m_hw->control_surface()->set_led(HW_LED_STOP, true);
                     m_hw->control_surface()->set_led(HW_LED_PLAY, false);
@@ -672,7 +675,7 @@ public:
                     sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_MASTER);
                 } else {
                     sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO);
-                    m_tempo_edit_active = true;
+                    m_tap_tempo_held = true;
                     auto now = std::chrono::steady_clock::now();
                     auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_tap_time).count();
                     m_last_tap_time = now;
@@ -873,33 +876,17 @@ public:
             case HW_BTN_ENTER:
             {
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BTN_PRESSED);
-                m_tempo_edit_active = false;
                 break;
             }
             case HW_BTN_PLUS:
             {
-                if (m_tempo_edit_active) {
-                    int cur_bpm = ae.getMasterBPM() + 1;
-                    if (cur_bpm <= 300) {
-                        ae.setSequenceBPM(ae.getSelectedSequence(), cur_bpm);
-                        ae.setMasterBPM(cur_bpm);
-                    }
-                } else {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_PRESSED);
-                }
+                // Always navigates (always sends a press), so the release below always has a matching press.
+                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS);
                 break;
             }
             case HW_BTN_MINUS:
             {
-                if (m_tempo_edit_active) {
-                    int cur_bpm = ae.getMasterBPM() - 1;
-                    if (cur_bpm >= 30) {
-                        ae.setSequenceBPM(ae.getSelectedSequence(), cur_bpm);
-                        ae.setMasterBPM(cur_bpm);
-                    }
-                } else {
-                    sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_PRESSED);
-                }
+                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS);
                 break;
             }
             case HW_BTN_PROG_EDIT:
@@ -1010,12 +997,12 @@ public:
             }
             case HW_BTN_STEP_PREV:
             {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_PRESSED);
+                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS);
                 break;
             }
             case HW_BTN_STEP_NEXT:
             {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_PRESSED);
+                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS);
                 break;
             }
             case HW_BTN_BAR_PREV:
@@ -1046,10 +1033,10 @@ public:
                 on_jog_dial(-1);
                 break;
             case HW_BTN_CURSOR_LEFT:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_PRESSED);
+                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS);
                 break;
             case HW_BTN_CURSOR_RIGHT:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_PRESSED);
+                sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS);
                 break;
             default:
                 break;
@@ -1104,16 +1091,19 @@ public:
                 break;
             case HW_BTN_CURSOR_LEFT:
             case HW_BTN_STEP_PREV:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BTN_RELEASED);
+            case HW_BTN_MINUS:
+                sendTrackedRelease(btn, -1); // only if the matching EN_MINUS press was sent by this button
                 break;
             case HW_BTN_CURSOR_RIGHT:
             case HW_BTN_STEP_NEXT:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BTN_RELEASED);
+            case HW_BTN_PLUS:
+                sendTrackedRelease(btn, -1); // only if the matching EN_PLUS press was sent by this button
                 break;
             case HW_BTN_BAR_PREV:
             case HW_BTN_BAR_NEXT:
                 break; // act on press only
             case HW_BTN_TAP_TEMPO:
+                m_tap_tempo_held = false;
                 sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO);
                 break;
             case HW_BTN_NOTE_REPEAT:
@@ -1160,7 +1150,7 @@ public:
     void on_jog_dial(int delta) override
     {
         auto& ae = mt::getAudioInterface();
-        if (m_tempo_edit_active)
+        if (m_tap_tempo_held)
         {
             int cur_bpm = ae.getMasterBPM() + delta;
             if (cur_bpm < 30) cur_bpm = 30;
