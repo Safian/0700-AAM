@@ -4,6 +4,7 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "hardware/device_factory.h"
 #include "hardware/pad_colour_map.h"
+#include "hardware/led_map.h"
 #include "hardware/key_transpose.h"
 #include "contracts/dcl/dcl_signals.h"
 #include "contracts/dcl/dcl_contracts.h"
@@ -66,6 +67,7 @@ private:
     std::atomic<bool> m_pad_aftertouch_enabled { false }; // set by the UI via EN_PAD_SET_AFTER_TOUCH
     std::atomic<uint8_t> m_pad_last_vel[16] = {};         // note-on velocity of the held pad (aftertouch packet field 3)
     sigslot::connection m_pad_colour_conn;
+    sigslot::connection m_screen_conn;
 
     void onDclCommand(std::shared_ptr<ipc::MTIPCJson> message)
     {
@@ -151,13 +153,86 @@ private:
     void updateBankLeds()
     {
         if (m_hw && m_hw->control_surface()) {
-            int b = m_current_bank % 4;
-            m_hw->control_surface()->set_led(HW_LED_BANK_A, b == 0);
-            m_hw->control_surface()->set_led(HW_LED_BANK_B, b == 1);
-            m_hw->control_surface()->set_led(HW_LED_BANK_C, b == 2);
-            m_hw->control_surface()->set_led(HW_LED_BANK_D, b == 3);
+            // Banks A..D: full colour A of their LED; E..H: full colour B of the LED of (bank % 4).
+            setLed(HW_LED_BANK_A, kick_hw::bankLedLevel(m_current_bank, 0));
+            setLed(HW_LED_BANK_B, kick_hw::bankLedLevel(m_current_bank, 1));
+            setLed(HW_LED_BANK_C, kick_hw::bankLedLevel(m_current_bank, 2));
+            setLed(HW_LED_BANK_D, kick_hw::bankLedLevel(m_current_bank, 3));
             refreshPadColors();
         }
+    }
+
+    // --- Button LEDs (T13). Writes are cheap (the adapter caches the last level and writes only changes); they
+    // may come from the message thread (screen signal, timer) or the MIDI reader thread (button handlers).
+    void setLed(HardwareLed led, int level)
+    {
+        if (m_hw && m_hw->control_surface()) m_hw->control_surface()->set_led_level(led, level);
+    }
+
+    // Mode button of a screen, as the original Kick lights it (kick_leds.cpp: onScreenLoaded -> setLEDON), but with
+    // the Akai panel's buttons: Shift-alternates of a button get the second colour (two-colour LED) or dim.
+    struct ModeLed { HardwareLed led; int level; };
+    static ModeLed modeLedForScreen(kick_ui::Screen s)
+    {
+        using S = kick_ui::Screen;
+        switch (s) {
+            case S::HomeGridView:       return { HW_LED_GRID,             kick_hw::kLedFullA };
+            case S::HomeSequencerView:  return { HW_LED_GRID,             kick_hw::kLedDimA };   // Shift+GRID
+            case S::MenuChannelMixer:   return { HW_LED_MIX,              kick_hw::kLedFullA };
+            case S::MenuPadMixer:       return { HW_LED_MIX,              kick_hw::kLedFullB };  // Shift+MIX
+            case S::MenuTrackMute:      return { HW_LED_MUTE,             kick_hw::kLedFullA };
+            case S::MenuPadMute:        return { HW_LED_MUTE,             kick_hw::kLedFullB };  // Shift+MUTE
+            case S::MenuProgramEdit:    return { HW_LED_EDIT,             kick_hw::kLedFullA };
+            case S::HomeXYView:         return { HW_LED_TOUCH_FX,         kick_hw::kLedFullA };
+            case S::MenuSampleEdit:     return { HW_LED_SAMPLE_EDIT,      kick_hw::kLedFullA };
+            case S::MenuSampler:        return { HW_LED_SAMPLE_EDIT,      kick_hw::kLedDimA };   // Shift+SAMPLE EDIT
+            case S::MenuPadPerform:     return { HW_LED_KEYBOARD_CONTROL, kick_hw::kLedFullA };
+            case S::MenuMidiControl:    return { HW_LED_KEYBOARD_CONTROL, kick_hw::kLedDimA };   // Shift+KEYBOARD CONTROL
+            case S::HomeListView:       return { HW_LED_MAIN,             kick_hw::kLedFullA };
+            case S::MenuFileBrowser:    return { HW_LED_SOUNDS,           kick_hw::kLedFullA };
+            case S::HomeOptions:        return { HW_LED_MENU,             kick_hw::kLedFullA };
+            case S::MenuKnobEdit:       return { HW_LED_QLINK,            kick_hw::kLedFullA };  // Shift+Q-LINK
+            default:                    return { NUM_HW_LEDS, 0 };                               // no mode button
+        }
+    }
+
+    // Lights the mode button of the current screen, all other mode buttons off.
+    void updateModeLeds(kick_ui::Screen current)
+    {
+        static const HardwareLed modeLeds[] = { HW_LED_GRID, HW_LED_MIX, HW_LED_MUTE, HW_LED_EDIT, HW_LED_TOUCH_FX,
+                                                HW_LED_SAMPLE_EDIT, HW_LED_KEYBOARD_CONTROL, HW_LED_MAIN,
+                                                HW_LED_SOUNDS, HW_LED_MENU, HW_LED_QLINK };
+        const ModeLed m = modeLedForScreen(current);
+        for (HardwareLed l : modeLeds) setLed(l, l == m.led ? m.level : kick_hw::kLedOff);
+    }
+
+    void updateShiftLed() { setLed(HW_LED_SHIFT, m_shift_pressed ? kick_hw::kLedFullA : kick_hw::kLedOff); }
+
+    void updateArpLeds()
+    {
+        auto& ae = mt::getAudioInterface();
+        const auto sel = ae.getSelected();
+        const bool arp = ae.isArpEnabled(sel);
+        setLed(HW_LED_ARP, arp ? kick_hw::kLedFullA : kick_hw::kLedOff);
+        setLed(HW_LED_LATCH, (arp && ae.isArpLatch(sel)) ? kick_hw::kLedFullA : kick_hw::kLedOff);
+    }
+
+    void updateTimingCorrectLed()
+    {
+        setLed(HW_LED_TIMING_CORRECT, mt::getAudioInterface().isTimingCorrectEnabled() ? kick_hw::kLedFullA : kick_hw::kLedOff);
+    }
+
+    // Start-up state: every button LED off, then the ones that reflect the current state.
+    void initButtonLeds()
+    {
+        if (!m_hw || !m_hw->control_surface()) return;
+        for (int l = 0; l < NUM_HW_LEDS; ++l) setLed((HardwareLed)l, kick_hw::kLedOff);
+        setLed(HW_LED_STOP, kick_hw::kLedFullA);
+        updateBankLeds();
+        updateModeLeds(kick_ui::KickHome::Instance().getCurrentScreen());
+        updateShiftLed();
+        updateArpLeds();
+        updateTimingCorrectLed();
     }
 
     void updateOctaveLeds()
@@ -446,9 +521,12 @@ public:
             }
             if (m_hw->control_surface()) {
                 m_hw->control_surface()->start(this);
-                m_hw->control_surface()->set_led(HW_LED_STOP, true);
-                m_hw->control_surface()->set_led(HW_LED_PLAY, false);
-                updateBankLeds();
+                initButtonLeds();
+            }
+
+            if (!m_screen_conn.connected()) {
+                m_screen_conn = kick_ui::signals::onScreenLoaded.connect(
+                    [this](kick_ui::Screen s) { updateModeLeds(s); });
             }
 
             m_have_project_colours = false;
@@ -481,6 +559,7 @@ public:
     void stop()
     {
         m_pad_colour_conn.disconnect();
+        m_screen_conn.disconnect();
         stopTimer();
         if (m_cmd_fd >= 0) { close(m_cmd_fd); m_cmd_fd = -1; }
         if (m_cmd_fd_w >= 0) { close(m_cmd_fd_w); m_cmd_fd_w = -1; }
@@ -516,6 +595,7 @@ public:
             case HW_BTN_SHIFT:
             {
                 m_shift_pressed = true;
+                updateShiftLed();
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_SHIFT, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
             }
@@ -625,10 +705,10 @@ public:
                     kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadPerform);
                 } else {
                     // Plain ARP toggles the arpeggiator of the selected track (no DCL press -> nothing to release).
-                    // No ARP LED: HardwareLed has no ARP value (T13), so there is no hardware indication yet.
                     const auto sel = ae.getSelected();
                     const bool on = !ae.isArpEnabled(sel);
                     ae.setArpEnabled(sel, on);
+                    updateArpLeds();
                     printf("[BRIDGE] Arpeggiator %s\n", on ? "ON" : "OFF");
                     fflush(stdout);
                 }
@@ -641,6 +721,7 @@ public:
                     // Arp running: LATCH toggles arp latch (no DCL press -> nothing to release).
                     const bool on = !ae.isArpLatch(sel);
                     ae.setArpLatch(sel, on);
+                    updateArpLeds();
                     printf("[BRIDGE] Arp latch %s\n", on ? "ON" : "OFF");
                     fflush(stdout);
                 } else {
@@ -911,6 +992,7 @@ public:
                 if (isShiftDown()) {
                     m_tc_sent_code = kTcNoPacket;
                     ae.toggleTimingCorrectEnabled();
+                    updateTimingCorrectLed();
                 } else {
                     m_tc_sent_code = contracts::DeviceControlContracts::BtnLedSequence::EN_TC;
                     sendButtonMsg(m_tc_sent_code, contracts::DeviceControlContracts::BTN_PRESSED);
@@ -980,6 +1062,7 @@ public:
         {
             case HW_BTN_SHIFT:
                 m_shift_pressed = false;
+                updateShiftLed();
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_SHIFT, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             case HW_BTN_LOCATE:
