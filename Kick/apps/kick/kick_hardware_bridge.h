@@ -493,14 +493,13 @@ public:
             case HW_BTN_STOP:
             {
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_STOP, contracts::DeviceControlContracts::BTN_PRESSED);
-                if (isShiftDown()) {
-                    // Shift + STOP: Return to start (01:01:00)
-                    ae.setSequenceStop();
-                    ae.setSequencePlay(ae.getSelectedSequence(), false, false);
-                    ae.setSequenceStop();
-                } else {
-                    ae.setSequenceStop();
-                }
+                // STOP and Shift+STOP (RETURN) both stop the transport. A stop already rewinds the tracks
+                // (MTTrack::stop resets the playheads) and the next play starts from the loop start / bar 1.
+                // The former Shift variant called setSequencePlay(.., Now=false), which only queued a stale
+                // "play at next bar" flag (_nextBar) and had no other effect.
+                // ARCHITECT-CLARIFY: should Shift+STOP also reset the displayed sequence playhead? MTSequence::stop()
+                // does not, and there is no engine call for it yet (see seek work, TODO T7b).
+                ae.setSequenceStop();
                 ae.stopPreview();
                 auto sel = ae.getSelected();
                 for (int ch = 1; ch <= 16; ++ch) {
