@@ -195,3 +195,17 @@ A strip melletti kis LED-sor a kamerán sötét maradt: `strip 0`, `strip 64`, `
 
 ### 13. hiba – a touch strip módjai: a Kick 3 módot ismer, a dokumentáció 12-t (MPC v3.10 útmutató, Touch Strip fejezet)
 A TOUCH STRIP gomb a dokumentáció szerint ezeken a módokon lépked (nyomva tartva a kijelzőn választható): **Q-Link, Pitch Bend, Pad Level, Mod Wheel, Track Level, Sustain, Touch FX, Expression, Notes, Crossfader, Note Strum, Off**. A TOUCH FX gomb azonnal a Touch FX módra vált; Shift+TOUCH STRIP / Shift+TOUCH FX a mód beállításait nyitja; az alapmód a Preferences/Hardware menüben állítható. A Kick (`hardware/strip_modes.h`) csak **Kick slider → Pitch bend → Mod wheel** módot ismer (3 mód). Hiányzik: Q-Link, Pad Level, Track Level, Sustain (CC64), Touch FX, Expression (CC11), Notes, Crossfader, Note Strum, Off. A Touch Sense (érintésre Note On, alapból note 78) a nyers adatok szerint megvan.
+
+## 13. kör – érintés-javítás hardveren (`c4ec7f35`, Z2a + Z1a): MŰKÖDIK
+Build: `safian/main` `c4ec7f35` (`-g`), `KICK_NO_HARDWARE=1 KICK_NO_SERIAL_DEVICE=1`. Napló: `[TOUCH] delivery=manual (peer=1 showing=0)`, `manual mouseDown/mouseUp delivered to '<név>'`.
+
+| Mérés | Eredmény |
+|---|---|
+| Injektált `touch 440 145` (framebuffer; a Program fül) | `target=KickToggleButton 'Program'`, `Button released: 'Program' (toggle=1)`, a képernyő a Program nézetre vált (md5 `eec1c1112cb6` → `39fce8a48ac1`) |
+| Fizikai érintés (felhasználó) | Track ↔ Program fülváltás, a Step Sequencer csúszkája és a track-sor tekerője **működik** |
+| Napló-összesítés | 104 `down`/`up` pár, ebből 102 fizikai (`AKAI-TOUCH down`); `delivery=manual` 184, `delivery=peer` 0 |
+| Célpontok a naplóban | Track/Program/Sequence fül, Solo, GridComponent, StepComponent, program-választó, BPM, Back, Record gomb |
+
+**Megjegyzés a koordinátákhoz:** a `kick_cmd` `touch X Y` framebuffer-koordináta (1280x800), és a snapshot (ppm) ugyanezt a teret mutatja, tehát a snapshotban látott pont közvetlenül használható. A postaládában megadott "Program fül ~550,193" nem pontos: a Program fül a snapshotban kb. (440,145).
+
+A húzás (`mouseDrag`) külön naplósort nem ír; a csúszka és a tekerő a felhasználó megfigyelése szerint működik.
