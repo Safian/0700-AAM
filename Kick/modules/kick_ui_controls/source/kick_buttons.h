@@ -162,6 +162,11 @@ namespace ui
         KickRecordButton();
         ~KickRecordButton() = default;
 
+        // Track Rec Arm: a click toggles armed (red dot) / not armed and reports it; setArmed() only follows the engine.
+        std::function<void( bool )> onArmChanged;
+        void                        setArmed( bool On );
+        bool                        isArmed() const { return currentIndex == 1; }
+
     private:
         int currentIndex = -1;
 
