@@ -41,31 +41,29 @@ bool isAudioFilePath(const juce::String& path) {
     return juce::File(path).hasFileExtension(".wav;bwf;aif;aiff;flac;ogg;mp3;wmv;asf;wm;wma");
 }
 
-// Live pass (renameCollisions=false): copies every foreign sample into the project (once) and records source -> destination in
-// `copied`. The live property is rewritten to samples/<name> only when that is safe: the destination is the source's own file
-// name AND no other external source in the tree has the same file name. Otherwise the live source stays absolute, because the
-// asset slice map is keyed by the absolute path and MTAudioAssetManager's file-name fallback (first key with that name, in map
-// order) would hand this layer ANOTHER source's slice once a same-named sibling was rewritten (wrong slice, or mute).
-// Snapshot pass (renameCollisions=true): only applies the recorded destination to the serialised copy.
+// The live document is NEVER modified by a save: the asset slice map is keyed by the original absolute path and does not re-key,
+// and MTAudioAssetManager falls back to a file-name match (first key with that name, in map order) when the exact key misses.
+// A live path rewritten to samples/<name> would therefore resolve to ANOTHER source's slices as soon as a same-named sample is
+// loaded later. relativizeSamplePaths runs on the serialised COPY only: it copies every foreign sample into the project (once)
+// and writes the destination, relative, into that copy. Records source -> destination in `copied`.
 // copied: per save, absolute source path -> destination. The same source may share its destination (two layers on one external
 // file); a different source is never mapped onto a file another source claimed in this save.
 using CopiedMap = std::map<juce::String, juce::File>;
-using NameClashSet = std::map<juce::String, std::set<juce::String>>; // file name -> distinct external absolute sources
 
-// liveRefs: absolute paths of project-internal sample files the live tree already points at (relative or absolute inside the
-// project). Such a file belongs to that node's source: chooseDest never hands it to another source, identical bytes or not.
+// liveRefs: absolute paths of project-internal sample files the live tree points at (relative, as in a loaded project, or
+// absolute inside the project). Such a file belongs to that node's source: chooseDest never hands it to another source, identical
+// bytes or not.
 using LiveRefSet = std::set<juce::String>;
 
-void collectExternalSamples(const juce::ValueTree& tree, const juce::File& projectDir, NameClashSet& names, LiveRefSet& liveRefs) {
+void collectLiveRefs(const juce::ValueTree& tree, const juce::File& projectDir, LiveRefSet& liveRefs) {
     for (const char* prop : {"path", "source"}) {
         if (!tree.hasProperty(prop)) continue;
         const auto val = tree.getProperty(prop).toString();
         if (!isAudioFilePath(val)) continue;
         if (!juce::File::isAbsolutePath(val)) liveRefs.insert(projectDir.getChildFile(val).getFullPathName());
         else if (juce::File(val).isAChildOf(projectDir)) liveRefs.insert(juce::File(val).getFullPathName());
-        else names[juce::File(val).getFileName()].insert(juce::File(val).getFullPathName());
     }
-    for (int i = 0; i < tree.getNumChildren(); ++i) collectExternalSamples(tree.getChild(i), projectDir, names, liveRefs);
+    for (int i = 0; i < tree.getNumChildren(); ++i) collectLiveRefs(tree.getChild(i), projectDir, liveRefs);
 }
 
 // Candidate names for a source: <name>, <parent>_<name>, <parent>_<stem>_2<ext>, <parent>_<stem>_3<ext>, ...
@@ -94,7 +92,7 @@ juce::File chooseDest(const juce::File& samplesDir, const juce::File& src, const
             for (const auto& entry : *map)
                 if (entry.second == dest) {
                     if (entry.first != src.getFullPathName()) claimedByOther = true;
-                    else if (map == &copied) return dest;
+                    else return dest; // this source's own recorded copy (repeated saves never duplicate it)
                 }
         // A live reference keeps its target even when that file is currently missing (otherwise a new source would be handed the
         // name and the referencing node would silently play the new source's audio).
@@ -105,8 +103,9 @@ juce::File chooseDest(const juce::File& samplesDir, const juce::File& src, const
     return {};
 }
 
-void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, bool renameCollisions, CopiedMap& copied, const CopiedMap& reserved,
-                           const NameClashSet& names, const LiveRefSet& liveRefs, juce::String& copyError) {
+// Operates on the serialised copy only (see above).
+void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, CopiedMap& copied, const CopiedMap& reserved,
+                           const LiveRefSet& liveRefs, juce::String& copyError) {
     if (!projectDir.exists() || !tree.isValid()) return;
 
     static const juce::Identifier idPath("path");
@@ -118,10 +117,7 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
         if (isAudioFilePath(val) && juce::File::isAbsolutePath(val)) {
             juce::File f(val);
             if (f.isAChildOf(projectDir)) {
-                if (!renameCollisions) tree.setProperty(prop, f.getRelativePathFrom(projectDir), nullptr);
-            } else if (renameCollisions) {
-                const auto done = copied.find(f.getFullPathName());
-                if (done != copied.end()) tree.setProperty(prop, done->second.getRelativePathFrom(projectDir), nullptr);
+                tree.setProperty(prop, f.getRelativePathFrom(projectDir), nullptr);
             } else {
                 auto samplesDir = projectDir.getChildFile("samples");
                 if (!samplesDir.exists() && projectDir.getChildFile("Imported").exists())
@@ -130,7 +126,7 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
                 const auto done = copied.find(f.getFullPathName());
                 auto dest = done != copied.end() ? done->second : chooseDest(samplesDir, f, copied, reserved, liveRefs);
                 if (dest == juce::File()) {
-                    if (!f.existsAsFile() && !renameCollisions) juce::Logger::writeToLog("Sample missing, no saved copy known, absolute path kept: " + f.getFullPathName());
+                    if (!f.existsAsFile()) juce::Logger::writeToLog("Sample missing, no saved copy known, absolute path kept: " + f.getFullPathName());
                     return;
                 }
                 if (!dest.existsAsFile() && !f.existsAsFile()) {
@@ -141,14 +137,11 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
                     if (!f.copyFileTo(dest)) {
                         dest.deleteFile();
                         if (copyError.isEmpty()) copyError = f.getFullPathName();
-                        return; // not recorded, live source stays absolute
+                        return; // not recorded, the saved copy stays absolute (the save fails anyway)
                     }
                 }
                 copied[f.getFullPathName()] = dest;
-                const auto clash = names.find(f.getFileName());
-                const bool unique = clash == names.end() || clash->second.size() <= 1;
-                if (unique && dest.getFileName() == f.getFileName())
-                    tree.setProperty(prop, dest.getRelativePathFrom(projectDir), nullptr);
+                tree.setProperty(prop, dest.getRelativePathFrom(projectDir), nullptr);
             }
         }
     };
@@ -158,7 +151,7 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
 
     for (int i = 0; i < tree.getNumChildren(); ++i) {
         auto child = tree.getChild(i);
-        relativizeSamplePaths(child, projectDir, renameCollisions, copied, reserved, names, liveRefs, copyError);
+        relativizeSamplePaths(child, projectDir, copied, reserved, liveRefs, copyError);
     }
 }
 }
@@ -277,8 +270,8 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
     if (isReadOnlyLocation)
         return failSave("Cannot save over factory demo/template. Please use Save As to a project folder.", reason);
 
-    // Sample paths stay rewritten in the live document as before: relativizeSamplePaths copies each foreign sample into the
-    // project once and is only idempotent because the live path becomes relative (a copy would duplicate files every save).
+    // The live document is never rewritten (see relativizeSamplePaths); repeated saves stay idempotent through sessionCopies
+    // (source -> copy) and chooseDest, which hands a source its own existing identical copy back.
     CopiedMap copied;
     // Missing sources resolve through the copies this session made (and recognised) for them, so a vanished source keeps its own
     // saved file instead of being guessed by name or written back as an absolute path.
@@ -289,18 +282,14 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
         if (!sourceGone && !it->second.existsAsFile()) it = sessionCopies.erase(it);
         else { if (sourceGone) copied[it->first] = it->second; ++it; }
     }
-    NameClashSet names;
-    LiveRefSet liveRefs;
-    juce::String copyError;
-    collectExternalSamples(vt, xmlFile.getParentDirectory(), names, liveRefs);
-    relativizeSamplePaths(vt, xmlFile.getParentDirectory(), false, copied, sessionCopies, names, liveRefs, copyError);
-    for (const auto& entry : copied) sessionCopies[entry.first] = entry.second;
-    if (copyError.isNotEmpty()) return failSave("Cannot copy sample " + copyError, reason);
-    // Sources renamed (destination differs from their own file name) or sharing a file name with another external source are
-    // relativised on the serialised copy only; the live source stays absolute.
     // patchSnapshot only ever touches this serialised copy, never the live document (the audio thread reads it).
     auto snapshot = vt.createCopy();
-    relativizeSamplePaths(snapshot, xmlFile.getParentDirectory(), true, copied, sessionCopies, names, liveRefs, copyError);
+    LiveRefSet liveRefs;
+    juce::String copyError;
+    collectLiveRefs(snapshot, xmlFile.getParentDirectory(), liveRefs);
+    relativizeSamplePaths(snapshot, xmlFile.getParentDirectory(), copied, sessionCopies, liveRefs, copyError);
+    for (const auto& entry : copied) sessionCopies[entry.first] = entry.second;
+    if (copyError.isNotEmpty()) return failSave("Cannot copy sample " + copyError, reason);
     if (patchSnapshot) patchSnapshot(snapshot);
 
     const auto xml = snapshot.toXmlString();

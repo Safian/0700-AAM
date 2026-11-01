@@ -308,8 +308,8 @@ int main(int argc, char** argv) {
         }
         check(doc.close(), "close N1 document");
     }
-    {   // P1: N1 layout, then the drive of A disappears. A has no live-relative path (name clash), so its saved reference must come
-        // from the session's source -> copy map, not be rewritten to the absolute path (silent mute layer on reopen).
+    {   // P1: N1 layout, then the drive of A disappears. A's saved reference must come from the session's source -> copy
+        // map, not be written as the absolute path (silent mute layer on reopen).
         const auto projFile = directory.getChildFile("p1/project.xml");
         const auto samples = projFile.getParentDirectory().getChildFile("samples");
         const auto zeta = directory.getChildFile("UsbP1/Zeta/kick.wav"), alpha = directory.getChildFile("UsbP1/Alpha/kick.wav");
@@ -368,8 +368,8 @@ int main(int argc, char** argv) {
         check(l1.getProperty("source").toString() == a.getFullPathName() && l2.getProperty("source").toString() == b.getFullPathName(), "Q1: live tree untouched");
         check(doc.close(), "close Q1 document");
     }
-    {   // O1: after a save A is live-relative (samples/kick.wav). A new external B with identical bytes, or A added again as a new
-        // node, must not adopt that file: the live tree already claims it. Each gets its own copy and stays absolute live.
+    {   // O1: after a save A has samples/kick.wav. A new external B with identical bytes must not adopt that file (A claims it);
+        // A added again as a new node is the same source and shares A's copy. The live tree stays absolute throughout.
         const auto projFile = directory.getChildFile("o1/project.xml");
         const auto samples = projFile.getParentDirectory().getChildFile("samples");
         const auto a = directory.getChildFile("Packs/A/kick.wav"), b = directory.getChildFile("Packs/B/kick.wav");
@@ -380,18 +380,18 @@ int main(int argc, char** argv) {
         l1.setProperty("source", a.getFullPathName(), nullptr);
         doc.getState().appendChild(l1, nullptr);
         auto savedAt = [&](int i) { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(i).getProperty("source").toString(); };
-        check(doc.save() && l1.getProperty("source").toString() == "samples/kick.wav" && savedAt(0) == "samples/kick.wav", "O1: A becomes relative");
+        check(doc.save() && l1.getProperty("source").toString() == a.getFullPathName() && savedAt(0) == "samples/kick.wav", "O1: A saved relative, live untouched");
         l2.setProperty("source", b.getFullPathName(), nullptr);
         doc.getState().appendChild(l2, nullptr);
         l3.setProperty("source", a.getFullPathName(), nullptr);
         for (int round = 0; round < 2; ++round) {
             if (round == 1) doc.getState().appendChild(l3, nullptr);
             check(doc.save(), "save O1 document");
-            check(l1.getProperty("source").toString() == "samples/kick.wav", "O1: A keeps its file");
+            check(l1.getProperty("source").toString() == a.getFullPathName(), "O1: A live absolute");
             check(l2.getProperty("source").toString() == b.getFullPathName(), "O1: B stays absolute live");
             check(savedAt(0) == "samples/kick.wav" && savedAt(1) != "samples/kick.wav" && savedAt(1).startsWith("samples/"), "O1: B has its own saved file");
-            if (round == 1) check(l3.getProperty("source").toString() == a.getFullPathName() && savedAt(2) != "samples/kick.wav" && savedAt(2) != savedAt(1) && savedAt(2).startsWith("samples/"), "O1: re-added A gets its own file");
-            check(samples.findChildFiles(juce::File::findFiles, false, "*.wav").size() == (round == 0 ? 2 : 3), "O1: file count stable");
+            if (round == 1) check(l3.getProperty("source").toString() == a.getFullPathName() && savedAt(2) == "samples/kick.wav", "O1: re-added A shares A's copy");
+            check(samples.findChildFiles(juce::File::findFiles, false, "*.wav").size() == 2, "O1: file count stable");
             doc.getState().setProperty("touch", round, nullptr);
         }
         check(doc.close(), "close O1 document");
@@ -429,9 +429,41 @@ int main(int argc, char** argv) {
         doc.getState().appendChild(l, nullptr);
         check(!doc.save() && doc.isDirty() && doc.getLastSaveError().contains("Cannot copy sample"), "O2: failed copy fails the save and keeps dirty");
         check(l.getProperty("source").toString() == src.getFullPathName() && !projFile.loadFileAsString().contains("samples/"), "O2: no relative path for a missing file");
-        check(samples.deleteFile() && doc.save() && !doc.isDirty() && l.getProperty("source").toString() == "samples/snare.wav" &&
-              samples.getChildFile("snare.wav").loadFileAsString() == "snare", "O2: retry succeeds once the copy works");
+        check(samples.deleteFile() && doc.save() && !doc.isDirty() && l.getProperty("source").toString() == src.getFullPathName() &&
+              juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(0).getProperty("source").toString() == "samples/snare.wav" &&
+              samples.getChildFile("snare.wav").loadFileAsString() == "snare", "O2: retry succeeds once the copy works, live untouched");
         check(doc.close(), "close O2 document");
+    }
+    {   // R1 (round 15): /Ext/kick.wav is saved, then a same-named /B/kick.wav is loaded. The save must never rewrite the live tree
+        // (the asset slice map is keyed by the absolute path; a relative live path would fall back to a file-name match = B's slices).
+        const auto projFile = directory.getChildFile("r1/project.xml");
+        const auto samples = projFile.getParentDirectory().getChildFile("samples");
+        const auto a = directory.getChildFile("Ext/kick.wav"), b = directory.getChildFile("B/kick.wav");
+        check(a.create().wasOk() && a.replaceWithText("aaa") && b.create().wasOk() && b.replaceWithText("bbb"), "seed R1 sources");
+        mt::KickXML doc("ROOT", ".xml", "1");
+        check(doc.loadOrCreate(projFile).isValid(), "create R1 document");
+        juce::ValueTree la("LAYER"), lb("LAYER");
+        la.setProperty("source", a.getFullPathName(), nullptr); la.setProperty("path", a.getFullPathName(), nullptr);
+        doc.getState().appendChild(la, nullptr);
+        auto savedAt = [&](int i) { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(i).getProperty("source").toString(); };
+        auto liveUntouched = [&](const char* why) {
+            check(la.getProperty("source").toString() == a.getFullPathName() && la.getProperty("path").toString() == a.getFullPathName(), why);
+        };
+        check(doc.save() && savedAt(0) == "samples/kick.wav", "R1: A saved relative");
+        liveUntouched("R1: A live absolute after first save");
+        lb.setProperty("source", b.getFullPathName(), nullptr);
+        doc.getState().appendChild(lb, nullptr);
+        for (int round = 0; round < 3; ++round) {
+            check(doc.save(), "save R1 document");
+            liveUntouched("R1: A live absolute after B was loaded");
+            check(lb.getProperty("source").toString() == b.getFullPathName(), "R1: B live absolute");
+            check(savedAt(0) == "samples/kick.wav" && savedAt(1) == "samples/B_kick.wav", "R1: saved A and B are distinct relative copies");
+            check(juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(0).getProperty("path").toString() == "samples/kick.wav", "R1: saved path relative too");
+            check(samples.getChildFile("kick.wav").loadFileAsString() == "aaa" && samples.getChildFile("B_kick.wav").loadFileAsString() == "bbb" &&
+                  samples.findChildFiles(juce::File::findFiles, false, "*.wav").size() == 2, "R1: contents match, file count stable");
+            doc.getState().setProperty("touch", round, nullptr);
+        }
+        check(doc.close(), "close R1 document");
     }
     directory.deleteRecursively();
     std::cout << "PASS: actual KickXML autosave, close, worker save, bounded snapshots, failed/unsupported state, dirty/error reporting and retry\n";
