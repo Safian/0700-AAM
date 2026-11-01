@@ -77,7 +77,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install application build and display dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libjack-jackd2-dev libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev libxi-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev xvfb xauth
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libjack-jackd2-dev libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev libxi-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev libcurl4-openssl-dev xvfb xauth
       - name: Fetch application JUCE
         run: git clone --depth 1 --branch 7.0.12 https://github.com/juce-framework/JUCE.git /tmp/JUCE
       - name: Configure released platform modules and real application tests
