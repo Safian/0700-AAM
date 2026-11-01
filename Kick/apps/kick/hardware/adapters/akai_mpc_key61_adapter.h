@@ -660,6 +660,13 @@ public:
         kick_hw::makeLedMessage(note, kick_hw::akaiLedValue(twoColour, level), msg);
         const ssize_t r = snd_rawmidi_write(m_out1, msg, 3);
         if (r < 0) log_write_error(m_out1, r);
+        // Same value to the mirrored LED (right Shift), under the same lock.
+        const int mirror = kick_hw::akaiLedMirrorNote(led);
+        if (mirror >= 0) {
+            kick_hw::makeLedMessage(mirror, kick_hw::akaiLedValue(twoColour, level), msg);
+            const ssize_t r2 = snd_rawmidi_write(m_out1, msg, 3);
+            if (r2 < 0) log_write_error(m_out1, r2);
+        }
     }
 
     void set_touch_strip_leds(int val) override {
