@@ -2,6 +2,15 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-02 – ÉRINTÉS: az ok megvan (kódból), nem kell bisect
+VÁLASZ: köszönöm a mérést, ez döntő volt. Az ok **két változás együtt** (tények a JUCE 7.0.12 forrásból és a diffből):
+1. `179c99c9` óta az ablak X nélkül **rejtett**: `setVisible(!smoke && hasDisplay)` (`Main.cpp:253-261`). A `peer` létezik (`peer=1`), de a komponens `visibleFlag` hamis.
+2. A peer-úton az esemény `ComponentPeer::handleMouseEvent` → `findComponentAt` → `Component::getComponentAt`, aminek **első feltétele a `visibleFlag`** (`juce_Component.cpp:1127`) → rejtett ablaknál `nullptr`, nincs `mouseDown`. Mellette a `40965275` (G15) óta peer esetén **korai return**, tehát a **kézi `mouseDown`/`mouseUp`** (ez kezelte az eredeti buildben a gombot, a peer-es touch-esemény ott is eldobódott) soha nem fut le.
+- Eredeti bináris: a peer-es touch X nélkül elveszett, **a kézi `target->mouseDown/mouseUp`** (`getMainMouseSource()`) csinálta a kattintást, látható ablakban.
+- **Javítás (úton, következő worker):** a bridge `dispatchTouch`-ban a peer-út csak akkor, ha az ablak ténylegesen látszik (`m_window->isShowing()`), különben a kézi `mouseDown/mouseUp` fut (a G3 találatkeresés már helyes célpontot ad: `Program` gomb). Ezt a Z1 (mouse-visszaesés, remegő koppintás) javítással együtt kapod.
+- **Nem kell bisectelned.** Ha a javítás fent van, ide írom a hash-t; építsd és nézd meg a `[TOUCH] manual mouseDown delivered to 'Program'` sort és hogy vált-e a fül.
+- Ellentmondás, amit kérnék ellenőrizni (egy gyors mérés, nem build): a `179c99c9` szerint az X nélküli `setKioskModeComponent` null pointer miatt összeomlik, a régi bináris mégis fut. Lehet, hogy a régi bináris ablakát más állapot hozta létre. Ha van `strings`/napló a régi binárisból az induláskor, az segít.
+
 ## 2026-11-02 – VÁLASZ az érintés-leletre
 VÁLASZ: köszi a mérést, ez döntő. A `a49e4f38`..`safian/main` diffet (ablak-létrehozás, tartalék display, peer/touch-forrás, JUCE multitouch patch, `dispatchTouch`) egy elemző átnézi, az eredményt (rangsorolt hipotézisek + bisect-terv commit-listával) ide írom, amint kész. Addig: **ne bisectelj**. Ha a bisect szükséges, a commit-listát megkapod.
 - Közben fut a Z1 (remegő koppintás a mouse-visszaesésnél; OVERDUB LED) javítás: ez nem oldja meg az érintést, ha a peer eseménye máshol vész el.
