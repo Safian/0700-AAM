@@ -109,15 +109,28 @@ namespace mt
     // this is not a reentrant function, calling from multiple threads simultaneously may result in incorrect results.
     void MTMidiProgram::noteProcess( juce::Array<juce::MidiMessage>& Msgs, bool /*live*/ ) // CC64/pitch wheel are forwarded in both paths
     {
-        if( isProgramEffectivelyMuted() )
-            return;
+        const bool muted = isProgramEffectivelyMuted();
 
         auto progGain = MIDI::SCALER * level.get();
         for( auto& it : Msgs )
         {
+            if( muted )
+            {
+                // Muted: only release-type messages reach the external port (no stuck notes / bend / pedal), no meters.
+                const bool release = it.isNoteOff() || it.isPitchWheel()
+                                     || ( it.isController() && ( ( it.getControllerNumber() == 64 && it.getControllerValue() < 64 )
+                                                                 || it.getControllerNumber() == 123 ) );
+                if( release )
+                {
+                    it.setChannel( midiCh.get() );
+                    ae.sendMidiMessage( midiPort.get(), it );
+                }
+                continue;
+            }
             auto noteLevel = MIDI::SCALER * ( it.isNoteOnOrOff() ? it.getVelocity() : 127 );
-            // In Meter...
-            reloadMidiMeter( noteLevel );
+            // In Meter (note-on only)...
+            if( it.isNoteOn() )
+                reloadMidiMeter( noteLevel );
 
             if( !isNoteEffectivelyMuted( it.getNoteNumber() ) )
             {

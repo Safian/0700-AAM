@@ -273,7 +273,7 @@ namespace mt
         }
         else
         {
-            if( lastSeqTicks <= playTime )
+            if( songActive.load() && lastSeqTicks <= playTime ) // not in song mode: nothing to stop
             {
                 songActive = false;
                 signals::onSongStopped();
