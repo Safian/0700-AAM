@@ -164,6 +164,8 @@ namespace kick_ui
             idx++;
         }
 
+        signals::sigMainModeSelectTab.connect( [this]( int Index ) { selectTab( Index ); } );
+
         tBar.add.onClick = [&]() {
             if( tabButtons[1].getToggleState() )
             {
@@ -283,6 +285,17 @@ namespace kick_ui
         pProg.reset();
         pTrack.reset();
         pSeq.reset();
+    }
+
+    void AppMainmode::selectTab( int Index )
+    {
+        if( Index < 0 || Index >= (int)tabButtons.size() )
+            return;
+
+        tabSelected = Index;
+        tabButtons[Index].setToggleState( true, juce::dontSendNotification );
+        refreshTab( tabSelected );
+        contracts::DclSignals::onMainModeTabSelected( tabSelected );
     }
 
     void AppMainmode::refreshTab( int Index )

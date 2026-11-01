@@ -48,6 +48,7 @@ namespace kick_ui
 
         void handleCommand( CPktMgr::HWMsg_t& ) override;
         void refreshTab( int Index );
+        void selectTab( int Index );
         void refreshDeleteButton();
         void handleUndoRedo( TabType tabType, UndoRedo undoRedoOption );
 

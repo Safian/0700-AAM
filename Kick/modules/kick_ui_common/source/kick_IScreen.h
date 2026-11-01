@@ -73,6 +73,10 @@ namespace kick_ui
         static sigslot::signal<Screen> onScreenClosed;
 
         static sigslot::signal<Screen, void*> onScreenData;
+
+        // External requests (e.g. hardware Shift+button): emit before sigScreenClose() of the target screen.
+        static sigslot::signal<>    sigBrowserShowFavourites; // MenuFileBrowser: jump to the next assigned favourite slot
+        static sigslot::signal<int> sigMainModeSelectTab;     // HomeListView: 0 = Sequence, 1 = Track, 2 = Program
     };
 
     // Base class for all UI screens...
