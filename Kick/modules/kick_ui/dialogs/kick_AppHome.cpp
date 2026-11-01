@@ -37,6 +37,9 @@ namespace kick_ui
 
     sigslot::signal<Screen, void*> signals::onScreenData = {};
 
+    sigslot::signal<>    signals::sigBrowserShowFavourites = {};
+    sigslot::signal<int> signals::sigMainModeSelectTab     = {};
+
     class TempScreen
         : public IScreen
         , public juce::Component

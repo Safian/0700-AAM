@@ -73,6 +73,16 @@ namespace ui
         }
         favouriteButtonImplementation();
 
+        // External request (hardware Shift+SOUNDS): act once the screen has been loaded.
+        kick_ui::signals::sigBrowserShowFavourites.connect( [this]() { favouritesRequested = true; } );
+        kick_ui::signals::onScreenLoaded.connect( [this]( kick_ui::Screen Scrn ) {
+            if( Scrn == kick_ui::Screen::MenuFileBrowser && favouritesRequested )
+            {
+                favouritesRequested = false;
+                showNextFavourite();
+            }
+        } );
+
         //TOP BUTTONS
         juce::String originalFullPath = fileUtils::getFilePath( ae.getCurrentDir().getFullPathName(), replacementPath );
         top.searchLabel.setText( originalFullPath, juce::dontSendNotification );
@@ -743,6 +753,25 @@ namespace ui
             settings.browser.setPathToButton( button->getName(), "" );
             button->setToggleState( false, juce::dontSendNotification );
         };
+    }
+
+    // Jumps to the next favourite slot that has a folder assigned (same as clicking its button).
+    void FileBrowser::showNextFavourite()
+    {
+        if( !settings.browser.isValid() )
+            return;
+
+        const int n = (int)grpNum.size();
+        for( int i = 1; i <= n; ++i )
+        {
+            const int k = ( favouriteCursor + i + n ) % n;
+            if( settings.browser.getPathAssignedToButton( grpNum[k]->getName() ).isNotEmpty() )
+            {
+                favouriteCursor = k;
+                onSecondClick( grpNum[k].get() );
+                return;
+            }
+        }
     }
 
     void FileBrowser::renameImplementation( juce::String newFileName )
