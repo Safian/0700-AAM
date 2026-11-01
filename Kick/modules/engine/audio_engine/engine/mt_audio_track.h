@@ -26,6 +26,7 @@
 #include "mt_arpeggiator.h"
 #include "mt_automation.h"
 #include "mt_mute_filter.h"
+#include "mt_seq_record.h"
 
 namespace mt
 {
@@ -142,6 +143,21 @@ namespace mt
         int  getArpOctaves();
         bool isArpLatch();
 
+        // SEQUENCE RECORDING (hardware REC / OVERDUB + PLAY, see mt_seq_record.h). The track's Record (arm) button sets
+        // the arm flag (any thread). A take is driven by MTAudioManager on the message thread: recBegin() starts the
+        // capture of the live note events (processIncomingMidiMessage -> recCap, input thread, no lock, no allocation),
+        // recFlush() pairs them and commits the notes into the note list (message thread; holds MTTrack::lock for the
+        // edit like RECALL / timing correct, lock order MTTrack::lock -> MTNoteList::lock), recStop() ends the capture.
+        void setRecArmed( bool On ) { recArmed.store( On ); }
+        bool isRecArmed() const { return recArmed.load(); }
+        bool isRecCapturing() const { return recCapturing.load(); }
+        bool recHasPending() const { return recCap.size() > 0; }
+        void recBegin();
+        // Commits the completed notes. CloseOpen: also the still-held ones, closed at the last played tick (end of the take).
+        // Returns the number of notes committed. Scratch is a caller-owned buffer (reused, avoids allocating per call).
+        int recFlush( bool CloseOpen, std::vector<seqrec::Note>& Scratch );
+        void recStop() { recCapturing.store( false ); }
+
         const MTMeterData& getMeter() const { return midiMeter.getMeter(); }
         inline void        processMidiMeter() { midiMeter.process(); }
 
@@ -257,6 +273,12 @@ namespace mt
         // and a mirror of the post-wrap playhead tick published by onTick (tickPos itself is tick-thread private).
         live::Ring       liveRing;
         std::atomic<int> livePlayTick{ -1 };
+        // Sequence recording: arm flag (UI thread), capture-on flag (message thread), the last played tick (tick thread,
+        // only while capturing) and the capture buffer (input thread pushes, message thread drains; own spin flag).
+        std::atomic<bool> recArmed{ false };
+        std::atomic<bool> recCapturing{ false };
+        std::atomic<int>  recLastTick{ 0 };
+        seqrec::Capture   recCap;
         std::atomic<unsigned int> lengthInTicks{ 0 };
         std::atomic<double>       lengthFactor{ 0 };
         //unsigned int              count;

@@ -134,7 +134,13 @@ namespace mt
         : manager( std::make_unique<MTAudioManager>( Name, Manufacturer, Version ) )
         , MTLooperInterface( manager )
 
-    {}
+    {
+        // Notes a sequence-recording flush added: the global timing correct applies to them, like to RECALL (message thread).
+        manager->recordedNotesHook = [this]( MTTrack* T, const std::set<int>& Added ) {
+            if( tcEnabled.load() )
+                T->timingCorrectLocked( tcParams, &Added );
+        };
+    }
 
     MTAudioInterface::~MTAudioInterface()
     {
@@ -988,8 +994,28 @@ namespace mt
     // Transport API's
     int MTAudioInterface::setSequencePlay( int Sequence, bool FromBeginning, bool Now )
     {
+        if( Now ) // an armed REC take starts with the transport (a queued "next bar" start does not record: dummy)
+            manager->seqRecBeforePlay( Sequence );
         return manager->play( Sequence, FromBeginning, Now );
     }
+
+    void MTAudioInterface::setTrackRecordArm( int Sequence, int Track, bool Armed )
+    {
+        if( auto* t = manager->getTrack( Sequence, Track ) )
+            t->setRecArmed( Armed );
+    }
+
+    bool MTAudioInterface::isTrackRecordArmed( int Sequence, int Track )
+    {
+        auto* t = manager->getTrack( Sequence, Track );
+        return t && t->isRecArmed();
+    }
+
+    void MTAudioInterface::sequenceRecPressed() { manager->seqRecPressed(); }
+    void MTAudioInterface::sequenceOverdubPressed() { manager->seqOverdubPressed(); }
+    bool MTAudioInterface::isSequenceRecArmed() { return seqrec::Phase::Armed == manager->getSeqRecControl().phase; }
+    bool MTAudioInterface::isSequenceRecording() { return seqrec::Phase::Recording == manager->getSeqRecControl().phase; }
+    bool MTAudioInterface::isSequenceOverdub() { return manager->getSeqRecControl().overdub; }
 
     int MTAudioInterface::setSequencePause()
     {
