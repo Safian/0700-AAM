@@ -22,6 +22,7 @@
 #pragma once
 
 #include "mt_midi_meter.h"
+#include "mt_sustain.h"
 #include "mt_audio_iprogram_atomics.h"
 #include "contracts/dcl/dcl_contracts.h"
 
@@ -301,8 +302,7 @@ namespace mt
         MTMidiMeter midiMeter{ 40 };
 
         // Sustain pedal (CC64). Only touched from noteProcess (MIDI/audio thread).
-        bool                  sustainDown{ false };
-        std::array<bool, 128> sustainHeld{};
+        SustainState sustain;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( MTIProgram )
     };

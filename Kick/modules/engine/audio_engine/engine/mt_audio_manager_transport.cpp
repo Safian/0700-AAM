@@ -166,6 +166,12 @@ namespace mt
 
     int MTAudioTransportManager::pause()
     {
+        // Only a playing transport can be paused. After STOP (bridge calls stop() on the MIDI thread, then the
+        // EN_STOP packet makes the screens call setSequencePause()) this must stay a no-op, otherwise the state
+        // becomes Paused and the next PLAY resume()s a reset sequence instead of play()ing it.
+        if( !isPlaying() )
+            return -1;
+
         midiClock.stop();
         setTransportState( TransportState::Paused );
 
