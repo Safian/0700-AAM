@@ -3,6 +3,12 @@
 #include "../hardware_adapter.h"
 #include "../midi_parser.h"
 #include "../led_map.h"
+#include "../akai_map.h"
+#include "../device_probe.h"
+#include <dirent.h>
+#include <mutex>
+#include <string>
+#include <vector>
 #include <alsa/asoundlib.h>
 #include <linux/input.h>
 #include <fcntl.h>
@@ -11,11 +17,52 @@
 #include <sys/mman.h>
 #include <linux/fb.h>
 #include <pthread.h>
+#include <errno.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+
+// Reads a whole (small) text file, e.g. /proc/asound/cards. Empty string on failure.
+static inline std::string akai_read_text_file(const char* path) {
+    std::string out;
+    FILE* f = fopen(path, "r");
+    if (!f) return out;
+    char buf[512];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) out.append(buf, n);
+    fclose(f);
+    return out;
+}
+
+// Card index by /proc/asound/cards text, or 'fallback' (the previously hard-coded value) when not found.
+static inline int akai_find_card(const std::vector<std::string>& needles, int fallback) {
+    return kick_hw::probe::chooseOrFallback(
+        kick_hw::probe::findCardIndex(akai_read_text_file("/proc/asound/cards"), needles), fallback);
+}
+
+// Touch device path: /sys/class/input/event*/device/name, then /proc/bus/input/devices, else /dev/input/event0.
+static inline std::string akai_find_touch_device() {
+    DIR* d = opendir("/sys/class/input");
+    if (d) {
+        struct dirent* e;
+        while ((e = readdir(d)) != nullptr) {
+            if (strncmp(e->d_name, "event", 5) != 0) continue;
+            std::string p = std::string("/sys/class/input/") + e->d_name + "/device/name";
+            std::string name = akai_read_text_file(p.c_str());
+            if (kick_hw::probe::isTouchDeviceName(name)) {
+                std::string path = std::string("/dev/input/") + e->d_name;
+                closedir(d);
+                return path;
+            }
+        }
+        closedir(d);
+    }
+    int n = kick_hw::probe::findTouchEventInProcDevices(akai_read_text_file("/proc/bus/input/devices"));
+    if (n >= 0) return "/dev/input/event" + std::to_string(n);
+    return "/dev/input/event0";
+}
 
 // ============================================================================
 // Akai MPC Key 61 Hardware Adapter
@@ -133,6 +180,8 @@ private:
     IHardwareEventListener* m_listener;
     int m_logical_w;
     int m_logical_h;
+    int m_range_x;   // ABS_MT_POSITION_X maximum (EVIOCGABS), 2048 when unknown
+    int m_range_y;
 
     static void* thread_entry(void* arg) {
         ((AkaiMpcKey61TouchAdapter*)arg)->run();
@@ -196,15 +245,10 @@ private:
                         if (!slot->has_x && !slot->was_down) continue;
                         if (!slot->has_y && !slot->was_down) continue;
 
-                        // Inverted rotation matrix for ILI2117 (0..2048):
-                        int rx = slot->raw_x, ry = slot->raw_y;
-                        if (rx < 0) rx = 0;
-                        if (rx > 2048) rx = 2048;
-                        if (ry < 0) ry = 0;
-                        if (ry > 2048) ry = 2048;
-
-                        int ui_x = ((2048 - ry) * (m_logical_w - 1)) / 2048;
-                        int ui_y = (rx * (m_logical_h - 1)) / 2048;
+                        // Inverted rotation matrix for ILI2117 (0..m_range, 2048 by default):
+                        int ui_x = 0, ui_y = 0;
+                        kick_hw::probe::mapTouch(slot->raw_x, slot->raw_y, m_range_x, m_range_y,
+                                                 m_logical_w, m_logical_h, ui_x, ui_y);
 
                         if (!slot->was_down) {
                             if (m_listener) {
@@ -227,7 +271,8 @@ private:
 public:
     AkaiMpcKey61TouchAdapter()
         : m_current_slot(0), m_fd(-1), m_running(false), m_listener(nullptr),
-          m_logical_w(1280), m_logical_h(800) {
+          m_logical_w(1280), m_logical_h(800),
+          m_range_x(kick_hw::probe::kDefaultTouchRange), m_range_y(kick_hw::probe::kDefaultTouchRange) {
         memset(m_slots, 0, sizeof(m_slots));
     }
 
@@ -238,16 +283,31 @@ public:
         m_logical_w = logical_w;
         m_logical_h = logical_h;
 
-        m_fd = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
+        // Discovery with safe fallback: ILI2117 by name, else the previously hard-coded /dev/input/event0.
+        const std::string dev = akai_find_touch_device();
+        m_fd = open(dev.c_str(), O_RDONLY | O_NONBLOCK);
+        if (m_fd < 0 && dev != "/dev/input/event0") {
+            perror("[AKAI-TOUCH] Cannot open discovered touch device, trying /dev/input/event0");
+            m_fd = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
+        }
         if (m_fd < 0) {
-            perror("[AKAI-TOUCH] Cannot open /dev/input/event0");
+            perror("[AKAI-TOUCH] Cannot open touch device");
             return false;
         }
 
+        // Real ABS ranges; falls back to 2048 when the ioctl fails.
+        struct input_absinfo ai;
+        memset(&ai, 0, sizeof(ai));
+        m_range_x = kick_hw::probe::touchRangeOrDefault(
+            ioctl(m_fd, EVIOCGABS(ABS_MT_POSITION_X), &ai) == 0 ? ai.maximum : 0);
+        memset(&ai, 0, sizeof(ai));
+        m_range_y = kick_hw::probe::touchRangeOrDefault(
+            ioctl(m_fd, EVIOCGABS(ABS_MT_POSITION_Y), &ai) == 0 ? ai.maximum : 0);
+
         m_running = true;
         pthread_create(&m_thread, NULL, thread_entry, this);
-        printf("[AKAI-TOUCH] Connected to ILI2117 (/dev/input/event0) -> Transform to %dx%d UI active\n",
-               m_logical_w, m_logical_h);
+        printf("[AKAI-TOUCH] Connected to ILI2117 (%s, range %dx%d) -> Transform to %dx%d UI active\n",
+               dev.c_str(), m_range_x, m_range_y, m_logical_w, m_logical_h);
         return true;
     }
 
@@ -277,94 +337,42 @@ private:
         return NULL;
     }
 
-    MidiParser m_parser0;
-    MidiParser m_parser1;
-    MidiParser m_parser2;
+    MidiParser m_parser[3];          // one per port; shared by the reader thread and inject_bytes()
+    std::mutex m_parser_mutex;       // guards m_parser[] only; never held while listener callbacks run
+    std::mutex m_out0_mutex;         // one write guard per output handle (several threads write LEDs / pads)
+    std::mutex m_out1_mutex;
 
-    static inline int get_akai_pad_index(int note) {
-        switch (note) {
-            case 37: return 0;  // Pad 1  (A01)
-            case 36: return 1;  // Pad 2  (A02)
-            case 42: return 2;  // Pad 3  (A03)
-            case 82: return 3;  // Pad 4  (A04)
-            case 40: return 4;  // Pad 5  (A05)
-            case 38: return 5;  // Pad 6  (A06)
-            case 46: return 6;  // Pad 7  (A07)
-            case 44: return 7;  // Pad 8  (A08)
-            case 48: return 8;  // Pad 9  (A09)
-            case 47: return 9;  // Pad 10 (A10)
-            case 45: return 10; // Pad 11 (A11)
-            case 43: return 11; // Pad 12 (A12)
-            case 49: return 12; // Pad 13 (A13)
-            case 55: return 13; // Pad 14 (A14)
-            case 51: return 14; // Pad 15 (A15)
-            case 53: return 15; // Pad 16 (A16)
-            default: return -1;
+    // The write is the only thing under the lock (plus the LED cache update that has to stay ordered with it).
+    static inline void locked_write(std::mutex& mx, snd_rawmidi_t* out, const uint8_t* data, size_t len) {
+        std::lock_guard<std::mutex> lock(mx);
+        snd_rawmidi_write(out, data, len);
+    }
+
+    struct ParsedMsg { uint8_t s, d0, d1; };
+
+    // Parser + dispatch for one port; used by run() and inject_bytes(). The parser runs under m_parser_mutex,
+    // collecting complete messages; the listener callbacks run afterwards, without the lock.
+    void feed_port(int port, const uint8_t* buf, size_t n) {
+        if (port < 0 || port > 2) return;
+        while (n > 0) {
+            const size_t chunk = n > 256 ? 256 : n;
+            ParsedMsg msgs[256];
+            int count = 0;
+            {
+                std::lock_guard<std::mutex> lock(m_parser_mutex);
+                m_parser[port].feed(buf, (ssize_t)chunk, [&](uint8_t s, uint8_t d0, uint8_t d1) {
+                    if (count < 256) msgs[count++] = { s, d0, d1 };
+                });
+            }
+            for (int i = 0; i < count; ++i) handle_midi_message(port, msgs[i].s, msgs[i].d0, msgs[i].d1);
+            buf += chunk;
+            n -= chunk;
         }
     }
 
-    static inline HardwareButton get_akai_button(int note) {
-        switch (note) {
-            // Bal szekcio (Tempo / Metro / Arp / Octave)
-            case 53:  return HW_BTN_TAP_TEMPO;
-            case 112: return HW_BTN_METRONOME;
-            case 118: return HW_BTN_ARP;
-            case 119: return HW_BTN_LATCH;
-            case 7:   return HW_BTN_OCTAVE_DOWN;
-            case 10:  return HW_BTN_OCTAVE_UP;
-
-            // Bal-kozepso szekcio (Bank A-D + Touch Strip)
-            case 35:  return HW_BTN_BANK_A;
-            case 36:  return HW_BTN_BANK_B;
-            case 37:  return HW_BTN_BANK_C;
-            case 38:  return HW_BTN_BANK_D;
-            case 4:   return HW_BTN_TOUCH_STRIP;
-            case 42:  return HW_BTN_TOUCH_FX;
-            case 11:  return HW_BTN_NOTE_REPEAT;
-
-            // Kozepso 2x4 oszlop
-            case 39:  return HW_BTN_FULL_LEVEL;
-            case 40:  return HW_BTN_16_LEVELS;
-            case 9:   return HW_BTN_ERASE;
-            case 122: return HW_BTN_COPY;
-            case 50:  return HW_BTN_SHIFT; // Left Shift
-            case 123: return HW_BTN_MENU;
-            case 121: return HW_BTN_SOUNDS;
-            case 52:  return HW_BTN_MAIN;
-
-            // Jobb felso (Q-Link gomb + Data Dial + +/-)
-            case 0:   return HW_BTN_QLINK;
-            case 111: return HW_BTN_ENTER; // Data Dial Push
-            case 55:  return HW_BTN_MINUS;
-            case 54:  return HW_BTN_PLUS;
-
-            // 2x5 Mod matrix
-            case 2:   return HW_BTN_PROG_EDIT;
-            case 117: return HW_BTN_GRID;
-            case 116: return HW_BTN_TRACK_MIX;
-            case 43:  return HW_BTN_TRACK_MUTE;
-            case 75:  return HW_BTN_AUTOMATION;
-            case 120: return HW_BTN_KEYBOARD_CONTROL;
-            case 6:   return HW_BTN_SAMPLE_EDIT;
-            case 12:  return HW_BTN_TC;
-            case 67:  return HW_BTN_UNDO;
-            case 49:  return HW_BTN_SHIFT; // Right Shift
-
-            // Transzport es Locate
-            case 68:  return HW_BTN_STEP_PREV; // <
-            case 69:  return HW_BTN_STEP_NEXT; // >
-            case 70:  return HW_BTN_LOCATE;
-            case 71:  return HW_BTN_BAR_PREV;  // <<
-            case 72:  return HW_BTN_BAR_NEXT;  // >>
-            case 73:  return HW_BTN_REC;
-            case 80:  return HW_BTN_OVERDUB;
-            case 81:  return HW_BTN_STOP;
-            case 82:  return HW_BTN_PLAY;
-            case 83:  return HW_BTN_PLAY_START;
-
-            default:  return HW_BTN_NONE;
-        }
-    }
+    // Note tables live in hardware/akai_map.h (ALSA-free, host-tested).
+    static inline int get_akai_pad_index(int note) { return kick_hw::akai::get_akai_pad_index(note); }
+    static inline HardwareButton get_akai_button(int note) { return kick_hw::akai::get_akai_button(note); }
 
     void handle_midi_message(int port, uint8_t status, uint8_t d0, uint8_t d1) {
         if (!m_listener) return;
@@ -487,34 +495,40 @@ private:
         }
     }
 
+    // Reader loop: poll() on the rawmidi input descriptors (20 ms timeout so stop() stays responsive),
+    // then a non-blocking read of every port that signalled data.
     void run() {
+        snd_rawmidi_t* const ins[3] = { m_in0, m_in1, m_in2 };
+        struct pollfd pfds[3 * 4];
+        int first[3] = { 0, 0, 0 };
+        int cnt[3] = { 0, 0, 0 };
+        int total = 0;
+        for (int p = 0; p < 3; ++p) {
+            if (!ins[p]) continue;
+            int c = snd_rawmidi_poll_descriptors_count(ins[p]);
+            if (c <= 0 || total + c > (int)(sizeof(pfds) / sizeof(pfds[0]))) continue;
+            first[p] = total;
+            cnt[p] = snd_rawmidi_poll_descriptors(ins[p], pfds + total, (unsigned)c);
+            if (cnt[p] < 0) cnt[p] = 0;
+            total += cnt[p];
+        }
         uint8_t buf[256];
         while (m_running) {
-            if (m_in0) {
-                ssize_t n = snd_rawmidi_read(m_in0, buf, sizeof(buf));
-                if (n > 0) {
-                    m_parser0.feed(buf, n, [this](uint8_t s, uint8_t d0, uint8_t d1) {
-                        handle_midi_message(0, s, d0, d1);
-                    });
-                }
+            if (total == 0) { usleep(20000); continue; }
+            int pr = poll(pfds, (nfds_t)total, 20);
+            if (pr < 0) { if (errno != EINTR) usleep(20000); continue; }
+            if (pr == 0) continue;
+            bool error = false;
+            for (int p = 0; p < 3; ++p) {
+                if (!cnt[p]) continue;
+                unsigned short revents = 0;
+                snd_rawmidi_poll_descriptors_revents(ins[p], pfds + first[p], (unsigned)cnt[p], &revents);
+                if (revents & (POLLERR | POLLHUP | POLLNVAL)) error = true;
+                if (!(revents & POLLIN)) continue;
+                ssize_t n = snd_rawmidi_read(ins[p], buf, sizeof(buf));
+                if (n > 0) feed_port(p, buf, (size_t)n);
             }
-            if (m_in1) {
-                ssize_t n = snd_rawmidi_read(m_in1, buf, sizeof(buf));
-                if (n > 0) {
-                    m_parser1.feed(buf, n, [this](uint8_t s, uint8_t d0, uint8_t d1) {
-                        handle_midi_message(1, s, d0, d1);
-                    });
-                }
-            }
-            if (m_in2) {
-                ssize_t n = snd_rawmidi_read(m_in2, buf, sizeof(buf));
-                if (n > 0) {
-                    m_parser2.feed(buf, n, [this](uint8_t s, uint8_t d0, uint8_t d1) {
-                        handle_midi_message(2, s, d0, d1);
-                    });
-                }
-            }
-            usleep(1000);
+            if (error) usleep(10000); // device vanished: do not spin
         }
     }
 
@@ -532,10 +546,15 @@ public:
         if (m_running) return true; // already started
 
         struct PortSpec { snd_rawmidi_t** in; snd_rawmidi_t** out; const char* name; };
+        // Discovery with safe fallback: card by name (M61 / MPC / Key 61), else card 0 as before.
+        const int card = akai_find_card({ "M61", "MPC", "Key 61" }, 0);
+        const std::string name0 = kick_hw::probe::rawmidiPortName(card, 0);
+        const std::string name1 = kick_hw::probe::rawmidiPortName(card, 1);
+        const std::string name2 = kick_hw::probe::rawmidiPortName(card, 2);
         const PortSpec ports[] = {
-            { &m_in0, &m_out0, "hw:0,0,0" },
-            { &m_in1, &m_out1, "hw:0,0,1" },
-            { &m_in2, &m_out2, "hw:0,0,2" },
+            { &m_in0, &m_out0, name0.c_str() },
+            { &m_in1, &m_out1, name1.c_str() },
+            { &m_in2, &m_out2, name2.c_str() },
         };
         for (const auto& p : ports) {
             *p.in = nullptr;
@@ -551,33 +570,35 @@ public:
         // Port 1 (MPC Private) carries buttons, pads and keybed. Without it the
         // control surface is useless: report failure instead of a silent "started".
         if (!m_in1 || !m_out1) {
-            fprintf(stderr, "[AKAI-CONTROLLER] Port 1 (hw:0,0,1) unavailable -> control surface NOT started\n");
+            fprintf(stderr, "[AKAI-CONTROLLER] Port 1 (%s) unavailable -> control surface NOT started\n", name1.c_str());
             stop();
             return false;
         }
 
-        m_parser0.reset();
-        m_parser1.reset();
-        m_parser2.reset();
+        {
+            std::lock_guard<std::mutex> lock(m_parser_mutex);
+            for (auto& pr : m_parser) pr.reset();
+        }
 
         // Mode 0x41: Port 1 Private enabled, Port 0 Public disabled, transport MMC disabled
         uint8_t akai_init[] = { 0xF0, 0x47, 0x7F, 0x4B, 0x60, 0x00, 0x01, 0x41, 0xF7 };
         // ARCHITECT-CLARIFY: the review says the mode SysEx should reach Port 1 only, but the
         // hardware-verified build also writes it to Port 0 (the host command port?). Keep both
         // until verified on a device; then drop the Port 0 write if it is not needed.
-        if (m_out0) snd_rawmidi_write(m_out0, akai_init, sizeof(akai_init));
-        snd_rawmidi_write(m_out1, akai_init, sizeof(akai_init));
+        if (m_out0) locked_write(m_out0_mutex, m_out0, akai_init, sizeof(akai_init));
+        locked_write(m_out1_mutex, m_out1, akai_init, sizeof(akai_init));
         m_led_cache.reset(); // after the mode set the device state is unknown: the next write of each LED goes out
 
         m_running = true;
         pthread_create(&m_thread, NULL, thread_entry, this);
-        printf("[AKAI-CONTROLLER] RawMIDI (hw:0,0,0 keybed, hw:0,0,1 controls, hw:0,0,2 DIN OUT) -> STARTED (Mode 0x41 Private)\n");
+        printf("[AKAI-CONTROLLER] RawMIDI (%s keybed, %s controls, %s DIN OUT) -> STARTED (Mode 0x41 Private)\n",
+               name0.c_str(), name1.c_str(), name2.c_str());
         return true;
     }
 
     // Both go through the level based path: the last level per LED is cached, only changes reach ALSA.
-    // Called from several threads (message thread, timer, MIDI reader); the 3-byte snd_rawmidi_write is not
-    // locked (see T16) - kept cheap, not made thread-safe here.
+    // Called from several threads (message thread, timer, MIDI reader): every snd_rawmidi_write goes through
+    // locked_write() (one mutex per output handle).
     void set_led(HardwareLed led, bool on, uint32_t rgb = 0) override {
         (void)rgb;
         set_led_level(led, on ? kick_hw::kLedFullA : kick_hw::kLedOff);
@@ -588,6 +609,8 @@ public:
         bool twoColour = false;
         const int note = kick_hw::akaiLedNote(led, twoColour);
         if (note < 0) return;
+        // Cache update and write under one lock so the cache never disagrees with what reached the device.
+        std::lock_guard<std::mutex> lock(m_out1_mutex);
         if (!m_led_cache.update(led, level)) return;
         uint8_t msg[3] = { (uint8_t)0x90, (uint8_t)note, kick_hw::akaiLedValue(twoColour, level) };
         snd_rawmidi_write(m_out1, msg, 3);
@@ -597,7 +620,7 @@ public:
         if (!m_out1) return;
         // CC33 (0x21) feedback to physical LED ladder (0..127)
         uint8_t msg[3] = { 0xB0, 0x21, (uint8_t)(val & 0x7F) };
-        snd_rawmidi_write(m_out1, msg, 3);
+        locked_write(m_out1_mutex, m_out1, msg, 3);
     }
 
     void set_pad_rgb(int pad, uint8_t r, uint8_t g, uint8_t b) override {
@@ -612,13 +635,20 @@ public:
         uint8_t sysex_dev[] = { 0xF0, 0x47, 0x00, 0x4B, 0x65, 0x00, 0x04, p, red, grn, blu, 0xF7 };
 
         if (m_out1) {
-            snd_rawmidi_write(m_out1, sysex_all, sizeof(sysex_all));
-            snd_rawmidi_write(m_out1, sysex_dev, sizeof(sysex_dev));
+            locked_write(m_out1_mutex, m_out1, sysex_all, sizeof(sysex_all));
+            locked_write(m_out1_mutex, m_out1, sysex_dev, sizeof(sysex_dev));
         }
         if (m_out0) {
-            snd_rawmidi_write(m_out0, sysex_all, sizeof(sysex_all));
-            snd_rawmidi_write(m_out0, sysex_dev, sizeof(sysex_dev));
+            locked_write(m_out0_mutex, m_out0, sysex_all, sizeof(sysex_all));
+            locked_write(m_out0_mutex, m_out0, sysex_dev, sizeof(sysex_dev));
         }
+    }
+
+    // Hardware-free byte level test: runs 'data' through the same parser and dispatch as the reader thread
+    // for 'port' (0 keybed, 1 control surface, 2 DIN). Thread-safe (shared parser guarded by m_parser_mutex).
+    void inject_bytes(int port, const uint8_t* data, size_t len) override {
+        if (!data) return;
+        feed_port(port, data, len);
     }
 
     void stop() override {
@@ -700,7 +730,8 @@ public:
         m_sample_rate = sample_rate;
         m_buffer_size = buffer_size;
 
-        int err = snd_pcm_open(&m_pcm, "plughw:1,0", SND_PCM_STREAM_PLAYBACK, 0);
+        int err = snd_pcm_open(&m_pcm,
+            kick_hw::probe::plughwName(akai_find_card({ "ACVM" }, 1)).c_str(), SND_PCM_STREAM_PLAYBACK, 0);
         if (err < 0) {
             // Fallback to default
             err = snd_pcm_open(&m_pcm, "default", SND_PCM_STREAM_PLAYBACK, 0);

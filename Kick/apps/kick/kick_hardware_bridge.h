@@ -1326,8 +1326,44 @@ public:
         }
     }
 
+    // kick_cmd: "rawmidi <port 0|1|2> <hex byte> [<hex byte> ...]" feeds raw MIDI bytes through the same parser and
+    // dispatch path as the control surface reader thread of that port (no hardware needed), e.g.
+    //   echo "rawmidi 1 90 52 7F" > /data/kick_cmd     (Port 1, ch1, note 82 = PLAY press, velocity 127)
+    //   echo "rawmidi 1 99 25 64" > /data/kick_cmd     (Port 1, ch10, note 37 = pad 1, velocity 100)
+    // Bytes are hex pairs (0x prefix optional); the whole command is ignored when any token is invalid.
+    void processRawMidiCommand(const std::string& cmd)
+    {
+        const char* p = cmd.c_str() + 7; // after "rawmidi"
+        char* end = nullptr;
+        long port = strtol(p, &end, 10);
+        if (end == p || port < 0 || port > 2) {
+            printf("[CMD] rawmidi: bad port (0..2)\n");
+            fflush(stdout);
+            return;
+        }
+        p = end;
+        std::vector<uint8_t> bytes;
+        for (;;) {
+            while (*p == ' ' || *p == '\t') ++p;
+            if (*p == '\0') break;
+            long v = strtol(p, &end, 16);
+            if (end == p || v < 0 || v > 0xFF || (*end != '\0' && *end != ' ' && *end != '\t')) {
+                printf("[CMD] rawmidi: bad hex byte\n");
+                fflush(stdout);
+                return;
+            }
+            bytes.push_back((uint8_t)v);
+            p = end;
+        }
+        printf("[CMD] rawmidi port=%ld bytes=%d\n", port, (int)bytes.size());
+        fflush(stdout);
+        if (!bytes.empty() && m_hw && m_hw->control_surface())
+            m_hw->control_surface()->inject_bytes((int)port, bytes.data(), bytes.size());
+    }
+
     void processCommand(const std::string& cmd)
     {
+        if (cmd.compare(0, 8, "rawmidi ") == 0) { processRawMidiCommand(cmd); return; }
         char op[64] = { 0 };
         int a1 = 0, a2 = 0;
         char sval[128] = { 0 };
