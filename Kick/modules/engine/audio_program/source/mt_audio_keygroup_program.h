@@ -48,6 +48,7 @@ namespace mt
         void noteOff( int Note ) override { key->noteOff( Note ); };
         void noteOff( std::vector<int>& Notes ) override { key->noteOff( Notes ); };
         void noteOffAll() override { key->noteOffAll(); };
+        void pitchBend( int Value ) override { key->pitchBend( Value ); };
         void noteMute( int Note, bool Mute ) override { key->noteMute( Note, Mute ); };
         void noteReset( int Note ) override { key->noteReset( Note ); };
         void noteReset( std::vector<int>& Notes ) override { key->noteReset( Notes ); };
