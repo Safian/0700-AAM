@@ -87,7 +87,7 @@ Az érintésnél a fizikai próba még nem történt meg (a felhasználó nincs 
 
 | Gomb (btn név) | Képernyő a snapshotban | Az útmutató szerint | Állapot |
 |---|---|---|---|
-| EDIT (`PROG_EDIT`) | **List Edit** | Program Edit Mode | **eltér** |
+| EDIT (`PROG_EDIT`) | injektálva: List Edit; **fizikai nyomásra: Program Edit** (felhasználói fotó) | Program Edit Mode | **OK fizikailag**; az injektált és a fizikai út eltér, ok nem tisztázott (elavult snapshot?) |
 | GRID (`GRID`) | Grid View | Grid View | OK |
 | STEP SEQ (`STEP_SEQ`) | Step Sequencer | Step Sequencer | OK |
 | MIX (`TRACK_MIX`) | Track Mixer | Track Mixer | OK |
@@ -100,4 +100,4 @@ Az érintésnél a fizikai próba még nem történt meg (a felhasználó nincs 
 | TIMING CORRECT (`TC`) | List Edit marad (md5 = UNDO utáni állapot) | Timing Correct ablak | **nem látható hatás** |
 | UNDO (`UNDO`) | nincs képernyőváltás | Undo | OK (hatás nem ellenőrizve) |
 
-Eltérések a cloud sessionnek: az EDIT a Kick List Edit képernyőjére megy (az útmutató szerint Program Edit lenne, Shift+EDIT XYFX); a KEYBOARD CONTROL a Pad Perform-ot nyitja, a Kickben nincs "Keyboard Control" menü; a TC gombnyomás hatása a snapshotban nem látszik (a Timing Correct ablak nem nyílik meg, vagy a globális TC csak a LED-et váltja).
+Eltérések a cloud sessionnek: az EDIT fizikailag a Program Editet nyitja (**helyes**; az injektált List Edit eltérés nem valódi hiba); a KEYBOARD CONTROL a Pad Perform-ot nyitja, a Kickben nincs "Keyboard Control" menü; a TC gombnyomás hatása a snapshotban nem látszik (a Timing Correct ablak nem nyílik meg, vagy a globális TC csak a LED-et váltja).
