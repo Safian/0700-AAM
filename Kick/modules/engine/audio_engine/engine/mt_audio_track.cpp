@@ -246,6 +246,26 @@ namespace mt
         updateTrackPlayhead( tickPos );
     }
 
+    void MTTrack::seekToTick( unsigned int TargetTick )
+    {
+        // Same lock as onTick(); the sequence lock is already held by the caller (lock order: sequence, track).
+        const juce::ScopedLock sl( lock );
+
+        // Hanging notes: all-notes-off and drop the queued note-offs, as pause()/stop() do.
+        stopAllMidiNotes();
+        midiMsgs.clearQuick();
+
+        // fillMidiMessages() plays (prevTick, Tick]; queued note-offs are keyed by absolute (shifted) ticks that
+        // are compared with tickCtr, so tickCtr must follow prevTick (== shifted tick).
+        prevTick = mt::bar_seek::prevTickFor( TargetTick );
+        tickCtr  = prevTick;
+        tickPos  = mt::bar_seek::wrapToLength( TargetTick, lengthInTicks.load() );
+
+        trackPlayhead.bnb = seq.toBnB( tickPos );
+        recalculateIndex( tickPos );
+        updateTrackPlayhead( tickPos );
+    }
+
     void MTTrack::recalculateIndex( unsigned int BeginTick )
     {
         noteIdx = 0;

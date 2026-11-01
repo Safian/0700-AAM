@@ -921,6 +921,24 @@ namespace mt
         manager->seek( posInTicks );
     }
 
+    int MTAudioInterface::seekToBar( int Sequence, int Bar0 )
+    {
+        if( auto s = manager->getSequence( Sequence ) ) return s->seekToBar( Bar0 );
+        return -1;
+    }
+
+    int MTAudioInterface::seekBars( int Sequence, int DeltaBars )
+    {
+        if( auto s = manager->getSequence( Sequence ) ) return s->seekBars( DeltaBars );
+        return -1;
+    }
+
+    int MTAudioInterface::getSequenceLastBar( int Sequence )
+    {
+        if( auto s = manager->getSequence( Sequence ) ) return s->getLastBar();
+        return -1;
+    }
+
     void MTAudioInterface::setBBT( int knob, int value )
     {
         manager->getSequence()->setBBT( knob, value );
