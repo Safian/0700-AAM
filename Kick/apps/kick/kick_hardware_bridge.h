@@ -32,6 +32,10 @@ private:
     std::string m_cmd_buf;
     bool m_shift_pressed = false;
     bool m_locate_pressed = false;
+    // DCL code sent on press of the Shift-dependent TC / AUTOMATION buttons (-1 = none), so the release
+    // goes to the same code even if Shift was released first.
+    int  m_tc_sent_code = -1;
+    int  m_automation_sent_code = -1;
     int m_current_bank = 0;
     int m_octave_offset = 0;
     int m_key_pitch_map[128];
@@ -531,6 +535,8 @@ public:
             }
             case HW_BTN_REC:
             {
+                // ARCHITECT-CLARIFY: REC+Shift = RECALL (retrospective MIDI recall) has no engine/UI function
+                // (no recall/retro-capture code in Kick). Shift is ignored here; plain RECORD is sent.
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
             }
@@ -673,6 +679,8 @@ public:
             case HW_BTN_16_LEVELS:
             {
                 if (isShiftDown()) {
+                    // ARCHITECT-CLARIFY: no distinct "Notes" screen exists; DCL EN_NOTES also opens MenuPadPerform
+                    // (kick_AppHome.cpp), the same screen as KEYBOARD CONTROL. Kept as is.
                     kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadPerform);
                 } else {
                     sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_16LEVELS, contracts::DeviceControlContracts::BTN_PRESSED);
@@ -704,11 +712,21 @@ public:
             }
             case HW_BTN_SOUNDS:
             {
+                if (isShiftDown()) {
+                    // FAVORITES: the review maps it to EN_NEXT_SEQ (AppHome: EN_NEXT_SEQ -> MenuNextSequence).
+                    // ARCHITECT-CLARIFY: the file browser's favourites are only an in-browser button with no
+                    // external trigger, so this opens the Next Sequence screen as the review specifies.
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuNextSequence);
+                    break;
+                }
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuFileBrowser);
                 break;
             }
             case HW_BTN_MAIN:
             {
+                // ARCHITECT-CLARIFY: MAIN+Shift = TRACK. The only Track UI is the "Track" tab inside HomeListView
+                // (AppMainmode); no screen enum value or DCL code selects it (HomeGridView is the GRID screen).
+                // Left as plain MAIN until the architect decides.
                 kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
                 break;
             }
@@ -806,7 +824,9 @@ public:
             }
             case HW_BTN_AUTOMATION:
             {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_AUTOMATION, contracts::DeviceControlContracts::BTN_PRESSED);
+                // +Shift = OFF -> EN_ON_OFF (same as keyboard 'N'). Note: no UI code consumes EN_ON_OFF yet.
+                m_automation_sent_code = isShiftDown() ? contracts::DeviceControlContracts::BtnLedSequence::EN_ON_OFF : contracts::DeviceControlContracts::BtnLedSequence::EN_AUTOMATION;
+                sendButtonMsg(m_automation_sent_code, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
             }
             case HW_BTN_KEYBOARD_CONTROL:
@@ -834,7 +854,9 @@ public:
             }
             case HW_BTN_TC:
             {
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_TC, contracts::DeviceControlContracts::BTN_PRESSED);
+                // +Shift = ON/OFF -> EN_ON_OFF (same as keyboard 'N'). Note: no UI code consumes EN_ON_OFF / EN_TC yet.
+                m_tc_sent_code = isShiftDown() ? contracts::DeviceControlContracts::BtnLedSequence::EN_ON_OFF : contracts::DeviceControlContracts::BtnLedSequence::EN_TC;
+                sendButtonMsg(m_tc_sent_code, contracts::DeviceControlContracts::BTN_PRESSED);
                 break;
             }
             case HW_BTN_UNDO:
@@ -965,10 +987,12 @@ public:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_COPY, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
             case HW_BTN_TC:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_TC, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendButtonMsg(m_tc_sent_code >= 0 ? m_tc_sent_code : (int)contracts::DeviceControlContracts::BtnLedSequence::EN_TC, contracts::DeviceControlContracts::BTN_RELEASED);
+                m_tc_sent_code = -1;
                 break;
             case HW_BTN_AUTOMATION:
-                sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_AUTOMATION, contracts::DeviceControlContracts::BTN_RELEASED);
+                sendButtonMsg(m_automation_sent_code >= 0 ? m_automation_sent_code : (int)contracts::DeviceControlContracts::BtnLedSequence::EN_AUTOMATION, contracts::DeviceControlContracts::BTN_RELEASED);
+                m_automation_sent_code = -1;
                 break;
             case HW_BTN_QLINK:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LINK, contracts::DeviceControlContracts::BTN_RELEASED);
