@@ -81,25 +81,30 @@ juce::File candidateDest(const juce::File& samplesDir, const juce::File& src, in
 // sources never share a file (separate slice maps). Remaining case: two distinct assets with identical bytes AND identical
 // parent folder name + file name (e.g. /Kit1/Kicks/kick.wav and /Kit2/Kicks/kick.wav, same bytes) get candidate names in order;
 // in a later session, when the earlier copy is not claimed in that save, the first of them may adopt the other's identical file.
-// A source that no longer exists cannot be compared: it only maps to an existing renamed copy (index >= 1), as before.
-juce::File chooseDest(const juce::File& samplesDir, const juce::File& src, const CopiedMap& copied, const LiveRefSet& liveRefs) {
-    const bool exists = src.existsAsFile();
-    for (int index = exists ? 0 : 1; index < 1000; ++index) {
+// A source that no longer exists cannot be compared, so it never gets a file by guessing: only its own recorded copy
+// (copied / sessionCopies, resolved by the caller) is usable. `reserved` is every copy this session made for any source: a
+// candidate reserved for another source is skipped even when that file has vanished, so it is never re-used for a different asset.
+juce::File chooseDest(const juce::File& samplesDir, const juce::File& src, const CopiedMap& copied, const CopiedMap& reserved,
+                      const LiveRefSet& liveRefs) {
+    if (!src.existsAsFile()) return {};
+    for (int index = 0; index < 1000; ++index) {
         const auto dest = candidateDest(samplesDir, src, index);
-        if (!dest.existsAsFile()) return exists ? dest : juce::File();
         bool claimedByOther = false;
-        for (const auto& entry : copied)
-            if (entry.second == dest) {
-                if (entry.first == src.getFullPathName()) return dest;
-                claimedByOther = true;
-            }
-        if (claimedByOther || liveRefs.count(dest.getFullPathName())) continue;
-        if (!exists || dest.hasIdenticalContentTo(src)) return dest;
+        for (const CopiedMap* map : {&copied, &reserved})
+            for (const auto& entry : *map)
+                if (entry.second == dest) {
+                    if (entry.first != src.getFullPathName()) claimedByOther = true;
+                    else if (map == &copied) return dest;
+                }
+        if (claimedByOther) continue;
+        if (!dest.existsAsFile()) return dest;
+        if (liveRefs.count(dest.getFullPathName())) continue;
+        if (dest.hasIdenticalContentTo(src)) return dest;
     }
     return {};
 }
 
-void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, bool renameCollisions, CopiedMap& copied,
+void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, bool renameCollisions, CopiedMap& copied, const CopiedMap& reserved,
                            const NameClashSet& names, const LiveRefSet& liveRefs, juce::String& copyError) {
     if (!projectDir.exists() || !tree.isValid()) return;
 
@@ -122,9 +127,15 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
                     samplesDir = projectDir.getChildFile("Imported");
 
                 const auto done = copied.find(f.getFullPathName());
-                auto dest = done != copied.end() ? done->second : chooseDest(samplesDir, f, copied, liveRefs);
-                if (dest == juce::File()) return;
-                if (!dest.existsAsFile()) {
+                auto dest = done != copied.end() ? done->second : chooseDest(samplesDir, f, copied, reserved, liveRefs);
+                if (dest == juce::File()) {
+                    if (!f.existsAsFile() && !renameCollisions) juce::Logger::writeToLog("Sample missing, no saved copy known, absolute path kept: " + f.getFullPathName());
+                    return;
+                }
+                if (!dest.existsAsFile() && !f.existsAsFile()) {
+                    // Source and its own copy are both gone: keep the saved path (no guessing, no blocking save), but say so.
+                    juce::Logger::writeToLog("Sample missing, saved path kept: " + dest.getFullPathName() + " (source " + f.getFullPathName() + ")");
+                } else if (!dest.existsAsFile()) {
                     samplesDir.createDirectory();
                     if (!f.copyFileTo(dest)) {
                         dest.deleteFile();
@@ -146,7 +157,7 @@ void relativizeSamplePaths(juce::ValueTree& tree, const juce::File& projectDir, 
 
     for (int i = 0; i < tree.getNumChildren(); ++i) {
         auto child = tree.getChild(i);
-        relativizeSamplePaths(child, projectDir, renameCollisions, copied, names, liveRefs, copyError);
+        relativizeSamplePaths(child, projectDir, renameCollisions, copied, reserved, names, liveRefs, copyError);
     }
 }
 }
@@ -271,21 +282,24 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
     // Missing sources resolve through the copies this session made (and recognised) for them, so a vanished source keeps its own
     // saved file instead of being guessed by name or written back as an absolute path.
     for (auto it = sessionCopies.begin(); it != sessionCopies.end();) {
-        if (!it->second.existsAsFile()) it = sessionCopies.erase(it);
-        else { if (!juce::File(it->first).existsAsFile()) copied[it->first] = it->second; ++it; }
+        const bool sourceGone = !juce::File(it->first).existsAsFile();
+        // A copy that vanished together with its source cannot be restored: the entry stays (so no other source takes that name
+        // and the saved path is kept), while a vanished copy of a still existing source is simply copied again.
+        if (!sourceGone && !it->second.existsAsFile()) it = sessionCopies.erase(it);
+        else { if (sourceGone) copied[it->first] = it->second; ++it; }
     }
     NameClashSet names;
     LiveRefSet liveRefs;
     juce::String copyError;
     collectExternalSamples(vt, xmlFile.getParentDirectory(), names, liveRefs);
-    relativizeSamplePaths(vt, xmlFile.getParentDirectory(), false, copied, names, liveRefs, copyError);
+    relativizeSamplePaths(vt, xmlFile.getParentDirectory(), false, copied, sessionCopies, names, liveRefs, copyError);
     for (const auto& entry : copied) sessionCopies[entry.first] = entry.second;
     if (copyError.isNotEmpty()) return failSave("Cannot copy sample " + copyError, reason);
     // Sources renamed (destination differs from their own file name) or sharing a file name with another external source are
     // relativised on the serialised copy only; the live source stays absolute.
     // patchSnapshot only ever touches this serialised copy, never the live document (the audio thread reads it).
     auto snapshot = vt.createCopy();
-    relativizeSamplePaths(snapshot, xmlFile.getParentDirectory(), true, copied, names, liveRefs, copyError);
+    relativizeSamplePaths(snapshot, xmlFile.getParentDirectory(), true, copied, sessionCopies, names, liveRefs, copyError);
     if (patchSnapshot) patchSnapshot(snapshot);
 
     const auto xml = snapshot.toXmlString();

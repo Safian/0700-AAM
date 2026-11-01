@@ -348,6 +348,26 @@ int main(int argc, char** argv) {
         check(savedAt(0) == "samples/Kicks_kick_2.wav" && savedAt(1) == "samples/Kicks_kick.wav", "P1b: reordered layers keep their own copies");
         check(doc.close(), "close P1b document");
     }
+    {   // Q1: A's source AND its own saved copy vanish: A must not adopt B's copy (Kicks_kick.wav), B's bytes stay with B.
+        const auto projFile = directory.getChildFile("q1/project.xml");
+        const auto a = directory.getChildFile("UsbQ1/x/Kicks/kick.wav"), b = directory.getChildFile("UsbQ1/y/Kicks/kick.wav");
+        const auto samples = projFile.getParentDirectory().getChildFile("samples");
+        check(a.create().wasOk() && a.replaceWithText("aaa") && b.create().wasOk() && b.replaceWithText("bbb"), "seed Q1 sources");
+        mt::KickXML doc("ROOT", ".xml", "1");
+        check(doc.loadOrCreate(projFile).isValid(), "create Q1 document");
+        juce::ValueTree l1("LAYER"), l2("LAYER");
+        l1.setProperty("source", a.getFullPathName(), nullptr); l2.setProperty("source", b.getFullPathName(), nullptr);
+        doc.getState().appendChild(l1, nullptr); doc.getState().appendChild(l2, nullptr);
+        auto savedAt = [&](int i) { return juce::ValueTree::fromXml(projFile.loadFileAsString()).getChild(i).getProperty("source").toString(); };
+        check(doc.save() && savedAt(0) == "samples/kick.wav" && savedAt(1) == "samples/Kicks_kick.wav", "Q1: first save maps both");
+        check(a.deleteFile() && samples.getChildFile("kick.wav").deleteFile(), "Q1: A's source and its copy vanish");
+        doc.getState().setProperty("touch", 1, nullptr);
+        check(doc.save(), "Q1: save does not block on a permanently missing sample");
+        check(savedAt(0) != "samples/Kicks_kick.wav", "Q1: A does not point at B's copy");
+        check(savedAt(1) == "samples/Kicks_kick.wav" && samples.getChildFile("Kicks_kick.wav").loadFileAsString() == "bbb", "Q1: B keeps its own copy");
+        check(l1.getProperty("source").toString() == a.getFullPathName() && l2.getProperty("source").toString() == b.getFullPathName(), "Q1: live tree untouched");
+        check(doc.close(), "close Q1 document");
+    }
     {   // O1: after a save A is live-relative (samples/kick.wav). A new external B with identical bytes, or A added again as a new
         // node, must not adopt that file: the live tree already claims it. Each gets its own copy and stays absolute live.
         const auto projFile = directory.getChildFile("o1/project.xml");
