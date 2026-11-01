@@ -68,6 +68,18 @@ int main()
         s.onCC64( 0, R ); // idempotent
         CHECK( rel.empty() );
     }
+    { // sequencer (non-live) note-off with the pedal down releases at once; SustainState is not written by it
+        SustainState s;
+        s.onCC64( 127, R );
+        const bool live = false;
+        bool       released = false;
+        if( !live || s.onNoteOff( 60 ) ) released = true; // mirrors MTIProgram::noteProcess
+        CHECK( released );
+        CHECK( !s.isHeld( 60 ) );
+        rel.clear();
+        s.onCC64( 0, R );
+        CHECK( rel.empty() );
+    }
     if( g_fail ) return 1;
     std::printf( "SustainTests OK\n" );
     return 0;
