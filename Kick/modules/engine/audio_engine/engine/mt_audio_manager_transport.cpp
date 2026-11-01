@@ -166,6 +166,12 @@ namespace mt
 
     int MTAudioTransportManager::pause()
     {
+        // Only a playing transport can be paused. After STOP (bridge calls stop() on the MIDI thread, then the
+        // EN_STOP packet makes the screens call setSequencePause()) this must stay a no-op, otherwise the state
+        // becomes Paused and the next PLAY resume()s a reset sequence instead of play()ing it.
+        if( !isPlaying() )
+            return -1;
+
         midiClock.stop();
         setTransportState( TransportState::Paused );
 
@@ -195,7 +201,13 @@ namespace mt
     int MTAudioTransportManager::play( int Seq, bool FromBeginning, bool Now )
     {
         if( Now )
+        {
+            // A bar parked by seekToBar() survives a plain PLAY but not "play from beginning".
+            if( FromBeginning )
+                if( auto s = getSequence( Seq ) )
+                    s->discardSeek();
             return FromBeginning ? play( Seq ) : resume( Seq );
+        }
         else
         {
             if( auto s = getSequence( Seq ) )
@@ -272,7 +284,8 @@ namespace mt
         {
             auto length        = playingSequence->isLooping.get() ? playingSequence->loopEnd.get() - playingSequence->loopStart.get() : (int)playingSequence->length.get();
             auto lengthInTicks = length * playingSequence->getTicksPerBar();
-            if( curTick % lengthInTicks == 0 )
+            // curTick is the raw clock tick; the sequence may have been shifted by a bar seek.
+            if( ( curTick + playingSequence->getTickShift() ) % lengthInTicks == 0 )
             {
                 play( nextSequenceToPlay );
                 nextSequenceToPlay = -1;

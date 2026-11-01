@@ -37,6 +37,9 @@ namespace kick_ui
 
     sigslot::signal<Screen, void*> signals::onScreenData = {};
 
+    sigslot::signal<>    signals::sigBrowserShowFavourites = {};
+    sigslot::signal<int> signals::sigMainModeSelectTab     = {};
+
     class TempScreen
         : public IScreen
         , public juce::Component
@@ -464,6 +467,9 @@ namespace kick_ui
                         case contracts::DeviceControlContracts::EN_PROG_EDIT: signals::sigScreenClose( Screen::MenuProgramEdit ); break;
                         case contracts::DeviceControlContracts::EN_MIDI_CONTROL: signals::sigScreenClose( Screen::MenuMidiControl ); break;
                         case contracts::DeviceControlContracts::EN_NOTES: signals::sigScreenClose( Screen::MenuPadPerform ); break;
+                        case contracts::DeviceControlContracts::EN_TC:
+                            if( getCurrentScreen() != Screen::MenuListEdit ) signals::sigScreenClose( Screen::MenuListEdit ); // TC dialog lives in List Edit
+                            break;
 
                         // Bank buttons...
                         case contracts::DeviceControlContracts::EN_BANK_A: ae.setBank( "A" ); break;

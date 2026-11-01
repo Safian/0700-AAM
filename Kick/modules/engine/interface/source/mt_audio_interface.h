@@ -288,6 +288,23 @@ namespace mt
         // on passing track position this api will restrict the track position to the length of the sequence.
         void seek( int posInTicks );
 
+        // Bar seek that follows what you hear (notes are re-aligned, hanging notes flushed). NUMBERING: bars are
+        // 0-based in the engine (0 = first bar); the UI shows bar + 1. Results are clamped to [0, length - 1], no wrap.
+        // Playing: applied on the next tick of the tick-processing thread. Stopped/paused: the position is parked and
+        // used by the next PLAY/resume (PLAY START and STOP discard it). Both return the resulting 0-based bar,
+        // or -1 for an invalid sequence. Sequence = sequence index, as in setSequencePlay().
+        int seekToBar( int Sequence, int Bar0 );
+        int seekBars( int Sequence, int DeltaBars ); // relative to the current (or already requested) bar
+        int getSequenceLastBar( int Sequence ); // 0-based start of the last bar: loopEnd - 1 when looping, else length - 1
+        // Tick-level seek (same hand-over as seekToBar). Returns the clamped tick, or -1 for an invalid sequence.
+        int seekToTick( int Sequence, int Tick );
+        // Tick a seek is relative to: pending/parked target, else the live playhead (playing/paused), else 0. -1: invalid.
+        int getSequenceSeekTick( int Sequence );
+        // Previous (Direction < 0, strictly before FromTick) / next (Direction > 0, strictly after) note start tick of
+        // the selected track, or -1 if there is none / invalid selection. Reads the track's note list: call it on the
+        // message thread (where the UI edits notes), not from the tick/audio thread.
+        int findEventTick( const MTSelected& Selection, int FromTick, int Direction );
+
         void setBBT( int knob, int value );
 
         // Transport API's
@@ -431,6 +448,27 @@ namespace mt
         int splitNotes( const MTSelected& Selection, const track::splitInfo& Info );
         int splitSelectedNotes( const MTSelected& Selection, const track::splitInfo& Info );
         int humanizeNotes( const MTSelected& Selection, const track::humanizeInfo& Info );
+        // TIMING CORRECT (note quantize) of the selected track as ONE undo step. Returns notes changed, -1 if no such
+        // track or unsupported Events::Range.
+        int timingCorrect( const MTSelected& Selection, const track::timingCorrectInfo& Info );
+        // Global TC flag (MPC "Timing Correct on"): when on, notes committed by RECALL are corrected with the stored
+        // params (the last ones passed to setTimingCorrectParams / timingCorrect). Session-only, not persisted.
+        void                        setTimingCorrectEnabled( bool On ) { tcEnabled.store( On ); }
+        bool                        isTimingCorrectEnabled() const { return tcEnabled.load(); }
+        bool                        toggleTimingCorrectEnabled() { const bool n = !tcEnabled.load(); tcEnabled.store( n ); return n; } // UI thread
+        void                        setTimingCorrectParams( const track::timingCorrectInfo& Info ) { tcParams = Info; }
+        const track::timingCorrectInfo& getTimingCorrectParams() const { return tcParams; }
+        // AUTOMATION: per track a LEVEL lane and a PAN lane. The track's own pan has no consumer, so the PAN lane is keyed
+        // to the PROGRAM the track plays (it drives/records the program's pan, the property the mixer knob writes).
+        // Mode (0 Off, 1 Read, 2 Write; global, session-only, not persisted): Read plays the lanes back (level on the tick
+        // thread, pan handed to the message thread), Write records level and program-pan moves made while the track plays,
+        // Off ignores lanes. Lanes persist with the project. Clearing removes both lanes.
+        void setAutomationMode( int Mode );
+        int  getAutomationMode();
+        // Clears the lane of the track in Selection as one undo step. Returns 0, -1 if no such track.
+        int clearAutomation( const MTSelected& Selection );
+        // Clears the lanes of every track of every sequence (one undo step).
+        void clearAllAutomation();
         int randomNotes( const MTSelected& Selection, const track::randomEventsInfo& Info );
         int pitchQuantizeNotes( const MTSelected& Selection, const track::pitchQuantizeInfo& Info );
         int explode( const MTSelected& Selection );
@@ -446,6 +484,27 @@ namespace mt
         int addLiveMidiMsg( const MTSelected& Selection, const juce::MidiMessage& Msg );
         int addLiveMidiNote( const MTSelected& Selection, int Note, int Velocity );
         int stopLiveMidiNote( const MTSelected& Selection, int Note );
+        // RECALL (retrospective capture): commits the live notes played on the selected track within the last WindowMs
+        // (max 30 s) into its note list as one undo step. Playing: positions follow the track playhead at play time;
+        // stopped: aligned to the sequence start. Returns notes committed, 0 if none captured, -1 if no such track.
+        int recallLiveMidi( const MTSelected& Selection, int WindowMs = 30000 );
+
+        // Arpeggiator (per track; the app drives the selected track: pass getSelected()). Works on live input and is
+        // clocked by the transport, so it arpeggiates while the sequence plays; stopped transport = notes pass through.
+        // Mode: 0 Up, 1 Down, 2 UpDown, 3 Random. Rate: 0 1/4, 1 1/8, 2 1/16 (default), 3 1/32, 4-7 the triplets
+        // 1/4T 1/8T 1/16T 1/32T. Octaves 1-4. Gate 5-100 %. Out-of-range values are clamped. Set* return 0, or -1 if
+        // there is no such track; is*/get* return false/-1 then.
+        int  setArpEnabled( const MTSelected& Selection, bool On );
+        bool isArpEnabled( const MTSelected& Selection );
+        int  setArpMode( const MTSelected& Selection, int Mode );
+        int  setArpRate( const MTSelected& Selection, int Rate );
+        int  setArpOctaves( const MTSelected& Selection, int Octaves );
+        int  setArpLatch( const MTSelected& Selection, bool On );
+        int  setArpGate( const MTSelected& Selection, int Percent );
+        bool isArpLatch( const MTSelected& Selection );
+        int  getArpMode( const MTSelected& Selection );
+        int  getArpRate( const MTSelected& Selection );
+        int  getArpOctaves( const MTSelected& Selection );
         int addLiveMidiNote( const int Program, const int Note, const int Velocity );
         int stopLiveMidiNote( const int Program, const int Note );
 
@@ -593,6 +652,8 @@ namespace mt
     private:
         std::unique_ptr<MTAudioManager> manager;
         MTPadColors                     keyGroupPadColour;
+        std::atomic<bool>               tcEnabled{ false };
+        track::timingCorrectInfo        tcParams; // message thread only
     }; // Class MTAudioInterface
 
     /// @brief This function returns global audio interface.

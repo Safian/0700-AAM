@@ -618,6 +618,152 @@ namespace mt
     }
 
     ///
+    /// Bar seek (audible). Engine bars are 0-based, the UI shows bar + 1.
+    ///
+    int MTSequence::seekToBar( int Bar0 )
+    {
+        const auto bar = bar_seek::clampBar( Bar0, getLength() );
+
+        // Always record the target: while playing, the tick-processing thread picks it up in onTick(); while stopped or
+        // paused, play()/resume() consume it. No lock and no work on the caller's thread in the playing case.
+        seekTargetTick.store( -1 );
+        seekTargetBar.store( bar );
+
+        if( !isPlaying )
+        {
+            // No tick thread activity: show the parked position right away (UI polls the playhead).
+            const juce::ScopedLock sl( lock );
+            showBar( bar );
+        }
+        return bar;
+    }
+
+    int MTSequence::seekBars( int DeltaBars )
+    {
+        // A request that has not been applied yet is the reference, so quick repeated presses accumulate.
+        auto current = seekTargetBar.load();
+        if( 0 > current && 0 <= seekTargetTick.load() )
+        {
+            const juce::ScopedLock sl( lock );
+            current = (int)toBnB( (unsigned int)seekTargetTick.load() ).bar; // bar a pending tick seek falls in
+        }
+        if( 0 > current )
+            current = ( isPlaying || isPaused.load() ) ? (int)sequencePlayhead.bnb.bar : 0; // stopped: play() starts at bar 0
+        return seekToBar( bar_seek::relativeBar( current, DeltaBars, getLength() ) );
+    }
+
+    int MTSequence::seekToTick( int Tick )
+    {
+        const auto tick = event_seek::clampTick( Tick, (long long)getLengthInTicks() );
+
+        // Same hand-over as seekToBar(): newest request wins, applied by onTick() / play() / resume().
+        seekTargetBar.store( -1 );
+        seekTargetTick.store( tick );
+
+        if( !isPlaying )
+        {
+            const juce::ScopedLock sl( lock );
+            showTick( (int)toBnB( (unsigned int)tick ).bar, tick );
+        }
+        return tick;
+    }
+
+    int MTSequence::getSeekTick()
+    {
+        const auto tick = seekTargetTick.load();
+        if( 0 <= tick )
+            return tick;
+
+        const auto bar = seekTargetBar.load();
+        if( 0 <= bar )
+        {
+            const juce::ScopedLock sl( lock );
+            return (int)getTicksUpto( (unsigned int)bar_seek::clampBar( bar, getLength() ) );
+        }
+        return ( isPlaying || isPaused.load() ) ? (int)tickPos.load() : 0;
+    }
+
+    int MTSequence::getLastBar()
+    {
+        return bar_seek::lastBar( isLooping.get(), loopEnd.get(), getLength() );
+    }
+
+    // Counters/playhead of the sequence itself for the start of Bar0 (no tracks, no clock shift).
+    void MTSequence::showBar( int Bar0 )
+    {
+        const auto bar = (unsigned int)bar_seek::clampBar( Bar0, getLength() );
+
+        // Tick data first: seekSeqenceInternal() and the bar/beat counters depend on the bar's time signature.
+        initializeTickDataFromTempoSettings( getSequenceTempoSettings( bar ) );
+        seekSeqenceInternal( (int)getTicksUpto( bar ) );
+
+        // A bar start is aligned to every grid below it, whatever the tempo map before it looks like.
+        barPos  = 0;
+        beatPos = 0;
+        pos1_2  = 0;
+        pos1_4  = 0;
+        pos1_8  = 0;
+        pos1_16 = 0;
+    }
+
+    // Like showBar() for a tick inside Bar0: the beat/bar/grid counters keep the phase of the tick (modulo the
+    // bar's own time signature, the same approximation seek() uses).
+    void MTSequence::showTick( int Bar0, int Tick )
+    {
+        const auto bar = (unsigned int)bar_seek::clampBar( Bar0, getLength() );
+        initializeTickDataFromTempoSettings( getSequenceTempoSettings( bar ) );
+        seekSeqenceInternal( Tick );
+    }
+
+    // Moves the heard position to the start of Bar0. RawTick is the clock tick the shift is anchored to: after this
+    // call, shifted(RawTick) == start tick of the bar.
+    //  - onTick() (tick thread): RawTick is the tick being processed.
+    //  - play(): RawTick 0 (the clock restarts at 0), resume(): lastRawTick (the clock continues from there).
+    // Lock order: sequence lock, then track locks (same as onTick/onBar).
+    void MTSequence::applySeek( int Bar0, unsigned int RawTick )
+    {
+        const juce::ScopedLock sl( lock );
+        const auto             bar = bar_seek::clampBar( Bar0, getLength() );
+        applySeekAt( getTicksUpto( (unsigned int)bar ), bar, RawTick );
+    }
+
+    // Tick variant of applySeek(): the bar is the one the tick falls in.
+    void MTSequence::applySeekTick( int Tick, unsigned int RawTick )
+    {
+        const juce::ScopedLock sl( lock );
+        const auto             tick = event_seek::clampTick( Tick, (long long)getLengthInTicks() );
+        applySeekAt( (unsigned int)tick, bar_seek::clampBar( (int)toBnB( (unsigned int)tick ).bar, getLength() ), RawTick );
+    }
+
+    // Common part. The sequence lock is held by the caller (recursive CriticalSection).
+    void MTSequence::applySeekAt( unsigned int Target, int Bar0, unsigned int RawTick )
+    {
+        const juce::ScopedLock sl( lock );
+
+        tickShift.store( bar_seek::shiftFor( Target, RawTick ) );
+        prevTicks.store( Target ); // onTick() computes diff = shifted - prevTicks: 0 for the tick that applied the seek
+
+        if( Target == getTicksUpto( (unsigned int)Bar0 ) )
+            showBar( Bar0 );
+        else
+            showTick( Bar0, (int)Target );
+
+        // Flushes hanging notes and resyncs prevTick/tickCtr/tickPos/noteIdx/playhead of every track.
+        for( const auto& it : tracks )
+            it->seekToTick( Target );
+
+        setupMidiClock( (unsigned int)Bar0 ); // no-op unless playing
+    }
+
+    void MTSequence::applySeekRequest( int Tick, int Bar0, unsigned int RawTick )
+    {
+        if( 0 <= Tick )
+            applySeekTick( Tick, RawTick );
+        else if( 0 <= Bar0 )
+            applySeek( Bar0, RawTick );
+    }
+
+    ///
     /// Playback control.
     ///
     void MTSequence::clearCounters()
@@ -637,6 +783,15 @@ namespace mt
 
     void MTSequence::play()
     {
+        // A bar parked by seekToBar() while stopped. "Play from beginning" discards it before calling play().
+        const auto parkedBar  = seekTargetBar.exchange( -1 );
+        const auto parkedTick = seekTargetTick.exchange( -1 );
+
+        // The clock restarts at tick 0 (start( true ) below): forget the previous run's tick mapping.
+        tickShift.store( 0 );
+        prevTicks.store( 0 );
+        isPaused = false;
+
         // Setup starting tick.
         sequencePlayhead.bnb.bar = isLooping.get() ? juce::jmax<int>( 0, loopStart.get() - 1 ) : 0;
 
@@ -650,6 +805,9 @@ namespace mt
         for( const auto& it : tracks )
             it->play();
 
+        // Start at the parked bar (after the tracks were reset above); the clock origin is tick 0.
+        applySeekRequest( parkedTick, parkedBar, 0 );
+
         // Emit signals...
         onStart( tickPos );
         if( isLooping.get() ) onLoopBegin( 0 );
@@ -662,6 +820,13 @@ namespace mt
 
     void MTSequence::resume()
     {
+        isPaused = false;
+
+        // A bar parked while paused: the clock was stopped, not reset, so it continues from lastRawTick.
+        const auto parkedBar  = seekTargetBar.exchange( -1 );
+        const auto parkedTick = seekTargetTick.exchange( -1 );
+        applySeekRequest( parkedTick, parkedBar, lastRawTick.load() );
+
         for( const auto& it : tracks )
             it->resume();
 
@@ -674,6 +839,7 @@ namespace mt
     void MTSequence::pause()
     {
         isPlaying = false;
+        isPaused  = true;
         getMidiClock().stop();
 
         for( const auto& it : tracks )
@@ -683,6 +849,9 @@ namespace mt
     void MTSequence::stop()
     {
         isPlaying = false;
+        isPaused  = false;
+        seekTargetTick.store( -1 );
+        seekTargetBar.store( -1 ); // stopped means "back to the start": a parked bar is only valid until stop
         getMidiClock().stop();
 
         for( const auto& it : tracks )
@@ -703,9 +872,23 @@ namespace mt
         signals::onLoopEnd( LoopCount );
     }
 
-    void MTSequence::onTick( unsigned int Ticks )
+    void MTSequence::onTick( unsigned int RawTicks )
     {
         //double start = juce::Time::getMillisecondCounterHiRes();
+
+        // Apply a bar seek requested from another thread. Done here, on the tick-processing thread, so that nothing
+        // else touches the tick bookkeeping (prevTicks, track prevTick/tickCtr/queued notes) at the same time.
+        lastRawTick.store( RawTicks );
+        if( isPlaying && ( 0 <= seekTargetBar.load() || 0 <= seekTargetTick.load() ) )
+        {
+            const auto tick = seekTargetTick.exchange( -1 );
+            const auto bar  = seekTargetBar.exchange( -1 );
+            applySeekRequest( tick, bar, RawTicks );
+        }
+
+        // Everything below works on the sequence's own (shifted) timeline.
+        const unsigned int Ticks = bar_seek::shifted( RawTicks, tickShift.load() );
+
         auto diff = Ticks - prevTicks;
         prevTicks.store( Ticks );
 

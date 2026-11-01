@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "mt_pitch_bend.h"
+
 namespace mt
 {
 
@@ -67,6 +69,9 @@ namespace mt
         Atomic<float> pan;
 
         std::atomic<float> pitchRatio;
+        std::atomic<float> bendRatio{ 1.f }; // Live MIDI pitch bend (+-2 semitones), multiplied with pitchRatio by the voices.
+        void               setPitchBend( int Value ) { bendRatio.store( pitchbend::ratioFromWheel( Value ), std::memory_order_relaxed ); }
+        void               resetPitchBend() { bendRatio.store( 1.f, std::memory_order_relaxed ); }
         std::atomic<float> gainL;
         std::atomic<float> gainR;
         AudIO::PannerFloat panner;

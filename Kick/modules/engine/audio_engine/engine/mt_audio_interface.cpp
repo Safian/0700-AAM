@@ -921,6 +921,62 @@ namespace mt
         manager->seek( posInTicks );
     }
 
+    int MTAudioInterface::seekToBar( int Sequence, int Bar0 )
+    {
+        if( auto s = manager->getSequence( Sequence ) ) return s->seekToBar( Bar0 );
+        return -1;
+    }
+
+    int MTAudioInterface::seekBars( int Sequence, int DeltaBars )
+    {
+        if( auto s = manager->getSequence( Sequence ) ) return s->seekBars( DeltaBars );
+        return -1;
+    }
+
+    int MTAudioInterface::getSequenceLastBar( int Sequence )
+    {
+        if( auto s = manager->getSequence( Sequence ) ) return s->getLastBar();
+        return -1;
+    }
+
+    int MTAudioInterface::seekToTick( int Sequence, int Tick )
+    {
+        if( auto s = manager->getSequence( Sequence ) ) return s->seekToTick( Tick );
+        return -1;
+    }
+
+    int MTAudioInterface::getSequenceSeekTick( int Sequence )
+    {
+        if( auto s = manager->getSequence( Sequence ) ) return s->getSeekTick();
+        return -1;
+    }
+
+    int MTAudioInterface::findEventTick( const MTSelected& Selection, int FromTick, int Direction )
+    {
+        auto t = manager->getTrack( Selection );
+        if( !t || 0 == Direction )
+            return -1;
+
+        // Copy the start ticks out first (the ValueTree-backed notes are only valid on the thread that edits them).
+        std::vector<MTNote> notes;
+        if( 0 != t->getNotesInRange( notes, NotesInRange{} ) ) // default range: every note number, whole timeline
+            return -1;
+
+        std::vector<int> starts;
+        starts.reserve( notes.size() );
+        for( const auto& n : notes )
+            starts.push_back( n.start.get() );
+
+        // F9: FromTick is a sequence tick, the starts are track-local; a shorter track repeats inside the sequence.
+        const long long r = event_seek::findEventInTrack( starts, FromTick, Direction, t->getLengthTicks() );
+        if( r < 0 )
+            return -1;
+        if( auto* s = manager->getSequence( Selection.sequence ) )
+            if( r >= (long long)s->getLengthInTicks() )
+                return -1; // beyond the sequence end: no event (the caller stays where it is)
+        return (int)r;
+    }
+
     void MTAudioInterface::setBBT( int knob, int value )
     {
         manager->getSequence()->setBBT( knob, value );
@@ -1709,6 +1765,31 @@ namespace mt
         return -1;
     }
 
+    int MTAudioInterface::timingCorrect( const MTSelected& Selection, const track::timingCorrectInfo& Info )
+    {
+        auto t = manager->getTrack( Selection );
+        if( !t )
+            return -1;
+        tcParams = Info;
+        manager->getUndoManager().beginNewTransaction( "Timing Correct" );
+        return t->timingCorrectLocked( Info );
+    }
+
+    void MTAudioInterface::setAutomationMode( int Mode ) { manager->setAutomationMode( Mode ); }
+    int  MTAudioInterface::getAutomationMode() { return manager->getAutomationMode(); }
+
+    int MTAudioInterface::clearAutomation( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        if( !t )
+            return -1;
+        manager->getUndoManager().beginNewTransaction( "Clear Automation" );
+        t->clearAutomation( true );
+        return 0;
+    }
+
+    void MTAudioInterface::clearAllAutomation() { manager->clearAutomation( 2 ); }
+
     int MTAudioInterface::humanizeNotes( const MTSelected& Selection, const track::humanizeInfo& Info )
     {
         if( auto t = manager->getTrack( Selection ) )
@@ -1764,6 +1845,86 @@ namespace mt
     {
         auto msg = juce::MidiMessage::noteOff( 1, Note );
         return addLiveMidiMsg( Selection, msg );
+    }
+
+    int MTAudioInterface::recallLiveMidi( const MTSelected& Selection, int WindowMs )
+    {
+        auto t = manager->getTrack( Selection );
+        if( !t )
+            return -1;
+        auto& um = manager->getUndoManager();
+        um.beginNewTransaction( "Recall" );
+        if( !tcEnabled.load() )
+            return t->recallLiveNotes( WindowMs );
+        // Global TC on: correct only the notes this recall adds (ids not present before), same undo transaction.
+        std::set<int> before;
+        for( auto vt : t->getNoteListVT() )
+            if( vt.hasType( IDs::NOTE ) ) before.insert( (int)vt.getProperty( IDs::id ) );
+        const int committed = t->recallLiveNotes( WindowMs );
+        if( committed > 0 )
+        {
+            std::set<int> added;
+            for( auto vt : t->getNoteListVT() )
+                if( vt.hasType( IDs::NOTE ) && !before.count( (int)vt.getProperty( IDs::id ) ) ) added.insert( (int)vt.getProperty( IDs::id ) );
+            t->timingCorrectLocked( tcParams, &added );
+        }
+        return committed;
+    }
+
+    int MTAudioInterface::setArpEnabled( const MTSelected& Selection, bool On )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpEnabled( On ); return 0; }
+        return -1;
+    }
+    bool MTAudioInterface::isArpEnabled( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t && t->isArpEnabled();
+    }
+    int MTAudioInterface::setArpMode( const MTSelected& Selection, int Mode )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpMode( Mode ); return 0; }
+        return -1;
+    }
+    int MTAudioInterface::setArpRate( const MTSelected& Selection, int Rate )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpRate( Rate ); return 0; }
+        return -1;
+    }
+    int MTAudioInterface::setArpOctaves( const MTSelected& Selection, int Octaves )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpOctaves( Octaves ); return 0; }
+        return -1;
+    }
+    int MTAudioInterface::setArpLatch( const MTSelected& Selection, bool On )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpLatch( On ); return 0; }
+        return -1;
+    }
+    int MTAudioInterface::setArpGate( const MTSelected& Selection, int Percent )
+    {
+        if( auto t = manager->getTrack( Selection ) ) { t->setArpGate( Percent ); return 0; }
+        return -1;
+    }
+    bool MTAudioInterface::isArpLatch( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t && t->isArpLatch();
+    }
+    int MTAudioInterface::getArpMode( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t ? t->getArpMode() : -1;
+    }
+    int MTAudioInterface::getArpRate( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t ? t->getArpRate() : -1;
+    }
+    int MTAudioInterface::getArpOctaves( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t ? t->getArpOctaves() : -1;
     }
 
     int MTAudioInterface::addLiveMidiNote( const int Program, const int Note, const int Velocity )

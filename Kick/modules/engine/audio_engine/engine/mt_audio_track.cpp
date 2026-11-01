@@ -73,6 +73,9 @@ namespace mt
             }
         } );
 
+        // Restore a persisted automation lane (written by commitLane).
+        reloadLaneFromState();
+
         // Restore program.
         // Connect handler to length change handler.
         lengthChangeHandler();
@@ -139,6 +142,7 @@ namespace mt
         {
             stopAllMidiNotes();
             program.store( newProgram );
+            bindProgramTree( newProgram );
             manager.triggerTrackProgramChanged( getIndex(), program.load() );
         }
     }
@@ -157,13 +161,292 @@ namespace mt
             if( Property == IDs::name )
                 trackNameChanged( this );
             else if( Property == IDs::level )
+            {
                 levelScaler = ( level.get() * MIDI::SCALER );
+                laneApplied.store( -1 ); // in Read mode the lane wins again on the next tick
+                recordLevelMove();
+            }
             else if( Property == IDs::solo )
                 seq.updateTrackSolo( this );
             else if( Property == IDs::length || Property == IDs::usingSequenceLength )
                 lengthChangeHandler();
             else if( Property == IDs::program )
                 progChangeHandler();
+        }
+        else if( progTree.isValid() && progTree == TreeWhosePropertyHasChanged && Property == IDs::pan )
+            recordPanMove(); // program pan moved (mixer knob, Q-Link): Write mode records it
+        else if( TreeWhosePropertyHasChanged.hasType( IDs::AUTOLANE ) && ( Property == IDs::autoPoints || Property == IDs::autoProgram ) )
+            reloadLaneFromState(); // undo/redo of a clear, or project load
+    }
+
+    ///
+    /// Automation (track level lane)
+    ///
+    void MTTrack::automationModeChanged( int Mode )
+    {
+        {
+            const juce::ScopedLock sl( laneWriteLock );
+            laneRec.reset();
+            panRec.reset();
+        }
+        laneApplied.store( -1 );
+        panApplied.store( automation::kNoValue );
+        panTarget.store( automation::kNoValue ); // drop a value published before the mode changed
+        // Leaving Read: the level falls back to the stored level. The program pan (which Read wrote into the program's
+        // pan property) is restored by MTAudioManager::setAutomationMode, because a program can be shared by tracks.
+        if( automation::Read != Mode )
+            levelScaler = ( MTITrackData::level.get() * MIDI::SCALER );
+    }
+
+    bool MTTrack::hasAutomation() const
+    {
+        const juce::ScopedLock sl( lock );
+        return !laneLevel.empty() || !lanePan.empty();
+    }
+
+    // The AUTOLANE child of the track holding Param. A node without `autoParam` (saved before the PAN lane existed)
+    // is the Level lane.
+    juce::ValueTree MTTrack::findLaneNode( int Param ) const
+    {
+        for( int i = 0; i < vTree.getNumChildren(); ++i )
+        {
+            auto c = vTree.getChild( i );
+            if( c.hasType( IDs::AUTOLANE ) && Param == automation::paramFromStored( c.hasProperty( IDs::autoParam ), (int)c[IDs::autoParam] ) )
+                return c;
+        }
+        return {};
+    }
+
+    // One undo step together with the caller's transaction (MTAudioManager::clearAutomation opens it): both lanes are
+    // cleared through the UndoManager, the ValueTree listener reloads (empties) the in-memory lanes.
+    void MTTrack::clearAutomation( bool Undoable )
+    {
+        bool levelDone = false, panDone = false;
+        if( Undoable )
+        {
+            auto ln = findLaneNode( automation::Level );
+            if( ln.isValid() && ln[IDs::autoPoints].toString().isNotEmpty() )
+            {
+                ln.setProperty( IDs::autoPoints, "", undoManager );
+                levelDone = true;
+            }
+            auto pn = findLaneNode( automation::Pan );
+            if( pn.isValid() && pn[IDs::autoPoints].toString().isNotEmpty() )
+            {
+                pn.setProperty( IDs::autoPoints, "", undoManager );
+                panDone = true;
+            }
+        }
+        {
+            automation::Lane       emptyL, emptyP;
+            const juce::ScopedLock w( laneWriteLock );
+            {
+                const juce::ScopedLock sl( lock );
+                if( !levelDone )
+                {
+                    laneLevel.swap( emptyL );
+                    levelScaler = ( MTITrackData::level.get() * MIDI::SCALER ); // F7: back to the stored level
+                }
+                if( !panDone ) lanePan.swap( emptyP );
+            }
+            if( !levelDone ) laneCommitted = "";
+            if( !panDone ) lanePanCommitted = "";
+            laneRec.reset();
+            panRec.reset();
+            refreshPanActive();
+        }
+        laneApplied.store( -1 );
+        panApplied.store( automation::kNoValue );
+    }
+
+    // Applies the lane values for the (post-wrap) track position. Tick thread, called with `lock` held. No allocation;
+    // only acts when the interpolated value changed. Level goes to levelScaler; Pan is handed to the message thread.
+    void MTTrack::applyLaneAt( unsigned int Pos )
+    {
+        if( automation::Read != manager.getAutomationMode() )
+            return;
+        if( !laneLevel.empty() )
+        {
+            const int v = juce::jlimit( 0, 127, (int)automation::valueAt( laneLevel, (int32_t)Pos, -1 ) );
+            if( v != laneApplied.load( std::memory_order_relaxed ) )
+            {
+                laneApplied.store( v, std::memory_order_relaxed );
+                levelScaler.store( v * MIDI::SCALER, std::memory_order_relaxed );
+            }
+        }
+        if( !lanePan.empty() && lanePanActive.load( std::memory_order_relaxed ) )
+        {
+            const int v = juce::jlimit( -automation::kPanScale, automation::kPanScale, (int)automation::valueAt( lanePan, (int32_t)Pos, 0 ) );
+            if( v != panApplied.load( std::memory_order_relaxed ) )
+            {
+                panApplied.store( v, std::memory_order_relaxed );
+                panTarget.store( v, std::memory_order_relaxed ); // message thread applies it (MTAudioManager::applyAutomatedPans)
+            }
+        }
+    }
+
+    // Called (message or MIDI-input thread) when the track level property changed. Records a breakpoint at the
+    // current track position in Write mode while this track plays. All level changes funnel through the ValueTree
+    // property (mixer slider, Q-Link via setTrackLevel, track view), so this is the single recording hook.
+    void MTTrack::recordLevelMove()
+    {
+        if( automation::Write != manager.getAutomationMode() )
+            return;
+        const juce::ScopedLock w( laneWriteLock );
+        auto                   p    = program.load();
+        const int              tick = livePlayTick.load( std::memory_order_relaxed );
+        if( !isPlaying.load() || tick < 0 || !p || p->isAudio() )
+        {
+            laneRec.reset(); // not playing: the next move starts a new touch
+            return;
+        }
+        automation::Lane next = laneLevel; // allocation on the writer thread only; the tick thread never sees a partial lane
+        if( automation::RecResult::Recorded != automation::recordMove( next, laneRec, tick, juce::jlimit( 0, 127, (int)vTree.getProperty( IDs::level ) ) ) )
+            return;
+        {
+            const juce::ScopedLock sl( lock );
+            laneLevel.swap( next );
+        }
+        commitLane( juce::String( automation::toString( laneLevel ) ) ); // laneLevel only changes under laneWriteLock
+    }
+
+    // Program pan moved (the played program's tree). Write mode only. When several tracks play the same program only
+    // the lowest (sequence, track) playing one records, so exactly one lane owns the take (MTAudioManager::isPanLaneOwner;
+    // same ordering that decides playback in applyAutomatedPans).
+    void MTTrack::recordPanMove()
+    {
+        if( automation::Write != manager.getAutomationMode() )
+            return;
+        auto      p    = program.load();
+        const int tick = livePlayTick.load( std::memory_order_relaxed );
+        if( !isPlaying.load() || tick < 0 || !p || p->isAudio() || !progTree.isValid() )
+        {
+            const juce::ScopedLock w( laneWriteLock );
+            panRec.reset();
+            return;
+        }
+        if( !manager.isPanLaneOwner( this, p ) )
+            return;
+        const juce::String progId = p->id.get();
+        const int          value  = automation::panToValue( (double)progTree.getProperty( IDs::pan, PAN::DEFAULT ) );
+
+        const juce::ScopedLock w( laneWriteLock );
+        const bool             sameProgram = ( lanePanProgId == progId );
+        automation::Lane       next        = sameProgram ? lanePan : automation::Lane(); // a new program starts a fresh lane
+        if( !sameProgram )
+            panRec.reset();
+        if( automation::RecResult::Recorded != automation::recordMove( next, panRec, tick, value ) )
+            return;
+        {
+            const juce::ScopedLock sl( lock );
+            lanePan.swap( next );
+        }
+        commitPanLane( juce::String( automation::toString( lanePan ) ), progId );
+        refreshPanActive();
+    }
+
+    void MTTrack::refreshPanActive()
+    {
+        lanePanActive.store( lanePanProgId.isNotEmpty() && lanePanProgId == MTITrackData::programId.get(), std::memory_order_relaxed );
+    }
+
+    // Follows the played program: its tree is listened to for pan moves (Write recording).
+    void MTTrack::bindProgramTree( MTIProgram* P )
+    {
+        if( progTree.isValid() )
+            progTree.removeListener( this );
+        progTree = P ? P->vTree : juce::ValueTree();
+        if( progTree.isValid() )
+            progTree.addListener( this );
+        {
+            const juce::ScopedLock w( laneWriteLock );
+            panRec.reset();
+            refreshPanActive();
+        }
+        panApplied.store( automation::kNoValue );
+    }
+
+    // Stores the lane text in the track's ValueTree (not undoable: a take is not an edit step) so it saves/loads
+    // with the project. Caller holds laneWriteLock.
+    void MTTrack::commitLane( const juce::String& Points )
+    {
+        if( Points == laneCommitted )
+            return;
+        laneCommitted = Points;
+        auto node     = findLaneNode( automation::Level );
+        if( !node.isValid() )
+        {
+            node = juce::ValueTree( IDs::AUTOLANE );
+            vTree.addChild( node, -1, nullptr );
+        }
+        node.setProperty( IDs::autoParam, (int)automation::Level, nullptr );
+        node.setProperty( IDs::autoPoints, Points, nullptr );
+    }
+
+    // PAN lane node: a second AUTOLANE child (autoParam = Pan, autoProgram = program id, autoPoints). A Level node is
+    // always created first (empty if needed) so that a reader which only knows the Level lane and takes the first
+    // AUTOLANE child still sees a harmless Level node. Caller holds laneWriteLock. The committed text and program id
+    // are set BEFORE the ValueTree writes so that the listener's reloadLaneFromState sees our own commit and skips.
+    void MTTrack::commitPanLane( const juce::String& Points, const juce::String& ProgramId )
+    {
+        lanePanCommitted = Points;
+        lanePanProgId    = ProgramId;
+        if( !findLaneNode( automation::Level ).isValid() )
+        {
+            auto lv = juce::ValueTree( IDs::AUTOLANE );
+            lv.setProperty( IDs::autoParam, (int)automation::Level, nullptr );
+            lv.setProperty( IDs::autoPoints, "", nullptr );
+            vTree.addChild( lv, -1, nullptr );
+        }
+        auto node = findLaneNode( automation::Pan );
+        if( !node.isValid() )
+        {
+            node = juce::ValueTree( IDs::AUTOLANE );
+            node.setProperty( IDs::autoParam, (int)automation::Pan, nullptr );
+            vTree.addChild( node, -1, nullptr );
+        }
+        node.setProperty( IDs::autoProgram, ProgramId, nullptr );
+        node.setProperty( IDs::autoPoints, Points, nullptr );
+    }
+
+    // Reads both lanes from the ValueTree (construction, project load, undo/redo). Skips lanes that are our own commit.
+    void MTTrack::reloadLaneFromState()
+    {
+        const juce::ScopedLock w( laneWriteLock );
+        {
+            const auto node   = findLaneNode( automation::Level );
+            const auto points = node.isValid() ? node[IDs::autoPoints].toString() : juce::String();
+            if( points != laneCommitted )
+            {
+                laneCommitted = points;
+                auto next     = automation::fromString( points.toStdString() );
+                {
+                    const juce::ScopedLock sl( lock );
+                    laneLevel.swap( next );
+                    if( laneLevel.empty() ) // F7: no lane: do not stay on the last automated level
+                        levelScaler = ( MTITrackData::level.get() * MIDI::SCALER );
+                }
+                laneRec.reset();
+                laneApplied.store( -1 );
+            }
+        }
+        {
+            const auto node   = findLaneNode( automation::Pan );
+            const auto points = node.isValid() ? node[IDs::autoPoints].toString() : juce::String();
+            const auto progId = node.isValid() ? node[IDs::autoProgram].toString() : juce::String();
+            if( points != lanePanCommitted || progId != lanePanProgId )
+            {
+                lanePanCommitted = points;
+                lanePanProgId    = progId;
+                auto next        = automation::fromString( points.toStdString() );
+                {
+                    const juce::ScopedLock sl( lock );
+                    lanePan.swap( next );
+                }
+                panRec.reset();
+                panApplied.store( automation::kNoValue );
+            }
+            refreshPanActive();
         }
     }
 
@@ -210,13 +493,21 @@ namespace mt
     {
         isPlaying = false;
         if (auto* p = program.load()) p->updatePluginTransport(seq.getBPM(), double(tickPos) / defaultPPQN, false);
+        arpPanic();
         stopAllMidiNotes();
     }
 
     void MTTrack::stop()
     {
         if (auto* p = program.load()) p->updatePluginTransport(seq.getBPM(), 0, false);
+        arpPanic();
         stopAllMidiNotes();
+        if( auto* p = program.load() ) // F16: all-notes-off no longer centres the pitch bend; only a real stop does
+        {
+            juce::Array<juce::MidiMessage> centre;
+            centre.add( juce::MidiMessage::pitchWheel( getMidiOutChannel(), 8192 ) );
+            p->noteProcess( centre );
+        }
         isPlaying = false;
         trackPlayhead.clear();
         trackPlayhead.bnb.bar = seq.isLooping.get() ? juce::jmax<int>( 0, seq.getLoopStart() - 1 ) : 0;
@@ -242,6 +533,26 @@ namespace mt
         //trackPlayhead.bnb.bar  = bnb.bar;
         //trackPlayhead.bnb.beat = bnb.beat;
 
+        recalculateIndex( tickPos );
+        updateTrackPlayhead( tickPos );
+    }
+
+    void MTTrack::seekToTick( unsigned int TargetTick )
+    {
+        // Same lock as onTick(); the sequence lock is already held by the caller (lock order: sequence, track).
+        const juce::ScopedLock sl( lock );
+
+        // Hanging notes: all-notes-off and drop the queued note-offs, as pause()/stop() do.
+        stopAllMidiNotes();
+        midiMsgs.clearQuick();
+
+        // fillMidiMessages() plays (prevTick, Tick]; queued note-offs are keyed by absolute (shifted) ticks that
+        // are compared with tickCtr, so tickCtr must follow prevTick (== shifted tick).
+        prevTick = bar_seek::prevTickFor( TargetTick );
+        tickCtr  = prevTick;
+        tickPos  = bar_seek::wrapToLength( TargetTick, lengthInTicks.load() );
+
+        trackPlayhead.bnb = seq.toBnB( tickPos );
         recalculateIndex( tickPos );
         updateTrackPlayhead( tickPos );
     }
@@ -362,6 +673,9 @@ namespace mt
                 ++p;
         }
 
+        // Automation playback (Read mode): lane value for this tick's position, before the notes use levelScaler.
+        applyLaneAt( tickPos >= lengthInTicks.load() ? tickPos - lengthInTicks.load() : tickPos );
+
         fillMidiMessages( Tick, prevTick, trackMidiOutChannel );
 
         prevTick = Tick;
@@ -373,6 +687,16 @@ namespace mt
         }
 
         updateTrackPlayhead( tickPos );
+        if( arpOn.load( std::memory_order_relaxed ) ) // arpeggiator step (tick thread); events go out with this tick's messages
+        {
+            arp::Result ar;
+            {
+                arp::SpinGuard g( arpFlag );
+                arpeg.tick( (int64_t)tickCtr, ar );
+            }
+            arpEmit( ar, midiMsgs );
+        }
+        livePlayTick.store( (int)tickPos, std::memory_order_relaxed );
         // add logic to compute normalized playhead position using lengthInTicks
         pProgram->updatePluginTransport(seq.getBPM(), double(tickPos) / defaultPPQN, true);
         if( !midiMsgs.isEmpty() )
@@ -385,6 +709,19 @@ namespace mt
 
     int MTTrack::processIncomingMidiMessage( const juce::MidiMessage& Msg )
     {
+        if( Msg.isNoteOnOrOff() ) // RECALL buffer: raw (pre-transpose) note, no allocation, even if the track is muted
+        {
+            live::Event e;
+            e.timeMs   = juce::Time::currentTimeMillis();
+            e.tick     = isPlaying.load() ? livePlayTick.load( std::memory_order_relaxed ) : -1;
+            e.note     = (uint8_t)Msg.getNoteNumber();
+            e.velocity = (uint8_t)( Msg.isNoteOn() ? Msg.getVelocity() : 0 );
+            e.channel  = (uint8_t)juce::jlimit( 0, 15, Msg.getChannel() - 1 );
+            e.on       = Msg.isNoteOn();
+            liveRing.push( e );
+        }
+        if( Msg.isNoteOnOrOff() && arpFilterLive( Msg ) ) // arpeggiator takes the note; its output is emitted by onTick
+            return 0;
         auto pProgram = program.load();
         if( pProgram && !isTrackEffectivelyMuted() )
         {
@@ -412,6 +749,111 @@ namespace mt
             reloadMidiMeter( levelScaler );
 
         return 0;
+    }
+
+    bool MTTrack::arpFilterLive( const juce::MidiMessage& Msg )
+    {
+        if( !arpOn.load( std::memory_order_relaxed ) )
+            return false;
+        auto       p      = program.load();
+        const bool active = isPlaying.load() && p && !p->isAudio() && 0 != lengthInTicks.load(); // same conditions as onTick stepping
+        const int  note   = Msg.getNoteNumber();
+        arp::SpinGuard g( arpFlag );
+        if( Msg.isNoteOn() )
+        {
+            if( !active )
+                return false; // transport stopped: play the note directly
+            arpeg.noteOn( note, Msg.getVelocity() );
+            return true;
+        }
+        const bool ours = arpeg.noteOff( note ); // always keep key state in sync
+        return active && ours;
+    }
+
+    void MTTrack::arpEmit( const arp::Result& R, juce::Array<juce::MidiMessage>& Out )
+    {
+        for( int i = 0; i < R.n; ++i )
+        {
+            const auto& e = R.ev[(size_t)i];
+            if( e.on )
+            {
+                if( isTrackEffectivelyMuted() )
+                    continue; // keep stepping while muted, just stay silent
+                if( getEffectiveNoteVelocity( e.velocity ) <= 0 )
+                    continue; // track level 0 (or automated to 0): silent, like the sequence notes (no jlimit up to 1)
+                const int eff = juce::jlimit( 0, 127, getEffectiveNoteNo( e.note ) );
+                const int vel = juce::jlimit( 1, 127, getEffectiveNoteVelocity( e.velocity ) );
+                Out.insert( -1, juce::MidiMessage::noteOn( getMidiOutChannel(), eff, (juce::uint8)vel ) );
+                arpSentNote.store( eff );
+            }
+            else if( const int n = arpSentNote.exchange( -1 ); n >= 0 )
+                Out.insert( -1, juce::MidiMessage::noteOff( getMidiOutChannel(), n ) );
+        }
+    }
+
+    // Non-tick-thread output (enable/disable/panic): straight to the program, like the other live input paths.
+    void MTTrack::arpFlush( const arp::Result& R )
+    {
+        juce::Array<juce::MidiMessage> list;
+        arpEmit( R, list );
+        if( auto p = program.load(); p && !list.isEmpty() )
+            p->noteProcess( list );
+    }
+
+    void MTTrack::arpPanic()
+    {
+        arp::Result r;
+        {
+            arp::SpinGuard g( arpFlag );
+            arpeg.panic( r );
+        }
+        arpFlush( r );
+    }
+
+    void MTTrack::setArpEnabled( bool On )
+    {
+        arp::Result r;
+        {
+            arp::SpinGuard g( arpFlag );
+            arpeg.setEnabled( On, r );
+            arpOn.store( On );
+        }
+        arpFlush( r );
+    }
+    void MTTrack::setArpMode( int Mode ) { arp::SpinGuard g( arpFlag ); arpeg.setMode( Mode ); }
+    void MTTrack::setArpRate( int Rate ) { arp::SpinGuard g( arpFlag ); arpeg.setRate( Rate ); }
+    void MTTrack::setArpOctaves( int Octaves ) { arp::SpinGuard g( arpFlag ); arpeg.setOctaves( Octaves ); }
+    void MTTrack::setArpLatch( bool On ) { arp::SpinGuard g( arpFlag ); arpeg.setLatch( On ); }
+    void MTTrack::setArpGate( int Percent ) { arp::SpinGuard g( arpFlag ); arpeg.setGatePercent( Percent ); }
+    int  MTTrack::getArpMode() { arp::SpinGuard g( arpFlag ); return arpeg.getMode(); }
+    int  MTTrack::getArpRate() { arp::SpinGuard g( arpFlag ); return arpeg.getRate(); }
+    int  MTTrack::getArpOctaves() { arp::SpinGuard g( arpFlag ); return arpeg.getOctaves(); }
+    bool MTTrack::isArpLatch() { arp::SpinGuard g( arpFlag ); return arpeg.isLatch(); }
+
+    int MTTrack::recallLiveNotes( int WindowMs )
+    {
+        const int len = (int)lengthInTicks.load();
+        if( len <= 0 )
+            return 0;
+        const double ticksPerMs = double( seq.getBPM() ) * defaultPPQN / 60000.0;
+        auto         notes      = live::pairEvents( liveRing.snapshot(), juce::Time::currentTimeMillis(), WindowMs, isPlaying.load(), ticksPerMs, len );
+        int          committed  = 0;
+        {
+            // F2: the tick thread walks the note HashMap under `lock`; the edits below rebuild that map. Lock order:
+            // MTTrack::lock, then MTNoteList::lock (see timingCorrectLocked).
+            const juce::ScopedLock sl( lock );
+            for( const auto& n : notes )
+                if( 0 == addOrModifyNote( n.note, n.startTick, n.lengthTicks, n.velocity ) )
+                    ++committed;
+        }
+        if( committed ) liveRing.clear(); // each captured note is committed once
+        return committed;
+    }
+
+    int MTTrack::timingCorrectLocked( const track::timingCorrectInfo& Info, const std::set<int>* OnlyIds )
+    {
+        const juce::ScopedLock sl( lock ); // see the lock order in the header
+        return MTNoteList::timingCorrect( Info, OnlyIds, (int)lengthInTicks.load() );
     }
 
     int MTTrack::processIncomingMidiMessage( const MTMidiMessage& Msg )

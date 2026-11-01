@@ -137,6 +137,60 @@ public:
     }
 
     //==============================================================================
+    // Headless screenshots (smoke test only): KICK_SMOKE_SCREENS="HomeGridView,MenuPadMixer,..." and
+    // KICK_SMOKE_SHOTS_DIR=<dir> open each kick_ui::Screen in turn and save <dir>/<Screen>.png (1.2 s settle time each).
+    void smokeScreenShots( juce::StringArray names, juce::File dir, int index )
+    {
+        using kick_ui::Screen;
+        static const std::pair<const char*, Screen> table[] = {
+            { "HomeOptions", Screen::HomeOptions }, { "HomeListView", Screen::HomeListView },
+            { "HomeGridView", Screen::HomeGridView }, { "HomeSequencerView", Screen::HomeSequencerView },
+            { "HomeXYView", Screen::HomeXYView }, { "HomePreferencesView", Screen::HomePreferencesView },
+            { "MenuSampleEdit", Screen::MenuSampleEdit }, { "MenuProgramEdit", Screen::MenuProgramEdit },
+            { "MenuSampler", Screen::MenuSampler }, { "MenuLooper", Screen::MenuLooper },
+            { "MenuPadMute", Screen::MenuPadMute }, { "MenuTrackMute", Screen::MenuTrackMute },
+            { "MenuPadMixer", Screen::MenuPadMixer }, { "MenuChannelMixer", Screen::MenuChannelMixer },
+            { "MenuKnobEdit", Screen::MenuKnobEdit }, { "MenuListEdit", Screen::MenuListEdit },
+            { "MenuPadPerform", Screen::MenuPadPerform }, { "MenuMidiControl", Screen::MenuMidiControl },
+            { "MenuFileBrowser", Screen::MenuFileBrowser }, { "MenuNextSequence", Screen::MenuNextSequence },
+            { "MenuSong", Screen::MenuSong }, { "MenuColorEdit", Screen::MenuColorEdit },
+            { "RecentProject", Screen::RecentProject }, { "SystemResources", Screen::SystemResources },
+        };
+
+        if( index >= names.size() || w == nullptr || w->getContentComponent() == nullptr )
+        {
+            quit();
+            return;
+        }
+
+        const auto name = names[index].trim();
+        Screen     screen = Screen::Invalid;
+        for( const auto& e : table )
+            if( name.equalsIgnoreCase( e.first ) ) screen = e.second;
+
+        if( screen == Screen::Invalid )
+        {
+            std::cerr << "smoke: unknown screen '" << name << "'" << std::endl;
+            setApplicationReturnValue( 2 );
+            smokeScreenShots( names, dir, index + 1 );
+            return;
+        }
+
+        kick_ui::signals::sigScreenClose( screen );
+        juce::Timer::callAfterDelay( 1200, [this, names, dir, index, name] {
+            if( auto* content = w != nullptr ? w->getContentComponent() : nullptr )
+            {
+                auto                  image = content->createComponentSnapshot( content->getLocalBounds() );
+                auto                   shotFile = dir.getChildFile( name + ".png" );
+                shotFile.deleteFile(); // FileOutputStream appends to an existing file
+                juce::FileOutputStream output{ shotFile };
+                juce::PNGImageFormat   png;
+                if( !output.openedOk() || !png.writeImageToStream( image, output ) ) setApplicationReturnValue( 2 );
+            }
+            smokeScreenShots( names, dir, index + 1 );
+        } );
+    }
+
     void initialise( const juce::String& commandLine ) override
     {
         audioInterface.reset(new KickAudioInterface());
@@ -187,13 +241,18 @@ public:
         w->setTopLeftPosition( 0, 0 );
 #endif
 
+        // Headless (no X server / display, e.g. the MPC framebuffer bridge): JUCE's Linux setKioskComponent()
+        // dereferences getDisplayForRect() unchecked and a native peer cannot be created. The bridge renders
+        // the component tree itself (peer-less touch path), so keep the window hidden and skip kiosk mode.
+        const bool hasDisplay = ! juce::Desktop::getInstance().getDisplays().displays.isEmpty();
+
         // Visibility...
-        w->setVisible(!smoke);
+        w->setVisible(!smoke && hasDisplay);
 
 #if JUCE_IOS
-        if (!smoke) juce::Desktop::getInstance().setKioskModeComponent( w.get(), true );
+        if (!smoke && hasDisplay) juce::Desktop::getInstance().setKioskModeComponent( w.get(), true );
 #elif( JUCE_ANDROID || JUCE_LINUX || __linux__ )
-        if (!smoke) juce::Desktop::getInstance().setKioskModeComponent( w.get(), false );
+        if (!smoke && hasDisplay) juce::Desktop::getInstance().setKioskModeComponent( w.get(), false );
 #endif
 #if JUCE_LINUX || __linux__
         if (!smoke)
@@ -220,9 +279,18 @@ public:
             const auto path = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SNAPSHOT", {});
             if (path.isNotEmpty() && w->getContentComponent()) {
                 auto image = w->getContentComponent()->createComponentSnapshot(w->getContentComponent()->getLocalBounds());
+                juce::File(path).deleteFile(); // FileOutputStream appends to an existing file
                 juce::FileOutputStream output{juce::File(path)};
                 juce::PNGImageFormat png;
                 if (!output.openedOk() || !png.writeImageToStream(image, output)) setApplicationReturnValue(2);
+            }
+            const auto screens = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SCREENS", {});
+            const auto shotsDir = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SHOTS_DIR", {});
+            if (screens.isNotEmpty() && shotsDir.isNotEmpty())
+            {
+                juce::File(shotsDir).createDirectory();
+                smokeScreenShots(juce::StringArray::fromTokens(screens, ",", ""), juce::File(shotsDir), 0);
+                return;
             }
             quit();
         });
