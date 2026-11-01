@@ -153,6 +153,11 @@ add_executable(kick-touch-space-tests TouchSpaceTests.cpp)
 add_test(NAME kick-touch-space COMMAND kick-touch-space-tests)
 set_tests_properties(kick-touch-space PROPERTIES TIMEOUT 10)
 
+# Hardware keys that close the modal Timing Correct dialog (ENTER/STOP apply, Shift+STOP/MAIN cancel); JUCE-free, header only.
+add_executable(kick-modal-dialog-keys-tests ModalDialogKeysTests.cpp)
+add_test(NAME kick-modal-dialog-keys COMMAND kick-modal-dialog-keys-tests)
+set_tests_properties(kick-modal-dialog-keys PROPERTIES TIMEOUT 10)
+
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()

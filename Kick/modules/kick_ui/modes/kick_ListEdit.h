@@ -27,7 +27,13 @@ namespace kick_ui
     {
     public:
         ListEditTimingCorrect();
-        ~ListEditTimingCorrect() = default;
+        ~ListEditTimingCorrect();
+
+        // Explicit "dialog is open" state for the hardware bridge (the dialog is modal and has touch-only buttons).
+        // Message thread only. closeFromHardware() ends the modal state with APPLY / CANCEL (same as the buttons);
+        // false when no Timing Correct dialog is open.
+        static bool isOpen();
+        static bool closeFromHardware( bool apply );
 
         // Current dialog values as engine params (Apply -> MTAudioInterface::timingCorrect).
         mt::track::timingCorrectInfo getData();
