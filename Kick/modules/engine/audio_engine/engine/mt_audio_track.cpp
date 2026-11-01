@@ -393,6 +393,7 @@ namespace mt
         }
 
         updateTrackPlayhead( tickPos );
+        livePlayTick.store( (int)tickPos, std::memory_order_relaxed );
         // add logic to compute normalized playhead position using lengthInTicks
         pProgram->updatePluginTransport(seq.getBPM(), double(tickPos) / defaultPPQN, true);
         if( !midiMsgs.isEmpty() )
@@ -405,6 +406,17 @@ namespace mt
 
     int MTTrack::processIncomingMidiMessage( const juce::MidiMessage& Msg )
     {
+        if( Msg.isNoteOnOrOff() ) // RECALL buffer: raw (pre-transpose) note, no allocation, even if the track is muted
+        {
+            live::Event e;
+            e.timeMs   = juce::Time::currentTimeMillis();
+            e.tick     = isPlaying.load() ? livePlayTick.load( std::memory_order_relaxed ) : -1;
+            e.note     = (uint8_t)Msg.getNoteNumber();
+            e.velocity = (uint8_t)( Msg.isNoteOn() ? Msg.getVelocity() : 0 );
+            e.channel  = (uint8_t)juce::jlimit( 0, 15, Msg.getChannel() - 1 );
+            e.on       = Msg.isNoteOn();
+            liveRing.push( e );
+        }
         auto pProgram = program.load();
         if( pProgram && !isTrackEffectivelyMuted() )
         {
@@ -432,6 +444,21 @@ namespace mt
             reloadMidiMeter( levelScaler );
 
         return 0;
+    }
+
+    int MTTrack::recallLiveNotes( int WindowMs )
+    {
+        const int len = (int)lengthInTicks.load();
+        if( len <= 0 )
+            return 0;
+        const double ticksPerMs = double( seq.getBPM() ) * defaultPPQN / 60000.0;
+        auto         notes      = live::pairEvents( liveRing.snapshot(), juce::Time::currentTimeMillis(), WindowMs, isPlaying.load(), ticksPerMs, len );
+        int          committed  = 0;
+        for( const auto& n : notes )
+            if( 0 == addOrModifyNote( n.note, n.startTick, n.lengthTicks, n.velocity ) )
+                ++committed;
+        if( committed ) liveRing.clear(); // each captured note is committed once
+        return committed;
     }
 
     int MTTrack::processIncomingMidiMessage( const MTMidiMessage& Msg )

@@ -21,6 +21,10 @@ add_executable(kick-midi-parser-tests MidiParserTests.cpp)
 add_test(NAME kick-midi-parser COMMAND kick-midi-parser-tests)
 set_tests_properties(kick-midi-parser PROPERTIES TIMEOUT 10)
 
+add_executable(kick-live-capture-tests LiveCaptureTests.cpp)
+add_test(NAME kick-live-capture COMMAND kick-live-capture-tests)
+set_tests_properties(kick-live-capture PROPERTIES TIMEOUT 10)
+
 add_executable(kick-bar-seek-tests BarSeekTests.cpp)
 add_test(NAME kick-bar-seek COMMAND kick-bar-seek-tests)
 set_tests_properties(kick-bar-seek PROPERTIES TIMEOUT 10)
