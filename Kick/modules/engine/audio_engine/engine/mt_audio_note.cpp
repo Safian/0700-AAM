@@ -533,6 +533,7 @@ namespace mt
     {
         if( NoteVT.isValid() )
         {
+            const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
             EditGuard eg( editDepth );
             vTree.addChild( NoteVT, -1, um );
             MTNote* n     = new MTNote( NoteVT );
@@ -633,6 +634,7 @@ namespace mt
     {
         if( NoteVT.getNumProperties() )
         {
+            const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
             EditGuard eg( editDepth );
             // A map entry may be missing (e.g. after an undo on an older build); never dereference it blindly.
             delete takeFromMap( NoteVT.getProperty( IDs::id ), NoteVT.getProperty( IDs::start ) );
@@ -667,6 +669,7 @@ namespace mt
 
     int MTNoteList::eraseInvalidNotes()
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl{ lock };
         for( auto it : vTree )
         {
@@ -762,6 +765,7 @@ namespace mt
 
     int MTNoteList::deleteAllNotes()
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl( lock );
         EditGuard        eg( editDepth );
         selected.clearQuick();
@@ -773,6 +777,7 @@ namespace mt
 
     int MTNoteList::deleteSelectedNotes()
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl( lock );
         EditGuard        eg( editDepth );
         for( auto it : selected )
@@ -787,6 +792,7 @@ namespace mt
 
     void MTNoteList::clearNotesToDelete()
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl{ lock };
         for( auto it : temp )
             eraseNote( it );
@@ -796,6 +802,7 @@ namespace mt
 
     int MTNoteList::deleteNotesInRange( const NotesInRange& Range )
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl{ lock };
         forNotesInRange( Range, [&]( juce::ValueTree& Note ) {
             temp.addIfNotAlreadyThere( Note );
@@ -806,6 +813,7 @@ namespace mt
 
     int MTNoteList::deleteNotesOutsideRange( const NotesInRange& Range )
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl{ lock };
         forNotesOutsideRange( Range, [&]( juce::ValueTree& Note ) {
             temp.addIfNotAlreadyThere( Note );
@@ -1110,6 +1118,7 @@ namespace mt
 
     int MTNoteList::nudgeNotes( int noteNumber, double DeltaTimeInTicks )
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl{ lock };
         auto             retVal = 0;
 
@@ -1135,6 +1144,7 @@ namespace mt
 
     int MTNoteList::nudgeSelectedNotes( double DeltaTimeInTicks, bool Snap, double TotalTicks )
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl{ lock };
 
         if( AudIO::utils::isNotEqual( DeltaTimeInTicks, 0.0 ) )
@@ -1153,6 +1163,7 @@ namespace mt
 
     int MTNoteList::transposeSelectedNotes( int DeltaNoteNumber )
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl{ lock };
         if( AudIO::utils::isNotEqual( DeltaNoteNumber, 0 ) )
         {
@@ -1170,6 +1181,7 @@ namespace mt
 
     int MTNoteList::editSelectedNotesStart( int DeltaNoteStart, bool Snap )
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl{ lock };
         if( AudIO::utils::isNotEqual( DeltaNoteStart, 0 ) )
         {
@@ -1268,6 +1280,7 @@ namespace mt
 
     int MTNoteList::editSelectedNotesEnd( int DeltaNoteEnd )
     {
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         juce::ScopedLock sl{ lock };
         if( AudIO::utils::isNotEqual( DeltaNoteEnd, 0 ) )
         {
@@ -1321,6 +1334,7 @@ namespace mt
             if( 0 >= Note.length.get() ) Note.length = 1;
         }
 
+        const juce::ScopedLock rl( readerLock ? *readerLock : lock ); // tick thread reads the map under MTTrack::lock; order: reader lock -> lock
         EditGuard eg( editDepth );
         auto      prevStart = Note.start.get();
         Note.start          = NewStart;
