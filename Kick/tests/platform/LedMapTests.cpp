@@ -81,6 +81,20 @@ int main()
         makeLedMessage(200, 200, m);
         check(m[0] == kAkaiLedStatus && m[1] < 128 && m[2] < 128, "data bytes masked to 7 bit");
     }
+    { // REC / OVERDUB from looper state
+        int r = -1, o = -1;
+        recOverdubLedLevels(false, false, true, r, o);
+        check(r == kLedOff && o == kLedOff, "idle: both dark");
+        recOverdubLedLevels(true, false, true, r, o);
+        check(r == kLedFullB && o == kLedOff, "recording, blink on: REC red");
+        recOverdubLedLevels(true, false, false, r, o);
+        check(r == kLedOff && o == kLedOff, "recording, blink off: dark");
+        recOverdubLedLevels(true, true, false, r, o);
+        check(r == kLedOff && o == kLedFullA, "overdubbing: OVERDUB steady, REC dark");
+        recOverdubLedLevels(false, true, true, r, o);
+        check(r == kLedOff && o == kLedFullA, "overdub without record flag");
+        check(blinkPhase(0) && blinkPhase(249) && !blinkPhase(250) && !blinkPhase(499) && blinkPhase(500), "blink phase");
+    }
     std::puts("OK");
     return 0;
 }
