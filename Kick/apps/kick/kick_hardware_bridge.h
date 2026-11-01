@@ -87,9 +87,6 @@ private:
     kick_hw::NoteTargets<mt::MTSelected> m_key_target;
     kick_hw::HeldTarget<mt::MTSelected>  m_bend_target;       // pitch wheel (on_pitch_bend)
     kick_hw::HeldTarget<mt::MTSelected>  m_strip_bend_target; // touch strip in pitch bend mode (own target, G16)
-    kick_hw::HeldTarget<mt::MTSelected>  m_cc1_target;        // mod wheel
-    kick_hw::HeldTarget<mt::MTSelected>  m_strip_cc1_target;  // touch strip in mod wheel mode
-    kick_hw::HeldTarget<mt::MTSelected>  m_cc11_target;       // expression
     kick_hw::HeldTarget<mt::MTSelected>  m_sustain_target;
 
     // Project pad colours (DCL EN_PAD_SET_COLOUR_STATE). Written by the sendCommandToDcl handler
@@ -1482,16 +1479,11 @@ public:
         }
         ae.addLiveMidiMsg(target, juce::MidiMessage::pitchWheel(1, val));
     }
-    // CC1 / CC11: the value-0 message ends on the track that got the first non-zero value (G16).
-    void sendHeldCc(kick_hw::HeldTarget<mt::MTSelected>& held, int cc, int val)
+    // CC1 / CC11: continuous controllers, always the currently selected track (no held target, see routeCc).
+    void sendCc(int cc, int val)
     {
         auto& ae = mt::getAudioInterface();
-        mt::MTSelected target;
-        {
-            std::lock_guard<std::mutex> lk(m_target_mutex);
-            target = kick_hw::routeCc(held, val, ae.getSelected());
-        }
-        ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, cc, val));
+        ae.addLiveMidiMsg(kick_hw::routeCc(val, ae.getSelected()), juce::MidiMessage::controllerEvent(1, cc, val));
     }
     void stripPitchSpringBack()
     {
@@ -1514,7 +1506,7 @@ public:
         if (mode == kick_hw::strip::kPitchBend) return; // pitch bend uses on_touch_strip_fine (14 bit)
         if (mode == kick_hw::strip::kModWheel)
         {
-            sendHeldCc(m_strip_cc1_target, 1, kick_hw::strip::modWheelFromPosition(val));
+            sendCc(1, kick_hw::strip::modWheelFromPosition(val));
             return;
         }
         CPktMgr::HWMsg_t msg;
@@ -1550,11 +1542,11 @@ public:
     }
     void on_mod_wheel(int val) override
     {
-        sendHeldCc(m_cc1_target, 1, val);
+        sendCc(1, val);
     }
     void on_expression(int val) override
     {
-        sendHeldCc(m_cc11_target, 11, val);
+        sendCc(11, val);
     }
     void on_footswitch2(bool down) override
     {

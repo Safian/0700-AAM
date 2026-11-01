@@ -48,7 +48,9 @@ namespace mt
                     if( held[n] )
                     {
                         held[n] = false;
-                        Release( (int)n );
+                        // A sequencer note currently sounds on this pitch: it ends with its own note-off, not with the pedal.
+                        if( seqActive[n] == 0 )
+                            Release( (int)n );
                     }
             sustainDown = down;
         }
@@ -57,8 +59,16 @@ namespace mt
         void onAllOff()
         {
             held.fill( false );
+            seqActive.fill( 0 );
             sustainDown = false;
         }
+
+        // Sequencer (non-live) NOTE_ON-type notes, counted per pitch so the pedal can tell them from live ones.
+        void onSeqNoteOn( int Note ) { if( valid( Note ) && seqActive[(size_t)Note] < 255 ) ++seqActive[(size_t)Note]; }
+        void onSeqNoteOff( int Note ) { if( valid( Note ) && seqActive[(size_t)Note] > 0 ) --seqActive[(size_t)Note]; }
+        // Transport stop / reset: no sequencer note is left sounding (a lost note-off must not block a later pedal release).
+        void clearSeq() { seqActive.fill( 0 ); }
+        int  seqCount( int Note ) const { return valid( Note ) ? seqActive[(size_t)Note] : 0; }
 
         bool isDown() const { return sustainDown; }
         bool isHeld( int Note ) const { return valid( Note ) && held[(size_t)Note]; }
@@ -67,11 +77,16 @@ namespace mt
         static bool valid( int N ) { return N >= 0 && N < 128; }
         bool                  sustainDown{ false };
         std::array<bool, 128> held{};
+        std::array<unsigned char, 128> seqActive{};
     };
-    // Pedal holds live notes only; sequencer (non-live) notes release at once. Returns true when the note must be released now.
+    // Pedal holds live notes only. A sequencer note-off releases at once, except on a pitch whose live note the pedal
+    // holds (same pitch = same voice): that one keeps sounding until the pedal goes up. Returns true when to release now.
     inline bool releaseNowOnNoteOff( SustainState& s, bool live, int n )
     {
-        return !live || s.onNoteOff( n );
+        if( live )
+            return s.onNoteOff( n );
+        s.onSeqNoteOff( n );
+        return !( s.isDown() && s.isHeld( n ) );
     }
 
 } // namespace mt
