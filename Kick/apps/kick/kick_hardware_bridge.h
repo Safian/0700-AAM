@@ -591,7 +591,8 @@ public:
             case HW_BTN_METRONOME:
             {
                 if (isShiftDown()) {
-                    kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeOptions);
+                    // +Shift = CONFIG -> DCL EN_PREF (opens HomePreferencesView in kick_AppHome handleCommand).
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_PREF);
                 } else {
                     auto& metronome = mt::getSettings().metronome;
                     metronome.enabled = !metronome.enabled();
@@ -996,6 +997,9 @@ public:
                 break;
             case HW_BTN_NOTE_REPEAT:
                 sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_NOTE_REPEAT);
+                break;
+            case HW_BTN_METRONOME:
+                sendTrackedRelease(btn, -1); // plain press toggles the click directly (no DCL press) -> release only if EN_PREF was sent
                 break;
             case HW_BTN_ARP:
                 sendTrackedRelease(btn, -1); // Shift variant opens a screen (no press); plain press was never released before
