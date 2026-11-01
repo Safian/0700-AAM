@@ -254,7 +254,9 @@ A fenti körök (1–14) összegzése. Minden állítás a megadott körben mér
 | Stop dupla nyomás | nem vizsgált |
 
 ## Nem ellenőrzött hardveren
-- **TC ablak hardveres zárása** (ENTER/STOP = Apply, Shift+STOP/MAIN = Cancel): az injektált `btn TC` nem nyitja meg az ablakot (List Edit marad); **fizikai TC → ENTER próba kell**.
+- **TC ablak hardveres zárása:** **ENTER = Apply igazolva** (injektált: `btn TC` a List Edit-re visz, a `TC` gomb érintésére megnyílik a Timing Correct ablak, `btn ENTER` után bezárul; md5 `8b8986e1d151` → `a0104c4456d1`); a **MAIN / Shift+STOP = Cancel még nincs mérve** (Shift-kombináció injektálva nem megy).
 - Pitch bend / mod kerék / pedál: az első track hangerő-ugrásának javítása (motor `reloadMidiMeter`) nincs újramérve.
 - Aura (`processReplacing`, `sampleFrames=0`) hosszú futás: az éjszakai teszt folyamatban (reggel kiegészítem).
 - Pad RGB hosszabb mérése, `KICK_AKAI_PORT0=0` összehasonlítás, MIDI-program PAN→CC10, RECALL, CV/Gate (a CV-hez a hardveres írás szándékosan ki van kapcsolva).
+
+**Kiegészítés (2026-11-02):** a Kick List Edit képernyőjén a `TC` gomb a szűrő mellett van; ezzel nyílik a Timing Correct ablak. A hardveres `ENTER` bezárja (Apply). Az injektált `btn TC` önmagában a List Edit képernyőre visz, az ablakot a `TC` gomb érintése nyitja.
