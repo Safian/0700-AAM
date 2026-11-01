@@ -21,6 +21,10 @@ add_executable(kick-midi-parser-tests MidiParserTests.cpp)
 add_test(NAME kick-midi-parser COMMAND kick-midi-parser-tests)
 set_tests_properties(kick-midi-parser PROPERTIES TIMEOUT 10)
 
+add_executable(kick-pad-colour-tests PadColourMapTests.cpp)
+add_test(NAME kick-pad-colour COMMAND kick-pad-colour-tests "${CMAKE_CURRENT_SOURCE_DIR}/../../assets/Default/theme.xml")
+set_tests_properties(kick-pad-colour PROPERTIES TIMEOUT 10)
+
 add_executable(kick-keyboard-tests KeyboardDetectorTests.cpp)
 target_include_directories(kick-keyboard-tests PRIVATE ../../modules ../../modules/3rdParty ../../../ComProtocol)
 target_link_libraries(kick-keyboard-tests PRIVATE contracts ipc juce::juce_gui_basics "-framework Carbon")
