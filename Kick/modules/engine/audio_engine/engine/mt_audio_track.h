@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "mt_audio_bar_seek.h"
+
 namespace mt
 {
     class MTNoteList;
@@ -90,6 +92,9 @@ namespace mt
         void pause();
         void stop();
         void seek( int posInTicks );
+        // Re-align playback to a bar start: TargetTick is in the sequence's shifted tick domain (see MTSequence::applySeek).
+        // Flushes sounding/queued notes and resyncs prevTick/tickCtr/tickPos so the next onTick plays from TargetTick.
+        void seekToTick( unsigned int TargetTick );
 
         void onTick( unsigned int Tick ) override;
         void onBeat();

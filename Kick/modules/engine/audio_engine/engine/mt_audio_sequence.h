@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "mt_audio_bar_seek.h"
+
 namespace mt
 {
     class MTTrack;
@@ -109,6 +111,19 @@ namespace mt
         void seek( int posInTicks );
         void seek( const MTBarNBeats& BnB );
 
+        // Bar seek that the listener HEARS (unlike seek(), which only moves the counters). Bars are 0-based in the
+        // engine, the UI shows bar + 1. Both return the resulting 0-based bar (clamped, no wrap).
+        //  - playing: only records the target; the tick-processing thread applies it at the start of its next onTick.
+        //  - stopped: parks the position; play() starts from it (discardSeek() = "play from beginning").
+        //  - paused: parks the position; resume() continues from it.
+        int seekToBar( int Bar0 );
+        int seekBars( int DeltaBars ); // relative to the current (or already requested) bar
+        // Start of the last bar of the playable range (loopEnd - 1 when looping, else length - 1), 0-based.
+        int  getLastBar();
+        void discardSeek() { seekTargetBar.store( -1 ); }
+        // shifted tick = clock tick + shift; see applySeek().
+        inline unsigned int getTickShift() const noexcept { return tickShift.load(); }
+
         // Track API's...
         int createTrack( const juce::String& Name );
         int createTrack( juce::ValueTree& VT );
@@ -161,6 +176,8 @@ namespace mt
 
     private:
         void                          seekSeqenceInternal( int posInTicks );
+        void                          showBar( int bar0 );
+        void                          applySeek( int bar0, unsigned int rawTick );
         void                          updateTrackSoloList();
         void                          updateTrackList();
         void                          lengthChangeHandler();
@@ -193,6 +210,7 @@ namespace mt
 
         bool             initialized{ false };
         bool             isPlaying{ false };
+        std::atomic<bool> isPaused{ false };
         int              selectedTrack{ 0 };
         juce::BigInteger soloingTracks;
 
@@ -211,6 +229,12 @@ namespace mt
         std::atomic<unsigned int> pos1_8{ 0 };
         std::atomic<unsigned int> pos1_16{ 0 };
         std::atomic<unsigned int> prevTicks{ 0 };
+
+        // Bar seek state. The clock (CMidiClock) is not touched: the sequence maps the raw clock tick to its own
+        // timeline, shifted = raw + tickShift (mod 2^32); tracks and the sequence only ever see shifted ticks.
+        std::atomic<unsigned int> tickShift{ 0 };
+        std::atomic<unsigned int> lastRawTick{ 0 }; // raw clock tick of the last processed onTick (origin for a seek while paused)
+        std::atomic<int>          seekTargetBar{ -1 }; // requested/parked 0-based bar, -1 = none
 
         double lengthFactor{ 1 };
         int    lengthInTicks{ 1 };
