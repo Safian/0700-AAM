@@ -121,6 +121,7 @@ namespace mt
         void applyAutomatedPans();
         // Leaving Read: puts back the pan the programs had before playback overwrote it.
         void restoreAutomatedPans();
+        void restoreAutomatedPan( const juce::String& ProgramId ); // one program (lane cleared / reloaded empty)
         std::map<juce::String, double> panBases; // program id -> stored pan before Read touched it (message thread)
 
     private:

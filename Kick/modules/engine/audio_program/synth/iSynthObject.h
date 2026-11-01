@@ -51,7 +51,7 @@ namespace mt
         inline int getPolyphony() const { return numPolyphony; }
 
         // Virtual functions.
-        virtual void noteProcess( juce::Array<juce::MidiMessage>& ){};
+        virtual void noteProcess( juce::Array<juce::MidiMessage>&, bool /*live*/ = false ){};
 
         virtual void noteOff( int Note );
         virtual void noteOff( std::vector<int>& Notes );

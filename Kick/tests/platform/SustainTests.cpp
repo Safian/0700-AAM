@@ -56,6 +56,18 @@ int main()
         CHECK( s.onNoteOff( 200 ) );
         s.onNoteOn( 200 );
     }
+    { // resetPerformance (MTTrack::stop, also muted): pedal-up value 0 releases every held note once
+        SustainState s;
+        s.onCC64( 127, R );
+        s.onNoteOff( 60 );
+        s.onNoteOff( 64 );
+        rel.clear();
+        s.onCC64( 0, R );
+        CHECK( rel.size() == 2 && !s.isDown() && !s.isHeld( 60 ) );
+        rel.clear();
+        s.onCC64( 0, R ); // idempotent
+        CHECK( rel.empty() );
+    }
     if( g_fail ) return 1;
     std::printf( "SustainTests OK\n" );
     return 0;
