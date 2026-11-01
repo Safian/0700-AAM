@@ -102,6 +102,13 @@ namespace mt
         void performUndo();
         void performRedo();
 
+        // Automation mode (automation::Mode: 0 Off, 1 Read, 2 Write), global. Readable from any thread (tick thread
+        // included); the setter runs on the message thread and re-arms every track.
+        inline int getAutomationMode() const noexcept { return automationMode.load( std::memory_order_relaxed ); }
+        void       setAutomationMode( int Mode );
+        // Clears the level lane of the tracks in Scope (0 = selected track, 1 = selected sequence, 2 = all). One undo step.
+        void clearAutomation( int Scope );
+
     private:
         void interTimerCallbackHandler();
 
@@ -125,6 +132,7 @@ namespace mt
         KickPrivateTimer internalTimer;
 
         bool projectLoaded{ false };
+        std::atomic<int> automationMode{ 0 };
 
 #if defined( USE_VALUE_TREE_DEBUGGER ) && ( USE_VALUE_TREE_DEBUGGER > 0 )
         jcf::ValueTreeDebugger debugger;

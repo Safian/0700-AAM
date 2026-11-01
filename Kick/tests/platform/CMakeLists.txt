@@ -115,6 +115,11 @@ set_tests_properties(kick-strip-modes PROPERTIES TIMEOUT 10)
 add_executable(kick-system-probe-tests SystemProbeTests.cpp)
 add_test(NAME kick-system-probe COMMAND kick-system-probe-tests)
 set_tests_properties(kick-system-probe PROPERTIES TIMEOUT 10)
+
+# Automation lanes (breakpoints, interpolation, record/overwrite, thinning, text form); JUCE-free, header only.
+add_executable(kick-automation-tests AutomationTests.cpp)
+add_test(NAME kick-automation COMMAND kick-automation-tests)
+set_tests_properties(kick-automation PROPERTIES TIMEOUT 10)
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()

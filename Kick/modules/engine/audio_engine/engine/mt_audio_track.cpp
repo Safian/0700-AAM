@@ -73,6 +73,9 @@ namespace mt
             }
         } );
 
+        // Restore a persisted automation lane (written by commitLane).
+        reloadLaneFromState();
+
         // Restore program.
         // Connect handler to length change handler.
         lengthChangeHandler();
@@ -157,7 +160,11 @@ namespace mt
             if( Property == IDs::name )
                 trackNameChanged( this );
             else if( Property == IDs::level )
+            {
                 levelScaler = ( level.get() * MIDI::SCALER );
+                laneApplied.store( -1 ); // in Read mode the lane wins again on the next tick
+                recordLevelMove();
+            }
             else if( Property == IDs::solo )
                 seq.updateTrackSolo( this );
             else if( Property == IDs::length || Property == IDs::usingSequenceLength )
@@ -165,6 +172,120 @@ namespace mt
             else if( Property == IDs::program )
                 progChangeHandler();
         }
+        else if( TreeWhosePropertyHasChanged.hasType( IDs::AUTOLANE ) && Property == IDs::autoPoints )
+            reloadLaneFromState(); // undo/redo of a clear, or project load
+    }
+
+    ///
+    /// Automation (track level lane)
+    ///
+    void MTTrack::automationModeChanged( int Mode )
+    {
+        {
+            const juce::ScopedLock sl( laneWriteLock );
+            laneRec.reset();
+        }
+        laneApplied.store( -1 );
+        if( automation::Read != Mode ) // leaving Read: fall back to the stored level, the lane no longer drives it
+            levelScaler = ( MTITrackData::level.get() * MIDI::SCALER );
+    }
+
+    bool MTTrack::hasAutomation() const
+    {
+        const juce::ScopedLock sl( lock );
+        return !laneLevel.empty();
+    }
+
+    void MTTrack::clearAutomation( bool Undoable )
+    {
+        auto node = vTree.getChildWithName( IDs::AUTOLANE );
+        if( node.isValid() && node[IDs::autoPoints].toString().isNotEmpty() )
+        {
+            // The ValueTree listener reloads (empties) the lane; this also makes the clear undoable.
+            node.setProperty( IDs::autoPoints, "", Undoable ? undoManager : nullptr );
+            if( Undoable )
+                return;
+        }
+        automation::Lane empty;
+        {
+            const juce::ScopedLock w( laneWriteLock );
+            {
+                const juce::ScopedLock sl( lock );
+                laneLevel.swap( empty );
+            }
+            laneRec.reset();
+            laneCommitted = "";
+        }
+        laneApplied.store( -1 );
+    }
+
+    // Applies the lane value for the (post-wrap) track position to levelScaler. Tick thread, called with `lock` held.
+    // No allocation; only writes when the interpolated value changed.
+    void MTTrack::applyLaneAt( unsigned int Pos )
+    {
+        if( laneLevel.empty() || automation::Read != manager.getAutomationMode() )
+            return;
+        const int v = juce::jlimit( 0, 127, (int)automation::valueAt( laneLevel, (int32_t)Pos, -1 ) );
+        if( v != laneApplied.load( std::memory_order_relaxed ) )
+        {
+            laneApplied.store( v, std::memory_order_relaxed );
+            levelScaler.store( v * MIDI::SCALER, std::memory_order_relaxed );
+        }
+    }
+
+    // Called (message or MIDI-input thread) when the track level property changed. Records a breakpoint at the
+    // current track position in Write mode while this track plays. All level changes funnel through the ValueTree
+    // property (mixer slider, Q-Link via setTrackLevel, track view), so this is the single recording hook.
+    void MTTrack::recordLevelMove()
+    {
+        if( automation::Write != manager.getAutomationMode() )
+            return;
+        const juce::ScopedLock w( laneWriteLock );
+        auto                   p    = program.load();
+        const int              tick = livePlayTick.load( std::memory_order_relaxed );
+        if( !isPlaying.load() || tick < 0 || !p || p->isAudio() )
+        {
+            laneRec.reset(); // not playing: the next move starts a new touch
+            return;
+        }
+        automation::Lane next = laneLevel; // allocation on the writer thread only; the tick thread never sees a partial lane
+        if( automation::RecResult::Recorded != automation::recordMove( next, laneRec, tick, juce::jlimit( 0, 127, (int)vTree.getProperty( IDs::level ) ) ) )
+            return;
+        {
+            const juce::ScopedLock sl( lock );
+            laneLevel.swap( next );
+        }
+        commitLane( juce::String( automation::toString( laneLevel ) ) ); // laneLevel only changes under laneWriteLock
+    }
+
+    // Stores the lane text in the track's ValueTree (not undoable: a take is not an edit step) so it saves/loads
+    // with the project. Caller holds laneWriteLock.
+    void MTTrack::commitLane( const juce::String& Points )
+    {
+        if( Points == laneCommitted )
+            return;
+        laneCommitted = Points;
+        auto node     = vTree.getOrCreateChildWithName( IDs::AUTOLANE, nullptr );
+        node.setProperty( IDs::autoParam, (int)automation::Level, nullptr );
+        node.setProperty( IDs::autoPoints, Points, nullptr );
+    }
+
+    // Reads the lane from the ValueTree (construction, project load, undo/redo). Skips if it is our own commit.
+    void MTTrack::reloadLaneFromState()
+    {
+        const auto node   = vTree.getChildWithName( IDs::AUTOLANE );
+        const auto points = node.isValid() ? node[IDs::autoPoints].toString() : juce::String();
+        const juce::ScopedLock w( laneWriteLock );
+        if( points == laneCommitted )
+            return;
+        laneCommitted = points;
+        auto next     = automation::fromString( points.toStdString() );
+        {
+            const juce::ScopedLock sl( lock );
+            laneLevel.swap( next );
+        }
+        laneRec.reset();
+        laneApplied.store( -1 );
     }
 
     void MTTrack::handleAsyncUpdate()
@@ -383,6 +504,9 @@ namespace mt
             else
                 ++p;
         }
+
+        // Automation playback (Read mode): lane value for this tick's position, before the notes use levelScaler.
+        applyLaneAt( tickPos >= lengthInTicks.load() ? tickPos - lengthInTicks.load() : tickPos );
 
         fillMidiMessages( Tick, prevTick, trackMidiOutChannel );
 

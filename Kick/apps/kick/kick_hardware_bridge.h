@@ -973,10 +973,14 @@ public:
             }
             case HW_BTN_AUTOMATION:
             {
-                // +Shift = OFF -> EN_ON_OFF (same as keyboard 'N'). Note: no UI code consumes EN_ON_OFF / EN_AUTOMATION yet:
-                // the engine has no automation read/write/off mode (see docs T30).
-                m_automation_sent_code = isShiftDown() ? contracts::DeviceControlContracts::BtnLedSequence::EN_ON_OFF : contracts::DeviceControlContracts::BtnLedSequence::EN_AUTOMATION;
-                sendButtonMsg(m_automation_sent_code, contracts::DeviceControlContracts::BTN_PRESSED);
+                // MPC: AUTOMATION toggles Read <-> Write (from Off it goes to Read); +Shift = Off. Drives the engine's
+                // automation mode directly (no DCL packet: nothing consumes EN_AUTOMATION / EN_ON_OFF), so the release
+                // sends nothing either (kTcNoPacket marker). LED: Read = colour A (3), Write = colour B (4), Off = dark.
+                m_automation_sent_code = kTcNoPacket;
+                const int amCur  = ae.getAutomationMode(); // 0 Off, 1 Read, 2 Write
+                const int amNext = isShiftDown() ? 0 : (amCur == 1 ? 2 : 1);
+                ae.setAutomationMode(amNext);
+                setLed(HW_LED_AUTOMATION, amNext == 2 ? kick_hw::kLedFullB : (amNext == 1 ? kick_hw::kLedFullA : kick_hw::kLedOff));
                 break;
             }
             case HW_BTN_KEYBOARD_CONTROL:
@@ -1171,7 +1175,7 @@ public:
                 m_tc_sent_code = -1;
                 break;
             case HW_BTN_AUTOMATION:
-                sendButtonMsg(m_automation_sent_code >= 0 ? m_automation_sent_code : (int)contracts::DeviceControlContracts::BtnLedSequence::EN_AUTOMATION, contracts::DeviceControlContracts::BTN_RELEASED);
+                // Press changed the engine mode directly and sent no packet, so there is no release packet either.
                 m_automation_sent_code = -1;
                 break;
             case HW_BTN_QLINK:

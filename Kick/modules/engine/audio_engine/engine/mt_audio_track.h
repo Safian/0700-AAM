@@ -24,6 +24,7 @@
 #include "mt_audio_bar_seek.h"
 #include "mt_live_capture.h"
 #include "mt_arpeggiator.h"
+#include "mt_automation.h"
 
 namespace mt
 {
@@ -135,6 +136,16 @@ namespace mt
         inline int               getEffectiveNoteVelocity( int Velocity ) { return (int)( Velocity * levelScaler ); };
         inline const MTPlayhead& playhead() { return trackPlayhead; }
 
+        // Automation (track LEVEL lane). Mode is global (MTAudioManager::getAutomationMode).
+        //  Threading: laneLevel is read by onTick under `lock` (no allocation, no extra locking there) and replaced
+        //  only by swapping a fully built lane under `lock`; writers (message / MIDI-input thread: recording, clear,
+        //  undo reload) are serialised by laneWriteLock and never hold `lock` while allocating.
+        //  Called by MTAudioManager::setAutomationMode on the message thread: re-arms/restores the level scaler.
+        void automationModeChanged( int Mode );
+        // Drops the recorded lane. Undoable through the track's UndoManager when Undoable (the caller opens the transaction).
+        void clearAutomation( bool Undoable );
+        bool hasAutomation() const;
+
         // Solo Mute; don't call this API's directly without careful analysis.
         inline void setSoloMute( bool Mute ) { soloMuted = Mute; }
 
@@ -155,6 +166,10 @@ namespace mt
         void        handleAsyncUpdate() override;
         inline void updateTrackPlayhead( unsigned tickpos ) { trackPlayhead.normized = lengthFactor * tickPos; };
         void        fillMidiMessages( unsigned int tick, unsigned int prevTick, int midiChannel );
+        void        recordLevelMove();
+        void        commitLane( const juce::String& Points );
+        void        reloadLaneFromState();
+        void        applyLaneAt( unsigned int Pos );
 
         MTAudioManager&          manager;
         MTSequence&              seq;
@@ -176,8 +191,14 @@ namespace mt
         unsigned int          prevTick{ 0 };
         unsigned int          tickCtr{ 0 };
         unsigned int          tickPos{ 0 };
-        double                levelScaler{ 1.f };
-        juce::CriticalSection lock;
+        std::atomic<double>   levelScaler{ 1.f }; // written by the UI thread (level change) and by onTick (Read mode)
+        // Automation lane state (see automation methods above).
+        automation::Lane      laneLevel;               // guarded by `lock` (reader: onTick) + laneWriteLock (writers)
+        automation::RecState  laneRec;                 // guarded by laneWriteLock
+        juce::CriticalSection laneWriteLock;
+        juce::String          laneCommitted;           // last text stored in / read from the ValueTree; laneWriteLock
+        std::atomic<int>      laneApplied{ -1 };       // last level pushed to levelScaler by playback (-1 = none)
+        mutable juce::CriticalSection lock;
 
         std::atomic<bool>         soloMuted{ false };
         // Arpeggiator state. arpeg is guarded by arpFlag (input thread vs tick thread); arpOn mirrors enabled for the

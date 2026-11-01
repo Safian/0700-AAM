@@ -67,6 +67,9 @@ namespace mt
         DECLARE_ID( LAYER )
         DECLARE_ID( NOTE )
         DECLARE_ID( NOTELIST )
+        DECLARE_ID( AUTOLANE )   // per-track automation lane node: autoParam + autoPoints
+        DECLARE_ID( autoParam )
+        DECLARE_ID( autoPoints ) // "tick:value,tick:value", see mt_automation.h
         DECLARE_ID( RANDOM )
         DECLARE_ID( LFO )
         DECLARE_ID( FILTER )
