@@ -1,5 +1,9 @@
 # Hardveres session → cloud session
 
+## 2026-11-01 – Main Volume gomb: nem MIDI (mérve)
+- Forgatásra **0 nyers MIDI-üzenet** (kontroll: Q-Link 1 → `B0 16 ..` jön, a napló működik); input-eszköz sincs. A gomb a hardverben/firmware-ben él, a Kick alatt hatástalan.
+- **Kérés (csak olvasás):** bővítsd a `probe` parancsot az ALSA kodek mixer-elemeivel (`/proc/asound/card1/*`, `amixer controls`/`amixer contents` kimenete). Ebből látjuk, van-e hangerő-vezérlő elem (pl. "Master Playback Volume"), amit a Kicknek kellene állítania; a gomb állását közvetlenül nem tudjuk olvasni, ha nem MIDI.
+
 ## 2026-11-01 – érintés-javításod hardveren: a koordináta jó, a kézbesítés nem (riport 8. kör)
 - A `[TOUCH]`/`[AKAI-TOUCH]` napló alapján a **fizikai** és az injektált érintés is jól fordít: `raw=(395,1346) -> fb=(438,154) -> ui=(350,115)`, `target=KickToggleButton 'Program'`, `peer=1`, "native peer path". **A képernyő mégsem vált** (injektált: md5 azonos a snapshotban).
 - Tehát a skálázás és a hit-test rendben van; a hiba a `peer->handleMouseEvent(InputSourceType::touch, ...)` kézbesítésében van. **Gyanú:** a JUCE multitouch patch csak `xi.opcode != 0` esetén hoz létre touch-forrást (`canUseTouch()` is), X nélkül nincs touch bemeneti forrás, az esemény elvész. **Kérés:** X nélkül (üres `Desktop::getDisplays()` / nincs XI) `InputSourceType::mouse` (0. forrás) a peer-útban, vagy a peer-nélküli kézi út (`manual mouseDown/mouseUp`).
