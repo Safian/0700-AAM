@@ -169,6 +169,11 @@ add_executable(kick-main-volume-tests MainVolumeTests.cpp)
 add_test(NAME kick-main-volume COMMAND kick-main-volume-tests)
 set_tests_properties(kick-main-volume PROPERTIES TIMEOUT 10)
 
+# Full Level / Half Level pad velocity rules (MPC v3.10 user guide p. 343); JUCE-free, header only.
+add_executable(kick-pad-level-tests PadLevelTests.cpp)
+add_test(NAME kick-pad-level COMMAND kick-pad-level-tests)
+set_tests_properties(kick-pad-level PROPERTIES TIMEOUT 10)
+
 # Relative controller decoding (Data Dial CC100 0x01/0x7F, Q-Links); JUCE-free, header only.
 add_executable(kick-relative-cc-tests RelativeCcTests.cpp)
 add_test(NAME kick-relative-cc COMMAND kick-relative-cc-tests)

@@ -9,6 +9,7 @@
 #include "hardware/strip_modes.h"
 #include "hardware/hw_targets.h"
 #include "hardware/modal_dialog_keys.h"
+#include "hardware/pad_level.h"
 #include "hardware/system_probe.h"
 #include "hardware/touch_space.h"
 #include "contracts/dcl/dcl_signals.h"
@@ -49,6 +50,9 @@ private:
     // The original Kick UI has no consumer of EN_TAP_TEMPO (only MIDI-control mapping / hardware drawer), so the
     // bridge keeps the BPM handling itself.
     bool m_tap_tempo_held = false;
+    // FULL LEVEL button: pad hits at 127 (Full Level) or at the user level 64 (Shift + button, Half Level). The state is
+    // changed on the message thread (button) and read on the ALSA reader thread (pad hit), so it is a packed atomic.
+    std::atomic<uint32_t> m_pad_level_bits { 0 };  // bit0 full, bit1 user level, bits 8..15 user level velocity
     int m_frame_counter = 0;
     int m_cmd_fd = -1;
     int m_cmd_fd_w = -1;
@@ -1089,13 +1093,14 @@ public:
             }
             case HW_BTN_FULL_LEVEL:
             {
-                if (isShiftDown()) {
-                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_HALF_LEVEL);
-                    contracts::DclContractsHelper::setHalfLevel(true);
-                } else {
-                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_FULL_LEVEL);
-                    contracts::DclContractsHelper::setHalfLevel(false);
-                }
+                // MPC manual (v3.10 p. 343): press = Full Level on/off, Shift + press = Half Level on/off. The state lives
+                // here (the Kick UI only knows a one-way "Half Level" flag for the step sequencer), the LED follows it.
+                // No DCL press is sent: AppHome would force the flag back and lights an LED the bridge does not map.
+                kick_hw::padlevel::State st = padLevelState();
+                st = isShiftDown() ? kick_hw::padlevel::toggleUser(st) : kick_hw::padlevel::toggleFull(st);
+                setPadLevelState(st);
+                contracts::DclContractsHelper::setHalfLevel(st.user);
+                setLed(HW_LED_FULL_LEVEL, kick_hw::padlevel::ledOn(st) ? kick_hw::kLedFullA : kick_hw::kLedOff);
                 break;
             }
             case HW_BTN_16_LEVELS:
@@ -1431,7 +1436,7 @@ public:
                 sendTrackedRelease(btn, -1); // arp-latch toggle sends no press -> release only if EN_LATCH was pressed
                 break;
             case HW_BTN_FULL_LEVEL:
-                sendTrackedRelease(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_FULL_LEVEL);
+                sendTrackedRelease(btn, -1); // the press sends no DCL packet (see handleButtonPress)
                 break;
             case HW_BTN_16_LEVELS:
                 sendTrackedRelease(btn, -1); // Shift variant opens a screen (no press) -> release only if a press was sent
@@ -1688,8 +1693,24 @@ public:
                                                juce::MidiMessage::controllerEvent(1, 65, down ? 127 : 0));
     }
 
-    void on_pad_note_on(int pad_num, int vel) override
+    kick_hw::padlevel::State padLevelState() const
     {
+        const uint32_t b = m_pad_level_bits.load();
+        kick_hw::padlevel::State s;
+        s.full      = (b & 1u) != 0;
+        s.user      = (b & 2u) != 0;
+        s.userLevel = (int)((b >> 8) & 0xFFu);
+        if (s.userLevel == 0) s.userLevel = kick_hw::padlevel::kDefaultUserVelocity;
+        return s;
+    }
+    void setPadLevelState(const kick_hw::padlevel::State& s)
+    {
+        m_pad_level_bits.store((s.full ? 1u : 0u) | (s.user ? 2u : 0u) | ((uint32_t)kick_hw::padlevel::clampVel(s.userLevel) << 8));
+    }
+
+    void on_pad_note_on(int pad_num, int rawVel) override
+    {
+        const int vel = kick_hw::padlevel::padVelocity(padLevelState(), rawVel);
         if (pad_num >= 0 && pad_num < 16)
         {
             m_pad_held.fetch_or(uint16_t(1u << pad_num));
