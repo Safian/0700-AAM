@@ -87,7 +87,7 @@ Az adapter `get_akai_button()` mind a 45 Note-ot leképezi. A viselkedést a `Ki
 |---|---|---|
 | Q-Link 1–4 forgatás (CC16–19) | ✅ | |
 | Q-Link 1–4 érintés (Note 84–87) | ❌ | `on_encoder_touch()` üres a hídban |
-| Data Dial forgatás (CC100) | ✅ | MÉRVE igaz (`B0 64 01`/`7F`, ch1, Port 1; 2026-11-02). Kick-oldali út végigkövetve (AD1b); a fizikai tekerés hatása futó appon még nem mért |
+| Data Dial forgatás (CC100) | ✅ | MÉRVE igaz (`B0 64 01`/`7F`, ch1, Port 1; 2026-11-02). Kick-oldali út végigkövetve (AD1b); a fizikai tekerés hatása futó appon MÉRVE (2026-11-02, `1a5e4543`): a Track képernyőn a tárcsa a trackek között léptet (felhasználó); 83 dial-csomag ért a DCL-ig. A List Edit képernyőn nem látszott változás (nyitott, lásd postaláda) |
 | Touch Strip pozíció | ⚠️ | Csak CC33 (MSB) megy át; CC34 (LSB) eldobva, Note 78 (érintés) üres ág; a `CC69` ágnak nincs forrása a dokumentációban |
 | Touch Strip LED-létra | n/a | Az MPC v3.10 útmutató szerint nincs szoftveres funkciója ("Light LED"); a Kick nem ír rá (a `set_touch_strip_leds` törölve), a sötét sor nem hiba |
 

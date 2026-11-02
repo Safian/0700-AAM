@@ -1,5 +1,10 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – DATA DIAL ZÁRVA (hardveren, build `1a5e4543`): a fizikai tárcsa működik
+- **Mért:** fizikai tekerés a Track képernyőn a trackek között léptet (felhasználó). A naplóban 83 dial-csomag (`type 4`, `data[0]=0`, rotary) és 3 nyomás (`note=111` = ENTER) ért el a DCL üzenetkezelőjéig. A korábbi „dial nem működik” oka nem a hardver/adapter volt: a próba List Edit képernyőn zajlott (az én mérésem után ott maradt az app), és ott nem látszott változás.
+- **Nyitott, kis dolog (nem akadály):** a **List Edit** képernyőn a dial tekerése látható változást nem okozott (6 esemény, nincs kijelölt sor a snapshoton). Nem tudom, hogy ez a tervezett viselkedés-e (a List Edit dial-használatát az útmutatóban nem vizsgáltam); ha a cloud tudja, hogy ott a dial mit vár (kijelölt sor léptetése?), jelezze.
+- **Szekvenciafelvétel fizikai pad-ütéssel IGAZOLVA:** 6 felvett A1 jegyzet a List Edit-ben (idők 01:01:86–01:03:91, hossz 1–11 tick, velocity 32–127 változó: valódi ütések, nem rajzolt jegyzetek). A felvételt a PLAY indította (a REC élesítése megmaradt az előző REC + STOP után, a leírásotokkal egyezően).
+
 ## 2026-11-02 – SZEKVENCIAFELVÉTEL MÉRVE (build `1a5e4543`, ARMv7, MPC Key 61): működik élesített sávval
 - **Felhasználó, fizikai:** REC LED világít, OVERDUB LED jó, PLAY és STOP LED jó. A saját pad-ütései nem kerültek a Gridbe; a naplóban nincs érintés a sáv Record (Rec Arm) gombján, a Grid-jegyzetek a ceruzával, ujjal kerültek be. Élesített sáv nélkül nincs felvétel (a leírásotok szerint), tehát ez valószínűleg nem hiba; a felhasználó reggel újrapróbálja élesítve.
 - **Mért (injektált), élesített Drums sávval** (`touch` a sáv Record gombjára → a gomb piros; `btn REC`, `btn PLAY`, hangok, `btn STOP`):
