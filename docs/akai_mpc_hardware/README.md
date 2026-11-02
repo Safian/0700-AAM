@@ -32,3 +32,4 @@ try d.string!.write(toFile: CommandLine.arguments[2], atomically: true, encoding
 
 ## Mért viselkedés
 - [KEY61_LED_COLOURS.md](KEY61_LED_COLOURS.md): a gombok LED-protokollja és színei (kamerás mérés, 2026-11-01).
+- [KEY61_HW_BEHAVIOUR.md](KEY61_HW_BEHAVIOUR.md): a hardver gombjainak fizikai működése (tudás-napló: portok, csatornák, jegyzetek, LED, mérési napló). Ami itt "mért", azt nem kell újra megmérni.
