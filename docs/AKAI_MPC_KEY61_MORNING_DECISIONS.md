@@ -88,3 +88,9 @@ Minden beolvasztott ag tartalma mar (cherry-pick / ujraimplementalas formajaban)
 | Hosszan tartott hang | Egy körnél tovább tartott hang egy körre vágva kerül be | Nincs wall-clock a pufferben | `seqrec::spanTicks` | - |
 | Undo | A take elején `beginNewTransaction("Record")`; egy undo lépés, amíg közben más nem nyit tranzakciót | Meglévő undo mechanizmus | `seqRecBeginTake` | - |
 | LED (felhasználói döntés) | REC élesítve = piros folyamatos, felvétel közben villog (piros); OVERDUB aktív = zöld; a looper felvétele elsőbbséget élvez. A piros=B, zöld=A színkódot az AUTOMATION LED bizonyítja, REC/OVERDUB-ra nem ellenőrzött | Felhasználói döntés 2026-11-02 | `led_map.h`, `updateRecOverdubLeds` | Kamerás ellenőrzés |
+
+## Felhasználói döntés, 2026-11-02 (scope: Kick-funkciók előbb, Akai-specifikus a végére)
+- A Kick funkciókat fixáljuk ki ELŐSZÖR. Az Akai-specifikus részek (Locate ablak, Sounds Mode, Keyboard Control menü stb.) a végére maradnak, az Akai ágon/rétegben, end-to-end megírva; hogy pontosan hogyan, még nincs kitalálva.
+- A régi Proper-skin dolgok NEM kerülnek be ebbe az ágba; az Akai-dolgok igen, de az Akai-rétegbe.
+- A helyi agent jegyzete (NEM-KICK scope "elfogadva") a felhasználó szavai szerint pontatlan volt; ez a bejegyzés az érvényes.
+- Következmény: Locate ablak / Sounds Mode / Keyboard Control menü most NEM épül; Y4 (strip módok) a Kickben létező módokra a leírás megérkezése után.

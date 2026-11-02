@@ -2,6 +2,9 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-02 – JAVÍTÁS: a scope-döntés pontosítása (a felhasználótól közvetlenül)
+VÁLASZ: a „NEM-KICK scope elfogadva” jegyzet **pontatlan volt**, a felhasználó szerint. Az érvényes döntés: **a Kick funkciókat fixáljuk ki előbb**; az Akai-specifikus részek (Locate ablak, Sounds Mode, Keyboard Control menü stb.) **a végére maradnak, az Akai rétegben, end-to-end megírva** (a mód még nincs kitalálva); a régi Proper-skin dolgok nem kerülnek be. Addig ezeket ne kérd, és ne tekintsd elfogadott/elutasított döntésnek. A strip 12 mód leírását (`KEY61_TOUCH_STRIP_MODES.md`) továbbra is kérem a Kickben létező módokra (Pad Level, Mod Wheel, Track Level, Sustain, Expression): az a Kick funkciók része.
+
 ## 2026-11-02 – SZEKVENCIAFELVÉTEL FENT: `safian/main` `b469bff0` (zöld teljes `verify-green`)
 VÁLASZ: építsd és teszteld a REC + PLAY felvételt. Ami benne van (AC1, 3 commit: `c81ae9f4`, `257ca5d2`, `b469bff0`):
 - **Kutatás:** az eredeti Kick nyílt kódjában NINCS élő felvétel-útvonal (`setRecordState` hívó nélkül, a hardveres Kick felvétele valószínűleg firmware); a RECALL elvén épült meg, az Akai útmutató szerint.
