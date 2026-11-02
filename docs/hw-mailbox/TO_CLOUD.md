@@ -1,5 +1,21 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – NYERS MIDI MÉRÉS (Key 61, fizikai vezérlők): Data Dial bemenete jó; a Main Volume SysExet küld, a Kick nem dolgozza fel
+- **Módszer:** a Kick leállítva (az kizárólagosan foglalja a RawMIDI portokat), `amidi -p hw:0,0,<0|1|2> -d -t 100`, a felhasználó sorban végigment a vezérlőkön. Időbélyeg nincs, a vezérlők az üzenettípusukról azonosíthatók. Port 0 és Port 2: 0 üzenet; Port 1: 1609 üzenet. Az app a mérés után újraindítva (futó build: b65dc8c6 alapú, a d0ab8e46-ig tartó cloud-commitokat még nem építettem).
+- **Mért üzenetek (mind Port 1):**
+  - Data Dial forgatás: `B0 64 01` (jobbra) / `B0 64 7F` (balra), CC 100 relatív, ch1; nyomás: Note 111.
+  - `+` = Note 54, `−` = Note 55 (be/ki).
+  - Q-Link 1–4: CC 16–19 relatív ch1; Q-Link érintés: Note 84, 85, 86, 87 (be/ki, vel 127/0).
+  - Touch strip: CC 33 + CC 34 ch1 (min 0, max 124/127).
+  - Pitch wheel: Pitch Bend ch16 (0–16383); Mod wheel: CC 1 ch16; szusztain: CC 64 ch16.
+  - Billentyűk: Note On/Off **ch16 Port 1-en** (Port 0 üres), vel 75–97; aftertouch: Channel Pressure ch16 (0–127).
+  - Pad: Note 37 ch10 + Poly Aftertouch; Note 78 (be/ki) egy gombé, leképezését nem néztem.
+  - **Main Volume (nem külön azonosítva, kizárásos alapon):** SysEx `F0 47 7F 4B 5B 00 01 <v> F7`, `v` = 0x00..0x75, lépésenként fel/le. Más, nem azonosított vezérlő a mérésben nem maradt.
+- **Következmény 1 (Data Dial):** a bemenet pontosan az, amit az adapter vár (`akai_mpc_key61_adapter.h:448`, CC 100 → `on_jog_dial`), tehát a "dial nem működik" hiba **a `handleJogDial` utáni úton van** (az `EN_KNOB_ROTARY`/`EN_KNOB_CENTER` csomagot a Kick UI-ban mely képernyő fogyasztja, nem tudom). A TODO "CC száma a review-ra támaszkodik ❓" jelzése megszűnhet: mérve igaz.
+- **Következmény 2 (Main Volume):** az adapter a Port 1 bejövő SysExet nem értelmezi (a kódban csak kimenő SysEx van: init, pad RGB). A korábbi "a Main Volume nem MIDI" állításom **hibás volt**: a gomb SysExet küld. Az érték a Kick master hangerejére köthető; a leképezés (a 0x00–0x75 tartomány, a 0x5B parancs jelentése) az útmutatóból nem ismert, ez mért adat, nem dokumentáció.
+- **Nem mértem:** expression pedál (nincs a felhasználónál; az adapter CC 11-et kezel), a Q-Link érintés és a Note 78 kezelése a Kickben.
+- Nyers napló (Port 1) a hardveres session scratchpadjében; kérésre feltöltöm.
+
 ## 2026-11-02 – TC hardveres zárás: ENTER = Apply HARDVEREN IGAZOLVA
 - Mért (b65dc8c6, injektált): `btn TC` → List Edit; a `TC` gomb érintésére megnyílik a Timing Correct ablak; `btn ENTER` → bezárul (snapshot md5 `8b8986e1d151` → `a0104c4456d1`). A `MAIN`/Shift+STOP = Cancel nincs mérve (Shift injektálva nem megy).
 - Megjegyzés: az injektált `btn TC` önmagában a List Edit-re visz (nem nyit ablakot); az ablak a List Edit `TC` gombjának érintésére nyílik.
