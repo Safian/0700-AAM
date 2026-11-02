@@ -55,9 +55,17 @@ private:
     std::string m_cmd_buf;
     // Two Shift buttons (left / right) share one Kick Shift state: EN_SHIFT goes out only on 0->1 / 1->0 (F10).
     kick_hw::ShiftCounter m_shift;
-    // T12 touch strip mode (kick_hw::strip::Mode): 0 Kick slider, 1 pitch bend (spring back), 2 mod wheel (CC1).
+    // T12/Y4 touch strip mode (kick_hw::strip::Mode): Kick slider, pitch bend (spring back), pad level, mod wheel
+    // (CC1), track level, sustain (CC64), expression (CC11), off. Mode and state are atomics: the strip arrives on the
+    // ALSA reader thread, the mode is cycled there too (button) or on the message thread (kick_cmd injector).
     std::atomic<int>  m_strip_mode { 0 };
     std::atomic<bool> m_strip_pitch_sent { false };  // a pitch value was sent and not yet sprung back to centre
+    std::atomic<bool> m_strip_sustain_down { false }; // Sustain mode: the strip currently holds the pedal down
+    std::atomic<int>  m_strip_last_note { -1 };      // Pad Level mode target: note (bank * 16 + pad) of the last pad hit
+    // Newest strip value waiting for the message thread (-1 = none queued): the level modes edit the engine through
+    // the same calls as the UI (message thread), and only one callAsync is pending at a time.
+    std::atomic<int>  m_strip_pad_level_pending { -1 };
+    std::atomic<int>  m_strip_track_level_pending { -1 };
     bool m_locate_pressed = false;
     // DCL code sent on press of the Shift-dependent TC / AUTOMATION buttons (-1 = none), so the release
     // goes to the same code even if Shift was released first.
@@ -110,6 +118,8 @@ private:
     std::atomic<uint8_t> m_pad_last_vel[16] = {};         // note-on velocity of the held pad (aftertouch packet field 3)
     sigslot::connection m_pad_colour_conn;
     sigslot::connection m_screen_conn;
+    int m_last_screen = -1;      // last loaded kick_ui::Screen (message thread only), for the [DIAL] diagnostic log
+    int m_dial_log_count = 0;    // handleJogDial calls so far (message thread only), thins the [DIAL] log
     sigslot::connection m_play_conn;
 
     void onDclCommand(std::shared_ptr<ipc::MTIPCJson> message)
@@ -736,7 +746,7 @@ public:
 
             if (!m_screen_conn.connected()) {
                 m_screen_conn = kick_ui::signals::onScreenLoaded.connect(
-                    [this](kick_ui::Screen s) { updateModeLeds(s); });
+                    [this](kick_ui::Screen s) { m_last_screen = static_cast<int>(s); updateModeLeds(s); });
             }
 
             m_have_project_colours = false;
@@ -819,17 +829,19 @@ public:
         juce::MessageManager::callAsync([this, alive = m_alive, delta]() { if (!alive->load()) return; handleJogDial(delta); });
     }
 
-    // T12 (Akai convention, Kick has no strip modes): cycle slider -> pitch bend -> mod wheel. Uses only atomics,
-    // set_led_level and stripPitchSpringBack (m_target_mutex), so it is safe on the ALSA reader thread.
+    // T12/Y4 (Kick has only the slider): cycle Kick slider -> pitch bend -> pad level -> mod wheel -> track level ->
+    // sustain -> expression -> off (manual order, MPC v3.10 p. 101, minus the modes Kick lacks). Uses only atomics,
+    // set_led_level, stripPitchSpringBack / stripSustainSet (m_target_mutex), so it is safe on the ALSA reader thread.
     void cycleStripMode()
     {
         const int old_mode = m_strip_mode.load();
         const int new_mode = kick_hw::strip::nextMode(old_mode);
         m_strip_mode.store(new_mode);
         if (old_mode == kick_hw::strip::kPitchBend) stripPitchSpringBack();
+        if (old_mode == kick_hw::strip::kSustain) stripSustainSet(false); // leaving Sustain lifts the pedal
         if (m_hw && m_hw->control_surface())
             m_hw->control_surface()->set_led_level(HW_LED_TOUCH_STRIP, kick_hw::strip::modeLedLevel(new_mode));
-        printf("[STRIP] mode %d (0 slider, 1 pitch bend, 2 mod wheel)\n", new_mode);
+        printf("[STRIP] mode %d (0 slider, 1 pitch bend, 2 pad level, 3 mod wheel, 4 track level, 5 sustain, 6 expression, 7 off)\n", new_mode);
         fflush(stdout);
     }
 
@@ -1445,6 +1457,13 @@ public:
 
     void handleJogDial(int delta)
     {
+        // AE1 diagnostics (no behaviour change): first 20 calls, then every 50th.
+        ++m_dial_log_count;
+        if (m_dial_log_count <= 20 || m_dial_log_count % 50 == 0)
+        {
+            printf("[DIAL] handleJogDial steps=%d screen=%d\n", delta, m_last_screen);
+            fflush(stdout);
+        }
         auto& ae = mt::getAudioInterface();
         if (m_tap_tempo_held)
         {
@@ -1510,9 +1529,43 @@ public:
         if (!m_strip_pitch_sent.exchange(false)) return;
         sendPitchBend(m_strip_bend_target, kick_hw::strip::pitchSpringBackTarget());
     }
+    // Sustain mode: CC64 on the edges only (same path as the physical pedal, so the release goes to the track that
+    // got the press).
+    void stripSustainSet(bool down)
+    {
+        if (m_strip_sustain_down.exchange(down) == down) return;
+        on_sustain_pedal(down);
+    }
+    // Level modes: apply the newest strip value on the message thread (setNoteGain / setTrackLevel are UI-thread calls).
+    void postStripPadLevel(int val)
+    {
+        if (m_strip_pad_level_pending.exchange(val) != -1) return; // a queued task will pick up the newest value
+        juce::MessageManager::callAsync([this, alive = m_alive]() {
+            if (!alive->load()) return;
+            const int v = m_strip_pad_level_pending.exchange(-1), note = m_strip_last_note.load();
+            if (v < 0 || note < 0) return; // no pad hit yet: nothing to set (DUMMY: "current pad" = last pad hit)
+            mt::getAudioInterface().setLevelForSelectedProgram(note, v);
+        });
+    }
+    void postStripTrackLevel(int val)
+    {
+        if (m_strip_track_level_pending.exchange(val) != -1) return;
+        juce::MessageManager::callAsync([this, alive = m_alive]() {
+            if (!alive->load()) return;
+            const int v = m_strip_track_level_pending.exchange(-1);
+            if (v < 0) return;
+            auto& ae = mt::getAudioInterface();
+            const mt::MTSelected sel = ae.getSelected();
+            ae.setTrackLevel(sel.sequence, sel.track, v);
+        });
+    }
     void on_touch_strip_touch(bool down) override
     {
-        if (!down && m_strip_mode.load() == kick_hw::strip::kPitchBend) stripPitchSpringBack();
+        if (down) return;
+        const int mode = m_strip_mode.load();
+        if (mode == kick_hw::strip::kPitchBend) stripPitchSpringBack();
+        else if (mode == kick_hw::strip::kSustain) stripSustainSet(false); // release always lifts the pedal
+        // Pad / track level, mod wheel, expression: the value stays (DUMMY, the manual has no release behaviour).
     }
     void on_touch_strip_fine(int pos14) override
     {
@@ -1524,10 +1577,15 @@ public:
     {
         const int mode = m_strip_mode.load();
         if (mode == kick_hw::strip::kPitchBend) return; // pitch bend uses on_touch_strip_fine (14 bit)
-        if (mode == kick_hw::strip::kModWheel)
+        switch (mode)
         {
-            sendCc(1, kick_hw::strip::modWheelFromPosition(val));
-            return;
+            case kick_hw::strip::kModWheel:   sendCc(1, kick_hw::strip::modWheelFromPosition(val)); return;
+            case kick_hw::strip::kExpression: sendCc(11, kick_hw::strip::expressionFromPosition(val)); return;
+            case kick_hw::strip::kSustain:    stripSustainSet(kick_hw::strip::sustainDownFromPosition(val)); return;
+            case kick_hw::strip::kPadLevel:   postStripPadLevel(kick_hw::strip::padLevelFromPosition(val)); return;
+            case kick_hw::strip::kTrackLevel: postStripTrackLevel(kick_hw::strip::trackLevelFromPosition(val)); return;
+            case kick_hw::strip::kOff:        return; // sends nothing
+            default: break; // kSlider: the Kick slider packet below
         }
         CPktMgr::HWMsg_t msg;
         msg.pktType = CPktMgr::enumPacketType::EN_PKT_TYPE_SLIDER;
@@ -1595,6 +1653,7 @@ public:
         if (pad_num >= 0 && pad_num < 16)
         {
             m_pad_held.fetch_or(uint16_t(1u << pad_num));
+            m_strip_last_note.store(m_current_bank.load() * 16 + pad_num); // Pad Level strip mode target
             m_pad_last_vel[pad_num] = static_cast<uint8_t>(vel);
             if (m_hw && m_hw->control_surface()) {
                 // Flash pad bright white/cyan on hit!

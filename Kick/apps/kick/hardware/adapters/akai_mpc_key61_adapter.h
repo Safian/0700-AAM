@@ -339,6 +339,7 @@ private:
     bool m_port0_writes = true;
     std::atomic<int> m_strip_msb { 0 };   // last CC33 / CC34 of the touch strip (14-bit position)
     std::atomic<int> m_strip_lsb { 0 };
+    int m_dial_cc_count = 0;              // CC100 events seen (MIDI reader thread only), thins the [AKAI-DIAL] log
     std::atomic<bool> m_out1_err_logged { false }; // first snd_rawmidi_write error per output handle
     std::atomic<bool> m_out0_err_logged { false };
     kick_hw::LedLevelCache m_led_cache; // last level per button LED (only changes are written)
@@ -481,6 +482,13 @@ private:
                         // 0x01 = +1 (right), 0x7F = -1 (left) (measured); 0x00 is no step and is not forwarded
                         // (a zero-count knob packet would reach the UI as a rotation with value 0).
                         const int delta = kick_hw::relcc::decode(cc_val);
+                        // AE1 diagnostics (no behaviour change): first 20 events, then every 50th.
+                        ++m_dial_cc_count;
+                        if (m_dial_cc_count <= 20 || m_dial_cc_count % 50 == 0)
+                        {
+                            printf("[AKAI-DIAL] cc100 val=%d -> steps=%d\n", cc_val, delta);
+                            fflush(stdout);
+                        }
                         if (delta != 0) m_listener->on_jog_dial(delta);
                     } else if (cc_num == 33) {
                         // Touch strip position MSB. The 0..127 path is unchanged; the 14-bit value (with the last
