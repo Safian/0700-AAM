@@ -62,24 +62,30 @@ namespace mt
 
         if( pKeys->isNoteEffectivelyMuted( Note ) ) return;
 
-        MTIKeys* pNote = pKeys->getKeysClip( Note );
-        int root = Note;
-        if( pNote )
+        // A key without an assigned sample still has a (default, empty) clip, so "no clip" alone is not the test: a clip
+        // without a sound source counts as unassigned and falls back to the first assigned sample (chromatic keybed playback).
+        const auto hasSound = []( MTIKeys* k ) { return k != nullptr && k->getSource( 0 ).isNotEmpty() && k->getSourceSlice( 0 ) != nullptr; };
+        MTIKeys*   pNote    = pKeys->getKeysClip( Note );
+        int        root     = Note;
+        if( hasSound( pNote ) )
         {
             root = pNote->keyNote.get();
             if( root < 0 || root > 127 ) root = Note;
         }
         else
         {
-            // Fallback to first assigned keygroup sample for chromatic keybed playback
-            auto assigned = pKeys->getAssignedNotes();
-            if( !assigned.empty() )
+            pNote = nullptr;
+            // Fallback to the first assigned keygroup sample for chromatic keybed playback
+            for( auto assignedNote : pKeys->getAssignedNotes() )
             {
-                pNote = pKeys->getKeysClip( assigned[0] );
-                if( pNote )
+                auto* candidate = pKeys->getKeysClip( assignedNote );
+                if( hasSound( candidate ) )
                 {
-                    root = pNote->keyNote.get();
-                    if( root < 0 || root > 127 ) root = assigned[0];
+                    pNote = candidate;
+                    // The sample has no root-note field of its own (keyNote is its pad slot), so a sample played from a key
+                    // it is not assigned to sounds at original pitch on middle C and follows the keybed chromatically.
+                    root = 60;
+                    break;
                 }
             }
         }
