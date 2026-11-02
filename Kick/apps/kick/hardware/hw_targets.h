@@ -7,6 +7,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdlib>
+#include <string>
 
 namespace kick_hw {
 
@@ -73,28 +74,51 @@ private:
     bool   m_active = false;
 };
 
+// Where a CC64 really takes effect. The CC64 lane of the engine is (sequence, track), but the pedal STATE lives in the
+// program the track uses (sample program: MTIProgram::sustain; MIDI program: the external port + channel). Two
+// different tracks can share one program (explode / copyTrack), two MIDI programs can share port + channel, so the
+// release decision compares this key too. An empty key (nothing resolved) never matches anything.
+struct SustainKey
+{
+    std::string program; // sample program id; empty for a MIDI program
+    std::string port;    // MIDI program: output port; empty for a sample program
+    int         channel = -1; // MIDI program: output channel
+    bool empty() const { return program.empty() && port.empty() && channel < 0; }
+    bool operator==(const SustainKey& o) const { return program == o.program && port == o.port && channel == o.channel; }
+};
+inline bool sameSustainKey(const SustainKey& a, const SustainKey& b) { return !a.empty() && a == b; }
+
 // Sustain (CC64) with two sources, the physical pedal and the touch strip in Sustain mode. Each source has its OWN
-// HeldTarget (the release goes to the track that got that source's press). The CC64 messages may go to a common
-// track, so a release only sends CC64=0 when the other source does not still hold the pedal on the same track.
+// HeldTarget (the release goes to the track that got that source's press) and the SustainKey resolved at its press.
+// A release only sends CC64=0 when the other source does not still hold the pedal at the same effect place (same
+// sequence/track lane OR same SustainKey), else the other source's pedal would be lifted early.
 template <typename Target>
 class SustainSources
 {
 public:
     enum Source { kPedal = 0, kStrip = 1 };
-    // Target for the CC64=127 of `s`.
-    Target press(Source s, const Target& current) { return m_held[s].begin(current); }
+    // Target for the CC64=127 of `s`; `key` = the effect place of that target (kept until the release of `s`).
+    Target press(Source s, const Target& current, const SustainKey& key = SustainKey())
+    {
+        if (!m_held[s].active()) m_key[s] = key;
+        return m_held[s].begin(current);
+    }
     // Ends `s`; `out` = the track that got its press. True = send CC64=0 there, false = the other source still holds
-    // the pedal on that same track (a different track gets its own CC64=0).
+    // the pedal at the same place (a different place gets its own CC64=0).
     template <typename Eq>
     bool release(Source s, const Target& current, Eq sameTarget, Target& out)
     {
+        const bool wasActive = m_held[s].active();
         out = m_held[s].end(current);
         const HeldTarget<Target>& other = m_held[1 - s];
-        return !(other.active() && sameTarget(other.peek(current), out));
+        if (!other.active()) return true;
+        if (sameTarget(other.peek(current), out)) return false;
+        return !(wasActive && sameSustainKey(m_key[1 - s], m_key[s]));
     }
     bool held(Source s) const { return m_held[s].active(); }
 private:
     HeldTarget<Target> m_held[2];
+    SustainKey         m_key[2];
 };
 
 // Lane identity of the CC64 output: MTAudioInterface::addLiveMidiMsg -> manager->getTrack(Selection) picks the track by
@@ -109,29 +133,33 @@ bool sameSequenceTrack(const Target& a, const Target& b)
 // the flag change and the press/release decision must happen in ONE critical section of the bridge's m_target_mutex
 // (otherwise a mode change on the message thread can interleave with the reader's press and leave CC64=127 stuck).
 // The bridge also sends the CC64 message inside that same critical section so two threads cannot reorder the output.
+// `resolveKey(const Target&) -> SustainKey` is called on a PRESS only (under the caller's lock), never on a release.
 template <typename Target>
 class SustainState
 {
 public:
     using Source = typename SustainSources<Target>::Source;
     // Physical pedal edge. True = send CC64=(down?127:0) to `out`.
-    bool pedal(bool down, const Target& current, Target& out)
+    template <typename KeyFn>
+    bool pedal(bool down, const Target& current, KeyFn resolveKey, Target& out)
     {
-        return edge(SustainSources<Target>::kPedal, down, current, out);
+        return edge(SustainSources<Target>::kPedal, down, current, resolveKey, out);
     }
     // Strip edge; a repeated value (no edge) sends nothing.
-    bool strip(bool down, const Target& current, Target& out)
+    template <typename KeyFn>
+    bool strip(bool down, const Target& current, KeyFn resolveKey, Target& out)
     {
         if (m_stripDown == down) return false;
         m_stripDown = down;
-        return edge(SustainSources<Target>::kStrip, down, current, out);
+        return edge(SustainSources<Target>::kStrip, down, current, resolveKey, out);
     }
     bool stripDown() const { return m_stripDown; }
     bool held(Source s) const { return m_src.held(s); }
 private:
-    bool edge(Source s, bool down, const Target& current, Target& out)
+    template <typename KeyFn>
+    bool edge(Source s, bool down, const Target& current, KeyFn resolveKey, Target& out)
     {
-        if (down) { out = m_src.press(s, current); return true; }
+        if (down) { out = m_src.press(s, current, resolveKey(current)); return true; }
         return m_src.release(s, current, sameSequenceTrack<Target>, out);
     }
     SustainSources<Target> m_src;

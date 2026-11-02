@@ -1533,6 +1533,28 @@ public:
         if (!m_strip_pitch_sent.exchange(false)) return;
         sendPitchBend(m_strip_bend_target, kick_hw::strip::pitchSpringBackTarget());
     }
+    // Effect place of a CC64 sent to `sel` (see kick_hw::SustainKey): the program the track uses, or for a MIDI program
+    // its external (port, channel). Called on a press only, under m_target_mutex; it takes the engine's own short
+    // lookups (getProgramForTrack -> manager->getTrack, as addLiveMidiMsg does) and never calls back into the bridge.
+    static kick_hw::SustainKey resolveSustainKey(mt::MTAudioInterface& ae, const mt::MTSelected& sel)
+    {
+        kick_hw::SustainKey k;
+        if (auto* p = ae.getProgramForTrack(sel.sequence, sel.track))
+        {
+            if (auto* m = dynamic_cast<mt::MTMidiProgram*>(p))
+            {
+                k.port    = m->getPort().toStdString();
+                k.channel = m->getMidiChannel();
+            }
+            else
+                k.program = p->id.get().toStdString();
+        }
+        return k;
+    }
+    static auto sustainKeyResolver(mt::MTAudioInterface& ae)
+    {
+        return [&ae](const mt::MTSelected& sel) { return resolveSustainKey(ae, sel); };
+    }
     // Sustain mode: CC64 on the edges only (same path as the physical pedal, so the release goes to the track that
     // got the press). AG1b: the strip flag change, the press/release decision AND the mode check are ONE critical
     // section of m_target_mutex, so a mode change (message thread, kick_cmd) cannot interleave with a press from the
@@ -1545,7 +1567,7 @@ public:
         std::lock_guard<std::mutex> lk(m_target_mutex);
         if (onlyInSustainMode && m_strip_mode.load() != kick_hw::strip::kSustain) down = false;
         mt::MTSelected target;
-        if (m_sustain.strip(down, ae.getSelected(), target))
+        if (m_sustain.strip(down, ae.getSelected(), sustainKeyResolver(ae), target))
             ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
     }
     // Level modes: apply the newest strip value on the message thread (setNoteGain / setTrackLevel are UI-thread calls).
@@ -1627,7 +1649,7 @@ public:
         auto& ae = mt::getAudioInterface();
         std::lock_guard<std::mutex> lk(m_target_mutex);
         mt::MTSelected target;
-        if (m_sustain.pedal(down, ae.getSelected(), target))
+        if (m_sustain.pedal(down, ae.getSelected(), sustainKeyResolver(ae), target))
             ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
     }
 
