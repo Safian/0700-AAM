@@ -3,6 +3,7 @@
 #include "../hardware_adapter.h"
 #include "../midi_parser.h"
 #include "../main_volume.h"
+#include "../relative_cc.h"
 #include "../led_map.h"
 #include "../akai_map.h"
 #include "../device_probe.h"
@@ -473,12 +474,14 @@ private:
                     int cc_num = d0, cc_val = d1;
                     if (cc_num >= 16 && cc_num <= 19) {
                         // Q-Link 1..4 relative rotary
-                        int delta = (cc_val < 64) ? cc_val : (cc_val - 128);
-                        m_listener->on_encoder_turn(cc_num - 16, delta);
+                        const int delta = kick_hw::relcc::decode(cc_val);
+                        if (delta != 0) m_listener->on_encoder_turn(cc_num - 16, delta);   // 0 = no step (see T11 note in the bridge)
                     } else if (cc_num == 100) {
                         // Data Dial relative rotary (CC 100 on MPC Key 61!)
-                        int delta = (cc_val < 64) ? cc_val : (cc_val - 128);
-                        m_listener->on_jog_dial(delta);
+                        // 0x01 = +1 (right), 0x7F = -1 (left) (measured); 0x00 is no step and is not forwarded
+                        // (a zero-count knob packet would reach the UI as a rotation with value 0).
+                        const int delta = kick_hw::relcc::decode(cc_val);
+                        if (delta != 0) m_listener->on_jog_dial(delta);
                     } else if (cc_num == 33) {
                         // Touch strip position MSB. The 0..127 path is unchanged; the 14-bit value (with the last
                         // CC34 LSB) is offered additionally for the pitch bend mode.
