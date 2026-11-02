@@ -14,9 +14,12 @@ static void check(bool ok, const char* why)
 int main()
 {
     using namespace kick_hw::strip;
-    check(nextMode(kSlider) == kPitchBend, "slider -> pitch");
-    check(nextMode(kPitchBend) == kModWheel, "pitch -> mod");
-    check(nextMode(kModWheel) == kSlider, "mod -> slider (wraps)");
+    // cycle: Kick slider first, then the manual's order (p. 101) without the modes Kick lacks
+    const int expected[] = { kSlider, kPitchBend, kPadLevel, kModWheel, kTrackLevel, kSustain, kExpression, kOff };
+    check(kNumModes == 8 && (int)(sizeof(expected) / sizeof(expected[0])) == kNumModes, "8 modes");
+    int m = kSlider;
+    for (int i = 0; i < kNumModes; ++i) { check(m == expected[i], "cycle order"); m = nextMode(m); }
+    check(m == kSlider, "off -> slider (wraps)");
     check(nextMode(99) == kSlider && nextMode(-1) == kSlider, "invalid mode -> slider");
 
     check(combine14(0, 0) == 0, "combine min");
@@ -36,12 +39,22 @@ int main()
         check(sliderPercent(v) == (int)std::round(v * 100.0f / 127.0f), "slider scaling equals the original formula");
     check(modWheelFromPosition(200) == 127 && modWheelFromPosition(-1) == 0 && modWheelFromPosition(42) == 42, "mod");
 
-    check(modeLedLevel(kSlider) == 0, "slider LED off");
-    check(modeLedLevel(kPitchBend) != modeLedLevel(kModWheel), "pitch / mod LED differ");
-    // the two mode levels must give different velocities on the (single colour) TOUCH STRIP LED
-    check(kick_hw::akaiLedValue(false, modeLedLevel(kPitchBend)) != kick_hw::akaiLedValue(false, modeLedLevel(kModWheel)),
-          "pitch / mod LED velocities differ");
-    check(kick_hw::akaiLedValue(false, modeLedLevel(kSlider)) == 0, "slider LED velocity 0");
+    check(expressionFromPosition(200) == 127 && expressionFromPosition(-1) == 0 && expressionFromPosition(11) == 11, "expression");
+    check(padLevelFromPosition(0) == 0 && padLevelFromPosition(127) == 127 && padLevelFromPosition(64) == 64, "pad level");
+    check(padLevelFromPosition(500) == 127 && padLevelFromPosition(-9) == 0, "pad level clamps");
+    check(trackLevelFromPosition(0) == 0 && trackLevelFromPosition(127) == 127 && trackLevelFromPosition(1) == 1, "track level");
+    check(trackLevelFromPosition(500) == 127 && trackLevelFromPosition(-9) == 0, "track level clamps");
+    check(!sustainDownFromPosition(0) && !sustainDownFromPosition(63), "sustain up below threshold");
+    check(sustainDownFromPosition(64) && sustainDownFromPosition(127), "sustain down from 64");
+
+    // LED: Off = dark, every other mode lit (slider dim, others full)
+    check(modeLedLevel(kOff) == 0, "off LED dark");
+    for (int i = 0; i < kNumModes; ++i)
+        check((modeLedLevel(i) == 0) == (i == kOff), "only Off is dark");
+    check(kick_hw::akaiLedValue(false, modeLedLevel(kOff)) == 0, "off LED velocity 0");
+    check(kick_hw::akaiLedValue(false, modeLedLevel(kSlider)) == 1, "slider LED dim");
+    check(kick_hw::akaiLedValue(false, modeLedLevel(kPadLevel)) == 127 &&
+          kick_hw::akaiLedValue(false, modeLedLevel(kExpression)) == 127, "other modes full");
     std::printf("strip modes tests passed\n");
     return 0;
 }
