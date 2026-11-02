@@ -6,13 +6,37 @@ namespace ui
     {
         int lastPressedPad = -1;
 
+        namespace
+        {
+            // Mount point of the first mounted device whose node starts with devPrefix (Linux /proc/mounts), else the
+            // fallback. The Kick hardware mounts at /mnt/{sdcard,flash}; the Akai MPC mounts at /sdcard and /media/<label>,
+            // so the file browser must follow the mount table instead of a fixed path. Mount points that hold only a
+            // boot partition (…/EFI) are skipped.
+            juce::String mountPointOf( const char* devPrefix, const char* fallback )
+            {
+#if defined( LINUX ) || defined( __linux__ )
+                juce::StringArray lines;
+                juce::File( "/proc/mounts" ).readLines( lines );
+                for( const auto& line : lines )
+                {
+                    auto fields = juce::StringArray::fromTokens( line, " ", "" );
+                    if( fields.size() < 2 || !fields[0].startsWith( devPrefix ) ) continue;
+                    auto mnt = fields[1].replace( "\\040", " " );
+                    if( mnt.endsWith( "/EFI" ) ) continue;
+                    if( juce::File( mnt ).isDirectory() ) return mnt;
+                }
+#endif
+                return fallback;
+            }
+        }
+
         juce::String getSdCardMountedPath()
         {
-            return "/mnt//sdcard";
+            return mountPointOf( "/dev/mmcblk1", "/mnt//sdcard" );
         }
         juce::String getUsbMountedPath()
         {
-            return "/mnt//flash";
+            return mountPointOf( "/dev/sd", "/mnt//flash" );
         }
 
         bool getSdCardStatus()
@@ -30,11 +54,8 @@ namespace ui
         bool getUsbStatus()
         {
 #if defined( LINUX ) || defined( __linux__ )
-            const char* usbDevicePath = "/dev/sda";
-            if( access( usbDevicePath, F_OK ) != -1 )
-                return true;
-            else
-                return false;
+            if( access( "/dev/sda", F_OK ) != -1 ) return true;
+            return getUsbMountedPath() != "/mnt//flash"; // a mounted /dev/sd* (the MPC numbers its drives from sdb)
 #endif
             return false;
         }
