@@ -92,6 +92,7 @@ public:
         const HeldTarget<Target>& other = m_held[1 - s];
         return !(other.active() && sameTarget(other.peek(current), out));
     }
+    bool held(Source s) const { return m_held[s].active(); }
 private:
     HeldTarget<Target> m_held[2];
 };
@@ -103,6 +104,39 @@ bool sameSequenceTrack(const Target& a, const Target& b)
 {
     return a.sequence == b.sequence && a.track == b.track;
 }
+
+// Sustain state machine of the bridge: both sources plus the "strip holds the pedal" flag. NOT thread-safe by itself:
+// the flag change and the press/release decision must happen in ONE critical section of the bridge's m_target_mutex
+// (otherwise a mode change on the message thread can interleave with the reader's press and leave CC64=127 stuck).
+// The bridge also sends the CC64 message inside that same critical section so two threads cannot reorder the output.
+template <typename Target>
+class SustainState
+{
+public:
+    using Source = typename SustainSources<Target>::Source;
+    // Physical pedal edge. True = send CC64=(down?127:0) to `out`.
+    bool pedal(bool down, const Target& current, Target& out)
+    {
+        return edge(SustainSources<Target>::kPedal, down, current, out);
+    }
+    // Strip edge; a repeated value (no edge) sends nothing.
+    bool strip(bool down, const Target& current, Target& out)
+    {
+        if (m_stripDown == down) return false;
+        m_stripDown = down;
+        return edge(SustainSources<Target>::kStrip, down, current, out);
+    }
+    bool stripDown() const { return m_stripDown; }
+    bool held(Source s) const { return m_src.held(s); }
+private:
+    bool edge(Source s, bool down, const Target& current, Target& out)
+    {
+        if (down) { out = m_src.press(s, current); return true; }
+        return m_src.release(s, current, sameSequenceTrack<Target>, out);
+    }
+    SustainSources<Target> m_src;
+    bool m_stripDown = false;
+};
 
 // G16: a pitch wheel rarely rests on exactly 8192; values within +-2 of the centre count as "centred" (ends the hold).
 constexpr int kBendCentre = 8192;
