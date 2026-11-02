@@ -48,16 +48,21 @@ namespace ui
             if( contracts::DclContractsHelper::isButtonMessage( f_hwMsg ) )
             {
                 int BtnNum = contracts::DclContractsHelper::getButtonCode( f_hwMsg );
+                // A button sends a press and a release; the control steps on the press only (the release used to step it a
+                // second time).
+                const bool pressed = contracts::DclContractsHelper::getButtonState( f_hwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED;
                 switch( BtnNum )
                 {
                     case contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS:
                     case contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_CW:
-                        knobRotated( getIncrement() );
+                        if( pressed )
+                            knobRotated( getIncrement() );
                         break;
 
                     case contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_CCW:
                     case contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS:
-                        knobRotated( -( getIncrement() ) );
+                        if( pressed )
+                            knobRotated( -( getIncrement() ) );
                         break;
 
                     case contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER:
@@ -115,7 +120,10 @@ namespace ui
                         // Nothing to be done for link knobs...
                         break;
                     case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_CENTER:
-                        knobRotated( contracts::DclContractsHelper::getKnobValue( f_hwMsg ) );
+                        // One data dial tick = one increment of the control, exactly like a +/- press (the MPC manual:
+                        // "use the data dial or -/+ buttons to adjust the value"). The raw tick count alone would move a
+                        // 0..1 slider with step 0.01 by a whole unit.
+                        knobRotated( contracts::DclContractsHelper::getKnobValue( f_hwMsg ) * getIncrement() );
                         break;
                 }
             }
@@ -149,13 +157,61 @@ namespace ui
         }
     };
 
+    // The control the data dial / +/- / dial press act on. JUCE keyboard focus is the normal way to select one, but it
+    // cannot exist when the window is hidden (no X display on the MPC: Component::isShowing() is false, so
+    // grabKeyboardFocus() does nothing) and the touch is delivered straight to mouseDown(). So the last touched control is
+    // remembered here and getComponentInFocus() falls back to it. One slot for the whole app (inline function, one
+    // definition across translation units).
+    inline juce::Component::SafePointer<juce::Component>& selectedControlSlot()
+    {
+        static juce::Component::SafePointer<juce::Component> slot;
+        return slot;
+    }
+
+    // True if the component and all its parents up to (not including) the top-level window are visible. isShowing() is
+    // false for the whole tree of a hidden window, and the MPC runs with an intentionally hidden top-level window (no X
+    // display), so the window's own visibility is not part of the test.
+    inline bool isVisibleInTree( const juce::Component* c )
+    {
+        for( ; c != nullptr && c->getParentComponent() != nullptr; c = c->getParentComponent() )
+            if( !c->isVisible() )
+                return false;
+        return c != nullptr;
+    }
+
+    // Select the control under a touch: the nearest parent (or the component itself) that is a selectable Kick control.
+    // A touch that lands on no control clears the selection, so the screens keep their own dial behaviour then.
+    inline void selectControlFromTouch( juce::Component* touched )
+    {
+        for( auto* c = touched; c != nullptr; c = c->getParentComponent() )
+        {
+            if( c->getProperties().contains( "CtrlBase" ) && c->getWantsKeyboardFocus() && dynamic_cast<KickControlsProcessor*>( c ) )
+            {
+                selectedControlSlot() = c;
+                return;
+            }
+        }
+        selectedControlSlot() = nullptr;
+    }
+
+    inline void clearSelectedControl() { selectedControlSlot() = nullptr; }
+
+    inline juce::Component* getSelectedControl()
+    {
+        auto* c = selectedControlSlot().getComponent();
+        return ( c != nullptr && isVisibleInTree( c ) ) ? c : nullptr;
+    }
+
     static inline KickControlsProcessor* getComponentInFocus()
     {
-        return dynamic_cast<KickControlsProcessor*>( juce::Component::getCurrentlyFocusedComponent() );
+        if( auto* f = dynamic_cast<KickControlsProcessor*>( juce::Component::getCurrentlyFocusedComponent() ) )
+            return f;
+        return dynamic_cast<KickControlsProcessor*>( getSelectedControl() );
     };
 
     static inline void clearFocusComponent()
     {
         juce::Component::unfocusAllComponents();
+        clearSelectedControl();
     }
 }

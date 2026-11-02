@@ -64,6 +64,7 @@ namespace kick_ui
         std::map<Screen, std::unique_ptr<IScreen>> screens_;
 
         std::unique_ptr<Component>                 ctrlBar_;
+        std::unique_ptr<Component>                 selectionOutline_;
         std::unique_ptr<KickLEDs>                  ledControl_;
         std::unique_ptr<MobileHardwareDrawer>      hardwareDrawer_;
         juce::Component::SafePointer<AppStatusbar> statusBar_;
