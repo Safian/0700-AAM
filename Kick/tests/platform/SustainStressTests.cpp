@@ -37,19 +37,21 @@ void checkInvariant()
     CHECK(g_laneOn == held);
 }
 
+auto noKey = [](const Sel&) { return kick_hw::SustainKey(); };
+
 void stripSet(bool down, bool onlyInSustainMode) // = bridge stripSustainSet
 {
     std::lock_guard<std::mutex> lk(g_mutex);
     if (onlyInSustainMode && !g_sustainMode.load()) down = false;
     Sel t;
-    if (g_state.strip(down, Sel{ 0, 0, g_program.load() }, t)) send(down ? 127 : 0);
+    if (g_state.strip(down, Sel{ 0, 0, g_program.load() }, noKey, t)) send(down ? 127 : 0);
     checkInvariant();
 }
 void pedalSet(bool down) // = bridge on_sustain_pedal
 {
     std::lock_guard<std::mutex> lk(g_mutex);
     Sel t;
-    if (g_state.pedal(down, Sel{ 0, 0, g_program.load() }, t)) send(down ? 127 : 0);
+    if (g_state.pedal(down, Sel{ 0, 0, g_program.load() }, noKey, t)) send(down ? 127 : 0);
     checkInvariant();
 }
 }

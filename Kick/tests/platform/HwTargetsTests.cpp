@@ -94,6 +94,57 @@ int main()
             CHECK(!kick_hw::sameSequenceTrack(Sel{ 0, 1, 0 }, Sel{ 0, 0, 0 })); // other sequence = other lane
             CHECK(!kick_hw::sameSequenceTrack(Sel{ 1, 0, 0 }, Sel{ 0, 0, 0 })); // other track
         }
+        { // AH1: different tracks, SAME effect place (shared program): the other source holds -> no early CC64=0
+            using K = kick_hw::SustainKey;
+            auto kp = [](const char* id) { K k; k.program = id; return k; };
+            SS ss;
+            ss.press(SS::kPedal, Sel{ 0, 0, 0 }, kp("X"));
+            ss.press(SS::kStrip, Sel{ 0, 1, 0 }, kp("X")); // track switched, X is the same program
+            CHECK(!ss.release(SS::kStrip, Sel{ 0, 1, 0 }, same, out));
+            CHECK(ss.release(SS::kPedal, Sel{ 0, 1, 0 }, same, out) && out.track == 0);
+            ss.press(SS::kStrip, Sel{ 0, 1, 0 }, kp("X")); // and the other way round, other sequence
+            ss.press(SS::kPedal, Sel{ 1, 0, 0 }, kp("X"));
+            CHECK(!ss.release(SS::kPedal, Sel{ 1, 0, 0 }, same, out));
+            CHECK(ss.release(SS::kStrip, Sel{ 1, 0, 0 }, same, out) && out.sequence == 1 && out.track == 0);
+            { // different programs: each sends its own CC64=0
+                SS s2;
+                s2.press(SS::kPedal, Sel{ 0, 0, 0 }, kp("X"));
+                s2.press(SS::kStrip, Sel{ 0, 1, 0 }, kp("Y"));
+                CHECK(s2.release(SS::kStrip, Sel{ 0, 1, 0 }, same, out) && out.sequence == 1);
+                CHECK(s2.release(SS::kPedal, Sel{ 0, 1, 0 }, same, out) && out.track == 0);
+            }
+            { // two MIDI programs on one port + channel are one place; other channel / port are not
+                auto km = [](const char* port, int ch) { K k; k.port = port; k.channel = ch; return k; };
+                SS s3;
+                s3.press(SS::kPedal, Sel{ 0, 0, 0 }, km("A", 1));
+                s3.press(SS::kStrip, Sel{ 0, 1, 1 }, km("A", 1));
+                CHECK(!s3.release(SS::kStrip, Sel{ 0, 1, 1 }, same, out));
+                CHECK(s3.release(SS::kPedal, Sel{ 0, 1, 1 }, same, out));
+                s3.press(SS::kPedal, Sel{ 0, 0, 0 }, km("A", 1));
+                s3.press(SS::kStrip, Sel{ 0, 1, 1 }, km("A", 2));
+                CHECK(s3.release(SS::kStrip, Sel{ 0, 1, 1 }, same, out));
+                s3.press(SS::kStrip, Sel{ 0, 1, 1 }, km("B", 1));
+                CHECK(s3.release(SS::kStrip, Sel{ 0, 1, 1 }, same, out));
+                CHECK(s3.release(SS::kPedal, Sel{ 0, 1, 1 }, same, out));
+            }
+            { // unresolved (empty) keys never match
+                SS s4;
+                s4.press(SS::kPedal, Sel{ 0, 0, 0 });
+                s4.press(SS::kStrip, Sel{ 0, 1, 0 });
+                CHECK(s4.release(SS::kStrip, Sel{ 0, 1, 0 }, same, out));
+                CHECK(s4.release(SS::kPedal, Sel{ 0, 1, 0 }, same, out));
+            }
+            { // whole state machine: the resolver is called on a press only
+                kick_hw::SustainState<Sel> st;
+                int calls = 0;
+                auto res = [&](const Sel& c) { ++calls; K k; k.program = c.program == 5 ? "X" : "Z"; return k; };
+                Sel t;
+                CHECK(st.pedal(true, Sel{ 0, 0, 5 }, res, t) && t.track == 0 && calls == 1);
+                CHECK(st.strip(true, Sel{ 0, 1, 5 }, res, t) && t.sequence == 1 && calls == 2);
+                CHECK(!st.strip(false, Sel{ 0, 1, 5 }, res, t) && calls == 2);
+                CHECK(st.pedal(false, Sel{ 0, 1, 5 }, res, t) && t.track == 0 && calls == 2);
+            }
+        }
         { // strip alone
             SS ss;
             ss.press(SS::kStrip, Sel{ 4 });
