@@ -188,6 +188,8 @@ Terület: a Track Mixer (137-141), a Pad Mixer (142-145), a Track/Pad Mute mód 
 
 ## Összegzés
 
+> **Ellenőrzési állapot (2026-11-02):** a lapot egy `sonnet-worker` készítette az útmutató szövegéből; a tábla formája és a `fájl:sor` hivatkozások létezése gépileg ellenőrzött (minden sor 7 oszlopos, a hivatkozott sor a fájlon belül van). A tartalmi mintavétel (7 véletlen `OK` sor) 6 sornál hihető vagy egyezik, 1 sornál túlállított (D-031: a hivatkozott sor a mixer nézet-listája, nem a Send-szabály). Az `OK` ezért **piszkozat-szintű**: fejlesztés előtt az adott sor hivatkozott kódját ellenőrizni kell. A hardveres állítások `NEM VIZSGÁLT`-ak.
+
 Sorok száma: 179 (a Kick-hivatkozások mindegyike ellenőrizve: 175 `fájl:sor` hivatkozás az OK és ELTÉR sorokban).
 
 | Állapot | Sorok |
