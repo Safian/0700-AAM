@@ -839,7 +839,10 @@ public:
         const int new_mode = kick_hw::strip::nextMode(old_mode);
         m_strip_mode.store(new_mode);
         if (old_mode == kick_hw::strip::kPitchBend) stripPitchSpringBack();
-        if (old_mode == kick_hw::strip::kSustain) stripSustainSet(false); // leaving Sustain lifts the pedal
+        // Leaving Sustain lifts the pedal. Unconditional (the exchange makes it harmless): on the kick_cmd path this runs on
+        // the message thread while the reader may still be inside on_touch_strip with the old mode.
+        (void)old_mode;
+        stripSustainSet(false);
         if (m_hw && m_hw->control_surface())
             m_hw->control_surface()->set_led_level(HW_LED_TOUCH_STRIP, kick_hw::strip::modeLedLevel(new_mode));
         printf("[STRIP] mode %d (0 slider, 1 pitch bend, 2 pad level, 3 mod wheel, 4 track level, 5 sustain, 6 expression, 7 off)\n", new_mode);
@@ -1568,7 +1571,7 @@ public:
         if (down) return;
         const int mode = m_strip_mode.load();
         if (mode == kick_hw::strip::kPitchBend) stripPitchSpringBack();
-        else if (mode == kick_hw::strip::kSustain) stripSustainSet(false); // release always lifts the pedal
+        stripSustainSet(false); // release always lifts the strip pedal, whatever the mode is now (a mode change may have raced)
         // Pad / track level, mod wheel, expression: the value stays (DUMMY, the manual has no release behaviour).
     }
     void on_touch_strip_fine(int pos14) override
@@ -1585,7 +1588,12 @@ public:
         {
             case kick_hw::strip::kModWheel:   sendCc(1, kick_hw::strip::modWheelFromPosition(val)); return;
             case kick_hw::strip::kExpression: sendCc(11, kick_hw::strip::expressionFromPosition(val)); return;
-            case kick_hw::strip::kSustain:    stripSustainSet(kick_hw::strip::sustainDownFromPosition(val)); return;
+            case kick_hw::strip::kSustain:
+                stripSustainSet(kick_hw::strip::sustainDownFromPosition(val));
+                // Re-check: cycleStripMode (message thread, kick_cmd) may have changed the mode after the load above and
+                // its stripSustainSet(false) may have run before our press; lift it again so it cannot stick.
+                if (m_strip_mode.load() != kick_hw::strip::kSustain) stripSustainSet(false);
+                return;
             case kick_hw::strip::kPadLevel:   postStripPadLevel(kick_hw::strip::padLevelFromPosition(val)); return;
             case kick_hw::strip::kTrackLevel: postStripTrackLevel(kick_hw::strip::trackLevelFromPosition(val)); return;
             case kick_hw::strip::kOff:        return; // sends nothing
