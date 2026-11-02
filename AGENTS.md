@@ -76,3 +76,23 @@ KICK_RESOURCE_ROOT=$PWD/Kick KICK_NO_AUDIO_DEVICE=1 KICK_NO_SERIAL_DEVICE=1 KICK
 Per-change compile check without a full build: take the TU command from `build-linux/compile_commands.json`, swap the path
 prefix to your worktree, drop `-o`/`-MD`, add `-fsyntax-only`. Syntax checks must cover every TU the change reaches (e.g. the `audio_program.cpp` unity TU, `kick_ui.cpp`, `Main.cpp`), not only `audio_engine.cpp`; `verify-green.sh` is the final judge.
 Worker template: `.claude/agents/kick-worker.md`.
+
+## Debugging on the MPC Key 61 hardware (owner rule, 2026-11-02, all agents)
+The owner must not be sent hopping around the device. Debug the way the 2026-11-02 Keygroup trace was done:
+- **Drive the app yourself.** Everything that can be injected is injected through the `/data/kick_cmd` FIFO on the MPC
+  (`echo "<cmd>" > /data/kick_cmd`): `btn <NAME>`, `touch X Y`, `touch_down/touch_move/touch_up`, `jog N`, `pad N V`, `key N V`,
+  `strip V`, `rawmidi PORT hex...`, `snapshot /data/x.ppm` (convert the PPM to PNG and look at it). Touch space is the 1280x800
+  framebuffer. Read `/data/kick.log` for what the app actually saw. Never ask the owner to tap or press something you can inject.
+- **Trace the whole path in one go.** When something does not work, put temporary `[TAG]` log lines on every stage of the
+  code path (input, router, program, engine, output) in ONE build, run the scenario, read the log, and see exactly where it stops.
+  Do not guess one stage at a time. Remove the temporary lines before committing.
+- **Rule the hardware out first.** `docs/akai_mpc_hardware/KEY61_HW_BEHAVIOUR.md` is the knowledge log of measured hardware
+  behaviour (ports, channels, notes, LEDs, SysEx, boot state). What it marks as measured is not measured again; the recorded raw MIDI can be
+  replayed with `rawmidi`. Every new measured fact is appended there (date, method, build).
+- **Ask the human only for what only a human can perceive** (sound, LEDs, a physical control): one request, with the exact steps,
+  and say what the result decides. Do not touch the screen while the owner is touching it; say so when you are about to drive it.
+- **Deploy** with the `kick-mpc-deploy` skill or `docs/akai_mpc_hardware/tools/build_arm.sh` and `deploy_mpc.sh`. There is one MPC and one
+  Docker build at a time (`-j2`). A deploy restarts Kick and drops the unsaved in-memory project: say so before you do it.
+- Known traps of the X-less MPC: the top-level window is hidden (no `isShowing()`, no JUCE keyboard focus); touches are delivered by
+  the bridge straight to `mouseDown/mouseDrag/mouseUp` (not through JUCE's dispatcher, so MouseListeners do not run); a double tap
+  needs two taps within 450 ms; popups are separate windows that the snapshot and the injected touch may not reach.
