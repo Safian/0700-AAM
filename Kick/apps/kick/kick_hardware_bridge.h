@@ -42,6 +42,13 @@ private:
     int  m_touch_down_x[10] = { 0 };
     int  m_touch_down_y[10] = { 0 };
     bool m_touch_dragging[10] = { false };
+    // Double tap: the synthetic MouseEvents used to carry numberOfClicks = 1 always, so JUCE never saw a double click
+    // (Sample Assign pad assignment, "double-tap to enter" in the MPC manual). A tap that starts within 450 ms and 24 px of
+    // the previous release of the same slot counts as the next click.
+    juce::int64 m_last_up_ms[10] = { 0 };
+    int         m_last_up_x[10]  = { 0 };
+    int         m_last_up_y[10]  = { 0 };
+    int         m_click_count[10] = { 0 };
     // Peer-path touch source (message thread only): probed on the first delivery, see deliverPeerTouch().
     bool m_touch_src_probed = false;
     bool m_touch_src_ok     = true;
@@ -520,13 +527,25 @@ private:
             }
 
             auto localPt = target->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
+            int clicks = 1;
+            if (slot >= 0 && slot < 10)
+            {
+                if (is_down)
+                {
+                    const auto now = juce::Time::currentTimeMillis();
+                    const bool again = m_click_count[slot] > 0 && now - m_last_up_ms[slot] <= 450
+                                       && !kick_hw::probe::exceedsTouchSlop(m_last_up_x[slot], m_last_up_y[slot], ix, iy, 24);
+                    m_click_count[slot] = again ? m_click_count[slot] + 1 : 1;
+                }
+                clicks = m_click_count[slot] > 0 ? m_click_count[slot] : 1;
+            }
             juce::MouseEvent e(juce::Desktop::getInstance().getMainMouseSource(),
                                localPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                target, target,
                                juce::Time::getCurrentTime(),
                                localPt,
                                juce::Time::getCurrentTime(),
-                               1, false);
+                               clicks, false);
 
             if (is_down)
             {
@@ -549,14 +568,24 @@ private:
                 auto* effectiveTarget = downTarget ? downTarget : target;
                 if (effectiveTarget) {
                     auto downLocalPt = effectiveTarget->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
+                    const bool wasDragged = slot >= 0 && slot < 10 && m_touch_dragging[slot];
                     juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                            effectiveTarget, effectiveTarget,
                                            juce::Time::getCurrentTime(),
                                            downLocalPt,
                                            juce::Time::getCurrentTime(),
-                                           1, false);
+                                           clicks, wasDragged);
+                    juce::Component::SafePointer<juce::Component> alive(effectiveTarget);
                     effectiveTarget->mouseUp(downE);
+                    if (clicks >= 2 && !wasDragged && alive != nullptr)
+                        effectiveTarget->mouseDoubleClick(downE);   // JUCE order: mouseUp, then mouseDoubleClick
+                    if (slot >= 0 && slot < 10)
+                    {
+                        m_last_up_ms[slot] = juce::Time::currentTimeMillis();
+                        m_last_up_x[slot]  = ix;
+                        m_last_up_y[slot]  = iy;
+                    }
                     printf("[TOUCH] manual mouseUp delivered to '%s'\n", effectiveTarget->getName().toRawUTF8());
                     fflush(stdout);
                 }
@@ -594,7 +623,7 @@ private:
                                            juce::Time::getCurrentTime(),
                                            pressLocalPt,
                                            juce::Time::getCurrentTime(),
-                                           1, true);
+                                           clicks, true);
                     downTarget->mouseDrag(downE);
                 } else {
                     target->mouseDrag(e);
