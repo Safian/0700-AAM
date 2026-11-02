@@ -61,7 +61,8 @@ private:
     std::atomic<int>  m_strip_mode { 0 };
     std::atomic<bool> m_strip_pitch_sent { false };  // a pitch value was sent and not yet sprung back to centre
     std::atomic<bool> m_strip_sustain_down { false }; // Sustain mode: the strip currently holds the pedal down
-    std::atomic<int>  m_strip_last_note { -1 };      // Pad Level mode target: note (bank * 16 + pad) of the last pad hit
+    std::atomic<int>  m_strip_last_pad { -1 };       // Pad Level mode target: pad index 0..15 of the last pad hit (the note is
+                                                     // computed on the message thread from the ENGINE bank, see postStripPadLevel)
     // Newest strip value waiting for the message thread (-1 = none queued): the level modes edit the engine through
     // the same calls as the UI (message thread), and only one callAsync is pending at a time.
     std::atomic<int>  m_strip_pad_level_pending { -1 };
@@ -1542,9 +1543,12 @@ public:
         if (m_strip_pad_level_pending.exchange(val) != -1) return; // a queued task will pick up the newest value
         juce::MessageManager::callAsync([this, alive = m_alive]() {
             if (!alive->load()) return;
-            const int v = m_strip_pad_level_pending.exchange(-1), note = m_strip_last_note.load();
-            if (v < 0 || note < 0) return; // no pad hit yet: nothing to set (DUMMY: "current pad" = last pad hit)
-            mt::getAudioInterface().setLevelForSelectedProgram(note, v);
+            const int v = m_strip_pad_level_pending.exchange(-1), pad = m_strip_last_pad.load();
+            if (v < 0 || pad < 0) return; // no pad hit yet: nothing to set (DUMMY: "current pad" = last pad hit)
+            // The bank is the engine's (the touch screen switches it too, m_current_bank only follows the BANK buttons):
+            // same note as the Grid plays, ae.getBankOffset() + pad.
+            auto& ae = mt::getAudioInterface();
+            ae.setLevelForSelectedProgram(kick_hw::strip::padNote(ae.getBankOffset(), pad), v);
         });
     }
     void postStripTrackLevel(int val)
@@ -1653,7 +1657,7 @@ public:
         if (pad_num >= 0 && pad_num < 16)
         {
             m_pad_held.fetch_or(uint16_t(1u << pad_num));
-            m_strip_last_note.store(m_current_bank.load() * 16 + pad_num); // Pad Level strip mode target
+            m_strip_last_pad.store(pad_num); // Pad Level strip mode target (note resolved later from the engine bank)
             m_pad_last_vel[pad_num] = static_cast<uint8_t>(vel);
             if (m_hw && m_hw->control_surface()) {
                 // Flash pad bright white/cyan on hit!

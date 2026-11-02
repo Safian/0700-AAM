@@ -47,6 +47,10 @@ int main()
     check(!sustainDownFromPosition(0) && !sustainDownFromPosition(63), "sustain up below threshold");
     check(sustainDownFromPosition(64) && sustainDownFromPosition(127), "sustain down from 64");
 
+    // AF1a: Pad Level note = engine bank offset + pad (not a bridge-side bank)
+    check(padNote(0, 0) == 0 && padNote(16, 0) == 16 && padNote(16, 15) == 31 && padNote(48, 3) == 51, "pad note = bank offset + pad");
+    check(padNote(16, -1) == -1 && padNote(16, 16) == -1, "bad pad");
+
     // LED: Off = dark, every other mode lit (slider dim, others full)
     check(modeLedLevel(kOff) == 0, "off LED dark");
     for (int i = 0; i < kNumModes; ++i)
