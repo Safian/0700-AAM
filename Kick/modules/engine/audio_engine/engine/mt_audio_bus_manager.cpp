@@ -89,6 +89,9 @@ namespace mt
 
         // Do this at the last to restore processing.
         bypass.referTo( state, IDs::bypass, UM, false );
+        // referTo() does not fire onValueChange, so the engine bus stayed bypassed after the setBypass( true ) above and
+        // Chain::process skipped its gain / mute / pan (Mixer master fader and Main Volume had no audible effect).
+        if( bus ) bus->setBypass( bypass.get() );
     }
 
     void MTIBus::valueTreePropertyChanged( juce::ValueTree& treeWhosePropertyHasChanged, const juce::Identifier& property )
