@@ -2,6 +2,13 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-02 – FENT: Main Volume, Data Dial napló, strip módok (`safian/main` `3180df00`, zöld teljes `verify-green`)
+VÁLASZ: köszi a strip-doksit, a nyers MIDI mérést és a szekvenciafelvétel mérését. Építsd és teszteld:
+- **Main Volume (AD1a, `e2a39526`):** a Port 1 SysEx `F0 47 7F 4B 5B 00 01 <v> F7` a Kick master szintjére (output bus 0, ugyanaz mint a Mixer Master csúszka) van kötve, `v*127/0x75` skálával; a 0x5B parancsbájt jelentése dummy (csak felismerés). Mérd: a gomb hallhatóan állítja-e a hangerőt, és hogy 0x75 tényleg a felső határ-e; más Akai SysEx `[AKAI-SYSEX] ...` naplósor.
+- **Data Dial (AD1b `de1b8d1c` + AE1):** a 0x00 CC érték már nem megy ki nulla lépéses balra forgatásként; a Kick-oldali út végigkövetve rendben (nincs olyan képernyő vagy feltétel, ami eldobná). **Diagnosztikai naplók a fizikai tárcsához:** `[AKAI-DIAL] cc100 val=.. -> steps=..` (adapter, a bejövő `B0 64 xx`) és `[DIAL] handleJogDial steps=.. screen=..` (a `callAsync` lefutása), az első 20 esemény + minden 50-edik. Értelmezés: csak az első sor → a `callAsync`/`m_alive` ág gyanús; egyik sem → a CC100 nem érkezik meg; mindkettő, de a UI nem lép → UI-oldali fogyasztó. Kérem a fizikai tekerést futó appon a Track képernyőn.
+- **Touch strip módok (Y4 `c2037bbe`, `3180df00`):** a TOUCH STRIP gomb körbeléptet: Kick slider (alap) → Pitch Bend → Pad Level → Mod Wheel (CC1) → Track Level → Sustain (CC64) → Expression (CC11) → Off. Dummyk (a doksi nem írja): Sustain küszöb ≥64 = pedál le; Pad/Track Level 1:1 (0..127), elengedéskor marad; Pad Level = az utoljára ütött pad (javítás úton: motor bankja); LED: Off = ki, a többi világít. A Q-Link/Crossfader/Note Strum/Notes nem épült.
+- Úton (AF1): a Pad Level helyes hangszámítása a motor bankjából, strip-sustain külön célpont, a strip LED induláskor.
+
 ## 2026-11-02 – JAVÍTÁS: a scope-döntés pontosítása (a felhasználótól közvetlenül)
 VÁLASZ: a „NEM-KICK scope elfogadva” jegyzet **pontatlan volt**, a felhasználó szerint. Az érvényes döntés: **a Kick funkciókat fixáljuk ki előbb**; az Akai-specifikus részek (Locate ablak, Sounds Mode, Keyboard Control menü stb.) **a végére maradnak, az Akai rétegben, end-to-end megírva** (a mód még nincs kitalálva); a régi Proper-skin dolgok nem kerülnek be. Addig ezeket ne kérd, és ne tekintsd elfogadott/elutasított döntésnek. A strip 12 mód leírását (`KEY61_TOUCH_STRIP_MODES.md`) továbbra is kérem a Kickben létező módokra (Pad Level, Mod Wheel, Track Level, Sustain, Expression): az a Kick funkciók része.
 
