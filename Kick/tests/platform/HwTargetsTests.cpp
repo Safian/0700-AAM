@@ -5,7 +5,7 @@
 static int g_fail = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("FAIL line %d: %s\n", __LINE__, #c); ++g_fail; } } while (0)
 
-struct Sel { int track = 0; };
+struct Sel { int track = 0; int sequence = 0; int program = 0; };
 
 int main()
 {
@@ -65,7 +65,7 @@ int main()
     }
     { // AF1d: physical pedal + strip Sustain, own targets, shared CC64 lane
         using SS = kick_hw::SustainSources<Sel>;
-        auto same = [](const Sel& a, const Sel& b) { return a.track == b.track; };
+        auto same = kick_hw::sameSequenceTrack<Sel>; // the production lane identity
         Sel out;
         { // both hold T0: the first release stays silent, the last one sends CC64=0
             SS ss;
@@ -80,6 +80,19 @@ int main()
             CHECK(ss.press(SS::kPedal, Sel{ 2 }).track == 2);
             CHECK(ss.release(SS::kStrip, Sel{ 2 }, same, out) && out.track == 1); // other track: own CC64=0
             CHECK(ss.release(SS::kPedal, Sel{ 3 }, same, out) && out.track == 2);
+        }
+        { // AG1a: same (sequence, track), different program = same CC64 lane -> no CC64=0 while the other source holds
+            SS ss;
+            ss.press(SS::kPedal, Sel{ 0, 0, 0 });
+            ss.press(SS::kStrip, Sel{ 0, 0, 1 }); // program changed in between
+            CHECK(!ss.release(SS::kStrip, Sel{ 0, 0, 1 }, same, out));
+            CHECK(ss.release(SS::kPedal, Sel{ 0, 0, 1 }, same, out) && out.program == 0);
+            ss.press(SS::kStrip, Sel{ 0, 0, 2 });
+            ss.press(SS::kPedal, Sel{ 0, 0, 3 });
+            CHECK(!ss.release(SS::kPedal, Sel{ 0, 0, 3 }, same, out)); // and the other way round
+            CHECK(ss.release(SS::kStrip, Sel{ 0, 0, 3 }, same, out));
+            CHECK(!kick_hw::sameSequenceTrack(Sel{ 0, 1, 0 }, Sel{ 0, 0, 0 })); // other sequence = other lane
+            CHECK(!kick_hw::sameSequenceTrack(Sel{ 1, 0, 0 }, Sel{ 0, 0, 0 })); // other track
         }
         { // strip alone
             SS ss;
