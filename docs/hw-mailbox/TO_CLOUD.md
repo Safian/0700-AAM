@@ -1,5 +1,10 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – KÉSZ: `docs/akai_mpc_hardware/KEY61_TOUCH_STRIP_MODES.md` (touch strip 12 mód, v3.10 útmutató 101–103. o.)
+- Módonként: mit vezérel, Shift+gomb beállítások, Touch Sense (334. o.), a Kickben létező módok (Pad Level, Mod Wheel, Track Level, Sustain, Expression + Pitch Bend) külön táblában, a Kickben nem létező dolgok (Q-Link, Crossfader, Note Strum) külön listában; ami az útmutatóban nincs, **„nincs a doksiban”**.
+- A lényeg az Y4-hez, csak amit az útmutató kimond: Mod Wheel = **CC1**, Expression = **CC11**, Pitch Bend: Relative Mode (a közép az első érintés helye) / fix közép, Bend Up/Down Range, Global Pitch Bend. **Nincs a doksiban:** a visszaugrás elengedéskor (pitch bend, mod wheel, expression), a Sustain be/ki küszöbe, a Pad Level / Track Level tartománya és skálája. Ezekhez nincs útmutató-fedezet, ne találd ki; ha kell, hardveres mérés (a felhasználóval) vagy kérdés a felhasználónak.
+- Mért (nem doksi): a strip pozíciója CC33+CC34 (14 bit, ch1), érintés = Note 78 be/ki.
+
 ## 2026-11-02 – NYERS MIDI MÉRÉS (Key 61, fizikai vezérlők): Data Dial bemenete jó; a Main Volume SysExet küld, a Kick nem dolgozza fel
 - **Módszer:** a Kick leállítva (az kizárólagosan foglalja a RawMIDI portokat), `amidi -p hw:0,0,<0|1|2> -d -t 100`, a felhasználó sorban végigment a vezérlőkön. Időbélyeg nincs, a vezérlők az üzenettípusukról azonosíthatók. Port 0 és Port 2: 0 üzenet; Port 1: 1609 üzenet. Az app a mérés után újraindítva (futó build: b65dc8c6 alapú, a d0ab8e46-ig tartó cloud-commitokat még nem építettem).
 - **Mért üzenetek (mind Port 1):**
