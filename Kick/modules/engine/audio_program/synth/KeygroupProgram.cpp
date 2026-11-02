@@ -65,29 +65,32 @@ namespace mt
         // A key without an assigned sample still has a (default, empty) clip, so "no clip" alone is not the test: a clip
         // without a sound source counts as unassigned and falls back to the first assigned sample (chromatic keybed playback).
         const auto hasSound = []( MTIKeys* k ) { return k != nullptr && k->getSource( 0 ).isNotEmpty() && k->getSourceSlice( 0 ) != nullptr; };
-        MTIKeys*   pNote    = pKeys->getKeysClip( Note );
+        MTIKeys*   pNote    = nullptr;
         int        root     = Note;
-        if( hasSound( pNote ) )
+
+        // The sample has no root-note field of its own (keyNote is its pad slot). A keygroup with exactly one sample is a
+        // single-sample instrument: it sounds at original pitch on middle C and follows the keybed chromatically, wherever
+        // it was assigned. With several samples a key with its own sample plays it at its own pitch (zone per key) and
+        // any other key falls back to the first assigned sample, rooted on middle C.
+        std::vector<MTIKeys*> sounding;
+        for( auto assignedNote : pKeys->getAssignedNotes() )
+            if( auto* candidate = pKeys->getKeysClip( assignedNote ); hasSound( candidate ) ) sounding.push_back( candidate );
+
+        if( sounding.size() == 1 )
         {
-            root = pNote->keyNote.get();
+            pNote = sounding.front();
+            root  = 60;
+        }
+        else if( auto* own = pKeys->getKeysClip( Note ); hasSound( own ) )
+        {
+            pNote = own;
+            root  = own->keyNote.get();
             if( root < 0 || root > 127 ) root = Note;
         }
-        else
+        else if( !sounding.empty() )
         {
-            pNote = nullptr;
-            // Fallback to the first assigned keygroup sample for chromatic keybed playback
-            for( auto assignedNote : pKeys->getAssignedNotes() )
-            {
-                auto* candidate = pKeys->getKeysClip( assignedNote );
-                if( hasSound( candidate ) )
-                {
-                    pNote = candidate;
-                    // The sample has no root-note field of its own (keyNote is its pad slot), so a sample played from a key
-                    // it is not assigned to sounds at original pitch on middle C and follows the keybed chromatically.
-                    root = 60;
-                    break;
-                }
-            }
+            pNote = sounding.front();
+            root  = 60;
         }
 
         if( pNote )
