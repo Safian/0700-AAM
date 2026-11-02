@@ -44,7 +44,7 @@ Forrás: *MPC Standalone OS – User Guide v3.10* (528 oldal; Key 61 fejezet "To
 | 39–40 | Arp, Latch | Arp be/ki (a tempó és az Time Division szerint); Latch: az arp a billentyűk felengedése után is megy | `updateArpLeds` (kód); LED világít (mért) | nem vizsgált: működés |
 | 41 | Oct –/+ | oktáv; **az oktáv-fények (gomb alatt) a jelenlegi oktávot mutatják**; Shift: félhang; mindkettő nyomva + billentyű: a transzponálás erre; mindkettő nyomva és felengedve: reset | `KeyTranspose` (kód); az oktáv-sor kijelzése: a fotón két piros pont (−1, 0) alapból | nem vizsgált: oktáv-sor vezérlése, "mindkettő + billentyű" |
 | 43–44 | Pitch/Mod kerék | pitch bend / moduláció | élő MIDI ch1 (kód); az első track hangereje megugrott (felhasználó); a cloud az okot a motor `reloadMidiMeter`-ében találta | javítás a cloudnál |
-| 45 | Main Volume | a kimenetek és a fejhallgató hangereje; nem ír analóg/MIDI/szoftveres mivoltáról | nem MIDI, nem input-esemény (mért); hangerő nem változik a Kick alatt (felhasználó) | a doksi nem mond több |
+| 45 | Main Volume | a kimenetek és a fejhallgató hangereje; nem ír analóg/MIDI/szoftveres mivoltáról | SysEx a Port 1-en (mért: `F0 47 7F 4B 5B 00 01 <v> F7`, v 0x00..0x75); a Kick master szintjére kötve (AD1a, hardveren nem igazolt); korábbi "nem MIDI" állítás hibás volt | a doksi nem mond több; a `0x5B` parancsbájt jelentése ismeretlen |
 
 ## 2. Hardveres és szoftveres elemek, amiket a Kick még nem néz
 

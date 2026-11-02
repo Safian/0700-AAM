@@ -142,6 +142,9 @@ public:
     virtual void on_mod_wheel(int /*val*/) {}
     virtual void on_expression(int /*val*/) {}
     virtual void on_footswitch2(bool /*down*/) {}
+    // Hardware Main Volume knob (Akai: incoming SysEx on Port 1, see hardware/main_volume.h), scaled to 0..127
+    // (the Kick master level scale). Optional.
+    virtual void on_main_volume(int /*val127*/) {}
     // Backward-compatibility aliases
     virtual void on_expression_pedal(int val) { on_expression(val); }
     virtual void on_aftertouch(int val) { on_channel_aftertouch(val); }
