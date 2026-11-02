@@ -1,0 +1,24 @@
+# A gyári MPC-alkalmazás indítási MIDI-sorozata a vezérlő felé (Key 61, 2026-11-02), LD_PRELOAD-os figyelővel (tools/mpcsnoop.c).
+# A gyári alkalmazás a hw:0,0,0-t (Port 0) csak KIMENETRE, a hw:0,0,1-et (Port 1) bemenetre és kimenetre nyitja.
+# Az alábbi 21 üzenet mind Port 0-ra megy, az indítás első ~1,1 másodpercében (a pad-RGB és LED-írások nélkül).
+t+0.000  F0 7E 00 06 01 F7
+t+0.004  F0 47 7F 4B 62 00 01 65 F7
+t+0.004  F0 47 7F 4B 64 00 03 00 01 01 F7
+t+0.004  F0 47 7F 4B 64 00 03 01 01 01 F7
+t+0.004  F0 47 7F 4B 64 00 03 02 00 00 F7
+t+0.004  F0 47 7F 4B 64 00 03 03 00 00 F7
+t+0.004  F0 47 7F 4B 63 00 03 00 00 00 F7
+t+0.004  F0 47 7F 4B 63 00 03 01 00 00 F7
+t+0.004  F0 47 7F 4B 41 00 00 F7
+t+0.004  F0 47 7F 4B 5B 00 00 F7
+t+0.004  F0 7E 00 06 01 F7
+t+0.027  F0 47 7F 4B 5A 00 20 00 00 01 04 00 00 01 0F 00 00 00 01 0B 08 00 00 00 00 00 01 00 01 00 00 00 00 00 0F 0F 00 00 00 F7
+t+1.066  F0 47 7F 00 66 00 01 5A F7
+t+1.066  F0 47 7F 00 67 00 01 14 F7
+t+1.066  F0 47 7F 00 68 00 01 14 F7
+t+1.066  F0 47 7F 00 69 00 01 14 F7
+t+1.066  F0 47 7F 00 6A 00 03 00 00 00 F7
+t+1.066  F0 47 7F 00 6A 00 03 01 00 00 F7
+t+1.066  F0 47 7F 00 6A 00 03 02 01 00 F7
+# Ezt követi a pad-RGB (F0 47 7F 4B 65 00 04 ...) és a gomb-LED (B0 <jegyzet> <érték>, Port 1) írás.
+# Megjegyzés: a Kick 4B 60 00 01 41 "mód" parancsa a gyári sorozatban NINCS.
