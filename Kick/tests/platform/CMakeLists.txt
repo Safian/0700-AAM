@@ -174,6 +174,13 @@ add_executable(kick-relative-cc-tests RelativeCcTests.cpp)
 add_test(NAME kick-relative-cc COMMAND kick-relative-cc-tests)
 set_tests_properties(kick-relative-cc PROPERTIES TIMEOUT 10)
 
+# AG1b: two-thread stress test of the bridge's strip + pedal Sustain state (kick_hw::SustainState); also run it with -fsanitize=thread.
+find_package(Threads REQUIRED)
+add_executable(kick-sustain-stress-tests SustainStressTests.cpp)
+target_link_libraries(kick-sustain-stress-tests PRIVATE Threads::Threads)
+add_test(NAME kick-sustain-stress COMMAND kick-sustain-stress-tests)
+set_tests_properties(kick-sustain-stress PROPERTIES TIMEOUT 60)
+
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()

@@ -60,7 +60,6 @@ private:
     // ALSA reader thread, the mode is cycled there too (button) or on the message thread (kick_cmd injector).
     std::atomic<int>  m_strip_mode { 0 };
     std::atomic<bool> m_strip_pitch_sent { false };  // a pitch value was sent and not yet sprung back to centre
-    std::atomic<bool> m_strip_sustain_down { false }; // Sustain mode: the strip currently holds the pedal down
     std::atomic<int>  m_strip_last_pad { -1 };       // Pad Level mode target: pad index 0..15 of the last pad hit (the note is
                                                      // computed on the message thread from the ENGINE bank, see postStripPadLevel)
     // Newest strip value waiting for the message thread (-1 = none queued): the level modes edit the engine through
@@ -96,7 +95,7 @@ private:
     kick_hw::NoteTargets<mt::MTSelected> m_key_target;
     kick_hw::HeldTarget<mt::MTSelected>  m_bend_target;       // pitch wheel (on_pitch_bend)
     kick_hw::HeldTarget<mt::MTSelected>  m_strip_bend_target; // touch strip in pitch bend mode (own target, G16)
-    kick_hw::SustainSources<mt::MTSelected> m_sustain_sources; // physical pedal + touch strip Sustain, own target each
+    kick_hw::SustainState<mt::MTSelected> m_sustain; // physical pedal + touch strip Sustain (own target each) + strip flag; only under m_target_mutex
 
     // Project pad colours (DCL EN_PAD_SET_COLOUR_STATE). Written by the sendCommandToDcl handler
     // (any thread), read by the timer (message thread) and the MIDI reader thread. Lock-free.
@@ -840,7 +839,7 @@ public:
         const int new_mode = kick_hw::strip::nextMode(old_mode);
         m_strip_mode.store(new_mode);
         if (old_mode == kick_hw::strip::kPitchBend) stripPitchSpringBack();
-        // Leaving Sustain lifts the pedal. Unconditional (the exchange makes it harmless): on the kick_cmd path this runs on
+        // Leaving Sustain lifts the pedal. Unconditional (a no-edge call sends nothing): on the kick_cmd path this runs on
         // the message thread while the reader may still be inside on_touch_strip with the old mode.
         (void)old_mode;
         stripSustainSet(false);
@@ -1535,11 +1534,19 @@ public:
         sendPitchBend(m_strip_bend_target, kick_hw::strip::pitchSpringBackTarget());
     }
     // Sustain mode: CC64 on the edges only (same path as the physical pedal, so the release goes to the track that
-    // got the press).
-    void stripSustainSet(bool down)
+    // got the press). AG1b: the strip flag change, the press/release decision AND the mode check are ONE critical
+    // section of m_target_mutex, so a mode change (message thread, kick_cmd) cannot interleave with a press from the
+    // reader thread. With `onlyInSustainMode` a press is turned into a release when the mode is no longer Sustain; the
+    // mode is stored before cycleStripMode takes this lock, so either the press sees the new mode, or the press comes
+    // first and the mode change's release follows it.
+    void stripSustainSet(bool down, bool onlyInSustainMode = false)
     {
-        if (m_strip_sustain_down.exchange(down) == down) return;
-        sendSustain(kick_hw::SustainSources<mt::MTSelected>::kStrip, down);
+        auto& ae = mt::getAudioInterface();
+        std::lock_guard<std::mutex> lk(m_target_mutex);
+        if (onlyInSustainMode && m_strip_mode.load() != kick_hw::strip::kSustain) down = false;
+        mt::MTSelected target;
+        if (m_sustain.strip(down, ae.getSelected(), target))
+            ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
     }
     // Level modes: apply the newest strip value on the message thread (setNoteGain / setTrackLevel are UI-thread calls).
     void postStripPadLevel(int val)
@@ -1590,10 +1597,8 @@ public:
             case kick_hw::strip::kModWheel:   sendCc(1, kick_hw::strip::modWheelFromPosition(val)); return;
             case kick_hw::strip::kExpression: sendCc(11, kick_hw::strip::expressionFromPosition(val)); return;
             case kick_hw::strip::kSustain:
-                stripSustainSet(kick_hw::strip::sustainDownFromPosition(val));
-                // Re-check: cycleStripMode (message thread, kick_cmd) may have changed the mode after the load above and
-                // its stripSustainSet(false) may have run before our press; lift it again so it cannot stick.
-                if (m_strip_mode.load() != kick_hw::strip::kSustain) stripSustainSet(false);
+                // The mode is re-checked under m_target_mutex (cycleStripMode may have changed it after the load above).
+                stripSustainSet(kick_hw::strip::sustainDownFromPosition(val), true);
                 return;
             case kick_hw::strip::kPadLevel:   postStripPadLevel(kick_hw::strip::padLevelFromPosition(val)); return;
             case kick_hw::strip::kTrackLevel: postStripTrackLevel(kick_hw::strip::trackLevelFromPosition(val)); return;
@@ -1613,25 +1618,17 @@ public:
     {
         sendPitchBend(m_bend_target, val);
     }
-    void on_sustain_pedal(bool down) override
-    {
-        sendSustain(kick_hw::SustainSources<mt::MTSelected>::kPedal, down);
-    }
     // F4(b): the release goes to the track that got the press, even after a track change in between. The physical pedal
     // and the strip Sustain mode each keep their own target; CC64=0 is skipped while the other source still holds the
-    // pedal on the same track.
-    void sendSustain(kick_hw::SustainSources<mt::MTSelected>::Source src, bool down)
+    // pedal on the same (sequence, track) lane. The CC64 is sent INSIDE the critical section (also in stripSustainSet):
+    // addLiveMidiMsg is one short non-blocking call, and this way the output order equals the state-change order.
+    void on_sustain_pedal(bool down) override
     {
         auto& ae = mt::getAudioInterface();
+        std::lock_guard<std::mutex> lk(m_target_mutex);
         mt::MTSelected target;
-        bool send = true;
-        {
-            std::lock_guard<std::mutex> lk(m_target_mutex);
-            const mt::MTSelected cur = ae.getSelected();
-            if (down) target = m_sustain_sources.press(src, cur);
-            else send = m_sustain_sources.release(src, cur, kick_hw::sameSequenceTrack<mt::MTSelected>, target);
-        }
-        if (send) ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
+        if (m_sustain.pedal(down, ae.getSelected(), target))
+            ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
     }
 
     void on_channel_aftertouch(int val) override
