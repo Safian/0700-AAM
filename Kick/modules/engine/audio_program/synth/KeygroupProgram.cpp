@@ -62,50 +62,63 @@ namespace mt
 
         if( pKeys->isNoteEffectivelyMuted( Note ) ) return;
 
-        // A key without an assigned sample still has a (default, empty) clip, so "no clip" alone is not the test: a clip
-        // without a sound source counts as unassigned and falls back to the first assigned sample (chromatic keybed playback).
-        const auto hasSound = []( MTIKeys* k ) { return k != nullptr && k->getSource( 0 ).isNotEmpty() && k->getSourceSlice( 0 ) != nullptr; };
-        MTIKeys*   pNote    = nullptr;
-        int        root     = Note;
+        // A key without an assigned sample still has a (default, empty) clip, so "no clip" alone is not the test: only a clip
+        // with a sound source on some layer counts as a sample.
+        const auto hasSound = []( MTIKeys* k ) {
+            if( k == nullptr ) return false;
+            for( auto l = 0; l < MAX_LAYERS; ++l )
+                if( k->getSource( l ).isNotEmpty() && k->getSourceSlice( l ) != nullptr ) return true;
+            return false;
+        };
 
-        // The sample has no root-note field of its own (keyNote is its pad slot). A keygroup with exactly one sample is a
-        // single-sample instrument: it sounds at original pitch on middle C and follows the keybed chromatically, wherever
-        // it was assigned. With several samples a key with its own sample plays it at its own pitch (zone per key) and
-        // any other key falls back to the first assigned sample, rooted on middle C.
         std::vector<MTIKeys*> sounding;
         for( auto assignedNote : pKeys->getAssignedNotes() )
             if( auto* candidate = pKeys->getKeysClip( assignedNote ); hasSound( candidate ) ) sounding.push_back( candidate );
+        if( sounding.empty() ) return;
 
-        if( sounding.size() == 1 )
+        // The sample has no root-note field of its own (keyNote is its pad slot). A keygroup with exactly one sample is a
+        // single-sample instrument: it sounds at original pitch on middle C and follows the keybed chromatically, wherever
+        // it was assigned. With several samples the key is played by the sample whose zone (minNote..maxNote) holds it,
+        // else by the nearest sample; every sample sounds at original pitch on its own keyNote (multisample instrument).
+        MTIKeys* pNote = sounding.front();
+        int      root  = 60;
+        if( sounding.size() > 1 )
         {
-            pNote = sounding.front();
-            root  = 60;
-        }
-        else if( auto* own = pKeys->getKeysClip( Note ); hasSound( own ) )
-        {
-            pNote = own;
-            root  = own->keyNote.get();
+            auto rank = [Note]( MTIKeys* k ) {
+                const auto inZone = (int)k->minNote.get() <= Note && Note <= (int)k->maxNote.get();
+                return ( inZone ? 0 : 1000 ) + std::abs( Note - (int)k->keyNote.get() );
+            };
+            for( auto* candidate : sounding )
+                if( rank( candidate ) < rank( pNote ) ) pNote = candidate;
+            root = pNote->keyNote.get();
             if( root < 0 || root > 127 ) root = Note;
         }
-        else if( !sounding.empty() )
+
+        // Layer: by velocity range when the clip plays its layers by velocity (the layers already carry the dynamics, so
+        // the voice then plays at full gain, as the sampler does), else the first layer with a sound.
+        const bool byVelocity = pNote->layerPlay.get() == LayerPlayType::VELOCITY;
+        int        layer      = -1;
+        for( auto l = 0; l < MAX_LAYERS; ++l )
         {
-            pNote = sounding.front();
-            root  = 60;
+            if( pNote->getSource( l ).isEmpty() || pNote->getSourceSlice( l ) == nullptr ) continue;
+            if( layer < 0 ) layer = l;
+            if( byVelocity && (int)pNote->layers[l]->velStart.get() <= Velocity && Velocity <= (int)pNote->layers[l]->velEnd.get() )
+            {
+                layer = l;
+                break;
+            }
         }
 
-        if( pNote )
+        auto notePoly = pNote->polyPhony.get();
+        if( auto soundSlice = pNote->getSourceSlice( layer ) )
         {
-            auto notePoly = pNote->polyPhony.get();
-            if( auto soundSlice = pNote->getSourceSlice( 0 ) )
+            if( auto voice = dynamic_cast<AVoice*>( getFreeVoice( Note, notePoly ) ) )
             {
-                if( auto voice = dynamic_cast<AVoice*>( getFreeVoice( Note, notePoly ) ) )
-                {
-                    double pr = std::pow( 2.0, ( Note - root ) / 12.0 );
-                    voice->setPitchRatio( pr );
-                    voice->setSlice( soundSlice );
-                    voice->noteOn( Note, Velocity );
-                    addVoiceForPlayback( voice );
-                }
+                double pr = std::pow( 2.0, ( Note - root ) / 12.0 );
+                voice->setPitchRatio( pr );
+                voice->setSlice( soundSlice );
+                voice->noteOn( Note, byVelocity ? 127 : Velocity );
+                addVoiceForPlayback( voice );
             }
         }
     }
