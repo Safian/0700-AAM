@@ -108,6 +108,12 @@ namespace kick_ui
         mute.setToggleState( State, juce::dontSendNotification );
     }
 
+    void PadMixerDisplay::refreshLevel()
+    {
+        if( pData )
+            levelSlider.setValue( pData->level, juce::dontSendNotification );
+    }
+
     void PadMixerDisplay::linkRotated( int ID, int Value )
     {
         switch( ID )
@@ -522,12 +528,42 @@ namespace kick_ui
     {
         if( pProg )
         {
+            syncLevels();
             auto outMeter = pProg->readOutMeter(); // TODO - Need to call different API for Pad
             for( auto sample : sampleList )
             {
                 if( sample->keyNote.get() >= ae.getBankOffset() && sample->keyNote.get() <= ( ae.getBankOffset() + 15 ) )
                     pads->updateLevelMeter( (int)sample->keyNote.get() % 16, outMeter[0].rms, outMeter[1].rms, outMeter[0].peak, outMeter[0].peak );
             }
+        }
+    }
+
+    void PadMixerContent::syncLevels()
+    {
+        // Pad levels can change outside this screen (e.g. Touch Strip "Pad Level" mode); follow the engine value.
+        // Called from the visible-only meter timer. Display only, no notifications, so no write-back to the engine.
+        bool changed{ false };
+        for( auto sample : sampleList )
+        {
+            auto note = (int)sample->keyNote.get();
+            if( !juce::isPositiveAndBelow( note, (int)padData.size() ) || padData[note].sampleName.isEmpty() )
+                continue;
+
+            auto level = (double)sample->gain.get();
+            if( padData[note].level != level )
+            {
+                padData[note].level = level;
+                changed             = true;
+                if( note >= pads->getBankOffset() && note < pads->getBankOffset() + _NUM_PADS_IN_COMPONENT )
+                    refreshPadData( note );
+            }
+        }
+
+        if( changed )
+        {
+            for( auto& comp : tableView->getRowComponents() )
+                if( auto pComp = dynamic_cast<PadMixerDisplay*>( comp ) )
+                    pComp->refreshLevel();
         }
     }
 
