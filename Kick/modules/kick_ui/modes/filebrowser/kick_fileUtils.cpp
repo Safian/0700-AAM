@@ -60,22 +60,16 @@ namespace ui
             return false;
         }
 
-        juce::int32 calculateFolderSize( juce::File filePath )
+        juce::int64 calculateFolderSize( juce::File filePath )
         {
             juce::int64 totalSize = 0;
 
+            // One recursive scan is enough: the result already lists every nested file, so directories are not descended
+            // into again (that made the cost grow with the depth of the tree: minutes on the MPC's 22 GB SD card).
             if( filePath.isDirectory() )
             {
-                juce::Array<juce::File> files;
-                filePath.findChildFiles( files, juce::File::findFilesAndDirectories, true );
-
-                for( const auto& file : files )
-                {
-                    if( file.isDirectory() )
-                        calculateFolderSize( file );
-                    else
-                        totalSize += file.getSize();
-                }
+                for( const auto& entry : juce::RangedDirectoryIterator( filePath, true, "*", juce::File::findFiles ) )
+                    totalSize += entry.getFileSize();
             }
             else
                 totalSize = filePath.getSize();
