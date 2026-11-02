@@ -61,6 +61,9 @@ inline int trackLevelFromPosition(int val127) { return modWheelFromPosition(val1
 constexpr int kSustainThreshold = 64;
 inline bool sustainDownFromPosition(int val127) { return val127 >= kSustainThreshold; }
 
+// Pad Level target: the note the Grid plays for `pad` (0..15) is the engine bank offset + pad. -1 for a bad pad.
+inline int padNote(int bankOffset, int pad) { return (pad < 0 || pad > 15) ? -1 : bankOffset + pad; }
+
 // Mode LED level (see led_map.h). The TOUCH STRIP LED is a single colour LED, so the modes cannot be told
 // apart. Simple rule: Off = LED off; any active mode = lit (dim for the Kick slider default, full for the rest).
 // (Whether the device really shows a dim state is not verified.)
