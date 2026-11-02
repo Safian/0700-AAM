@@ -2,6 +2,17 @@
 
 (Ide ír a cloud session; a bejegyzések legyenek legfelül, hozzáfűzve. Lásd README.md.)
 
+## 2026-11-02 – LEZÁRÁS: átadás a helyi sessionnek (a cloud session befejezi a munkát)
+VÁLASZ: a felhasználó döntése szerint a cloud session leáll. **Minden commit fent van a `safian/main`-en (utolsó kód: `e7724c87`, zöld teljes `verify-green`); nincs nem pusholt és nincs félbemaradt munka.** A függő tételek, amiket átveszel:
+1. **Main Volume nem szabályoz hallható hangerőt:** a gomb a Mixer master Level-t mozgatja (output bus 0 `gain = CommonUtils::midiToGain(v127)`, ugyanaz a hívás, mint a Mixer „Master" csúszkáé: `kick_master_route_mix.h`), mégsem hallható. Nyomok: ellenőrizd, hogy a Mixer Master CSÚSZKA (érintéssel) változtat-e hangerőt; ha az sem, akkor a bus 0 gain nem az ALSA kimenet útja (keresd, melyik gain-lépcső szabályoz: a kimeneti útvonal `MTAudioInterface`/`AudioDeviceManager` callback, a master bus alkalmazása a végső mixben). A gomb SysEx parancsbájtja (0x5B) és a 0x75 felső határ dummy/mért.
+2. **Full/Half Level a fizikai pad-ütés velocity-jére:** az útmutató (343. o.) szerint Full Level = 127, Shift+Full Level (Half) = 64. A hídban az állapot kezelve van, de a pad-ütés velocityjére nincs hatás (`isHalfLevel()` olvasója csak a step sequencer). Megoldás: a bridge pad-útján (a `HW_PAD` ág, `addLiveMidiMsg`/pad DCL) a velocity felülírása a gomb állapota szerint.
+3. **Strip:** Track Level (Tracks nézet) hatása és a Pad Mixer élő frissítése (UI-hiány) igazolatlan; a mód-szabályok dummyk (Sustain küszöb ≥64, Pad/Track Level 1:1, elengedéskor marad, a Pad Level az utoljára ütött padre; részletek: `MORNING_DECISIONS.md`).
+4. **Pad csendes állapot (nem reprodukált):** gyanús pontok: strip Sustain (CC64) vagy Pad Level mód által elnémított/nullázott hang; a strip Sustain csak CC64-et küld (felengedéskor mindig FEL), a Pad Level a `setLevelForSelectedProgram`-ot hívja az utoljára ütött padre.
+5. **List Edit dial:** a List Edit képernyőn a dial nem látszik hatni; a kód szerint ~25 fájl fogyasztja az `EN_KNOB_ROTARY`-t (`kick_AppTrack.cpp:94-97`, `kick_AppSequence.cpp:123-125`, `kick_AppGrid.cpp:569`, `kick_AppProgram.cpp:60`, `kick_ui_channel_mixer.cpp:216`); a List Edit fogyasztóját külön nem vizsgáltuk.
+6. **Looper SYNC fázis (Z2b) és Aura hosszú futás** mérése, **`fix/project-relative-samples`** (szándékosan kimaradt: az élő fát írná át mentéskor; ha az upstream kéri, a snapshot-elv köré újratervezendő, lásd `MORNING_DECISIONS.md`), a **hiányzó minta jelzése** (egyszeri nem blokkoló UI-figyelmeztetés: döntés megvan, a UI-elem még nincs megírva), a **KT_KickEM** szimulátor target `config.h` hiánya Linuxon (ismert, nem a mi változtatásunk).
+7. **Akai-specifikus részek** (Locate ablak, Sounds Mode, Keyboard Control menü stb.): a felhasználó döntése szerint a végére, az Akai rétegben, end-to-end megírva; a mód még nincs kitalálva.
+Minden dummy és autonóm döntés: `docs/AKAI_MPC_KEY61_MORNING_DECISIONS.md`.
+
 ## 2026-11-02 – FENT: Main Volume, Data Dial napló, strip módok (`safian/main` `3180df00`, zöld teljes `verify-green`)
 VÁLASZ: köszi a strip-doksit, a nyers MIDI mérést és a szekvenciafelvétel mérését. Építsd és teszteld:
 - **Main Volume (AD1a, `e2a39526`):** a Port 1 SysEx `F0 47 7F 4B 5B 00 01 <v> F7` a Kick master szintjére (output bus 0, ugyanaz mint a Mixer Master csúszka) van kötve, `v*127/0x75` skálával; a 0x5B parancsbájt jelentése dummy (csak felismerés). Mérd: a gomb hallhatóan állítja-e a hangerőt, és hogy 0x75 tényleg a felső határ-e; más Akai SysEx `[AKAI-SYSEX] ...` naplósor.
