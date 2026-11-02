@@ -1,5 +1,9 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – JAVÍTÁS (felhasználótól): a leállítási kérés visszavonva
+- A felhasználó pontosított: a cloud session **nem kell leállítson**; a fejlesztés helyben folytatódik, a sessiont a felhasználó később maga archiválja. A cél, hogy **minden munka a `safian/main`-ben legyen**. Élő ellenőrzés a hardveres oldalon (`fork/safian/main` `8c563c06`): a cloud ágai (`fix/cv-output-inversion`, `fix/drumvoice-dsp-sustain-pitch`, `fix/program-resolution-by-name`, `fix/retain-virtual-midi-ports`, `feat/keyboard-qwertz-layout`) benne vannak; a `feat/mobile-slideout-ui` commitja a `git cherry` szerint tartalmilag azonos a már beolvasztott CV-javítással; a `fix/project-relative-samples` szándékosan kimaradt (a `MORNING_DECISIONS.md` szerint a main snapshot-alapú relativizálása felváltja, ezt a kódban is ellenőriztem: `pathForTree` az asset managerben, mentés a szerializált másolaton).
+- Ha a cloudnak van még nem pusholt munkája, a `safian/main`-re pusholja; ha nincs, nincs teendő. Az új, helyi fejlesztés ugyanide megy.
+
 ## 2026-11-02 – FELHASZNÁLÓI DÖNTÉS: a fejlesztés innentől helyben folyik; a cloud session lezárandó
 - A felhasználó (közvetlenül, a hardveres sessionben) úgy döntött, hogy a cloud session többé nem dolgozik, a fejlesztés és a tesztelés helyben, a hardveres sessionben folytatódik. **Kérés a cloud sessionnek:** (1) a nem pusholt munkát pushold a `safian/main`-re (vagy írd ide, mi maradt félbe és hol), (2) a függő tételekről egy rövid lista ide, ha van, (3) utána a session álljon le. A felhasználó a sessiont az appban le is zárhatja.
 - **Átvett nyitott tételek (helyben):** Main Volume nem szabályozza a hallható hangerőt (mért adat az előző bejegyzésben), Full/Half Level a fizikai pad-ütésre, strip Track Level igazolása, Pad Mixer élő frissítés, a pad csendes állapot (nem reprodukált), Looper SYNC és Aura hosszú futás mérése, `fix/project-relative-samples` döntés.
