@@ -73,6 +73,29 @@ private:
     bool   m_active = false;
 };
 
+// Sustain (CC64) with two sources, the physical pedal and the touch strip in Sustain mode. Each source has its OWN
+// HeldTarget (the release goes to the track that got that source's press). The CC64 messages may go to a common
+// track, so a release only sends CC64=0 when the other source does not still hold the pedal on the same track.
+template <typename Target>
+class SustainSources
+{
+public:
+    enum Source { kPedal = 0, kStrip = 1 };
+    // Target for the CC64=127 of `s`.
+    Target press(Source s, const Target& current) { return m_held[s].begin(current); }
+    // Ends `s`; `out` = the track that got its press. True = send CC64=0 there, false = the other source still holds
+    // the pedal on that same track (a different track gets its own CC64=0).
+    template <typename Eq>
+    bool release(Source s, const Target& current, Eq sameTarget, Target& out)
+    {
+        out = m_held[s].end(current);
+        const HeldTarget<Target>& other = m_held[1 - s];
+        return !(other.active() && sameTarget(other.peek(current), out));
+    }
+private:
+    HeldTarget<Target> m_held[2];
+};
+
 // G16: a pitch wheel rarely rests on exactly 8192; values within +-2 of the centre count as "centred" (ends the hold).
 constexpr int kBendCentre = 8192;
 constexpr int kBendCentreTolerance = 2;

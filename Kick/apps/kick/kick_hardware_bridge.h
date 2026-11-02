@@ -96,7 +96,7 @@ private:
     kick_hw::NoteTargets<mt::MTSelected> m_key_target;
     kick_hw::HeldTarget<mt::MTSelected>  m_bend_target;       // pitch wheel (on_pitch_bend)
     kick_hw::HeldTarget<mt::MTSelected>  m_strip_bend_target; // touch strip in pitch bend mode (own target, G16)
-    kick_hw::HeldTarget<mt::MTSelected>  m_sustain_target;
+    kick_hw::SustainSources<mt::MTSelected> m_sustain_sources; // physical pedal + touch strip Sustain, own target each
 
     // Project pad colours (DCL EN_PAD_SET_COLOUR_STATE). Written by the sendCommandToDcl handler
     // (any thread), read by the timer (message thread) and the MIDI reader thread. Lock-free.
@@ -1539,7 +1539,7 @@ public:
     void stripSustainSet(bool down)
     {
         if (m_strip_sustain_down.exchange(down) == down) return;
-        on_sustain_pedal(down);
+        sendSustain(kick_hw::SustainSources<mt::MTSelected>::kStrip, down);
     }
     // Level modes: apply the newest strip value on the message thread (setNoteGain / setTrackLevel are UI-thread calls).
     void postStripPadLevel(int val)
@@ -1615,15 +1615,24 @@ public:
     }
     void on_sustain_pedal(bool down) override
     {
-        // F4(b): the release goes to the track that got the press, even after a track change in between.
+        sendSustain(kick_hw::SustainSources<mt::MTSelected>::kPedal, down);
+    }
+    // F4(b): the release goes to the track that got the press, even after a track change in between. The physical pedal
+    // and the strip Sustain mode each keep their own target; CC64=0 is skipped while the other source still holds the
+    // pedal on the same track.
+    void sendSustain(kick_hw::SustainSources<mt::MTSelected>::Source src, bool down)
+    {
         auto& ae = mt::getAudioInterface();
         mt::MTSelected target;
+        bool send = true;
         {
             std::lock_guard<std::mutex> lk(m_target_mutex);
             const mt::MTSelected cur = ae.getSelected();
-            target = down ? m_sustain_target.begin(cur) : m_sustain_target.end(cur);
+            if (down) target = m_sustain_sources.press(src, cur);
+            else send = m_sustain_sources.release(src, cur, [](const mt::MTSelected& a, const mt::MTSelected& b) {
+                return a.sequence == b.sequence && a.track == b.track && a.program == b.program; }, target);
         }
-        ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
+        if (send) ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
     }
 
     void on_channel_aftertouch(int val) override
