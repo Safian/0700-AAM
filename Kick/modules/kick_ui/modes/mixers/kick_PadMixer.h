@@ -62,6 +62,7 @@ namespace kick_ui
         void                 linkRotated( int ID, int value );
         juce::Rectangle<int> getElementBounds( int state );
         void                 setMute( bool, bool );
+        void                 refreshLevel();
 
     private:
         mt::MTAudioInterface& ae{ mt::getAudioInterface() };
@@ -105,6 +106,7 @@ namespace kick_ui
         void setDisplay( bool isProgramAvailable );
         void updateView();
         void refreshSoloMute();
+        void syncLevels();
 
     private:
         mt::MTAudioInterface&                            ae{ mt::getAudioInterface() };
