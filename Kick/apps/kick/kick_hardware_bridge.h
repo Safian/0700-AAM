@@ -313,6 +313,7 @@ private:
         updateShiftLed();
         updateArpLeds();
         updateTimingCorrectLed();
+        setLed(HW_LED_TOUCH_STRIP, kick_hw::strip::modeLedLevel(m_strip_mode.load())); // strip mode LED (Kick slider = dim) from the start
     }
 
     void updateOctaveLeds()

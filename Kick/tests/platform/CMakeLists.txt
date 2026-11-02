@@ -110,7 +110,8 @@ set_tests_properties(kick-device-probe PROPERTIES TIMEOUT 10)
 add_executable(kick-event-seek-tests EventSeekTests.cpp)
 add_test(NAME kick-event-seek COMMAND kick-event-seek-tests)
 set_tests_properties(kick-event-seek PROPERTIES TIMEOUT 10)
-# Touch strip mode maths (slider / pitch bend / mod wheel); JUCE-free, header only.
+# Touch strip mode maths (8 modes: slider, pitch bend, pad level, mod wheel, track level, sustain, expression, off),
+# Pad Level note mapping and the strip LED levels; JUCE-free, header only.
 add_executable(kick-strip-modes-tests StripModesTests.cpp)
 add_test(NAME kick-strip-modes COMMAND kick-strip-modes-tests)
 set_tests_properties(kick-strip-modes PROPERTIES TIMEOUT 10)
