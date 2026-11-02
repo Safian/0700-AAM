@@ -29,7 +29,7 @@ Forrás: `Kick/apps/kick/hardware/akai_map.h` és `led_map.h` (generálva, a LED
 | TOUCH_STRIP | 4 | egyszínű (0 / 1 / 127) | a gomb jele megérkezett (Kick log); a LED Off módban kialszik (felhasználó, 2026-11-02) |
 | SAMPLE_EDIT | 6 | egyszínű (0 / 1 / 127) | nincs nyersen mérve (térkép: review/kód) |
 | OCTAVE_DOWN | 7 | egyszínű (0 / 1 / 127) | nincs nyersen mérve (térkép: review/kód) |
-| ERASE | 9 | egyszínű (0 / 1 / 127) | a Kick-first indulásban Port 0-n jön (nem Port 1-en), lásd 4. szakasz |
+| ERASE | 9 | egyszínű (0 / 1 / 127) | gyári indítási sorozat nélkül Port 0-n jön, a sorozattal Port 1-en (Shift mérve), lásd 4. szakasz |
 | OCTAVE_UP | 10 | egyszínű (0 / 1 / 127) | nincs nyersen mérve (térkép: review/kód) |
 | NOTE_REPEAT | 11 | egyszínű (0 / 1 / 127) | nincs nyersen mérve (térkép: review/kód) |
 | TC | 12 | egyszínű (0 / 1 / 127) | nincs nyersen mérve (térkép: review/kód) |
@@ -37,13 +37,13 @@ Forrás: `Kick/apps/kick/hardware/akai_map.h` és `led_map.h` (generálva, a LED
 | BANK_B | 36 | kétszínű 0..4 | nincs nyersen mérve (térkép: review/kód) |
 | BANK_C | 37 | kétszínű 0..4 | nincs nyersen mérve (térkép: review/kód) |
 | BANK_D | 38 | kétszínű 0..4 | nincs nyersen mérve (térkép: review/kód) |
-| FULL_LEVEL | 39 | egyszínű (0 / 1 / 127) | a Kick-first indulásban Port 0-n jön (nem Port 1-en), lásd 4. szakasz |
-| 16_LEVELS | 40 | egyszínű (0 / 1 / 127) | a Kick-first indulásban Port 0-n jön (nem Port 1-en), lásd 4. szakasz |
+| FULL_LEVEL | 39 | egyszínű (0 / 1 / 127) | gyári indítási sorozat nélkül Port 0-n jön, a sorozattal Port 1-en (Shift mérve), lásd 4. szakasz |
+| 16_LEVELS | 40 | egyszínű (0 / 1 / 127) | gyári indítási sorozat nélkül Port 0-n jön, a sorozattal Port 1-en (Shift mérve), lásd 4. szakasz |
 | TOUCH_FX | 42 | egyszínű (0 / 1 / 127) | nincs nyersen mérve (térkép: review/kód) |
 | TRACK_MUTE | 43 | kétszínű 0..4 | nincs nyersen mérve (térkép: review/kód) |
 | SHIFT – Right Shift | 49 | nincs LED-leképezés | nincs nyersen mérve (térkép: review/kód) |
-| SHIFT – Left Shift | 50 | egyszínű (0 / 1 / 127) | a Kick-first indulásban Port 0-n jön (nem Port 1-en), lásd 4. szakasz |
-| MAIN | 52 | egyszínű (0 / 1 / 127) | a Kick-first indulásban Port 0-n jön (nem Port 1-en), lásd 4. szakasz |
+| SHIFT – Left Shift | 50 | egyszínű (0 / 1 / 127) | gyári indítási sorozat nélkül Port 0-n jön, a sorozattal Port 1-en (Shift mérve), lásd 4. szakasz |
+| MAIN | 52 | egyszínű (0 / 1 / 127) | gyári indítási sorozat nélkül Port 0-n jön, a sorozattal Port 1-en (Shift mérve), lásd 4. szakasz |
 | TAP_TEMPO | 53 | egyszínű (0 / 1 / 127) | nincs nyersen mérve (térkép: review/kód) |
 | PLUS | 54 | nincs LED-leképezés | nyers MIDI, 2026-11-02 |
 | MINUS | 55 | nincs LED-leképezés | nyers MIDI, 2026-11-02 |
@@ -66,18 +66,18 @@ Forrás: `Kick/apps/kick/hardware/akai_map.h` és `led_map.h` (generálva, a LED
 | ARP | 118 | egyszínű (0 / 1 / 127) | nincs nyersen mérve (térkép: review/kód) |
 | LATCH | 119 | egyszínű (0 / 1 / 127) | nincs nyersen mérve (térkép: review/kód) |
 | KEYBOARD_CONTROL | 120 | egyszínű (0 / 1 / 127) | nincs nyersen mérve (térkép: review/kód) |
-| SOUNDS | 121 | egyszínű (0 / 1 / 127) | a Kick-first indulásban Port 0-n jön (nem Port 1-en), lásd 4. szakasz |
-| COPY | 122 | egyszínű (0 / 1 / 127) | a Kick-first indulásban Port 0-n jön (nem Port 1-en), lásd 4. szakasz |
-| MENU | 123 | egyszínű (0 / 1 / 127) | a Kick-first indulásban Port 0-n jön (nem Port 1-en), lásd 4. szakasz |
+| SOUNDS | 121 | egyszínű (0 / 1 / 127) | gyári indítási sorozat nélkül Port 0-n jön, a sorozattal Port 1-en (Shift mérve), lásd 4. szakasz |
+| COPY | 122 | egyszínű (0 / 1 / 127) | gyári indítási sorozat nélkül Port 0-n jön, a sorozattal Port 1-en (Shift mérve), lásd 4. szakasz |
+| MENU | 123 | egyszínű (0 / 1 / 127) | gyári indítási sorozat nélkül Port 0-n jön, a sorozattal Port 1-en (Shift mérve), lásd 4. szakasz |
 
 A pad-ek, a Q-Link gomb, a Data Dial és a strip külön szakaszban (1.) szerepelnek.
 
 ## 3. Mért viselkedés (összefoglaló)
-- **Shift:** csak nyomva tartva él (az útmutató szerint), két gomb (49 jobb, 50 bal) ugyanazt az állapotot adja. Fizikai működése a korábbi hardveres körökben igazolt (felhasználó); a nyers jele **ebben a Kick-first indulásban nem érkezik** (4. szakasz).
+- **Shift:** csak nyomva tartva él (az útmutató szerint), két gomb (49 jobb, 50 bal) ugyanazt az állapotot adja. Hideg indítás után a jobb Shift (49) Port 1-en jön, a LED felvillan (mért, 4. szakasz).
 - **Touch Strip gomb LED:** Off módban kialszik (felhasználó). A strip melletti piros LED-pöttyök az útmutató szerint nem vezérelhetők (a MIDI Control Mode "Light LED" leírása szerint nincs funkciója); normál módban az útmutató nem ír róluk.
 - **Transzport blokk (PLAY 82, STOP 81, REC 73, OVERDUB 80):** a jelük megérkezik a Kick-first indulásban is.
 
-## 4. Anomália: Kick-first indulás (2026-11-02, build `f7e8846d` és újabb)
+## 4. Kick-first indulás (2026-11-02): MEGOLDVA a gyári indítási sorozattal
 **Mért ok (nyers MIDI, `captures/key61_sweep_kick_first_20261102.txt`):** a pendrive-os indulás után (a Kick a gyári MPC-alkalmazás nélkül indul) a vezérlő **nincs Private módban**: a gombok többsége **Port 0-n (Public), ch1 Note On/Off** jön, **ugyanazokkal a jegyzetszámokkal, mint a térképben**, és nem Port 1-en:
 
 | Gomb | Port 0 üzenet |
@@ -98,8 +98,9 @@ A pad-ek, a Q-Link gomb, a Data Dial és a strip külön szakaszban (1.) szerepe
 Csak a transzport gombok (Play, Stop, Rec, Overdub) jönnek Port 1-en is, ezért ezek működtek. A Kick a Port 0 jegyzeteit **billentyűnek** veszi, ezért szólalt meg az Erase (jegyzet 9) sample-t. A LED-ek is kimaradtak a vezérlő állapota miatt (a Shift és a Full Level LED sötét maradt).
 **Következmény:** a Kick által küldött `F0 47 7F 4B 60 00 01 41 F7` ("Mode 0x41 Private: Port 1 Private be, Port 0 Public ki") ebben az állapotban **nem hat** (a Port 0 továbbra is él, a gombok nem a Port 1-re kerülnek). A Port 0 jegyzeteit nem lehet egyszerűen gombnak venni, mert a billentyűk jegyzettartományával ütköznek (pl. 39, 40).
 **Korábban:** ugyanezek a gombok működtek, amikor a Kick-et a gyári MPC-alkalmazás leállítása után kézzel indítottam (a vezérlőt előtte az MPC-alkalmazás inicializálta).
-**Hipotézis (nem bizonyított):** a gyári alkalmazás a vezérlőnek olyan bevezető üzeneteket (kézfogás / mód-sorozat) küld, amelyek nélkül a `0x41` mód nem veszi át a hatalmat. Következő mérés: a gyári MPC-alkalmazás induláskor kiküldött MIDI-bájtjainak megfigyelése (az MPC-n nincs `strace`, ezért `LD_PRELOAD`-os figyelő könyvtárral).
-**A hiba nem hardverhiba:** a vezérlő a gombokat jól érzékeli, csak másik porton küldi.
+**Megoldás (mért):** a gyári MPC-alkalmazás induláskor a Port 0-ra (kimenet) egy **MIDI Identity Requestet és konfigurációs SysEx-eket** küld (21 üzenet, `captures/key61_stock_mpc_startup_20261102.txt`, rögzítve az `LD_PRELOAD`-os `tools/mpcsnoop.c`-vel). A Kick adaptere most ugyanezt küldi el ugyanabban a sorrendben (a második csoport 1 s után). **Hideg indítás után (kikapcsolás, bekapcsolás, pendrive) a Shift már Port 1-en jön (`90 31`, `[AKAI-BTN] note=49`), és a Shift LED felvillan (piros, felhasználó).** A hipotézis tehát beigazolódott: a vezérlő addig Public módban marad, amíg a gyári kézfogást nem kapja meg, és a Kick `4B 60 00 01 41` módparancsa önmagában nem elég.
+**Nem tudjuk:** a 21 üzenet közül melyik a lényeges (az Identity Request, a `4B 62/63/64/41/5B/5A` konfiguráció, vagy mind). Nem szűkítettük, mert a teljes sorozat a gyári viselkedés, és mind beküldése biztonságos.
+**Következtetés:** a pendrive-os és bármely más Kick-first indítás ugyanazt a bináris kódot használja, a hardver-előkészítés az adapterben él, az indító réteg csak a szkript.
 
 ## 5. Mérési módszerek (hogy ne kelljen a felhasználót kérni)
 1. **Nyers MIDI a Kick alatt:** az adapter ideiglenes `[AKAI-RAW] port=<n> <status> <d0> <d1>` naplósora (az első 600 üzenet). A felhasználó egyetlen sorrendben végigmegy a gombokon, a naplót elmentjük ide.
@@ -115,4 +116,6 @@ Csak a transzport gombok (Play, Stop, Rec, Overdub) jönnek Port 1-en is, ezért
 | 2026-11-02 | `amidi` Port 1, Kick leállítva, indító SysEx nélkül | 0 üzenet |
 | 2026-11-02 | `amidi` Port 1, indító SysEx kézzel, 40 s | csak Main Volume SysEx (19 db); nem meggyőző |
 | 2026-11-02 | Kick-napló a pendrive-os indulás után, felhasználó nyomkodása | csak 82/81/73/80 érkezik Port 1-en, a többi gomb Port 0-n (Public mód); Erase = sample (4. szakasz) |
+| 2026-11-02 | `LD_PRELOAD`-os figyelő (`tools/mpcsnoop.c`) a gyári MPC-alkalmazáson, indulás | 21 indító üzenet Port 0-ra, köztük Identity Request; a Kick módparancsa nincs benne (`captures/key61_stock_mpc_startup_20261102.txt`) |
+| 2026-11-02 | hideg indítás (kikapcsolás, bekapcsolás) a gyári sorozatot küldő Kick-kel, a felhasználó egyszer megnyomta a Shift-et | Shift Port 1-en jön, a LED felvillan: a Port 0 / Public állapot megszűnt (4. szakasz) |
 | 2026-11-02 | `[AKAI-RAW]` napló, a felhasználó egyszer végigment: Shift, Full Level, 16 Levels, Erase, Copy, Menu, Sounds, Main, Undo, Tap Tempo, Play, Stop | a gombok Port 0 ch1 Note On, azonos jegyzetszámokkal; elmentve: `captures/key61_sweep_kick_first_20261102.txt` |
