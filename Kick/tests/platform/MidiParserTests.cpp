@@ -19,6 +19,17 @@ static std::vector<Msg> run(MidiParser& p, std::vector<uint8_t> bytes)
     return out;
 }
 
+using Sx = std::vector<std::vector<uint8_t>>;
+
+static Sx runSx(MidiParser& p, std::vector<uint8_t> bytes, std::vector<Msg>* msgs = nullptr)
+{
+    Sx out;
+    p.feed(bytes.data(), (ssize_t)bytes.size(),
+           [&](uint8_t s, uint8_t a, uint8_t b) { if (msgs) msgs->push_back({ s, a, b }); },
+           [&](const uint8_t* m, size_t n) { out.emplace_back(m, m + n); });
+    return out;
+}
+
 int main()
 {
     { // plain note on + running status
@@ -73,6 +84,89 @@ int main()
         run(p, { 0x90, 60 });
         p.reset();
         check(run(p, { 100 }).empty(), "reset clears running status");
+    }
+    // ---- SysEx assembly (4-argument feed) ----
+    const std::vector<uint8_t> vol = { 0xF0, 0x47, 0x7F, 0x4B, 0x5B, 0x00, 0x01, 0x40, 0xF7 };
+    { // complete message
+        MidiParser p;
+        auto x = runSx(p, vol);
+        check(x.size() == 1 && x[0] == vol, "sysex: complete message reported whole");
+    }
+    { // split at every possible byte boundary, one read per piece
+        for (size_t cut = 1; cut < vol.size(); ++cut) {
+            MidiParser p;
+            auto a = runSx(p, std::vector<uint8_t>(vol.begin(), vol.begin() + (long)cut));
+            check(a.empty(), "sysex: nothing before F7");
+            auto b = runSx(p, std::vector<uint8_t>(vol.begin() + (long)cut, vol.end()));
+            check(b.size() == 1 && b[0] == vol, "sysex: split message reported once, complete");
+        }
+    }
+    { // byte by byte
+        MidiParser p;
+        size_t got = 0;
+        for (uint8_t b : vol) got += runSx(p, { b }).size();
+        check(got == 1, "sysex: byte-wise feed reports once");
+    }
+    { // two back to back, with a channel message and a real-time byte in between
+        MidiParser p;
+        std::vector<Msg> msgs;
+        std::vector<uint8_t> in = vol;
+        in.push_back(0xB0); in.push_back(100); in.push_back(1);
+        in.push_back(0xF8);
+        in.insert(in.end(), vol.begin(), vol.end());
+        auto x = runSx(p, in, &msgs);
+        check(x.size() == 2 && msgs.size() == 1 && msgs[0].s == 0xB0 && msgs[0].a == 100 && msgs[0].b == 1, "sysex: back to back + channel message");
+    }
+    { // real-time byte inside the SysEx does not corrupt it
+        MidiParser p;
+        auto x = runSx(p, { 0xF0, 0x47, 0xF8, 0x7F, 0x4B, 0x5B, 0xFE, 0x00, 0x01, 0x10, 0xF7 });
+        check(x.size() == 1 && x[0].size() == 9 && x[0][7] == 0x10, "sysex: realtime ignored inside");
+    }
+    { // too long: dropped whole, never truncated; parser stays usable
+        MidiParser p;
+        std::vector<uint8_t> big = { 0xF0 };
+        for (size_t i = 0; i < MidiParser::kSysexMax + 10; ++i) big.push_back(0x11);
+        big.push_back(0xF7);
+        check(runSx(p, big).empty(), "sysex: too long dropped");
+        check(runSx(p, vol).size() == 1, "sysex: usable after overflow");
+        // exactly at the limit is still kept: F0 + (kSysexMax - 2) data + F7
+        std::vector<uint8_t> fit = { 0xF0 };
+        for (size_t i = 0; i < MidiParser::kSysexMax - 2; ++i) fit.push_back(0x22);
+        fit.push_back(0xF7);
+        auto x = runSx(p, fit);
+        check(x.size() == 1 && x[0].size() == MidiParser::kSysexMax, "sysex: exactly kSysexMax kept");
+        fit.insert(fit.begin() + 1, 0x22);
+        check(runSx(p, fit).empty(), "sysex: kSysexMax + 1 dropped");
+    }
+    { // truncated (no F7): a following channel status aborts it, nothing reported, channel message parsed
+        MidiParser p;
+        std::vector<Msg> msgs;
+        auto x = runSx(p, { 0xF0, 0x47, 0x7F, 0x4B, 0x90, 60, 100 }, &msgs);
+        check(x.empty() && msgs.size() == 1 && msgs[0].s == 0x90, "sysex: truncated aborted, not reported");
+        auto y = runSx(p, { 0xF7 });
+        check(y.empty(), "sysex: stray F7 reports nothing");
+    }
+    { // a second F0 restarts the assembly: only the complete one is reported
+        MidiParser p;
+        auto x = runSx(p, { 0xF0, 0x47, 0x7F, 0xF0, 0x01, 0x02, 0xF7 });
+        check(x.size() == 1 && x[0] == (std::vector<uint8_t>{ 0xF0, 0x01, 0x02, 0xF7 }), "sysex: F0 restarts");
+    }
+    { // stray F7 without F0, and empty F0 F7
+        MidiParser p;
+        check(runSx(p, { 0x10, 0xF7 }).empty(), "sysex: F7 without F0");
+        auto x = runSx(p, { 0xF0, 0xF7 });
+        check(x.size() == 1 && x[0].size() == 2, "sysex: empty F0 F7");
+    }
+    { // reset drops a half-assembled SysEx
+        MidiParser p;
+        runSx(p, { 0xF0, 0x47, 0x7F });
+        p.reset();
+        check(runSx(p, { 0x4B, 0xF7 }).empty(), "sysex: reset clears assembly");
+    }
+    { // the 3-argument feed still skips SysEx (compat)
+        MidiParser p;
+        auto m = run(p, { 0xF0, 0x47, 0xF7, 0x90, 60, 100 });
+        check(m.size() == 1 && m[0].a == 60, "3-arg feed unchanged");
     }
     std::puts("midi parser tests passed");
     return 0;

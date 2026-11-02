@@ -2,6 +2,7 @@
 
 #include "../hardware_adapter.h"
 #include "../midi_parser.h"
+#include "../main_volume.h"
 #include "../led_map.h"
 #include "../akai_map.h"
 #include "../device_probe.h"
@@ -370,6 +371,9 @@ private:
     }
 
     struct ParsedMsg { uint8_t s, d0, d1; };
+    // One complete incoming SysEx, decoded under the parser lock (pure function), acted on after it.
+    struct ParsedSysex { kick_hw::mainvol::Result res; uint8_t head[16]; uint8_t head_len; size_t full_len; };
+    std::atomic<bool> m_unknown_sysex_logged { false };   // log the first unrecognised Akai SysEx only
 
     // Parser + dispatch for one port; used by run() and inject_bytes(). The parser runs under m_parser_mutex,
     // collecting complete messages; the listener callbacks run afterwards, without the lock.
@@ -378,17 +382,44 @@ private:
         while (n > 0) {
             const size_t chunk = n > 256 ? 256 : n;
             ParsedMsg msgs[256];
+            ParsedSysex sysex[128];   // a framed SysEx is >= 2 bytes, so a 256 byte chunk holds at most 128
             int count = 0;
+            int sx_count = 0;
             {
                 std::lock_guard<std::mutex> lock(m_parser_mutex);
                 m_parser[port].feed(buf, (ssize_t)chunk, [&](uint8_t s, uint8_t d0, uint8_t d1) {
                     if (count < 256) msgs[count++] = { s, d0, d1 };
+                }, [&](const uint8_t* m, size_t len) {
+                    if (sx_count >= 128) return;
+                    ParsedSysex& e = sysex[sx_count++];
+                    e.res = kick_hw::mainvol::decode(m, len);
+                    e.full_len = len;
+                    e.head_len = (uint8_t)(len < sizeof(e.head) ? len : sizeof(e.head));
+                    for (uint8_t k = 0; k < e.head_len; ++k) e.head[k] = m[k];
                 });
             }
             for (int i = 0; i < count; ++i) handle_midi_message(port, msgs[i].s, msgs[i].d0, msgs[i].d1);
+            for (int i = 0; i < sx_count; ++i) handle_sysex(port, sysex[i]);
             buf += chunk;
             n -= chunk;
         }
+    }
+
+    void handle_sysex(int port, const ParsedSysex& e) {
+        using kick_hw::mainvol::Kind;
+        if (!m_listener || e.res.kind == Kind::NotAkai) return;   // other manufacturers' SysEx: ignored
+        if (port == 1 && e.res.kind == Kind::MainVolume) {
+            m_listener->on_main_volume(kick_hw::mainvol::toMidi127(e.res.value));
+            return;
+        }
+        // Akai SysEx we do not understand (other command / length, or any Akai SysEx on Port 0/2): not dropped
+        // silently, logged once.
+        if (m_unknown_sysex_logged.exchange(true)) return;
+        char hex[16 * 3 + 1] = { 0 };
+        for (uint8_t k = 0; k < e.head_len; ++k) snprintf(hex + k * 3, 4, "%02X ", e.head[k]);
+        printf("[AKAI-SYSEX] Unrecognised Akai SysEx on port %d (len %zu): %s%s (logged once)\n",
+               port, e.full_len, hex, e.full_len > e.head_len ? "..." : "");
+        fflush(stdout);
     }
 
     // Note tables live in hardware/akai_map.h (ALSA-free, host-tested).

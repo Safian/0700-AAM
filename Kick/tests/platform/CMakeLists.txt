@@ -163,6 +163,11 @@ add_executable(kick-seq-record-tests SeqRecordTests.cpp)
 add_test(NAME kick-seq-record COMMAND kick-seq-record-tests)
 set_tests_properties(kick-seq-record PROPERTIES TIMEOUT 20)
 
+# Akai Main Volume SysEx (F0 47 7F 4B 5B 00 01 <v> F7) decoder + MidiParser SysEx assembly; JUCE-free, header only.
+add_executable(kick-main-volume-tests MainVolumeTests.cpp)
+add_test(NAME kick-main-volume COMMAND kick-main-volume-tests)
+set_tests_properties(kick-main-volume PROPERTIES TIMEOUT 10)
+
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()

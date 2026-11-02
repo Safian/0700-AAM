@@ -94,3 +94,13 @@ Minden beolvasztott ag tartalma mar (cherry-pick / ujraimplementalas formajaban)
 - A régi Proper-skin dolgok NEM kerülnek be ebbe az ágba; az Akai-dolgok igen, de az Akai-rétegbe.
 - A helyi agent jegyzete (NEM-KICK scope "elfogadva") a felhasználó szavai szerint pontatlan volt; ez a bejegyzés az érvényes.
 - Következmény: Locate ablak / Sounds Mode / Keyboard Control menü most NEM épül; Y4 (strip módok) a Kickben létező módokra a leírás megérkezése után.
+
+## AD1a – Main Volume gomb (2026-11-02, nyers MIDI mérés alapján)
+| Elem | Állapot | Indok | Hol | Reggeli teendő |
+|---|---|---|---|---|
+| Bejövő SysEx értelmezése | KÉSZ: `MidiParser` összeállítja a teljes F0..F7 üzenetet (darabolt olvasás, 32 bájt korlát, a hosszabb egészében eldobva, F7 nélküli üzenetet státuszbájt/új F0 megszakít); csak Port 1-en értelmezett | Mért: `F0 47 7F 4B 5B 00 01 <v> F7` | `hardware/midi_parser.h`, `hardware/main_volume.h` | - |
+| Parancsbájt `0x5B` jelentése | DUMMY: ismeretlen; csak az üzenet felismerésére szolgál. Más Akai SysEx (más parancs/hossz/eszköz/termék-bájt, vagy bármely Akai SysEx Port 0/2-n) NEM dobódik el csendben: az első egyszer naplózva (`[AKAI-SYSEX] ...`), a hex tartalommal | Nincs dokumentáció | `main_volume.h` (`kCommand`), `akai_mpc_key61_adapter.h` (`handle_sysex`) | Ha a parancs jelentése kiderül (pl. a jövőbeli firmware több parancsot küld), bővíteni |
+| `<v>` tartomány és skála | `0x00..0x75` mért; `0x76..0x7F` nem látott, `0x75`-re vágva; skála: `v*127/0x75` kerekítve, 0..127 (a Mixer Master csúszka skálája) | A 0..0x75 mért adat; a hardver a 0x75-nél telít | `main_volume.h` (`toMidi127`) | Hardveren ellenőrizni, hogy tényleg 0x75 a felső határ |
+| Mire köt | A Kick master szintje: kimeneti busz 0 `gain = CommonUtils::midiToGain(0..127)` (ugyanaz, amit a Mixer "Master" csúszka tesz, `kick_master_route_mix.h`); üzenetszálon `callAsync`+`alive` | A Kickben nincs külön "fő hangerő" API; az eredeti Kick fő hangereje analóg hardveres volt (a kódból nem látszik szoftveres párja) | `kick_hardware_bridge.h` (`on_main_volume`/`handleMainVolume`) | Döntés: (1) mentődjön-e a projekttel (most igen, mint a Mixer csúszka), (2) legyen-e a busz kiválasztható (most mindig az 1. kimeneti busz), (3) a Mixer UI nem kap értesítést, ha a Master képernyő épp nem látható (megnyitáskor frissül) |
+| Hardveres hangerő | NEM nyúlunk hozzá: a gomb a hardver firmware-ében a kimeneti/fejhallgató szintet is állíthatja (a felhasználó szerint a Kick alatt nem változott a hangerő); hogy a SysEx mellett a firmware maga is állít-e, nem ismert | Nincs doksi | - | Hardveren: a gomb forgatása alatt hallható-e kettős hatás |
+

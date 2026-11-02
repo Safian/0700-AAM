@@ -130,7 +130,7 @@ Az adapter `get_akai_button()` mind a 45 Note-ot leképezi. A viselkedést a `Ki
 | CV/Gate 1–8 | ❓ | A DAC-írás a `modules/hardware/source/kick_I2c.cpp`-ben van (feszültség-skálázás javítva: `9ade01df`). Az Akai adapterben nincs; hogy ezen a hardveren elérhető-e, nem tudom. A mod wheel CV-hez az adapter CC1-et még mindig eldobja (T9) |
 | DIN MIDI IN/OUT/THRU (Card 3) | ❌ az adapterben | A review szerint a JUCE MIDI manager viszi ❓ |
 | USB-B (gadget MIDI), USB-A | ❌ / ❓ | Nem része az adapternek |
-| Main Volume | – | Analóg potméter, nem küld MIDI-t (nem hiba) |
+| Main Volume | ✅ (kód; hardveren nem igazolt) | Nem analóg: SysEx `F0 47 7F 4B 5B 00 01 <v> F7` (v 0x00..0x75, mért) a Port 1-en; a Kick master szintjére kötve (AD1a), a `0x5B` parancsbájt jelentése ismeretlen |
 
 ## 3. Hibák és kockázatok (javítandó)
 

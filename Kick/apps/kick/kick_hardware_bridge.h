@@ -1568,6 +1568,22 @@ public:
     {
         sendCc(11, val);
     }
+    // Hardware Main Volume knob -> Kick master level (the Mixer "Master" strip level slider: output bus 0, gain =
+    // CommonUtils::midiToGain(0..127), exactly what MasterRouteDisplay does). Same thread rule as the other
+    // incoming events: the reader thread only posts, the bus is touched on the message thread.
+    // ARCHITECT-CLARIFY: the knob sets the project's master bus level (as the Mixer slider does), not an
+    // analog/codec hardware volume; whether it should be non-persistent is open (MORNING_DECISIONS).
+    void on_main_volume(int val127) override
+    {
+        juce::MessageManager::callAsync([this, alive = m_alive, val127]() { if (!alive->load()) return; handleMainVolume(val127); });
+    }
+    void handleMainVolume(int val127)
+    {
+        if (val127 < 0) val127 = 0;
+        if (val127 > 127) val127 = 127;
+        if (auto* bus = mt::getAudioInterface().getBusManager().getOutput(0))
+            bus->gain = CommonUtils::midiToGain(val127);
+    }
     void on_footswitch2(bool down) override
     {
         mt::getAudioInterface().addLiveMidiMsg(mt::getAudioInterface().getSelected(),

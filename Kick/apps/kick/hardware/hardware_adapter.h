@@ -136,15 +136,18 @@ public:
     // Touch strip 14-bit position 0..16383 (CC33 MSB + last CC34 LSB). Optional, fires in addition to on_touch_strip.
     virtual void on_touch_strip_fine(int /*pos14*/) {}
     virtual void on_pitch_bend(int val) = 0;
-    virtual void on_mod_wheel(int /*val*/) {}
-    virtual void on_expression_pedal(int /*val*/) {}
-    virtual void on_aftertouch(int /*val*/) {}
     virtual void on_sustain_pedal(bool down) = 0;
     // Optional keybed / wheel / pedal inputs (0..127); adapters without them need not implement these.
     virtual void on_channel_aftertouch(int /*val*/) {}
     virtual void on_mod_wheel(int /*val*/) {}
     virtual void on_expression(int /*val*/) {}
     virtual void on_footswitch2(bool /*down*/) {}
+    // Hardware Main Volume knob (Akai: incoming SysEx on Port 1, see hardware/main_volume.h), scaled to 0..127
+    // (the Kick master level scale). Optional.
+    virtual void on_main_volume(int /*val127*/) {}
+    // Backward-compatibility aliases
+    virtual void on_expression_pedal(int val) { on_expression(val); }
+    virtual void on_aftertouch(int val) { on_channel_aftertouch(val); }
     // Polyphonic pad pressure after the initial hit (pad 0..15, value 0..127).
     virtual void on_pad_aftertouch(int /*pad_num*/, int /*val*/) {}
 
