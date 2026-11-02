@@ -30,6 +30,51 @@
 
 namespace kick_ui
 {
+    namespace
+    {
+        // Red outline around the control the data dial / +/- act on (MPC manual: "a parameter highlighted with a red
+        // outline is selected"). JUCE's own focus outline needs a focused window, which the X-less MPC does not have.
+        class SelectedControlOutline : public juce::Component
+            , private juce::Timer
+        {
+        public:
+            SelectedControlOutline()
+            {
+                setInterceptsMouseClicks( false, false );
+                setVisible( false );
+                startTimerHz( 20 );
+            }
+
+            bool hitTest( int, int ) override { return false; }
+
+            void paint( juce::Graphics& g ) override
+            {
+                g.setColour( juce::Colour( 0xffe5322b ) );
+                g.drawRoundedRectangle( getLocalBounds().toFloat().reduced( 1.0f ), 4.0f, 2.0f );
+            }
+
+        private:
+            void timerCallback() override
+            {
+                auto* parent = getParentComponent();
+                auto* ctrl   = ui::getSelectedControl();
+                if( parent == nullptr || ctrl == nullptr || !parent->isParentOf( ctrl ) )
+                {
+                    if( isVisible() )
+                        setVisible( false );
+                    return;
+                }
+
+                const auto area = parent->getLocalArea( ctrl, ctrl->getLocalBounds() ).expanded( 2 );
+                if( area != getBounds() )
+                    setBounds( area );
+                if( !isVisible() )
+                    setVisible( true );
+                toFront( false );
+            }
+        };
+    } // namespace
+
     sigslot::signal<Screen> signals::sigScreenClose = {};
     sigslot::signal<Screen> signals::sigScreenOpen  = {};
     sigslot::signal<Screen> signals::onScreenLoaded = {};
@@ -193,6 +238,9 @@ namespace kick_ui
         contracts::DclSignals::hardwareInputTriggered.connect( [&]( CPktMgr::HWMsg_t& f_HwMsg ) {
             this->handleCommand( f_HwMsg );
         } );
+
+        selectionOutline_ = std::make_unique<SelectedControlOutline>();
+        addChildComponent( selectionOutline_.get() );
 
         // Function to add screens.
         auto screenAdder = [&]( Screen Type, std::unique_ptr<IScreen> Screen ) {

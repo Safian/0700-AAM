@@ -17,6 +17,7 @@
 #include "contracts/dcl/dcl_contracts_helper.h"
 #include "kick_ui/kick_ui.h"
 #include "kick_ui_controls/source/kick_Theme.h"
+#include "kick_ui_controls/source/kick_ControlBase.h"
 #include "audio_engine/audio_engine.h"
 #include <chrono>
 #include <atomic>
@@ -462,6 +463,12 @@ private:
             auto* target = juce::Desktop::getInstance().findComponentAt(juce::Point<int>(ix, iy));
             if (!target) target = hitRoot->getComponentAt(hitRoot->getLocalPoint(nullptr, juce::Point<int>(ix, iy)));
             if (!target) target = root;
+            // A slider's value box (a Label child) hands its mouse events to the slider through a MouseListener (LinearBar
+            // styles). The direct mouseDown()/mouseDrag() calls below do not run listeners, so a touch on the value box
+            // would never reach the slider: deliver it to the slider itself.
+            if (dynamic_cast<juce::Label*>(target) != nullptr)
+                if (auto* sl = target->findParentComponentOfClass<juce::Slider>())
+                    target = sl;
 
             // Diagnostics (hardware debugging, down / up only): fb -> UI point, hit root, target, peer.
             if (is_down || is_up)
@@ -530,6 +537,8 @@ private:
                     m_touch_down_y[slot] = iy;
                     m_touch_dragging[slot] = false;
                 }
+                // No window focus without an X display: remember the touched control as the one the data dial / +/- act on.
+                ui::selectControlFromTouch(target);
                 target->mouseDown(e);
                 printf("[TOUCH] manual mouseDown delivered to '%s'\n", target->getName().toRawUTF8());
                 fflush(stdout);
@@ -574,14 +583,18 @@ private:
                 if (inSlot && !m_touch_dragging[slot]) {
                     // finger still within the tap slop: nothing to deliver
                 } else if (downTarget) {
+                    // A real drag event carries where the press began and that the mouse moved since: JUCE sliders
+                    // (LinearBar with an editable value box) treat a drag with mouseWasClicked() as a click and ignore it.
                     auto downLocalPt = downTarget->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
+                    auto pressLocalPt = inSlot ? downTarget->getLocalPoint(nullptr, juce::Point<int>(m_touch_down_x[slot], m_touch_down_y[slot])).toFloat()
+                                               : downLocalPt;
                     juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                            downTarget, downTarget,
                                            juce::Time::getCurrentTime(),
-                                           downLocalPt,
+                                           pressLocalPt,
                                            juce::Time::getCurrentTime(),
-                                           1, false);
+                                           1, true);
                     downTarget->mouseDrag(downE);
                 } else {
                     target->mouseDrag(e);
@@ -751,7 +764,7 @@ public:
 
             if (!m_screen_conn.connected()) {
                 m_screen_conn = kick_ui::signals::onScreenLoaded.connect(
-                    [this](kick_ui::Screen s) { m_last_screen = static_cast<int>(s); updateModeLeds(s); });
+                    [this](kick_ui::Screen s) { m_last_screen = static_cast<int>(s); ui::clearSelectedControl(); updateModeLeds(s); });
             }
 
             m_have_project_colours = false;
