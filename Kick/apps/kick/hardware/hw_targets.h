@@ -96,6 +96,14 @@ private:
     HeldTarget<Target> m_held[2];
 };
 
+// Lane identity of the CC64 output: MTAudioInterface::addLiveMidiMsg -> manager->getTrack(Selection) picks the track by
+// (sequence, track) only and ignores `program`, so two targets that differ only in the program share one CC64 lane.
+template <typename Target>
+bool sameSequenceTrack(const Target& a, const Target& b)
+{
+    return a.sequence == b.sequence && a.track == b.track;
+}
+
 // G16: a pitch wheel rarely rests on exactly 8192; values within +-2 of the centre count as "centred" (ends the hold).
 constexpr int kBendCentre = 8192;
 constexpr int kBendCentreTolerance = 2;

@@ -1629,8 +1629,7 @@ public:
             std::lock_guard<std::mutex> lk(m_target_mutex);
             const mt::MTSelected cur = ae.getSelected();
             if (down) target = m_sustain_sources.press(src, cur);
-            else send = m_sustain_sources.release(src, cur, [](const mt::MTSelected& a, const mt::MTSelected& b) {
-                return a.sequence == b.sequence && a.track == b.track && a.program == b.program; }, target);
+            else send = m_sustain_sources.release(src, cur, kick_hw::sameSequenceTrack<mt::MTSelected>, target);
         }
         if (send) ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
     }
