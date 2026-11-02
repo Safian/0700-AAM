@@ -63,6 +63,30 @@ int main()
         CHECK(kick_hw::routeCc(127, Sel{ 3 }).track == 3);
         CHECK(kick_hw::routeCc(0, Sel{ 4 }).track == 4);
     }
+    { // AF1d: physical pedal + strip Sustain, own targets, shared CC64 lane
+        using SS = kick_hw::SustainSources<Sel>;
+        auto same = [](const Sel& a, const Sel& b) { return a.track == b.track; };
+        Sel out;
+        { // both hold T0: the first release stays silent, the last one sends CC64=0
+            SS ss;
+            CHECK(ss.press(SS::kPedal, Sel{ 0 }).track == 0);
+            CHECK(ss.press(SS::kStrip, Sel{ 0 }).track == 0);
+            CHECK(!ss.release(SS::kStrip, Sel{ 0 }, same, out));
+            CHECK(ss.release(SS::kPedal, Sel{ 0 }, same, out) && out.track == 0);
+        }
+        { // strip holds T1, selection moves to T2, pedal pressed: pedal gets T2 (not the strip's stored T1)
+            SS ss;
+            ss.press(SS::kStrip, Sel{ 1 });
+            CHECK(ss.press(SS::kPedal, Sel{ 2 }).track == 2);
+            CHECK(ss.release(SS::kStrip, Sel{ 2 }, same, out) && out.track == 1); // other track: own CC64=0
+            CHECK(ss.release(SS::kPedal, Sel{ 3 }, same, out) && out.track == 2);
+        }
+        { // strip alone
+            SS ss;
+            ss.press(SS::kStrip, Sel{ 4 });
+            CHECK(ss.release(SS::kStrip, Sel{ 5 }, same, out) && out.track == 4);
+        }
+    }
     if (g_fail == 0) std::printf("hw_targets: all passed\n");
     return g_fail ? 1 : 0;
 }
