@@ -1,5 +1,13 @@
 # Hardveres session → cloud session
 
+## 2026-11-02 – SZEKVENCIAFELVÉTEL MÉRVE (build `1a5e4543`, ARMv7, MPC Key 61): működik élesített sávval
+- **Felhasználó, fizikai:** REC LED világít, OVERDUB LED jó, PLAY és STOP LED jó. A saját pad-ütései nem kerültek a Gridbe; a naplóban nincs érintés a sáv Record (Rec Arm) gombján, a Grid-jegyzetek a ceruzával, ujjal kerültek be. Élesített sáv nélkül nincs felvétel (a leírásotok szerint), tehát ez valószínűleg nem hiba; a felhasználó reggel újrapróbálja élesítve.
+- **Mért (injektált), élesített Drums sávval** (`touch` a sáv Record gombjára → a gomb piros; `btn REC`, `btn PLAY`, hangok, `btn STOP`):
+  - `pad 1/3/5 100`: a sáv szintjelzője PLAY alatt mozgott, a régi jegyzetek (A8, A5, A1) eltűntek (a REC törli az élesített sáv jegyzeteit, ahogy leírtátok), új jegyzetek jelentek meg a Gridben.
+  - `rawmidi 1 9F <30|34|37> 64` / `8F ... 00` (billentyű ch16, 2 s-onként): a List Edit 3 eseményt mutat: D1 `01:02:90` hossz 195, D5 `02:02:88` hossz 197, D8 `03:02:90` hossz 195, velocity 100 mindhárom. Az időzítés pontosan 1 ütem (2 s @120 BPM), a hossz ≈ 1 s (note-on → note-off), tehát a hang és a hossz helyes.
+- **Megfigyelés (UI, nem felvétel):** a Grid View csak az A bank sorait mutatja (A1–A16, B1–B3); a billentyű-hangok a D bankba estek (D1, D5, D8), ezért a Grid üresnek látszott, miközben a List Edit mutatta őket. Ha a felhasználó pad-felvétele másik bankba esett, mint a Gridben látható, ugyanez adhat „nem került be" benyomást. Ezt reggel a fizikai pad-felvételnél nézem meg (melyik bank aktív).
+- **Nem mértem még:** hallható-e a lejátszás (a felhasználó füle kell), a Looper SYNC PLAY/REC fázis, az Aura hosszú futás (az éjszakai stabilitás: az előző build végig élt, új coredump nincs), Shift+REC Recall.
+
 ## 2026-11-02 – KÉSZ: `docs/akai_mpc_hardware/KEY61_TOUCH_STRIP_MODES.md` (touch strip 12 mód, v3.10 útmutató 101–103. o.)
 - Módonként: mit vezérel, Shift+gomb beállítások, Touch Sense (334. o.), a Kickben létező módok (Pad Level, Mod Wheel, Track Level, Sustain, Expression + Pitch Bend) külön táblában, a Kickben nem létező dolgok (Q-Link, Crossfader, Note Strum) külön listában; ami az útmutatóban nincs, **„nincs a doksiban”**.
 - A lényeg az Y4-hez, csak amit az útmutató kimond: Mod Wheel = **CC1**, Expression = **CC11**, Pitch Bend: Relative Mode (a közép az első érintés helye) / fix közép, Bend Up/Down Range, Global Pitch Bend. **Nincs a doksiban:** a visszaugrás elengedéskor (pitch bend, mod wheel, expression), a Sustain be/ki küszöbe, a Pad Level / Track Level tartománya és skálája. Ezekhez nincs útmutató-fedezet, ne találd ki; ha kell, hardveres mérés (a felhasználóval) vagy kérdés a felhasználónak.
