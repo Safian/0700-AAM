@@ -147,8 +147,8 @@ void AppTrackDisplay::setTrack( int Seq, int Track )
     pTrack = ae.getTrackData( seq, track );
     arm.setArmed( ae.isTrackRecordArmed( seq, track ) );
 
-    auto muteValueHandler        = [&]() { muteData = pTrack->mute; };
-    auto soloValueHandler        = [&]() { soloData = pTrack->solo; };
+    auto muteValueHandler        = [&]() { if( pTrack ) muteData = pTrack->mute; };
+    auto soloValueHandler        = [&]() { if( pTrack ) soloData = pTrack->solo; };
     auto levelValueHandler       = [&]() { level.setValue( pTrack ? (double)pTrack->level.get() : 0.0, juce::dontSendNotification ); };
     auto nameValueHandler        = [&]() { name.setText( pTrack ? pTrack->name.get() : "", juce::dontSendNotification ); };
     auto lengthValueHandler      = [&]() { length.setValue( pTrack ? (double)pTrack->length.get() : BAR::MIN, juce::dontSendNotification ); };
@@ -276,6 +276,11 @@ void AppTrackDisplay::resized()
 
 void AppTrackDisplay::refreshSoloMute()
 {
+    // A row can outlive its track: after a project switch the track list shrinks while stale rows still get refreshed,
+    // and their pTrack points into the closed project. Look the track up again; no track, nothing to refresh.
+    pTrack = ae.getTrackData( seq, track );
+    if( pTrack == nullptr ) return;
+
     auto isSoloed = ae.getNumSoloTracks( seq ) >= 1 ? true : false;
     mute.setToggleState( soloData ? false : isSoloed ? true :
                                                        muteData,

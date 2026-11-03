@@ -12,6 +12,18 @@ inline juce::String runKickAppSmoke() {
     ui::IPv4Editor::Instance(); ui::NoteSelectorEditor::Instance();
     kick_ui::KSystemResources::Instance();
     { ui::KickNumPad<double> pad(0, 1, .5); }
+    // KICK_SMOKE_SWITCH="a.kickPrj,b.kickPrj": load the projects one after the other (the MPC crashed on every project switch).
+    const auto switchList = juce::StringArray::fromTokens(juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SWITCH", {}), ",", "");
+    if (!switchList.isEmpty()) {
+        for (const auto& name : switchList) {
+            auto project = juce::File(name);
+            std::cout << "SWITCH: loading " << name << "\n" << std::flush;
+            if (!mt::getAudioInterface().loadProject(project)) return "Cannot load " + name;
+            std::cout << "SWITCH: loaded " << name << ", programs " << mt::getAudioInterface().getNumPrograms() << "\n" << std::flush;
+        }
+        std::cout << "PASS: project switch\n";
+        return {};
+    }
     const auto path = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_CLAP_PATH", {});
     if (path.isEmpty()) return {};
     const auto catalog = kick::clap::inspect(path.toStdString());
