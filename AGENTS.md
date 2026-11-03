@@ -1,7 +1,7 @@
 # BehringerKick – agent instructions
 
 Local fork of `MusicTribeOpenSource/0700-AAM` (Behringer KICK, AGPL-3.0-or-later).
-Goal: contribute to Kick upstream (iOS/iPad port, scalable UI, slide-out hardware controls) and ship
+Goal: contribute to Kick upstream (iOS/iPad port, scalable UI) and ship
 a **Proper** build that is Kick plus a skin only. Everything except the skin should be upstreamable.
 
 ## Layout
@@ -17,6 +17,9 @@ a **Proper** build that is Kick plus a skin only. Everything except the skin sho
   platform-glue commit (it is cherry-picked from upstream PR #13 and may diverge from upstream's fix for issue #9).
 - Platform code behind `#if JUCE_IOS` / `JUCE_MAC`; Linux/hardware behaviour must not change.
 - Keep the hardware 1024x600 behaviour the default; scaling/mobile layouts are opt-in.
+- Mobile app (iOS/iPad): the Kick UI looks the same as on the Akai: full screen only, no hardware-lookalike chassis, drawers
+  or on-screen hardware controls. Full operation needs an external MIDI controller connected; the mobile app is the Kick port
+  to which external MIDI is attached.
 - Trademarks: "Behringer" and "KICK" names/logos are not licensed. Proper builds use their own name and logo.
 - No proprietary SDKs (ads, analytics) in this tree – AGPL.
 - Keep existing license headers. Do not edit `build*/`, `.3rdPartySourceCache/` (both git-excluded locally).

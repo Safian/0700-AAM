@@ -36,6 +36,14 @@
  #include "../../tests/platform/AppSmoke.h"
 #endif
 #include "contracts/utils/keyboard/keyboard_detector.h"
+#if JUCE_LINUX
+ #include <execinfo.h>
+ #include <dlfcn.h>
+ #include <fcntl.h>
+ #include <signal.h>
+ #include <ucontext.h>
+ #include <unistd.h>
+#endif
 
 #ifdef PERFETTO
     #include "melatonin_perfetto/melatonin_perfetto.h"
@@ -194,6 +202,58 @@ public:
 
     void initialise( const juce::String& commandLine ) override
     {
+#if JUCE_LINUX
+        // A crash (SIGSEGV/SIGBUS/...) leaves its signal, fault address, registers and call stack in /data/kick.crash
+        // (module-relative addresses: resolve with arm-linux-gnueabihf-addr2line against the unstripped binary). On ARM the
+        // backtrace() of a signal handler stops at the signal trampoline, so the faulting pc/lr are written from the context.
+        // Without the file the MPC just falls back to the stock app.
+        struct sigaction action {};
+        action.sa_sigaction = []( int sig, siginfo_t* info, void* context ) {
+            const int fd = open( "/data/kick.crash", O_WRONLY | O_CREAT | O_TRUNC, 0644 );
+            if( fd >= 0 )
+            {
+                char line[160];
+#if defined( __arm__ )
+                const auto* uc = static_cast<ucontext_t*>( context );
+                const int   len = snprintf( line, sizeof( line ), "signal=%d fault_addr=%p pc=%#lx lr=%#lx sp=%#lx\n", sig, info->si_addr,
+                                            uc->uc_mcontext.arm_pc, uc->uc_mcontext.arm_lr, uc->uc_mcontext.arm_sp );
+#else
+                (void)context;
+                const int len = snprintf( line, sizeof( line ), "signal=%d fault_addr=%p\n", sig, info->si_addr );
+#endif
+                if( len > 0 ) (void)!write( fd, line, (size_t)len );
+#if defined( __arm__ )
+                // The unwinder stops at the signal trampoline, so scan the faulting stack for words that point into this binary
+                // (module offsets of probable return addresses, nearest the fault first).
+                Dl_info    mod {};
+                const auto* sp = reinterpret_cast<const unsigned long*>( uc->uc_mcontext.arm_sp );
+                if( dladdr( reinterpret_cast<void*>( uc->uc_mcontext.arm_pc ), &mod ) != 0 )
+                {
+                    const auto base = reinterpret_cast<unsigned long>( mod.dli_fbase );
+                    int        found = 0;
+                    for( int i = 0; i < 4096 && found < 80; ++i )
+                    {
+                        const auto w = sp[i];
+                        if( w > base && w < base + 0x1800000 )
+                        {
+                            const int l = snprintf( line, sizeof( line ), "stack+%d: %#lx\n", i * 4, w - base );
+                            if( l > 0 ) (void)!write( fd, line, (size_t)l );
+                            ++found;
+                        }
+                    }
+                }
+#endif
+                void*     frames[64];
+                const int n = backtrace( frames, 64 );
+                backtrace_symbols_fd( frames, n, fd );
+                close( fd );
+            }
+            signal( sig, SIG_DFL );
+            raise( sig );
+        };
+        action.sa_flags = SA_SIGINFO | SA_RESETHAND;
+        for( const int sig : { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT } ) sigaction( sig, &action, nullptr );
+#endif
         audioInterface.reset(new KickAudioInterface());
         engineAdapter.reset(new KickAudioEngineAdapter(audioInterface));
         

@@ -383,6 +383,12 @@ namespace mt
         ASoundSlice*                         getSourceSlice( int Layer = 0 );
         std::array<juce::String, MAX_LAYERS> getSources();
 
+        // Programs own their clips as unique_ptr<MTISample> but create MTIDrum / MTIKeys / MTIClip: without a virtual destructor
+        // only this base was destroyed, the derived CachedValues (LFO, envelopes, layerPlay, ...) stayed registered as
+        // ValueTree listeners in freed memory, and the next project switch crashed in ValueTree::~SharedObject
+        // (heap-use-after-free, found with AddressSanitizer on the project-switch smoke run).
+        virtual ~MTISample() = default;
+
         virtual void virtualFunc(){};
     };
 
