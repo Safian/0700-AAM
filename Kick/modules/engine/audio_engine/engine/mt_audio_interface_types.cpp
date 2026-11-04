@@ -351,27 +351,35 @@ namespace mt
     }
 
     /// MTIPadColors
+    // The pad colours the user stored for the group of program type 'Type' (Color Edit "Make Default").
+    bool loadUserPadDefaults( MTProgramType Type, padcolour::Defaults& Out )
+    {
+        const auto text = getSettings().padColours.get( padcolour::groupKey( padcolour::groupOfType( (int)Type ) ) );
+        return text.isNotEmpty() && padcolour::decode( text.toStdString(), Out );
+    }
+
     MTIPadColors::MTIPadColors( const juce::ValueTree& V, juce::UndoManager* UM )
     {
         jassert( V.hasType( IDs::COLOURS ) );
         juce::ValueTree state = V;
 
-        auto getDefaultPadColour = []( const juce::ValueTree& V, int Pad ) -> int {
-            auto        prog        = V.getParent();
-            auto        type        = magic_enum::enum_cast<MTProgramType>( (int)prog.getProperty( IDs::type, 7 ) ).value();
-            const auto& progColours = MTProgramType::Drum == type ? defaultDrumColours :
-                                      MTProgramType::Clip == type ? defaultClipColours :
-                                                                    defaultPadColours;
-
-            return ( Pad < MIDI::NUMERIC_MAX ) ? progColours[Pad] : 0;
+        // The default of a pad: what the user stored with Color Edit "Make Default" for this program type, else the factory table.
+        const auto type = magic_enum::enum_cast<MTProgramType>( (int)state.getParent().getProperty( IDs::type, 7 ) ).value();
+        padcolour::Defaults userDefaults;
+        const bool          haveUser = loadUserPadDefaults( type, userDefaults );
+        auto                getDefaultPadColour = [&]( int Pad ) -> int {
+            const auto& factory = MTProgramType::Drum == type ? defaultDrumColours :
+                                  MTProgramType::Clip == type ? defaultClipColours :
+                                                                defaultPadColours;
+            return ( Pad < MIDI::NUMERIC_MAX ) ? padcolour::colourFor( haveUser ? &userDefaults : nullptr, factory, Pad ) : 0;
         };
 
-        colourMode.referTo( state, IDs::mode, UM, PadColorMode::DIM_VELOCITY );
-        emptyPadColourMode.referTo( state, IDs::emptyColourmode, UM, EmptyPadColorMode::Off );
+        colourMode.referTo( state, IDs::mode, UM, haveUser ? (PadColorMode)userDefaults.mode : PadColorMode::DIM_VELOCITY );
+        emptyPadColourMode.referTo( state, IDs::emptyColourmode, UM, haveUser ? (EmptyPadColorMode)userDefaults.empty : EmptyPadColorMode::Off );
         for( auto pad = MIDI::MIN; pad < MIDI::NUMERIC_MAX; ++pad )
         {
             juce::Identifier padId( juce::String( "clr" + juce::String( pad ) ) );
-            padColour[pad].referTo( state, padId, UM, getDefaultPadColour( state, pad ) );
+            padColour[pad].referTo( state, padId, UM, getDefaultPadColour( pad ) );
         }
     }
 

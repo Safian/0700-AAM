@@ -24,7 +24,6 @@ namespace kick_ui
     namespace
     {
         // Controls without a function behind them are not shown (they used to look usable and did nothing).
-        constexpr bool kFilterAvailable = false; // FILTER list: no handler, no entries
         constexpr bool kSnapAvailable   = false; // Snap button: no handler
     }
 
@@ -46,6 +45,8 @@ namespace kick_ui
         tableView->setRowBackgroundColour( ui::Theme::backgroundColour( 3 ) );
         tableView->setMargin( 0, 0, 4, 0 );
         tableView->enableSelectMode( false );
+        // Only the rows in (and just around) the visible area exist as components: thousands of events open at once.
+        tableView->enableVirtualRows( true );
         tableView->addMouseListener( this, true ); // a touch pauses auto scroll
         for( int i = 0; i < headerTitles.size(); ++i )
         {
@@ -56,7 +57,8 @@ namespace kick_ui
             tableHeaderData[i]->setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
         }
 
-        mt::utils::addChildComponents( this, header, tableView.get(), filterListBox, snapButton, insertButton, deleteButton, trackSelector, tcButton );
+        mt::utils::addChildComponents( this, header, tableView.get(), filterListBox, snapButton, insertButton, deleteButton, trackSelector, tcButton,
+                                       selectButton, velDownButton, velUpButton, nudgeLeftButton, nudgeRightButton, playheadButton, playButton );
 
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
 
@@ -85,38 +87,72 @@ namespace kick_ui
         insertButton.setValueFontHeight( 18 );
         tcButton.setValueColour( ui::Theme::textColour( 1 ) );
         tcButton.setValueFontHeight( 18 );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), selectButton, velDownButton, velUpButton, nudgeLeftButton, nudgeRightButton, playheadButton, playButton );
+        mt::utils::setValueFontHeight( 18, selectButton, velDownButton, velUpButton, nudgeLeftButton, nudgeRightButton, playheadButton, playButton );
 
         provider.numRows = [&]() {
-            return numNotes;
+            return (int)rows.size();
         };
 
+        // A touch / the Data Dial selects a row. Touch Select (or the hardware Shift) adds / removes rows (group edit);
+        // otherwise the touched row is the only selected one.
         provider.onRowSelected = [&]( int Row ) {
-            auto isEnable = tableView->getSelectMode();
-            if( !isEnable && noteList.isValid() && juce::isPositiveAndBelow( Row, noteList.getNumChildren() ) )
-            {
-                mt::MTNoteRO note( noteList.getChild( Row ) );
-                ae.selectNote( sel, false );
-                ae.selectNote( sel, note.number(), note.start(), true );
-            }
+            if( !juce::isPositiveAndBelow( Row, (int)rows.size() ) )
+                return;
+            const bool group = selectButton.getToggleState() || contracts::DclContractsHelper::isShiftPressed();
+            setSelection( group ? list_edit_logic::toggleRow( selectedRows, Row ) : std::vector<int>{ Row } );
         };
 
         provider.cellComponent = [&]( int Row, juce::Component* Existing ) -> juce::Component* {
-            auto comp = dynamic_cast<ListEntry*>( Existing );
-            if( juce::isPositiveAndBelow( Row, numNotes ) && noteList.isValid() && Row < noteList.getNumChildren() )
+            if( !juce::isPositiveAndBelow( Row, (int)rows.size() ) )
+                return nullptr;
+            const auto& r = rows[(size_t)Row];
+            if( !r.automation )
             {
+                auto vt = noteAt( Row );
+                if( !vt.isValid() )
+                    return nullptr;
+                // An existing component of the other kind is replaced (and deleted) by the table.
+                auto* comp = dynamic_cast<ListEntry*>( Existing );
                 if( comp == nullptr )
-                    comp = new ListEntry( Row, noteList.getChild( Row ) );
+                    comp = new ListEntry( Row, vt );
                 comp->setInterceptsMouseClicks( true, true );
-                comp->setValues( Row, noteList.getChild( Row ) );
+                comp->setValues( Row, vt, r.sameTime );
+                comp->setPlayhead( Row == playheadRow );
                 comp->onPadTapped  = [this]( ListEntry* E ) { editPad( E ); };
                 comp->onTimeTapped = [this]( ListEntry* E ) { editTime( E ); };
                 return comp;
             }
-            return nullptr;
+            if( !juce::isPositiveAndBelow( r.index, (int)autoEvents.size() ) )
+                return nullptr;
+            auto* comp = dynamic_cast<AutomationEntry*>( Existing );
+            if( comp == nullptr )
+                comp = new AutomationEntry();
+            comp->setInterceptsMouseClicks( true, true );
+            const auto& e = autoEvents[(size_t)r.index];
+            comp->setValues( Row, e.param, e.tick, e.value, r.sameTime );
+            comp->setPlayhead( Row == playheadRow );
+            comp->onTimeTapped = [this]( AutomationEntry* E ) { editAutomationTime( E ); };
+            comp->onValueEdited = [this]( AutomationEntry* E, int LaneValue ) {
+                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Edit automation value" );
+                ae.setAutomationEvent( sel, E->getParam(), E->getTick(), E->getTick(), LaneValue );
+            };
+            return comp;
+        };
+
+        filterListBox.onSelectionChanged = [&]( int Index, const juce::String& ) {
+            const auto next = Index == 1 ? list_edit_logic::EventFilter::Notes : Index == 2 ? list_edit_logic::EventFilter::Automation :
+                                                                                          list_edit_logic::EventFilter::All;
+            if( next == filter )
+                return;
+            filter = next;
+            updateHeaders();
+            setSelection( {}, true );
+            reloadEvents();
         };
 
         insertButton.onClick = [&]() {
-            auto p = new ListEditInsertDialog();
+            auto p = new ListEditInsertDialog( filter == list_edit_logic::EventFilter::Automation );
             mt::utils::showOptions(
                 p->getName(), p, [&, p]( int R ) {
                     if( R == UI::APPLY )
@@ -130,22 +166,51 @@ namespace kick_ui
                         const int tpb       = juce::jmax( 1, gridData.getTicksPerBar( bar0 ) / beats );
                         const int start     = list_edit_logic::bbtToTicks( barStart, tpb, { p->getStartBar(), p->getStartBeat(), p->getStartTick() } );
                         const int length    = juce::jmax( 1, gridData.getTicksPerQuantization( bar0 ) );
+                        if( data.automation )
                         {
-                            mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Insert note" );
-                            ae.addOrModifyNote( data.padIndex, start, length );
-                        }
-                        reloadNotes();
-                        // select the inserted note
-                        for( int i = 0; i < noteList.getNumChildren(); ++i )
-                        {
-                            mt::MTNoteRO n( noteList.getChild( i ) );
-                            if( n.number() == data.padIndex && n.start() == start )
+                            bool ok = false;
                             {
-                                tableView->selectRow( i );
-                                break;
+                                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Insert automation" );
+                                ok = ae.setAutomationEvent( sel, data.autoParam, -1, start, list_edit_logic::autoFromDisplay( data.autoParam, data.autoShown ) ) == 0;
                             }
+                            reloadEvents();
+                            if( ok )
+                            {
+                                for( int i = 0; i < (int)rows.size(); ++i )
+                                    if( rows[(size_t)i].automation && autoEvents[(size_t)rows[(size_t)i].index].param == data.autoParam && rows[(size_t)i].tick == start )
+                                    {
+                                        selectOnly( i );
+                                        scrollRowIntoView( i );
+                                        break;
+                                    }
+                                statusBar.offerUndo( "Automation point inserted", [this]() { ae.getUndoManager().undo(); reloadEvents(); } );
+                            }
+                            else
+                                mt::utils::showNotification( "The automation point could not be added (the Pan lane belongs to another program, or the lane is full)" );
                         }
-                        mt::utils::showNotification( "Note inserted (UNDO takes it back)" );
+                        else
+                        {
+                            {
+                                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Insert note" );
+                                ae.addOrModifyNote( data.padIndex, start, length );
+                            }
+                            reloadEvents();
+                            // select the inserted note
+                            for( int i = 0; i < (int)rows.size(); ++i )
+                            {
+                                if( rows[(size_t)i].automation )
+                                    continue;
+                                auto vt = noteAt( i );
+                                mt::MTNoteRO n( vt );
+                                if( n.number() == data.padIndex && n.start() == start )
+                                {
+                                    selectOnly( i );
+                                    scrollRowIntoView( i );
+                                    break;
+                                }
+                            }
+                            statusBar.offerUndo( "Note inserted", [this]() { ae.getUndoManager().undo(); reloadEvents(); } );
+                        }
                     }
                     insertButton.setToggleState( false, juce::dontSendNotification );
                     if( p ) delete p;
@@ -154,27 +219,27 @@ namespace kick_ui
 
         deleteButton.onClick = [&]() {
             deleteButton.setToggleState( false, juce::dontSendNotification ); // always, also when nothing is deleted
-            const int row = tableView->getSelectedRowOrNone();
-            if( !noteList.isValid() || !list_edit_logic::canDeleteRow( noteList.getNumChildren(), row ) )
-                return;
-            {
-                // The selected row's own note, matched exactly (start AND length): never a longer note of an earlier step.
-                mt::MTNoteRO              n( noteList.getChild( row ) );
-                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Delete note" );
-                ae.eraseNote( n.number(), n.start(), n.length() );
-            }
-            const int before = numNotes;
-            reloadNotes( list_edit_logic::selectionAfterDelete( before, row, 1 ) );
-            mt::utils::showNotification( "Note deleted (UNDO takes it back)" );
+            deleteSelection();
         };
+
+        selectButton.onClick  = [&]() { /* the toggle state is read when a row is touched */ };
+        velDownButton.onClick = [&]() { adjustSelectionVelocity( -5 ); };
+        velUpButton.onClick   = [&]() { adjustSelectionVelocity( 5 ); };
+        nudgeLeftButton.onClick  = [&]() { nudgeSelection( -1 ); };
+        nudgeRightButton.onClick = [&]() { nudgeSelection( 1 ); };
+        playheadButton.onClick   = [&]() { goToPlayhead(); };
+        playButton.onClick       = [&]() { playSelectedNote(); };
 
         trackSelector.tracks.onSelectionChanged = [&]( int Sel, const juce::String& ) {
             ae.setSelectedTrack( Sel );
             noteWatcher.rebind();
-            reloadNotes( -1 );
+            setSelection( {}, false );
+            reloadEvents();
         };
 
-        // Undo / redo, live recording and edits made on other screens show up while this screen is open.
+        // Undo / redo, live recording and edits made on other screens show up while this screen is open
+        // (notes and the track's automation lanes).
+        noteWatcher.setWatchAutomation( true );
         noteWatcher.onChanged = [this]() { externalNotesChanged(); };
 
         tcButton.onClick = [&]() {
@@ -188,13 +253,14 @@ namespace kick_ui
                 {
                     ae.setTimingCorrectEnabled( pTc->getGlobalEnabled() );
                     if( ae.timingCorrect( ae.getSelected(), pTc->getData() ) < 0 )
-                        mt::utils::showNotification( "Timing correct: range not supported" );
+                        mt::utils::showNotification( "Timing correct failed" );
                 }
                 delete pTc;
             },
                                     { 0, 0, 650, 520 } );
         };
         gridData.gridPlayHeadChanged.connect( [&]() {
+            updatePlayheadRow();
             updateViewPosition();
         } );
 
@@ -202,6 +268,7 @@ namespace kick_ui
             snapButton.setToggleButtonText( "Snap:On", "Snap:Off" );
             deleteButton.setToggleButtonText( "Delete", "Delete" );
             insertButton.setToggleButtonText( "Insert", "Insert" );
+            selectButton.setToggleButtonText( "Select:On", "Select:Off" );
             header.setIcon( "Icon_listEdit" );
         } );
     }
@@ -231,9 +298,18 @@ namespace kick_ui
         tcButton.setBoundsRelative( 0.7f, 0.031f, 0.048f, 0.0792f );
         filterListBox.setBoundsRelative( 0.624f, 0.029f, 0.0724f, 0.0735f );
 
-        snapButton.setBounds( cntlButtons.removeFromRight( 120 ).reduced( 0, 10 ) );
+        snapButton.setBounds( {} ); // hidden (no function behind it): no space is reserved
         deleteButton.setBounds( cntlButtons.removeFromRight( 128 ).reduced( 4, 10 ) );
         insertButton.setBounds( cntlButtons.removeFromRight( 122 ).reduced( 0, 10 ) );
+        // Group edit buttons, from the left.
+        cntlButtons.removeFromLeft( 10 );
+        selectButton.setBounds( cntlButtons.removeFromLeft( 112 ).reduced( 2, 10 ) );
+        velDownButton.setBounds( cntlButtons.removeFromLeft( 82 ).reduced( 2, 10 ) );
+        velUpButton.setBounds( cntlButtons.removeFromLeft( 82 ).reduced( 2, 10 ) );
+        nudgeLeftButton.setBounds( cntlButtons.removeFromLeft( 106 ).reduced( 2, 10 ) );
+        nudgeRightButton.setBounds( cntlButtons.removeFromLeft( 106 ).reduced( 2, 10 ) );
+        playheadButton.setBounds( cntlButtons.removeFromLeft( 118 ).reduced( 2, 10 ) );
+        playButton.setBounds( cntlButtons.removeFromLeft( 82 ).reduced( 2, 10 ) );
 
         tableHeaderData[0]->setBoundsRelative( 0.0190f, 0.172f, 0.0587f, 0.0735f );
         tableHeaderData[1]->setBoundsRelative( 0.0975f, 0.172f, 0.1448f, 0.0735f );
@@ -246,15 +322,28 @@ namespace kick_ui
         tableHeaderData[8]->setBoundsRelative( 0.6640f, 0.172f, 0.0586f, 0.0735f ); // Rat
     }
 
+    // Header texts follow the view: automation rows have a parameter and a value instead of a pad and a velocity.
+    void ListEditMode::updateHeaders()
+    {
+        const bool shown = isVisible();
+        using F          = list_edit_logic::EventFilter;
+        tableHeaderData[2]->setText( filter == F::Automation ? "Parameter" : filter == F::All ? "Pad / Param" : "Pad/Note", juce::dontSendNotification );
+        tableHeaderData[4]->setText( filter == F::Automation ? "Value" : filter == F::All ? "Vel / Value" : "Velocity", juce::dontSendNotification );
+        tableHeaderData[3]->setVisible( shown && filter != F::Automation ); // Length
+        tableHeaderData[7]->setVisible( shown && filter != F::Automation ); // Prob
+        tableHeaderData[8]->setVisible( shown && filter != F::Automation ); // Rat
+        tableHeaderData[5]->setVisible( false );                            // Mod Type
+        tableHeaderData[6]->setVisible( false );                            // Value (note modifier)
+    }
+
     void ListEditMode::visibilityChanged()
     {
         for( auto it : getChildren() )
             it->setVisible( isVisible() );
         trackSelector.setVisible( isVisible() );
-        filterListBox.setVisible( isVisible() && kFilterAvailable );
+        filterListBox.setVisible( isVisible() );
         snapButton.setVisible( isVisible() && kSnapAvailable );
-        tableHeaderData[5]->setVisible( false ); // Mod Type
-        tableHeaderData[6]->setVisible( false ); // Value
+        updateHeaders();
 
         if( isVisible() )
         {
@@ -266,7 +355,11 @@ namespace kick_ui
         {
             noteWatcher.setEnabled( false );
             noteList = {};
-            numNotes = 0;
+            autoEvents.clear();
+            noteChild.clear();
+            rows.clear();
+            selectedRows.clear();
+            playheadRow = -1;
         }
     }
 
@@ -282,39 +375,431 @@ namespace kick_ui
         ListEntry::useNoteNames = prog != nullptr && prog->type.get() != mt::MTProgramType::Drum && prog->type.get() != mt::MTProgramType::Clip;
     }
 
-    // Re-read the note list of the selected track. SelectRow: row to select afterwards, -1 none, -2 keep.
-    void ListEditMode::reloadNotes( int SelectRow )
+    juce::ValueTree ListEditMode::noteAt( int Row ) const
     {
-        noteList = ae.isProjectLoaded() ? ae.getNoteList() : juce::ValueTree{};
-        numNotes = noteList.isValid() ? noteList.getNumChildren() : 0;
+        if( !juce::isPositiveAndBelow( Row, (int)rows.size() ) || rows[(size_t)Row].automation || !noteList.isValid() )
+            return {};
+        const int idx = rows[(size_t)Row].index;
+        if( !juce::isPositiveAndBelow( idx, (int)noteChild.size() ) || !juce::isPositiveAndBelow( noteChild[(size_t)idx], noteList.getNumChildren() ) )
+            return {};
+        return noteList.getChild( noteChild[(size_t)idx] );
+    }
+
+    // Read the track's notes and automation breakpoints and merge them into the rows of the list.
+    void ListEditMode::rebuildRows()
+    {
+        const bool loaded = ae.isProjectLoaded();
+        noteList          = loaded ? ae.getNoteList() : juce::ValueTree{};
+        autoEvents        = loaded ? ae.getAutomationEvents( ae.getSelected() ) : std::vector<mt::MTAutomationEvent>{};
+
+        std::vector<std::pair<int, int>> byStart; // (start, child index)
+        if( noteList.isValid() )
+            for( int i = 0; i < noteList.getNumChildren(); ++i )
+                byStart.emplace_back( (int)noteList.getChild( i ).getProperty( mt::IDs::start ), i );
+        std::stable_sort( byStart.begin(), byStart.end(), []( const auto& a, const auto& b ) { return a.first < b.first; } );
+        noteChild.clear();
+        std::vector<int> noteTicks, autoTicks;
+        for( auto& n : byStart )
+        {
+            noteChild.push_back( n.second );
+            noteTicks.push_back( n.first );
+        }
+        for( auto& e : autoEvents )
+            autoTicks.push_back( e.tick );
+        rows = list_edit_logic::mergeEvents( noteTicks, autoTicks, filter );
         updateNoteNaming();
+        playheadRow = list_edit_logic::rowAtPlayhead( rows, ae.getSequenceSeekTick( sel.sequence ) );
+    }
+
+    // Rebuild the rows and the table; the selected events stay selected (matched by identity, the rows may have moved).
+    void ListEditMode::reloadEvents()
+    {
+        const auto keys = captureSelection();
+        rebuildRows();
+        restoreSelection( keys );
         if( isVisible() )
             tableView->refresh();
-        if( SelectRow >= 0 && SelectRow < numNotes )
-            tableView->selectRow( SelectRow );
-        else if( SelectRow == -1 )
-            tableView->clearSelection();
     }
 
     void ListEditMode::externalNotesChanged()
     {
         if( !isVisible() )
             return;
-        const int count = ae.isProjectLoaded() && ae.getNoteList().isValid() ? ae.getNoteList().getNumChildren() : 0;
-        if( count != numNotes )
+        // Structure unchanged (a value was edited, an edit was undone): refresh the existing cells in place, no
+        // rebuild (a rebuild during a finger drag on a cell would cancel the drag). Else rebuild.
+        const auto oldRows = rows;
+        const auto keys    = captureSelection();
+        rebuildRows();
+        bool same = oldRows.size() == rows.size();
+        for( size_t i = 0; same && i < rows.size(); ++i )
+            same = oldRows[i].automation == rows[i].automation && oldRows[i].tick == rows[i].tick;
+        restoreSelection( keys );
+        if( !same )
         {
-            reloadNotes(); // notes were added / removed (recording, undo, other screen)
+            tableView->refresh();
             return;
         }
-        // Same number of notes (a value was edited, an edit was undone): refresh the cells in place, no rebuild
-        // (a rebuild during a finger drag on a cell would cancel the drag).
-        noteList = ae.getNoteList();
-        int row  = 0;
-        tableView->forEachRowComponent( [&]( juce::Component* C ) {
+        forEachRowIndexed( [this]( int Row, juce::Component* C ) {
+            const auto& r = rows[(size_t)Row];
             if( auto* e = dynamic_cast<ListEntry*>( C ) )
-                e->setValues( row, noteList.getChild( row ) );
-            ++row;
+            {
+                auto vt = noteAt( Row );
+                if( vt.isValid() )
+                    e->setValues( Row, vt, r.sameTime );
+            }
+            else if( auto* a = dynamic_cast<AutomationEntry*>( C ) )
+            {
+                if( r.automation && juce::isPositiveAndBelow( r.index, (int)autoEvents.size() ) )
+                {
+                    const auto& ev = autoEvents[(size_t)r.index];
+                    a->setValues( Row, ev.param, ev.tick, ev.value, r.sameTime );
+                }
+            }
         } );
+    }
+
+    void ListEditMode::forEachRowIndexed( const std::function<void( int, juce::Component* )>& F )
+    {
+        auto& comps = tableView->getRowComponents();
+        for( int i = 0; i < comps.size() && i < (int)rows.size(); ++i )
+            if( auto* c = comps[i] )
+                F( i, c );
+    }
+
+    int ListEditMode::getNumBuiltRows()
+    {
+        int n = 0;
+        for( auto* c : tableView->getRowComponents() )
+            n += c != nullptr ? 1 : 0;
+        return n;
+    }
+
+    std::vector<ListEditMode::SelKey> ListEditMode::captureSelection() const
+    {
+        std::vector<SelKey> keys;
+        for( int row : selectedRows )
+        {
+            if( !juce::isPositiveAndBelow( row, (int)rows.size() ) )
+                continue;
+            SelKey k;
+            k.automation = rows[(size_t)row].automation;
+            if( k.automation )
+            {
+                if( !juce::isPositiveAndBelow( rows[(size_t)row].index, (int)autoEvents.size() ) )
+                    continue;
+                k.param = autoEvents[(size_t)rows[(size_t)row].index].param;
+                k.tick  = rows[(size_t)row].tick;
+            }
+            else
+            {
+                auto vt = noteAt( row );
+                if( !vt.isValid() )
+                    continue;
+                k.id = vt.getProperty( mt::IDs::id );
+            }
+            keys.push_back( k );
+        }
+        return keys;
+    }
+
+    void ListEditMode::restoreSelection( const std::vector<SelKey>& Keys )
+    {
+        std::vector<int> found;
+        if( !Keys.empty() )
+        {
+            for( int i = 0; i < (int)rows.size(); ++i )
+            {
+                const auto& r = rows[(size_t)i];
+                for( auto& k : Keys )
+                {
+                    if( k.automation != r.automation )
+                        continue;
+                    bool match = false;
+                    if( r.automation )
+                        match = juce::isPositiveAndBelow( r.index, (int)autoEvents.size() ) && autoEvents[(size_t)r.index].param == k.param && r.tick == k.tick;
+                    else
+                    {
+                        auto vt = noteAt( i );
+                        match   = vt.isValid() && (int)vt.getProperty( mt::IDs::id ) == k.id;
+                    }
+                    if( match )
+                    {
+                        found.push_back( i );
+                        break;
+                    }
+                }
+            }
+        }
+        setSelection( found, false ); // the engine selection already holds these notes
+    }
+
+    // The selection as a whole (sorted rows). SyncEngine: the engine's selected notes follow (Timing Correct "Selected").
+    void ListEditMode::setSelection( std::vector<int> Rows, bool SyncEngine )
+    {
+        std::sort( Rows.begin(), Rows.end() );
+        Rows.erase( std::unique( Rows.begin(), Rows.end() ), Rows.end() );
+        Rows.erase( std::remove_if( Rows.begin(), Rows.end(), [this]( int r ) { return r < 0 || r >= (int)rows.size(); } ), Rows.end() );
+        selectedRows = Rows;
+        juce::Array<int> arr;
+        for( int r : selectedRows )
+            arr.add( r );
+        tableView->setSelectedRows( arr );
+        if( SyncEngine )
+            syncEngineSelection();
+    }
+
+    void ListEditMode::selectOnly( int Row )
+    {
+        setSelection( Row >= 0 ? std::vector<int>{ Row } : std::vector<int>{} );
+    }
+
+    // The notes among the selected rows are the engine's selected notes (Timing Correct "Selected", Grid selection).
+    void ListEditMode::syncEngineSelection()
+    {
+        if( !ae.isProjectLoaded() )
+            return;
+        ae.selectNote( sel, false );
+        std::vector<int> ids;
+        for( int row : selectedRows )
+        {
+            auto vt = noteAt( row );
+            if( vt.isValid() )
+                ids.push_back( (int)vt.getProperty( mt::IDs::id ) );
+        }
+        if( !ids.empty() )
+            ae.selectNote( sel, ids, true );
+    }
+
+    void ListEditMode::scrollRowIntoView( int Row, bool Centre )
+    {
+        if( !juce::isPositiveAndBelow( Row, (int)rows.size() ) )
+            return;
+        auto&      vp = tableView->getTableViewPort();
+        const auto rb = tableView->getRowBounds( Row );
+        const auto va = vp.getViewArea();
+        if( Centre )
+            vp.setViewPosition( va.getX(), juce::jmax( 0, rb.getCentreY() - vp.getHeight() / 2 ) );
+        else if( !va.contains( rb ) )
+            vp.setViewPosition( va.getX(), rb.getY() < va.getY() ? rb.getY() : juce::jmax( 0, rb.getBottom() - vp.getHeight() ) );
+    }
+
+    // The red marker follows the playhead row (the manual's arrow on the left of the list).
+    void ListEditMode::updatePlayheadRow()
+    {
+        if( !isVisible() || rows.empty() )
+            return;
+        const int now = list_edit_logic::rowAtPlayhead( rows, ae.getSequenceSeekTick( sel.sequence ) );
+        if( now == playheadRow )
+            return;
+        playheadRow = now;
+        forEachRowIndexed( [this]( int Row, juce::Component* C ) {
+            if( auto* e = dynamic_cast<ListEntry*>( C ) )
+                e->setPlayhead( Row == playheadRow );
+            else if( auto* a = dynamic_cast<AutomationEntry*>( C ) )
+                a->setPlayhead( Row == playheadRow );
+        } );
+    }
+
+    // "Go to playhead": bring the row at the playhead into view (centred) and mark it.
+    void ListEditMode::goToPlayhead()
+    {
+        const int tick = ae.getSequenceSeekTick( sel.sequence );
+        const int row  = list_edit_logic::goToPlayheadRow( rows, tick );
+        if( row < 0 )
+            return;
+        lastTouchMs = 0; // auto scroll may follow again
+        updatePlayheadRow();
+        scrollRowIntoView( row, true );
+    }
+
+    void ListEditMode::deleteSelection()
+    {
+        const int before = (int)rows.size();
+        const auto toDelete = list_edit_logic::rowsToDelete( selectedRows, before ); // highest row first
+        if( toDelete.empty() )
+            return; // nothing selected: nothing is deleted
+        // What each row stands for, read before anything is removed (the rows shift while deleting).
+        struct Item { bool automation; int a, b, c; };
+        std::vector<Item> items;
+        for( int row : toDelete )
+        {
+            const auto& r = rows[(size_t)row];
+            if( r.automation && juce::isPositiveAndBelow( r.index, (int)autoEvents.size() ) )
+                items.push_back( { true, autoEvents[(size_t)r.index].param, r.tick, 0 } );
+            else if( !r.automation )
+            {
+                auto vt = noteAt( row );
+                if( vt.isValid() )
+                {
+                    mt::MTNoteRO n( vt );
+                    items.push_back( { false, n.number(), n.start(), n.length() } );
+                }
+            }
+        }
+        {
+            // The selected events, matched exactly (start AND length for notes): never a longer note of an earlier step.
+            mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), items.size() > 1 ? "Delete events" : "Delete event" );
+            for( auto& it : items )
+            {
+                if( it.automation )
+                    ae.deleteAutomationEvent( sel, it.a, it.b );
+                else
+                    ae.eraseNote( it.a, it.b, it.c );
+            }
+        }
+        setSelection( {}, false );
+        rebuildRows();
+        const int next = list_edit_logic::selectionAfterGroupDelete( before, toDelete );
+        if( isVisible() )
+            tableView->refresh();
+        if( next >= 0 )
+            selectOnly( next );
+        else
+            syncEngineSelection();
+        statusBar.offerUndo( juce::String( (int)items.size() ) + " event(s) deleted", [this]() { ae.getUndoManager().undo(); reloadEvents(); } );
+    }
+
+    // Vel - / Vel +: every selected note's velocity, every selected breakpoint's value; one undo step.
+    void ListEditMode::adjustSelectionVelocity( int Delta )
+    {
+        if( selectedRows.empty() )
+            return;
+        const auto keys = captureSelection();
+        {
+            mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Group velocity" );
+            for( int row : selectedRows )
+            {
+                if( !juce::isPositiveAndBelow( row, (int)rows.size() ) )
+                    continue;
+                const auto& r = rows[(size_t)row];
+                if( r.automation )
+                {
+                    if( !juce::isPositiveAndBelow( r.index, (int)autoEvents.size() ) )
+                        continue;
+                    const auto& e   = autoEvents[(size_t)r.index];
+                    const int   now = list_edit_logic::autoDisplay( e.param, e.value );
+                    ae.setAutomationEvent( sel, e.param, e.tick, e.tick, list_edit_logic::autoFromDisplay( e.param, now + Delta ) );
+                }
+                else
+                {
+                    auto vt = noteAt( row );
+                    if( vt.isValid() )
+                        vt.setProperty( mt::IDs::velocity, list_edit_logic::velocityDelta( vt.getProperty( mt::IDs::velocity ), Delta ), &ae.getUndoManager() );
+                }
+            }
+        }
+        reloadEvents();
+        restoreSelection( keys );
+    }
+
+    int ListEditMode::tcStepTicks()
+    {
+        const auto bnb = ae.toBnB( sel, (unsigned int)juce::jmax( 0, ae.getSequenceSeekTick( sel.sequence ) ) );
+        return list_edit_logic::stepRecordLength( ae.getTimingCorrectParams().gridTicks, juce::jmax( 1, gridData.getTicksPerQuantization( bnb.bar ) ) );
+    }
+
+    // Play: the selected note sounds once on its track, as long as it is long (50 ms .. 2 s).
+    void ListEditMode::playSelectedNote()
+    {
+        for( int row = selectedRows.empty() ? -1 : selectedRows.back(); row >= 0; row = -1 )
+        {
+            auto vt = noteAt( row );
+            if( !vt.isValid() )
+                return; // breakpoints are not played
+            mt::MTNoteRO n( vt );
+            const auto*  sd     = ae.getSequenceData( sel.sequence );
+            const double bpm    = sd != nullptr ? juce::jmax( 20.0, (double)sd->tempo ) : 120.0;
+            const int    ms     = juce::jlimit( 50, 2000, juce::roundToInt( n.length() * 60000.0 / ( bpm * mt::defaultPPQN ) ) );
+            const int    number = n.number();
+            const auto   track  = sel;
+            ae.addLiveMidiNote( track, number, juce::jlimit( 1, 127, n.velocity() ) );
+            juce::Timer::callAfterDelay( ms, [track, number]() { mt::getAudioInterface().stopLiveMidiNote( track, number ); } );
+        }
+    }
+
+    // Nudge < / >: the selected events move by one Timing Correct division (one grid step when TC is on BAR).
+    void ListEditMode::nudgeSelection( int Direction )
+    {
+        if( selectedRows.empty() || Direction == 0 )
+            return;
+        const int  step     = tcStepTicks();
+        const int  seqTicks = (int)gridData.getTicksUptoBar( (unsigned int)juce::jmax( 1, ae.getSequenceLength( sel.sequence ) ) );
+        auto       keys     = captureSelection();
+        {
+            mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Nudge events" );
+            for( size_t i = 0; i < keys.size(); ++i )
+            {
+                auto& k = keys[i];
+                if( k.automation )
+                {
+                    const int newTick = list_edit_logic::nudgeStart( k.tick, Direction * step, seqTicks );
+                    for( auto& e : autoEvents )
+                        if( e.param == k.param && e.tick == k.tick )
+                        {
+                            if( ae.setAutomationEvent( sel, e.param, e.tick, newTick, e.value ) == 0 )
+                                k.tick = newTick;
+                            break;
+                        }
+                }
+                else
+                {
+                    for( int c = 0; c < noteList.getNumChildren(); ++c )
+                    {
+                        auto vt = noteList.getChild( c );
+                        if( (int)vt.getProperty( mt::IDs::id ) == k.id )
+                        {
+                            const int newStart = list_edit_logic::nudgeStart( vt.getProperty( mt::IDs::start ), Direction * step, seqTicks );
+                            ae.editNote( sel, k.id, newStart );
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        rebuildRows();
+        restoreSelection( keys );
+        if( isVisible() )
+            tableView->refresh();
+        syncEngineSelection();
+    }
+
+    // Step record (the manual's REC + pad in List Edit): with the sequence REC armed and the transport stopped a pad press
+    // inserts a note at the current position, one Timing Correct division long; Auto Advance moves the position on.
+    bool ListEditMode::stepRecordActive()
+    {
+        return ae.isProjectLoaded() && ae.isSequenceRecArmed() && !ae.isSequencePlaying();
+    }
+
+    void ListEditMode::stepRecord( int Pad, int Velocity )
+    {
+        const int start = ae.getSequenceSeekTick( sel.sequence );
+        if( start < 0 || Pad < 0 || Pad > 127 )
+            return;
+        const auto bnb      = ae.toBnB( sel, (unsigned int)start );
+        const int  length   = list_edit_logic::stepRecordLength( ae.getTimingCorrectParams().gridTicks, juce::jmax( 1, gridData.getTicksPerQuantization( bnb.bar ) ) );
+        const int  velocity = list_edit_logic::stepRecordVelocity( Velocity );
+        {
+            mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Step record" );
+            ae.addOrModifyNote( Pad, start, length, velocity );
+        }
+        if( gridSettings.getAutoAdvance() )
+        {
+            const int seqTicks = (int)gridData.getTicksUptoBar( (unsigned int)juce::jmax( 1, ae.getSequenceLength( sel.sequence ) ) );
+            ae.seekToTick( sel.sequence, list_edit_logic::stepRecordNextTick( start, length, seqTicks ) );
+        }
+        reloadEvents();
+        for( int i = 0; i < (int)rows.size(); ++i )
+        {
+            if( rows[(size_t)i].automation || rows[(size_t)i].tick != start )
+                continue;
+            auto vt = noteAt( i );
+            if( vt.isValid() && (int)vt.getProperty( mt::IDs::no ) == Pad )
+            {
+                selectOnly( i );
+                scrollRowIntoView( i );
+                break;
+            }
+        }
     }
 
     void ListEditMode::editTime( ListEntry* Entry )
@@ -336,9 +821,48 @@ namespace kick_ui
                 const int beats    = juce::jmax( 1, gd.getBeatsPerBar( bar0 ) );
                 const int tpb      = juce::jmax( 1, gd.getTicksPerBar( bar0 ) / beats );
                 const int newStart = list_edit_logic::bbtToTicks( (int)gd.getTicksUptoBar( (unsigned int)bar0 ), tpb, { dlg->getBar(), dlg->getBeat(), dlg->getTick() } );
-                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Edit note time" );
-                ae.editNote( sel, noteId, newStart );
-                reloadNotes();
+                {
+                    mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Edit note time" );
+                    ae.editNote( sel, noteId, newStart );
+                }
+                reloadEvents();
+            }
+            delete dlg;
+        } );
+    }
+
+    void ListEditMode::editAutomationTime( AutomationEntry* Entry )
+    {
+        if( Entry == nullptr )
+            return;
+        const int  param    = Entry->getParam();
+        const int  oldTick  = Entry->getTick();
+        const int  value    = Entry->getLaneValue();
+        auto&      gd       = GridData::Instance();
+        const auto bnb      = ae.toBnB( sel, (unsigned int)oldTick );
+        auto*      dlg      = new ListEditTimeDialog( bnb.bar + 1, bnb.beat + 1, bnb.tick, ae.getSequenceLength( sel.sequence ) );
+        mt::utils::showOptions( dlg->getName(), dlg, [this, dlg, param, oldTick, value, &gd]( int R ) {
+            if( R == UI::APPLY )
+            {
+                const int bar0     = juce::jmax( 0, dlg->getBar() - 1 );
+                const int beats    = juce::jmax( 1, gd.getBeatsPerBar( bar0 ) );
+                const int tpb      = juce::jmax( 1, gd.getTicksPerBar( bar0 ) / beats );
+                const int newTick  = list_edit_logic::bbtToTicks( (int)gd.getTicksUptoBar( (unsigned int)bar0 ), tpb, { dlg->getBar(), dlg->getBeat(), dlg->getTick() } );
+                {
+                    mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Edit automation time" );
+                    ae.setAutomationEvent( sel, param, oldTick, newTick, value );
+                }
+                // the moved breakpoint stays selected
+                setSelection( {}, false );
+                rebuildRows();
+                if( isVisible() )
+                    tableView->refresh();
+                for( int i = 0; i < (int)rows.size(); ++i )
+                    if( rows[(size_t)i].automation && autoEvents[(size_t)rows[(size_t)i].index].param == param && rows[(size_t)i].tick == newTick )
+                    {
+                        selectOnly( i );
+                        break;
+                    }
             }
             delete dlg;
         } );
@@ -366,14 +890,15 @@ namespace kick_ui
         } );
     }
 
-    // Data Dial / +/-: step the selected row, scroll it into view.
+    // Data Dial / +/-: step the selected row (the last selected one), scroll it into view.
     void ListEditMode::stepRowBy( int Delta )
     {
-        const int target = list_edit_logic::stepRow( tableView->getSelectedRowOrNone(), Delta, numNotes );
+        const int cur    = selectedRows.empty() ? -1 : selectedRows.back();
+        const int target = list_edit_logic::stepRow( cur, Delta, (int)rows.size() );
         if( target < 0 )
             return;
-        tableView->selectRow( target );
-        tableView->knobRotated( 0 ); // re-selects the same row and scrolls it into view
+        selectOnly( target );
+        scrollRowIntoView( target );
     }
 
     void ListEditMode::mouseDown( const juce::MouseEvent& ) { lastTouchMs = juce::Time::getMillisecondCounter(); }
@@ -382,26 +907,31 @@ namespace kick_ui
 
     void ListEditMode::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
     {
-        if( contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) && gridSettings.getHittingPadMode() )
+        if( contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) )
         {
-            auto padNum = contracts::DclContractsHelper::getPadNumber( f_HwMsg ) + ae.getBankOffset();
-            tableView->clearSelection();
-            tableView->enableSelectMode( true );
-            auto i        = 0;
-            int  firstHit = -1;
-            for( const auto& it : noteList )
+            const auto padNum = contracts::DclContractsHelper::getPadNumber( f_HwMsg ) + ae.getBankOffset();
+            if( contracts::DclContractsHelper::getPadState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED && stepRecordActive() )
+                stepRecord( padNum, contracts::DclContractsHelper::getPadVelocity( f_HwMsg ) );
+            else if( gridSettings.getHittingPadMode() )
             {
-                auto note = mt::MTNoteRO( it );
-                if( padNum == note.number() )
+                // Hitting a pad selects all of its note events.
+                std::vector<int> hit;
+                for( int i = 0; i < (int)rows.size(); ++i )
                 {
-                    tableView->selectRow( i );
-                    if( firstHit < 0 )
-                        firstHit = i;
+                    if( rows[(size_t)i].automation )
+                        continue;
+                    auto vt = noteAt( i );
+                    if( vt.isValid() )
+                    {
+                        mt::MTNoteRO note( vt );
+                        if( padNum == note.number() )
+                            hit.push_back( i );
+                    }
                 }
-                i++;
+                setSelection( hit );
+                if( !hit.empty() )
+                    scrollRowIntoView( hit.front() ); // the first matching row
             }
-            if( firstHit >= 0 ) // scroll to the first matching row
-                tableView->setTableViewPosition( firstHit * ( tableView->getRowHeight() + tableView->getRowSpacing() ) );
         }
         else if( contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )
         {
@@ -409,6 +939,8 @@ namespace kick_ui
             auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
             if( knob != contracts::DeviceControlContracts::EN_KNOB_CENTER )
                 knobCommand( knob, value );
+            else if( value != 0 && contracts::DclContractsHelper::isShiftPressed() )
+                nudgeSelection( value ); // Shift + dial: the events move by Timing Correct divisions (the manual)
             else if( value != 0 )
                 stepRowBy( value ); // the dial walks the rows (it used to be dropped here)
         }
@@ -436,45 +968,65 @@ namespace kick_ui
                 default: break;
             }
         }
-        tableView->enableSelectMode( false );
     }
 
-    // Q-Link 1-4 edit the SELECTED row: Pad, Length, Velocity, Probability. No selection or no rows: nothing happens.
+    // Q-Link 1-4 edit the SELECTED row: Pad, Length, Velocity, Probability (a breakpoint: Q-Link 3 = its value). No
+    // selection or no rows: nothing happens.
     void ListEditMode::knobCommand( int knob, int value )
     {
         list_edit_logic::Cell cell;
         if( value == 0 || !list_edit_logic::qlinkCell( knob - contracts::DeviceControlContracts::EN_KNOB_1 + 1, cell ) )
             return;
-        const int row = tableView->getSelectedRowOrNone();
-        auto&     rowComps = tableView->getRowComponents();
-        if( !list_edit_logic::canDeleteRow( numNotes, row ) || !juce::isPositiveAndBelow( row, rowComps.size() ) )
+        const int row = selectedRows.empty() ? -1 : selectedRows.back();
+        if( !list_edit_logic::canDeleteRow( (int)rows.size(), row ) )
+            return;
+        // Shift: Pad moves by a pad bank (16), Length by a Timing Correct division (the manual: Shift + dial / Q-Link).
+        if( contracts::DclContractsHelper::isShiftPressed() )
+        {
+            if( cell == list_edit_logic::Cell::Pad )
+                value *= 16;
+            else if( cell == list_edit_logic::Cell::Length )
+                value *= tcStepTicks();
+        }
+        scrollRowIntoView( row ); // virtual rows: make sure the row has a component
+        auto& rowComps = tableView->getRowComponents();
+        if( !juce::isPositiveAndBelow( row, rowComps.size() ) )
             return;
         if( auto* entry = dynamic_cast<ListEntry*>( rowComps[row] ) )
             entry->adjust( cell, value );
+        else if( auto* a = dynamic_cast<AutomationEntry*>( rowComps[row] ) )
+        {
+            if( cell == list_edit_logic::Cell::Velocity )
+                a->adjust( value );
+        }
     }
 
+    // Opening the screen: the notes the engine has selected (Grid / Step Sequencer selection) are the selected rows.
     void ListEditMode::markSelectedRows()
     {
-        tableView->clearSelection();
-        tableView->enableSelectMode( true );
-
-        auto selectedNotes = ae.getSelectedNoteList();
-
-        for( const auto& it : selectedNotes )
+        rebuildRows();
+        std::vector<int> found;
+        auto             selectedNotes = ae.getSelectedNoteList();
+        for( int i = 0; i < (int)rows.size(); ++i )
         {
-            mt::MTNoteRO selectedNote( it );
-            auto         i = 0;
-            for( const auto& itr : noteList )
+            if( rows[(size_t)i].automation )
+                continue;
+            auto vt = noteAt( i );
+            if( !vt.isValid() )
+                continue;
+            mt::MTNoteRO note( vt );
+            for( const auto& it : selectedNotes )
             {
-                mt::MTNoteRO note( itr );
+                mt::MTNoteRO selectedNote( it );
                 if( selectedNote.number() == note.number() && selectedNote.start() == note.start() )
                 {
-                    tableView->selectRow( i );
+                    found.push_back( i );
+                    break;
                 }
-                i++;
             }
         }
-        tableView->enableSelectMode( false );
+        setSelection( found, false );
+        tableView->refresh();
     }
 
     void ListEditMode::updateViewPosition()
@@ -591,11 +1143,33 @@ namespace kick_ui
         refreshData();
     }
 
-    void ListEntry::setValues( int Row, juce::ValueTree Vt )
+    void ListEntry::setValues( int Row, juce::ValueTree Vt, bool SameTime )
     {
         vt = Vt;
         row.setText( juce::String( Row + 1 ), juce::dontSendNotification );
+        time.setTextColour( ui::Theme::textColour( SameTime ? 2 : 1 ) ); // the same position as the row above: greyed
         refreshData();
+    }
+
+    void ListEntry::setPlayhead( bool On )
+    {
+        if( atPlayhead == On )
+            return;
+        atPlayhead = On;
+        repaint();
+    }
+
+    // The manual's red arrow on the left of the list marks the playhead row.
+    void ListEntry::paint( juce::Graphics& g )
+    {
+        if( atPlayhead )
+        {
+            juce::Path arrow;
+            const float cy = getHeight() * 0.5f;
+            arrow.addTriangle( 3.0f, cy - 8.0f, 3.0f, cy + 8.0f, 14.0f, cy );
+            g.setColour( juce::Colours::red );
+            g.fillPath( arrow );
+        }
     }
 
     void ListEntry::setSelected( bool Select )
@@ -678,6 +1252,111 @@ namespace kick_ui
         }
     }
 
+    /////////////////////////////////////////////////////////////////////////////////////
+    ///////////////               Automation Entry
+    /////////////////////////////////////////////////////////////////////////////////////
+
+    AutomationEntry::AutomationEntry()
+    {
+        addMouseListener( this, true );
+        mt::utils::addAndMakeVisible( this, row, time, paramLabel, value );
+        row.setValueJustification( juce::Justification::centred );
+        time.setValueJustification( juce::Justification::centred );
+        value.setValueJustification( juce::Justification::centred );
+        paramLabel.setJustificationType( juce::Justification::centred );
+        paramLabel.setEditable( false );
+
+        row.setFontHeight( 16 );
+        time.setFontHeight( 16 );
+        paramLabel.setFontHeight( 16 );
+        value.setValueFontHeight( 16 );
+
+        row.setTextColour( ui::Theme::textColour( 1 ) );
+        time.setTextColour( ui::Theme::textColour( 1 ) );
+        paramLabel.setColours( ui::Theme::textColour( 1 ), ui::Theme::backgroundColour( 9 ) );
+        value.setColours( ui::Theme::textColour( 1 ), juce::Colours::transparentBlack );
+
+        row.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+        time.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+        value.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+
+        // Only the user's own edit writes (the cell is filled without notification).
+        value.onValueChanged = [this]( int Shown ) {
+            if( settingValue )
+                return;
+            const int lane = list_edit_logic::autoFromDisplay( param, Shown );
+            if( lane != laneValue && onValueEdited )
+                onValueEdited( this, lane );
+        };
+    }
+
+    void AutomationEntry::setValues( int Row, int Param, int Tick, int LaneValue, bool SameTime )
+    {
+        auto& ae  = mt::getAudioInterface();
+        param     = Param;
+        tick      = Tick;
+        laneValue = LaneValue;
+        row.setText( juce::String( Row + 1 ), juce::dontSendNotification );
+        const auto bnb = ae.toBnB( ae.getSelected(), (unsigned int)Tick );
+        time.setText( juce::String( list_edit_logic::formatTime( { bnb.bar + 1, bnb.beat + 1, bnb.tick } ) ), juce::dontSendNotification );
+        time.setTextColour( ui::Theme::textColour( SameTime ? 2 : 1 ) );
+        paramLabel.setText( "TRK " + juce::String( list_edit_logic::autoName( Param ) ), juce::dontSendNotification );
+        settingValue = true;
+        value.setRange( list_edit_logic::autoMinShown( Param ), list_edit_logic::autoMaxShown( Param ), 1 );
+        value.setValue( list_edit_logic::autoDisplay( Param, LaneValue ), juce::dontSendNotification );
+        settingValue = false;
+    }
+
+    void AutomationEntry::setPlayhead( bool On )
+    {
+        if( atPlayhead == On )
+            return;
+        atPlayhead = On;
+        repaint();
+    }
+
+    void AutomationEntry::adjust( int DeltaShown )
+    {
+        if( DeltaShown == 0 || !onValueEdited )
+            return;
+        const int shown = list_edit_logic::autoDisplay( param, laneValue ) + DeltaShown;
+        const int lane  = list_edit_logic::autoFromDisplay( param, shown );
+        if( lane != laneValue )
+            onValueEdited( this, lane );
+    }
+
+    void AutomationEntry::paint( juce::Graphics& g )
+    {
+        if( atPlayhead )
+        {
+            juce::Path arrow;
+            const float cy = getHeight() * 0.5f;
+            arrow.addTriangle( 3.0f, cy - 8.0f, 3.0f, cy + 8.0f, 14.0f, cy );
+            g.setColour( juce::Colours::red );
+            g.fillPath( arrow );
+        }
+    }
+
+    void AutomationEntry::mouseUp( const juce::MouseEvent& e )
+    {
+        if( e.mouseWasDraggedSinceMouseDown() )
+            return;
+        const auto p = e.getEventRelativeTo( this ).getPosition();
+        if( time.getBounds().contains( p ) && onTimeTapped )
+            onTimeTapped( this );
+    }
+
+    void AutomationEntry::resized()
+    {
+        auto b = getLocalBounds();
+        row.setBounds( b.removeFromLeft( 69 ).reduced( 8 ) );
+        b.removeFromLeft( 10 );
+        time.setBounds( b.removeFromLeft( 167 ).reduced( 8 ) );
+        paramLabel.setBounds( b.removeFromLeft( 139 ).reduced( 8 ) );
+        b.removeFromLeft( 99 ); // the Length column has no meaning for a breakpoint
+        value.setBounds( b.removeFromLeft( 99 ).reduced( 8 ) );
+    }
+
     // "BAR" -> 0 (engine: one bar), "1/N" -> a whole note (4 * defaultPPQN ticks) / N, "1/NT" -> two thirds of that.
     static int timeDivToTicks( const juce::String& Div )
     {
@@ -724,7 +1403,20 @@ namespace kick_ui
         juce::Component* modalAncestor = nullptr;
         for( auto* c = g_openTimingCorrect->getParentComponent(); c != nullptr; c = c->getParentComponent() )
             if( c->isCurrentlyModal( false ) ) { modalAncestor = c; break; }
-        if( modalAncestor == nullptr || !modalAncestor->isCurrentlyModal( true ) ) return false;
+        if( modalAncestor == nullptr )
+            return false;
+        if( !modalAncestor->isCurrentlyModal( true ) )
+        {
+            // A nested list popup (TYPE / EVENTS / time division) is the foremost modal component: close just that popup
+            // (its own selection stays); the Timing Correct dialog underneath stays open for the next press.
+            if( auto* top = juce::Component::getCurrentlyModalComponent( 0 ) )
+                if( top != modalAncestor && !top->isParentOf( g_openTimingCorrect ) && !g_openTimingCorrect->isParentOf( top ) )
+                {
+                    top->exitModalState( UI::CANCEL );
+                    return true;
+                }
+            return false;
+        }
         mt::utils::exitDialog( g_openTimingCorrect, apply ? UI::APPLY : UI::CANCEL );
         return true;
     }

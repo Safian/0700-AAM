@@ -38,7 +38,22 @@ namespace kick_ui
 
         setInterceptsMouseClicks( false, true );
 
-        mt::utils::addChildComponents( this, progressBar, boxInfo, left, right );
+        undoOfferHandler() = [this]( const juce::String& Text, std::function<void()> Action ) { offerUndo( Text, std::move( Action ) ); };
+
+        mt::utils::addChildComponents( this, progressBar, boxInfo, undoButton, left, right );
+        undoButton.setValueFontHeight( 18 );
+        undoButton.setValueColour( ui::Theme::textColour( 1 ) );
+        undoButton.setVisible( false );
+        undoButton.onClick = [this]() {
+            auto action = std::move( undoAction );
+            clearUndoOffer();
+            if( action )
+            {
+                action();
+                boxInfo.setText( "Undone", juce::dontSendNotification );
+                startTimer( 2000 ); // back to the neutral text
+            }
+        };
 
         auto& grid{ GridData::Instance() };
 
@@ -68,6 +83,10 @@ namespace kick_ui
         progressBar.setBoundsRelative( .0f, .0f, 1.0f, .094 );
         left.setBoundsRelative( .0097f, .2031f, .4091f, .6875f );
         boxInfo.setBoundsRelative( .4296f, .2031f, .4225f, .6875f );
+        {
+            auto r = boxInfo.getBounds();
+            undoButton.setBounds( r.removeFromRight( juce::jmin( 110, r.getWidth() / 3 ) ).reduced( 3 ) );
+        }
         right.setBoundsRelative( .7617f, .2031f, .2382f, .6875f );
 
         init = true;
@@ -76,7 +95,32 @@ namespace kick_ui
 
     void AppStatusbar::setBoxInfo( juce::String BoxInfo )
     {
+        if( undoAction != nullptr )
+            clearUndoOffer();
         boxInfo.setText( BoxInfo, juce::dontSendNotification );
+    }
+
+    void AppStatusbar::offerUndo( const juce::String& Text, std::function<void()> UndoAction )
+    {
+        undoAction = std::move( UndoAction );
+        boxInfo.setText( Text, juce::dontSendNotification );
+        undoButton.setVisible( isVisible() && undoAction != nullptr );
+        undoButton.toFront( false );
+        startTimer( 8000 );
+    }
+
+    void AppStatusbar::clearUndoOffer()
+    {
+        stopTimer();
+        undoAction = nullptr;
+        undoButton.setVisible( false );
+    }
+
+    void AppStatusbar::timerCallback()
+    {
+        // The offer ran out (or the "Undone" note was shown long enough): neutral text again.
+        clearUndoOffer();
+        boxInfo.setText( "Box Info", juce::dontSendNotification );
     }
 
     void AppStatusbar::visibilityChanged()
@@ -85,6 +129,7 @@ namespace kick_ui
 
         for( auto& it : getChildren() )
             it->setVisible( visible );
+        undoButton.setVisible( visible && undoAction != nullptr );
         right.bbt.refresh();
     }
 

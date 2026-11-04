@@ -213,7 +213,8 @@ namespace mt
         int                       setProgramColourMode( int Program, PadColorMode Mode );
         int                       setProgramEmptyPadColorMode( int Program, EmptyPadColorMode Mode );
         int                       setProgramPadColour( int Program, int Colour, int Pad );
-        int                       resetProgramPadColours( int Program ); // default colours of the program type
+        int                       resetProgramPadColours( int Program ); // default colours of the program type (the user's Make Default, else factory)
+        int                       makeProgramPadColoursDefault( int Program ); // Make Default: the program's colours + modes become the type's defaults
         std::vector<juce::String> getProgramNames( MTProgramCategory ct = MTProgramCategory::Unused );
         int                       renameProgram( int Program, const juce::String& NewName );
         int                       getProgramIndexByName( const juce::String& ProgramName );
@@ -500,6 +501,12 @@ namespace mt
         int clearAutomation( const MTSelected& Selection );
         // Clears the lanes of every track of every sequence (one undo step).
         void clearAllAutomation();
+        // The automation lane breakpoints of the track in Selection as events, sorted by tick (Level lane, then Pan lane
+        // at equal ticks). setAutomationEvent: OldTick < 0 inserts, else moves the point at OldTick; 0 ok, -1 refused.
+        // The caller opens the undo transaction (ScopedUndoTransaction); delete likewise.
+        std::vector<MTAutomationEvent> getAutomationEvents( const MTSelected& Selection );
+        int                            setAutomationEvent( const MTSelected& Selection, int Param, int OldTick, int NewTick, int Value );
+        int                            deleteAutomationEvent( const MTSelected& Selection, int Param, int Tick );
         int randomNotes( const MTSelected& Selection, const track::randomEventsInfo& Info );
         int pitchQuantizeNotes( const MTSelected& Selection, const track::pitchQuantizeInfo& Info );
         int explode( const MTSelected& Selection );
@@ -659,6 +666,7 @@ namespace mt
         void                      renameSong( const juce::String& OldName, const juce::String& NewName );
         MTSongInfo                getSongInfo( const juce::String& SongName );
         void                      addSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex );
+        int                       appendSongSteps( const juce::String& SongName, std::vector<MTSongStepInfo>& Steps, bool CreateSong = false ); // one undo step
         void                      editSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex );
         void                      deleteSongStep( const juce::String& SongName, int AtIndex );
         void                      deleteAllSongSteps( const juce::String& SongName );
@@ -666,6 +674,7 @@ namespace mt
         void                      playSong( const juce::String& SongName, int SequenceIndexToPlay );
         void                      resumeSong();
         void                      stopSong();
+        void                      skipSongStep( bool AtNextBar ); // song playing: next step now (Sudden) or at the next bar (Next)
 
         // Next Sequence
         void playSequence( int Sequence );

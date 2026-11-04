@@ -3,6 +3,7 @@
 // Build: g++ -std=c++17 -Wall -Wextra -fsanitize=address,undefined ListEditLogicTests.cpp
 #include "../../modules/kick_ui/modes/kick_ListEditLogic.h"
 #include <cstdio>
+#include <string>
 
 static int g_fail = 0;
 #define CHECK_EQ( a, b )                                                                                                   \
@@ -88,6 +89,72 @@ int main()
     CHECK( autoScrollAllowed( 100, 0 ) );
     CHECK( !autoScrollAllowed( 1000, 500 ) );
     CHECK( autoScrollAllowed( 5000, 500 ) );
+
+    // ---- event rows: notes and automation breakpoints merged by time (LE-21), virtual 3000-event list (LE-07)
+    {
+        std::vector<int> notes{ 0, 96, 96, 384 }, autos{ 0, 96, 200 };
+        auto all = mergeEvents( notes, autos, EventFilter::All );
+        CHECK_EQ( all.size(), 7 );
+        CHECK( !all[0].automation && all[0].tick == 0 && !all[0].sameTime ); // note first at equal ticks
+        CHECK( all[1].automation && all[1].tick == 0 && all[1].sameTime );   // same position: time greyed
+        CHECK( !all[2].automation && all[2].tick == 96 && !all[2].sameTime );
+        CHECK( !all[3].automation && all[3].sameTime );
+        CHECK( all[4].automation && all[4].tick == 96 && all[4].sameTime );
+        CHECK( all[5].automation && all[5].tick == 200 );
+        CHECK( !all[6].automation && all[6].tick == 384 && all[6].index == 3 );
+        CHECK_EQ( mergeEvents( notes, autos, EventFilter::Notes ).size(), 4 );
+        CHECK_EQ( mergeEvents( notes, autos, EventFilter::Automation ).size(), 3 );
+        CHECK( mergeEvents( {}, {}, EventFilter::All ).empty() );
+        // 3000 events: sorted, every note appears once
+        std::vector<int> big, bigAuto;
+        for( int i = 0; i < 3000; ++i ) big.push_back( i * 24 );
+        for( int i = 0; i < 50; ++i ) bigAuto.push_back( i * 1440 + 7 );
+        auto rows = mergeEvents( big, bigAuto, EventFilter::All );
+        CHECK_EQ( rows.size(), 3050 );
+        for( size_t i = 1; i < rows.size(); ++i ) CHECK( rows[i - 1].tick <= rows[i].tick );
+        // playhead rows
+        CHECK_EQ( rowAtPlayhead( all, -1 ), -1 );
+        CHECK_EQ( rowAtPlayhead( all, 0 ), 1 );    // the last row starting at tick 0
+        CHECK_EQ( rowAtPlayhead( all, 100 ), 4 );
+        CHECK_EQ( rowAtPlayhead( all, 100000 ), 6 );
+        CHECK_EQ( goToPlayheadRow( all, -5 ), 0 );
+        CHECK_EQ( goToPlayheadRow( all, 250 ), 5 );
+        CHECK_EQ( goToPlayheadRow( {}, 10 ), -1 );
+    }
+    // automation values: Level 0..127, Pan -100..100 percent
+    CHECK( std::string( autoName( kAutoLevel ) ) == "Level" && std::string( autoName( kAutoPan ) ) == "Pan" );
+    CHECK_EQ( autoDisplay( kAutoPan, -1000 ), -100 );
+    CHECK_EQ( autoDisplay( kAutoPan, 500 ), 50 );
+    CHECK_EQ( autoDisplay( kAutoPan, -504 ), -50 );
+    CHECK_EQ( autoDisplay( kAutoLevel, 200 ), 127 );
+    CHECK_EQ( autoFromDisplay( kAutoPan, 50 ), 500 );
+    CHECK_EQ( autoFromDisplay( kAutoPan, -300 ), -1000 );
+    CHECK_EQ( autoFromDisplay( kAutoLevel, -4 ), 0 );
+    CHECK_EQ( autoMinShown( kAutoPan ), -100 ); CHECK_EQ( autoMaxShown( kAutoLevel ), 127 );
+    for( int shown = -100; shown <= 100; ++shown ) CHECK_EQ( autoDisplay( kAutoPan, autoFromDisplay( kAutoPan, shown ) ), shown ); // round trip
+
+    // group edits
+    CHECK_EQ( nudgeStart( 10, -50, 1536 ), 0 );
+    CHECK_EQ( nudgeStart( 1530, 50, 1536 ), 1535 );
+    CHECK_EQ( nudgeStart( 100, 24, 1536 ), 124 );
+    {
+        auto sel = toggleRow( {}, 5 );
+        sel = toggleRow( sel, 2 );
+        CHECK_EQ( sel.size(), 2 ); CHECK_EQ( sel[0], 2 ); CHECK_EQ( sel[1], 5 );
+        sel = toggleRow( sel, 2 );
+        CHECK_EQ( sel.size(), 1 ); CHECK_EQ( sel[0], 5 );
+        CHECK_EQ( selectionAfterGroupDelete( 10, { 4, 5, 6 } ), 4 );
+        CHECK_EQ( selectionAfterGroupDelete( 10, { 7, 8, 9 } ), 6 );
+        CHECK_EQ( selectionAfterGroupDelete( 3, { 0, 1, 2 } ), -1 );
+        CHECK_EQ( selectionAfterGroupDelete( 3, {} ), -1 );
+    }
+    // step record: TC division, BAR (0) falls back, velocity, auto advance stays inside the sequence
+    CHECK_EQ( stepRecordLength( 48, 96 ), 48 );
+    CHECK_EQ( stepRecordLength( 0, 96 ), 96 );
+    CHECK_EQ( stepRecordLength( 0, 0 ), 1 );
+    CHECK_EQ( stepRecordVelocity( 0 ), 1 ); CHECK_EQ( stepRecordVelocity( 300 ), 127 );
+    CHECK_EQ( stepRecordNextTick( 0, 48, 1536 ), 48 );
+    CHECK_EQ( stepRecordNextTick( 1500, 96, 1536 ), 1536 );
 
     if( g_fail == 0 )
         std::printf( "ListEditLogicTests: all passed\n" );

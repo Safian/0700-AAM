@@ -127,6 +127,15 @@ namespace kick_ui
             return std::max( 1, TicksPerBar / TicksPerStep );
         }
 
+        // Ticks at the end of a bar that no step reaches (a division that does not divide the bar: 7/8 at 1/4 notes
+        // = 3 steps of 96 = 288 of 336 ticks). Those ticks are edited at a finer division.
+        inline int uncoveredTicks( int TicksPerBar, int TicksPerStep, int Fallback )
+        {
+            if( TicksPerBar <= 0 || TicksPerStep <= 0 )
+                return 0;
+            return TicksPerBar - stepsPerBar( TicksPerBar, TicksPerStep, Fallback ) * TicksPerStep;
+        }
+
         // Value of a step with several notes: average, kept inside the param range.
         inline int averageValue( Param P, const std::vector<int>& Values )
         {
@@ -173,6 +182,27 @@ namespace kick_ui
             static const int v[] = { 1, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96 };
             return ( ListIndex >= 0 && ListIndex < 11 ) ? v[ListIndex] : 16;
         }
+
+        // ---- step entry settings (the manual's gear window: "Velocity" = the default step velocity) -------------
+        // Views keep their own default while the Velocity setting is 0 (Auto): CLASSIC 127 (Flip Steps / full level),
+        // GRID 100. A setting of 1..127 is the default of every entered step in both views.
+        constexpr int kClassicDefaultVelocity = 127;
+        constexpr int kGridDefaultVelocity    = 100;
+
+        // Velocity of a step that is switched on. SettingVelocity: 0 = Auto. PadVelocity: what the hardware pad
+        // reported. A pad entry takes the pad's own velocity with the "Pad velocity" switch or at the user level
+        // (Half Level); a touch on the screen has no pad velocity (PadVelocitySwitch false, UserLevel false).
+        inline int entryVelocity( int SettingVelocity, bool PadVelocitySwitch, int ViewDefault, int PadVelocity, bool UserLevel )
+        {
+            if( UserLevel || PadVelocitySwitch )
+                return clampTo( PadVelocity, kVelMin, kVelMax );
+            if( SettingVelocity > 0 )
+                return clampTo( SettingVelocity, kVelMin, kVelMax );
+            return clampTo( ViewDefault, kVelMin, kVelMax );
+        }
+
+        // Q-Link / dial turned below the lowest velocity: the manual says "setting a value of 0 (Off) will delete the step".
+        inline bool velocityTurnDeletes( int Current, int Delta ) { return Delta < 0 && Current + Delta < kVelMin; }
 
         // Page that contains a step (for page following).
         inline int pageOfStep( int AbsStep, int StepsPerPage ) { return AbsStep / std::max( 1, StepsPerPage ); }

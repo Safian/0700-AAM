@@ -25,6 +25,7 @@
 #include "mt_sustain.h"
 #include "mt_audio_iprogram_atomics.h"
 #include "contracts/dcl/dcl_contracts.h"
+#include "mt_pad_colour_defaults.h"
 
 namespace mt
 {
@@ -58,6 +59,9 @@ namespace mt
     // All other program types keep their previous default (pad 1 red, the rest colour 0): which colours a
     // keygroup / MIDI / plugin program should start with is a design decision, not a bug fix.
     const std::array<int, 128> defaultPadColours{ contracts::DeviceControlContracts::PadColourRed };
+
+    // The pad colours the user stored with Color Edit "Make Default" for the group of program type 'Type' (false: none).
+    bool loadUserPadDefaults( MTProgramType Type, padcolour::Defaults& Out );
 
     struct IMidiMsgProcessor
     {

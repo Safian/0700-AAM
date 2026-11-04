@@ -73,6 +73,30 @@ namespace kick_ui
         void resized() override;
     };
 
+    // Copy to Song: pick the song the sequence playlist is appended to (or a new one).
+    class NextSequenceSongDialog : public juce::Component
+    {
+    public:
+        explicit NextSequenceSongDialog( const std::vector<juce::String>& Songs )
+        {
+            names = Songs;
+            names.push_back( "NEW SONG" );
+            addAndMakeVisible( list );
+            list.setJustificationType( juce::Justification::centred );
+            list.setListOptions( names, 0 );
+            list.onSelectionChanged = [this]( int Index, const juce::String& ) { selected = Index; };
+            setName( "COPY TO SONG" );
+        }
+        // The chosen song; empty = a new song.
+        juce::String getSong() const { return selected >= 0 && selected + 1 < (int)names.size() ? names[(size_t)selected] : juce::String(); }
+
+    private:
+        std::vector<juce::String> names;
+        ui::KickListBox           list{ ui::KickListBox::withoutTitleBar, "", {} };
+        int                       selected{ 0 };
+        void                      resized() override { list.setBoundsRelative( .2f, .4f, .6f, .2f ); }
+    };
+
     class KickNextSequenceContent : public juce::Component
         , public mt::MTAudioInterfaceListener
     {
@@ -99,10 +123,12 @@ namespace kick_ui
         ui::KickToggleButton sudden{ "Sudden", "Sudden", "Sudden" };
         ui::KickToggleButton clear{ "Clear", "Clear", " Clear" };
         ui::KickToggleButton hold{ "Hold", "Hold", "Hold" };
+        ui::KickToggleButton toSong{ "Song", "Song", "Song" }; // copy the sequence playlist to a song (stopped only)
 
         ui::KickLabel srNo{ "#" }, sequence{ "Sequence" }, length{ "Length" }, bpm{ "BPM" };
 
         int playingSequence{ 0 };
+        int heldSequence{ -1 }; // selected while Hold is on (not queued)
 
         ObservableInt nextSequence{ -1 };
 
@@ -125,6 +151,13 @@ namespace kick_ui
         void stopPlaying( bool Engine );
         void syncTransport();
         void restoreData();
+
+        sequence_logic::NextState state() const;
+        void                      holdSelect( int Index );
+        void                      clearHeld();
+        void                      refreshClear();
+        void                      deleteSelectedSequence();
+        void                      copyToSong();
 
         void setPadLED( const int id, int state, int color );
         void setPadBlinking( const int id, int state, int OnColorID, int OffColorID = contracts::DeviceControlContracts::PadColourIds::PadColourTrans );

@@ -227,6 +227,29 @@ namespace mt
         }
     }
 
+    int MTSongManager::appendSongSteps( const juce::String& SongName, std::vector<MTSongStepInfo>& Steps, bool CreateSong )
+    {
+        if( Steps.empty() )
+            return 0;
+        auto vt = getSong( SongName );
+        if( !vt.isValid() && !CreateSong )
+            return 0;
+        if( undo ) undo->beginNewTransaction( "Copy sequences to song" );
+        if( !vt.isValid() )
+        {
+            vt = createVTree( IDs::song,
+                              IDs::id, CommonUtils::createID(),
+                              IDs::name, SongName );
+            vTree.appendChild( vt, undo );
+        }
+        MTSong song( vt, undo );
+        if( !song.isValid() )
+            return 0;
+        for( auto& step : Steps )
+            song.addStep( step, -1 );
+        return (int)Steps.size();
+    }
+
     void MTSongManager::editSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex )
     {
         auto   vt = getSong( SongName );

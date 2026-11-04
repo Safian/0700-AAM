@@ -65,11 +65,16 @@ namespace kick_ui
         // ---- Next Sequence state ---------------------------------------------------------------------------
         // playing  = the sequence shown as playing / selected, next = the queued one (-1 none),
         // isPlaying = the engine transport state this screen believes in.
+        // hold / held: the Hold button (manual: "repeat the current sequence indefinitely and temporarily ignore pad
+        // presses ... select other pads without selecting them to play next"). While Hold is on a pad press only
+        // SELECTS ('held'); nothing is queued. Next Bar / Sudden switch to the selection (held, else the queued one).
         struct NextState
         {
             int  playing{ -1 };
             int  next{ -1 };
             bool isPlaying{ false };
+            bool hold{ false };
+            int  held{ -1 };
         };
 
         // Pad / row pressed while playing: queue 'Index' as the next sequence. Pressing the playing
@@ -116,13 +121,76 @@ namespace kick_ui
             return S;
         }
 
-        // Hold pressed on: a queued sequence is dropped (Akai semantics NOT verified, behaviour kept).
-        inline NextState holdOn( NextState S )
+        // Hold switched on / off. On: the engine's queue is cancelled (the current sequence repeats) and the pad
+        // selection starts empty. Off: back to normal operation; a selection made during Hold is not queued.
+        inline NextState setHold( NextState S, bool On )
         {
-            if( S.isPlaying )
+            S.hold = On;
+            S.held = -1;
+            if( On )
                 S.next = -1;
             return S;
         }
+
+        // A pad / row pressed while playing: with Hold it selects, without Hold it queues.
+        inline NextState pressPad( NextState S, int Index )
+        {
+            if( !S.isPlaying )
+                return S;
+            if( !S.hold )
+                return queueNext( S, Index );
+            S.held = ( Index == S.playing ) ? -1 : Index;
+            return S;
+        }
+
+        // The sequence Next Bar / Sudden switch to: the selection while Hold is on, else the queued one (-1 none).
+        inline int switchTarget( const NextState& S ) { return S.hold ? S.held : S.next; }
+
+        // After a Sudden switch: the target plays, selection and queue are empty (Hold stays as it was).
+        inline NextState afterSudden( NextState S )
+        {
+            const int t = switchTarget( S );
+            if( t >= 0 )
+                S.playing = t;
+            S.next = -1;
+            S.held = -1;
+            return S;
+        }
+
+        // Clear = delete the selected sequence from the playlist (manual): only a sequence that is not playing.
+        // While playing the selected sequence is the queued one (or the held selection); stopped it is 'playing'
+        // (the selected one). The last remaining sequence is kept. Returns the index to delete, -1 none.
+        inline int clearTarget( const NextState& S, int NumSequences )
+        {
+            if( NumSequences <= 1 )
+                return -1;
+            const int t = S.isPlaying ? switchTarget( S ) : S.playing;
+            if( t < 0 || t >= NumSequences )
+                return -1;
+            if( S.isPlaying && t == S.playing )
+                return -1;
+            return t;
+        }
+
+        // Indices after sequence 'Deleted' was removed from a list that had 'NumBefore' entries.
+        inline int indexAfterDelete( int Index, int Deleted )
+        {
+            if( Index < 0 || Index == Deleted )
+                return -1;
+            return Index > Deleted ? Index - 1 : Index;
+        }
+
+        inline NextState afterDelete( NextState S, int Deleted, int NumBefore )
+        {
+            S.next = indexAfterDelete( S.next, Deleted );
+            S.held = indexAfterDelete( S.held, Deleted );
+            const int p = indexAfterDelete( S.playing, Deleted );
+            S.playing   = p >= 0 ? p : std::max( 0, std::min( Deleted, NumBefore - 2 ) ); // the neighbour takes over the selection
+            return S;
+        }
+
+        // Copy to Song (manual: "copy the sequence playlist to a song"): one step per used sequence, repeat 1.
+        inline int copyToSongStepCount( int NumSequences ) { return std::max( 0, NumSequences ); }
 
         // Screen hidden while stopped: the queued sequence becomes the selected one.
         inline NextState hiddenWhileStopped( NextState S )

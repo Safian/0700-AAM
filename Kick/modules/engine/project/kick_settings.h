@@ -41,6 +41,19 @@ namespace mt
     };
 
     /// ///////////////////////////////////
+    ///    Pad colour defaults per program type (Color Edit "Make Default").
+    /// ///////////////////////////////////
+    struct KickPadColourDefaults : public MTIVTBase
+    {
+        void setup( juce::ValueTree VT, juce::UndoManager* Undo );
+        bool isValid();
+
+        // Text form of one program type group ("drum", "clip", "other"), see mt_pad_colour_defaults.h; empty when never set.
+        juce::String get( const juce::String& Key );
+        void         set( const juce::String& Key, const juce::String& Value );
+    };
+
+    /// ///////////////////////////////////
     ///    Recent Projects.
     /// ///////////////////////////////////
     struct KickProjectsDefault : public MTIVTBase
@@ -245,6 +258,7 @@ namespace mt
         KickCVClib           cvclib;
         KickMetronome        metronome;
         KickWifi             wifi;
+        KickPadColourDefaults padColours;
 
         // Runtime settings, not saved in XML
         KickPreview     preview;
