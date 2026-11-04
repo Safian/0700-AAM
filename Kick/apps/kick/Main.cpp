@@ -260,6 +260,63 @@ public:
         } );
     }
 
+    // KICK_SMOKE_MENUTILES=1: every tile of the Menu is pressed (on its page), first without a project (screens that need one stay
+    // closed and the tile is grayed out), then with one (each opens its screen). Prints "MENUTILE ..." per item and "PASS: menu tiles".
+    void smokeMenuTiles( int item, bool withProject )
+    {
+        namespace ml = ui::menu_logic;
+        using kick_ui::Screen;
+        auto& home = kick_ui::KickHome::Instance();
+        const auto fail = [this]( const juce::String& m ) {
+            std::cerr << "FAIL: " << m << std::endl;
+            setApplicationReturnValue( 3 );
+        };
+        if( item >= ml::kMenuItemCount )
+        {
+            if( !withProject )
+            {
+                auto file = juce::File( juce::SystemStats::getEnvironmentVariable( "KICK_DATA_ROOT", {} ) ).getChildFile( "menutiles/Project.kickPrj" );
+                if( !file.getParentDirectory().createDirectory() || !mt::getAudioInterface().loadProject( file, true ) )
+                {
+                    fail( "menu tiles: cannot create the project" );
+                    quit();
+                    return;
+                }
+                smokeMenuTiles( 0, true );
+                return;
+            }
+            std::cout << "PASS: menu tiles" << std::endl;
+            quit();
+            return;
+        }
+        if( home.getCurrentScreen() != Screen::HomeOptions )
+            kick_ui::signals::sigScreenClose( Screen::HomeOptions );
+        juce::Timer::callAfterDelay( 500, [this, item, withProject, fail] {
+            auto& home = kick_ui::KickHome::Instance();
+            auto* menu = dynamic_cast<kick_ui::AppMenuOptions*>( home.findScreen( Screen::HomeOptions ) );
+            if( menu == nullptr || home.getCurrentScreen() != Screen::HomeOptions )
+            {
+                fail( "menu tiles: the Menu is not open for item " + juce::String( item ) );
+                quit();
+                return;
+            }
+            const bool shouldWork = withProject || !ml::itemNeedsProject<Screen>( item );
+            const bool clicked    = menu->activateItem( item );
+            juce::Timer::callAfterDelay( 700, [this, item, withProject, fail, shouldWork, clicked] {
+                auto& home = kick_ui::KickHome::Instance();
+                const Screen want = item < ml::kTileCount ? ml::tileScreen<Screen>( item ) : item == ml::kCommandKickUpdate ? Screen::KickUpdate : Screen::HomeOptions;
+                const Screen expect = shouldWork ? want : Screen::HomeOptions;
+                const bool   ok     = clicked == shouldWork && home.getCurrentScreen() == expect;
+                std::cout << "MENUTILE " << ( withProject ? "project" : "no-project" ) << " item " << item << " '" << ml::tileDef<Screen>( item ).name << "' clicked=" << clicked
+                          << " screen=" << (int)home.getCurrentScreen() << " expected=" << (int)expect << ( ok ? " ok" : " FAIL" ) << std::endl;
+                if( !ok )
+                    fail( "menu tile " + juce::String( ml::tileDef<Screen>( item ).name ) + ( withProject ? " (project)" : " (no project)" ) );
+                juce::ModalComponentManager::getInstance()->cancelAllModalComponents(); // the Resources dialog
+                smokeMenuTiles( item + 1, withProject );
+            } );
+        } );
+    }
+
     void initialise( const juce::String& commandLine ) override
     {
         kick_logger::init();
@@ -451,6 +508,11 @@ public:
                 juce::FileOutputStream output{juce::File(path)};
                 juce::PNGImageFormat png;
                 if (!output.openedOk() || !png.writeImageToStream(image, output)) setApplicationReturnValue(2);
+            }
+            if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_MENUTILES", {}).isNotEmpty())
+            {
+                smokeMenuTiles(0, false);
+                return;
             }
             const auto screens = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SCREENS", {});
             const auto shotsDir = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SHOTS_DIR", {});

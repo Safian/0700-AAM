@@ -155,6 +155,10 @@ if(TARGET Kick)
     add_test(NAME kick-projects-smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ProjectsBrowserSmoke.py"
         $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}" projects)
     set_tests_properties(kick-projects-smoke PROPERTIES TIMEOUT 110)
+    # Menu: every tile pressed on its page, without and with a project (grayed out / opens its screen).
+    add_test(NAME kick-menu-tiles-smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ProjectsBrowserSmoke.py"
+        $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}" menutiles)
+    set_tests_properties(kick-menu-tiles-smoke PROPERTIES TIMEOUT 110)
 endif()
 # Timing correct (note quantize) logic; JUCE-free, header only.
 add_executable(kick-timing-correct-tests TimingCorrectTests.cpp)
@@ -392,6 +396,11 @@ set_tests_properties(kick-sample-editor-actions PROPERTIES TIMEOUT 10)
 add_executable(kick-menu-logic-tests MenuLogicTests.cpp)
 add_test(NAME kick-menu-logic COMMAND kick-menu-logic-tests)
 set_tests_properties(kick-menu-logic PROPERTIES TIMEOUT 10)
+
+add_executable(kick-menu-assets-tests MenuAssetTests.cpp)
+add_test(NAME kick-menu-assets COMMAND kick-menu-assets-tests
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../assets/Default/theme.xml" "${CMAKE_CURRENT_SOURCE_DIR}/../../assets/Proper/theme.xml")
+set_tests_properties(kick-menu-assets PROPERTIES TIMEOUT 10)
 
 # System-resource helpers (CPU delta, MemAvailable, mount table, statvfs); JUCE-free, header only.
 add_executable(kick-sysinfo-tests SysInfoTests.cpp)

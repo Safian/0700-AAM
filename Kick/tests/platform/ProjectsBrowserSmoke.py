@@ -4,6 +4,7 @@
 
   python3 ProjectsBrowserSmoke.py <Kick app> <resource root> browser    sorted list without hidden files in the browser screenshot
   python3 ProjectsBrowserSmoke.py <Kick app> <resource root> projects   project operations (engine) + the load queue
+  python3 ProjectsBrowserSmoke.py <Kick app> <resource root> menutiles  every Menu tile pressed without / with a project (MENU-15)
 """
 import os
 from pathlib import Path
@@ -35,6 +36,10 @@ with tempfile.TemporaryDirectory(prefix="kick-prj-smoke-") as directory:
         env.update(KICK_SMOKE_PROJECTS="queue", KICK_SMOKE_SCREENS=",".join(["HomeOptions"] * 12), KICK_SMOKE_SHOTS_DIR=str(shots))
         expect = ["PROJECTS: missing project refused", "PROJECTS: save a copy ok", "PROJECTS: save as ok", "PROJECTS: don't save ok",
                   "PROJECTS: demo ok", "PROJECTS: load queue ok", "PASS: project load queue"]
+    elif mode == "menutiles":
+        env.update(KICK_SMOKE_MENUTILES="1")
+        expect = ["MENUTILE no-project item 1 'Track Mixer' clicked=0", "MENUTILE project item 1 'Track Mixer' clicked=1",
+                  "MENUTILE project item 19 'Kick Update' clicked=1", "PASS: menu tiles"]
     else:
         raise SystemExit("unknown mode")
     with (root / "app.log").open("w+") as log:
