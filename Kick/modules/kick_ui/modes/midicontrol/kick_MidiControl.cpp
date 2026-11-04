@@ -70,7 +70,7 @@ namespace kick_ui
         midiLearnTab.onMessageReceived = [&]( const juce::MidiMessage& Msg, const juce::String& Port ) {
             midiMonitor.addMidiInMessage( Msg, Port );
             juce::String desc = ( Port.isNotEmpty() ? Port + ": " : "" ) + Msg.getDescription();
-            statusBar.setText( "MIDI IN: " + desc, juce::dontSendNotification );
+            statusBar.setBoxInfo( "MIDI IN: " + desc );
         };
 
         output.onSelectionChanged = [&]( int index, const juce::String value ) {
