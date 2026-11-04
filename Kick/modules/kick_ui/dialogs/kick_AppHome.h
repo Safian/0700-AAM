@@ -22,6 +22,7 @@
 #pragma once
 
 #include <stack>
+#include "kick_UndoWatcher.h"
 
 namespace kick_ui
 {
@@ -71,6 +72,7 @@ namespace kick_ui
         std::unique_ptr<Component>                 ctrlBar_;
         std::unique_ptr<Component>                 selectionOutline_;
         std::unique_ptr<KickLEDs>                  ledControl_;
+        std::unique_ptr<UndoWatcher>               undoWatcher_; // "Undid: ..." for every undo / redo path
         std::unique_ptr<MobileHardwareDrawer>      hardwareDrawer_;
         std::unique_ptr<StartupScreen>             startupScreen_;
         juce::Component::SafePointer<AppStatusbar> statusBar_;

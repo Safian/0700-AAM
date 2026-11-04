@@ -21,6 +21,7 @@
 
 #pragma once
 #include "kick_ui/audio_components//gridview/kick_Locate.h"
+#include "kick_statusbar_logic.h"
 namespace kick_ui
 {
 
@@ -48,14 +49,23 @@ namespace kick_ui
         void mouseDown( const juce::MouseEvent& e ) override;
     };
 
-    class AppStatusbar : public juce::Component, public juce::DeletedAtShutdown
+    class AppStatusbar : public juce::Component, public juce::DeletedAtShutdown, private juce::Timer
     {
     public:
         ~AppStatusbar() = default;
 
         static AppStatusbar& Instance();
 
+        // A message in the Box Info line: it shows for a few seconds, then the standing state comes back.
         void setBoxInfo( juce::String );
+        // The standing state of the line (e.g. "Unsaved project changes"; empty = nothing). A device fault of the startup
+        // report takes its place.
+        void setStanding( juce::String );
+
+        // The popups of the three fields (also used by the smoke test): playhead control (STP), BBT locate, tempo editor.
+        void showStpPopup() { left.stp.displaySTPPopup(); }
+        void showBbtPopup() { right.bbt.displayPopup(); }
+        void showTempoEditor() { editTempo(); }
 
     private:
         mt::MTPlayhead&   playHead{ mt::getAudioInterface().getPlayhead() };
@@ -63,6 +73,18 @@ namespace kick_ui
         LeftControl       left;
         RightControl      right;
         ui::KickLabel     boxInfo{ "Box Info" };
+        // Tempo and time signature of the selected sequence; a tap opens the Tempo editor / the Time Signature dialog.
+        ui::KickImageButton tempoBtn{ "Tempo", "" }, timeSigBtn{ "Time signature", "" };
+
+        kick_ui::statusbar_logic::BoxInfoState boxState;
+        juce::String                           projectStanding, shownBox, shownTempo, shownTimeSig, lowStorage, lowMemory;
+        int                                    resourceTicks{ 0 };
+
+        void timerCallback() override;
+        void refreshBox();
+        void refreshTempo();
+        void refreshResources(); // low storage / memory (every 5 s)
+        void editTempo();
 
         // Don't any direct instantiaion of this class.
         AppStatusbar();
