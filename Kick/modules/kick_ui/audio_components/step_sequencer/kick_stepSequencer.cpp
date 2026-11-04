@@ -603,11 +603,19 @@ namespace kick_ui
         }
         else
         {
-            for( auto& n : found )
-            {
-                const auto current = param == sm::Param::Velocity ? (int)n.velocity.get() : ( param == sm::Param::Probability ? (int)n.probability.get() : (int)n.ratchet.get() );
-                writeParam( n, param, current + Delta );
-            }
+            // Velocity turned below its lowest value: the step is deleted (the manual: "setting a value of 0 (Off) will delete the step").
+            bool remove = false;
+            if( param == sm::Param::Velocity )
+                for( auto& n : found )
+                    remove = remove || sm::velocityTurnDeletes( (int)n.velocity.get(), Delta );
+            if( remove )
+                eraseStepNotes( Index );
+            else
+                for( auto& n : found )
+                {
+                    const auto current = param == sm::Param::Velocity ? (int)n.velocity.get() : ( param == sm::Param::Probability ? (int)n.probability.get() : (int)n.ratchet.get() );
+                    writeParam( n, param, current + Delta );
+                }
         }
         triggerAsyncUpdate();
     }
@@ -690,7 +698,7 @@ namespace kick_ui
         {
             switch( currentParam() )
             {
-                case sm::Param::Velocity: toggleStep( index, sm::kVelMax ); break;
+                case sm::Param::Velocity: toggleStep( index, sm::entryVelocity( data.entryVelocity, false, sm::kClassicDefaultVelocity, 0, false ) ); break;
                 case sm::Param::Probability: toggleStep( index, sm::kProbMax ); break;
                 case sm::Param::Ratchet: toggleStep( index, sm::kRatMin ); break;
             }
@@ -735,6 +743,16 @@ namespace kick_ui
 
         //header
         header.onBackButtonPressed = [this]( bool ) { closeScreen( Screen::HomeListView ); };
+        // The manual's gear window: the default step Velocity (0 = Auto, each view's own default) and pad-velocity entry.
+        header.showSettingsButton( true );
+        header.onSettingsClick = [this]() {
+            settings.load( data.entryVelocity, data.entryPadVelocity );
+            mt::utils::showDialog( "STEP SEQUENCER SETTINGS", &settings, [this]( int ) {
+                data.entryVelocity    = settings.getVelocity();
+                data.entryPadVelocity = settings.getPadVelocity();
+            },
+                                   { 0, 0, 650, 330 } );
+        };
 
         // Setup step sequencer...
         mt::utils::addAndMakeVisible( this, stepControl, stepPreset, stepViewport, header, topControl, tracks, totalBars, padName, bpmTempo, warningLabel, drumGrid, viewModeButton );
@@ -826,9 +844,14 @@ namespace kick_ui
         };
 
         totalBars.onValueChanged = [&]( int V ) {
-            mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Sequence length" );
-            ae.setSequenceLength( aeSel.sequence, V );
+            const int before = ae.getSequenceLength( aeSel.sequence );
+            {
+                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Sequence length" );
+                ae.setSequenceLength( aeSel.sequence, V );
+            }
             refresh();
+            if( V < before ) // shortening can cut off steps: UNDO is one tap away
+                offerUndo( "Sequence shortened to " + juce::String( V ) + " bar(s)" );
         };
 
         bpmTempo.onValueChanged = [&]( int Value ) {
@@ -1007,19 +1030,20 @@ namespace kick_ui
                     topControl.padValueListBox.setSelected( padNum + ae.getBankOffset() );
                 }
             }
+            else if( padState == contracts::DeviceControlContracts::BTN_PRESSED && contracts::DclContractsHelper::isShiftPressed() )
+            {
+                // Shift + pad selects that pad (the manual: "hold Shift and tap a pad to select it"), no step is touched.
+                topControl.padValueListBox.setSelected( padNum + ae.getBankOffset() );
+            }
             else if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
             {
-                // The pad is the step at its position on the page, in every parameter view. Half (user) level
-                // takes the pad's own velocity for the step, otherwise the value is fixed.
+                // The pad is the step at its position on the page, in every parameter view. The step velocity is the
+                // Velocity setting (or the view's default); the pad's own velocity counts at the user level (Half Level)
+                // and with the Pad velocity switch of the settings window.
                 const auto padStep = step_model::absoluteStep( stepComponent.getPage(), data.numStepsPerPage, padNum );
                 const auto param   = topControl.paramValueListBox.getSelected();
                 if( param == "Velocity" )
-                {
-                    if( contracts::DclContractsHelper::isHalfLevel() )
-                        stepComponent.toggleStep( padStep, padVelocity );
-                    else
-                        stepComponent.toggleStep( padStep );
-                }
+                    stepComponent.toggleStep( padStep, step_model::entryVelocity( data.entryVelocity, data.entryPadVelocity, step_model::kClassicDefaultVelocity, padVelocity, contracts::DclContractsHelper::isHalfLevel() ) );
                 else if( param == "Probability" )
                     stepComponent.toggleStep( padStep, 100 );
                 else if( param == "Ratchet" )
@@ -1281,9 +1305,10 @@ namespace kick_ui
         mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Clear pad" );
         const auto                pad   = topControl.padValueListBox.getSelectedIndex();
         const auto                total = (int)gridData.getTicksUptoBar( (unsigned int)juce::jmax( 1, ae.getSequenceLength( aeSel.sequence ) ) );
-        eraseNotesStartingIn( pad, 0, total );
+        const int                 erased = eraseNotesStartingIn( pad, 0, total );
         stepComponent.refresh();
         drumGrid.refresh();
+        offerUndo( erased > 0 ? "Pad cleared" : juce::String() );
     }
 
     void StepSequencer::clearBarData()
@@ -1291,9 +1316,24 @@ namespace kick_ui
         mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Clear bar" );
         const auto                pad = topControl.padValueListBox.getSelectedIndex();
         const auto                bar = juce::jmax( 0, topControl.barValueListBox.getSelectedIndex() );
-        eraseNotesStartingIn( pad, (int)gridData.getTicksUptoBar( (unsigned int)bar ), (int)gridData.getTicksUptoBar( (unsigned int)bar + 1 ) );
+        const int                 erased = eraseNotesStartingIn( pad, (int)gridData.getTicksUptoBar( (unsigned int)bar ), (int)gridData.getTicksUptoBar( (unsigned int)bar + 1 ) );
         stepComponent.refresh();
         drumGrid.refresh();
+        offerUndo( erased > 0 ? "Bar cleared" : juce::String() );
+    }
+
+    // The status bar offers UNDO after a destructive action (no modal question: dialogs are awkward on the hardware).
+    void StepSequencer::offerUndo( const juce::String& Message )
+    {
+        if( Message.isEmpty() )
+            return;
+        if( auto& offer = undoOfferHandler() )
+            offer( Message, [this]() {
+                ae.getUndoManager().undo();
+                refresh();
+                stepComponent.refresh();
+                drumGrid.refresh();
+            } );
     }
 
     void StepSequencer::setTempo()

@@ -43,6 +43,10 @@ namespace kick_ui
         int ticksPerQl{ 0 };
         int stepWidth{ 0 };
 
+        // Step entry settings (Step Sequencer settings window): Velocity 0 = Auto (each view's own default).
+        int  entryVelocity{ 0 };
+        bool entryPadVelocity{ false };
+
         std::vector<bool> selected{ false };
         std::vector<int>  indexValues{ 0 };
         std::vector<int>  indexProbValues{ 0 };

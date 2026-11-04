@@ -245,8 +245,9 @@ namespace kick_ui
         if( On && !c.on )
         {
             const auto st = stepStartTick( Column );
-            ae.addOrModifyNote( note, st, data.ticksPerQl, DrumGridConstants::defaultVel, 100, 1 );
-            c = Cell{ true, st, data.ticksPerQl, DrumGridConstants::defaultVel, 100, 1, 1 };
+            const int v = step_model::entryVelocity( data.entryVelocity, false, DrumGridConstants::defaultVel, 0, false );
+            ae.addOrModifyNote( note, st, data.ticksPerQl, v, 100, 1 );
+            c = Cell{ true, st, data.ticksPerQl, v, 100, 1, 1 };
         }
         else if( !On && c.on )
         {
@@ -267,7 +268,7 @@ namespace kick_ui
     {
         auto& c = cells[(size_t)Row][(size_t)Column];
         if( !c.on ) // setting a value on an empty step creates the note
-            c = Cell{ true, stepStartTick( Column ), data.ticksPerQl, DrumGridConstants::defaultVel, 100, 1, 1 };
+            c = Cell{ true, stepStartTick( Column ), data.ticksPerQl, step_model::entryVelocity( data.entryVelocity, false, DrumGridConstants::defaultVel, 0, false ), 100, 1, 1 };
 
         Normalized = juce::jlimit( 0.f, 1.f, Normalized );
         switch( layer )

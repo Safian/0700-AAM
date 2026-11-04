@@ -2,6 +2,7 @@
 // Host test for the JUCE-free step sequencer logic (kick_StepModel.h).
 // Build: g++ -std=c++17 -Wall -Wextra -fsanitize=address,undefined StepModelTests.cpp
 #include "../../modules/kick_ui/audio_components/step_sequencer/kick_StepModel.h"
+#include <algorithm>
 #include <cstdio>
 
 static int g_fail = 0;
@@ -135,6 +136,72 @@ int main()
     CHECK_EQ( pageOfStep( 15, 16 ), 0 );
     CHECK_EQ( pageOfStep( 16, 16 ), 1 );
     CHECK_EQ( pageOfStep( 20, 0 ), 20 );
+
+    // ---- SS-17: non-4/4 time signatures (PPQN 96: quarter 96 ticks, 1/16 = 24; bar = num * 384 / den)
+    {
+        struct TS { int num, den; };
+        const TS sigs[] = { { 2, 4 }, { 3, 4 }, { 5, 4 }, { 6, 8 }, { 7, 8 }, { 12, 8 }, { 7, 4 }, { 9, 8 } };
+        const int stepTicks[] = { 96, 48, 24, 12, 6 }; // 1/4, 1/8, 1/16, 1/32, 1/64
+        for( auto& t : sigs )
+        {
+            const int bar = t.num * 384 / t.den;
+            for( int st : stepTicks )
+            {
+                const int steps = stepsPerBar( bar, st, 16 );
+                CHECK_EQ( steps, bar / st );                      // the bar length decides, never the enum value
+                CHECK( steps >= 1 );
+                CHECK_EQ( steps * st + uncoveredTicks( bar, st, 16 ), bar );
+                // every step of the bar maps to a page and back; the last step exists, the next one does not
+                const int perPage = std::min( 16, steps );
+                CHECK( stepExists( steps - 1, steps ) );
+                CHECK( !stepExists( steps, steps ) );
+                CHECK_EQ( pageCount( steps, perPage ), ( steps + perPage - 1 ) / perPage );
+                CHECK_EQ( absoluteStep( pageCount( steps, perPage ) - 1, perPage, 0 ), ( pageCount( steps, perPage ) - 1 ) * perPage );
+                // a note that starts inside the last step belongs to it, one at the next bar's start does not
+                CHECK( noteStartsInStep( ( steps - 1 ) * st + st - 1, ( steps - 1 ) * st, st ) );
+                CHECK( !noteStartsInStep( steps * st, ( steps - 1 ) * st, st ) );
+                // the playhead of the bar after the first one (bars have the SAME length here: an even-bar project)
+                CHECK_EQ( playStep( bar + 5, bar, st, steps ), 0 );
+                CHECK_EQ( playStep( bar + steps * st - 1, bar, st, steps ), steps - 1 );
+                CHECK_EQ( playStep( 2 * bar - 1, bar, st, steps ), uncoveredTicks( bar, st, 16 ) > 0 ? -1 : steps - 1 ); // the unreachable tail shows no step
+                CHECK_EQ( playStep( 2 * bar, bar, st, steps ), -1 );
+            }
+        }
+        // 3/4 at 1/16: 12 steps, a single page; 5/4 at 1/16: 20 steps, 2 pages (the second one has 4)
+        CHECK_EQ( stepsPerBar( 288, 24, 16 ), 12 );
+        CHECK_EQ( pageCount( 12, 12 ), 1 );
+        CHECK_EQ( stepsPerBar( 480, 24, 16 ), 20 );
+        CHECK_EQ( pageCount( 20, 16 ), 2 );
+        CHECK( stepExists( 19, 20 ) && !stepExists( 20, 20 ) );
+        // 7/8 at 1/4 notes leaves the last eighth unreachable (3 steps = 288 of 336 ticks); 1/8 covers the bar
+        CHECK_EQ( stepsPerBar( 336, 96, 16 ), 3 );
+        CHECK_EQ( uncoveredTicks( 336, 96, 16 ), 48 );
+        CHECK_EQ( uncoveredTicks( 336, 48, 16 ), 0 );
+        // bars of different length in one sequence (a 4/4 bar then a 3/4 bar): each bar is measured on its own
+        CHECK_EQ( stepsPerBar( 384, 24, 16 ), 16 );
+        CHECK_EQ( stepsPerBar( 288, 24, 16 ), 12 );
+        CHECK_EQ( playStep( 384 + 287, 384, 24, 12 ), 11 );
+        CHECK_EQ( playStep( 384 + 288, 384, 24, 12 ), -1 );
+        // triplets: 1/16T = 16 ticks -> 24 steps in 4/4, 18 in 3/4
+        CHECK_EQ( stepsPerBar( 384, 16, 16 ), 24 );
+        CHECK_EQ( stepsPerBar( 288, 16, 16 ), 18 );
+    }
+
+    // ---- step entry velocity (settings window): Auto keeps each view's default
+    CHECK_EQ( entryVelocity( 0, false, kClassicDefaultVelocity, 55, false ), 127 );
+    CHECK_EQ( entryVelocity( 0, false, kGridDefaultVelocity, 55, false ), 100 );
+    CHECK_EQ( entryVelocity( 90, false, kClassicDefaultVelocity, 55, false ), 90 );   // the setting applies to both views
+    CHECK_EQ( entryVelocity( 90, false, kGridDefaultVelocity, 55, false ), 90 );
+    CHECK_EQ( entryVelocity( 90, true, kClassicDefaultVelocity, 55, false ), 55 );    // pad velocity switch
+    CHECK_EQ( entryVelocity( 90, false, kClassicDefaultVelocity, 55, true ), 55 );    // user level
+    CHECK_EQ( entryVelocity( 0, true, kClassicDefaultVelocity, 0, false ), 1 );       // never 0
+    CHECK_EQ( entryVelocity( 500, false, kClassicDefaultVelocity, 0, false ), 127 );
+    // Q-Link / dial below the lowest velocity deletes the step
+    CHECK( velocityTurnDeletes( 1, -1 ) );
+    CHECK( velocityTurnDeletes( 3, -5 ) );
+    CHECK( !velocityTurnDeletes( 3, -2 ) );
+    CHECK( !velocityTurnDeletes( 1, 1 ) );
+    CHECK( !velocityTurnDeletes( 127, 5 ) );
 
     if( g_fail == 0 )
         std::printf( "StepModelTests: all passed\n" );
