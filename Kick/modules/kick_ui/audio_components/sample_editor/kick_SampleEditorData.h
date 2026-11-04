@@ -383,6 +383,7 @@ namespace mt
             void          splitSelectedRegion();
             void          joinSelectedAndPrev();
             size_t        getTotalRegions() { return regions.size(); }
+            const Region& getRegion( int pos ) { return regions.getRegion( pos ); }
             void          removeLastRegion();
             bool          isEnd( const Region& region );
             int           getPosition( const Region& region );

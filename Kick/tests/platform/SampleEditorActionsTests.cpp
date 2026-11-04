@@ -79,6 +79,43 @@ int main()
     check( resultFileName( "a:b*c", "x_edit" ) == "a_b_c.wav", "illegal characters replaced" );
     check( resultFileName( "C:\\temp\\snare", "x_edit" ) == "snare.wav", "windows path stripped" );
 
+    // SE-06: Bit reduce DSP tests
+    check( bitReduce( 0.73f, 24 ) == 0.73f, "24 bits leaves sample untouched" );
+    check( bitReduce( 0.73f, 0 ) == 0.73f, "invalid bits leaves sample untouched" );
+    // 2 bits: 1 << 1 = 2 levels -> steps at -1.0, -0.5, 0.0, 0.5, 1.0
+    check( near( bitReduce( 0.49f, 2 ), 0.5f ), "2 bits quantizes 0.49 to 0.5" );
+    check( near( bitReduce( 0.1f, 2 ), 0.0f ), "2 bits quantizes 0.1 to 0.0" );
+    check( bitReduce( 1.5f, 4 ) == 1.0f, "clamped to +1.0" );
+    check( bitReduce( -1.5f, 4 ) == -1.0f, "clamped to -1.0" );
+
+    std::vector<float> brBuf = { 0.12f, -0.48f, 0.91f };
+    applyBitReduce( brBuf.data(), 3, 2 );
+    check( near( brBuf[0], 0.0f ) && near( brBuf[1], -0.5f ) && near( brBuf[2], 1.0f ), "applyBitReduce in place" );
+    applyBitReduce( nullptr, 5, 4 ); // no crash
+
+    // SE-15: dB conversion & clip check
+    check( near( dBToLinear( 0.0f ), 1.0f ), "0 dB is unity linear" );
+    check( near( dBToLinear( 6.0206f ), 2.0f, 1e-3f ), "+6 dB doubles" );
+    check( linearToDB( 0.0f ) == -144.0f, "silence is -144 dB floor" );
+    check( near( linearToDB( 1.0f ), 0.0f ), "unity is 0 dB" );
+    check( !willGainClip( 0.5f, 3.0f ), "0.5 with +3dB does not clip" );
+    check( willGainClip( 0.8f, 3.0f ), "0.8 with +3dB clips" );
+    check( !willGainClip( 0.0f, 18.0f ), "silence never clips" );
+    check( !willGainClip( -0.5f, 10.0f ), "invalid peak does not clip" );
+
+    // SE-09: Energy envelope autocorrelation BPM estimation
+    // Create a 50 Hz frame rate pulse train at 120 BPM (period = 0.5 s -> 25 frames)
+    std::vector<float> flux120( 200, 0.0f );
+    for( size_t i = 0; i < flux120.size(); i += 25 )
+        flux120[i] = 1.0f;
+    double bpm120 = estimateBpmFromFlux( flux120.data(), (int)flux120.size(), 50.0 );
+    check( std::fabs( bpm120 - 120.0 ) <= 1.0, "detected 120 BPM from pulse train" );
+
+    // Silence or flat signal returns default 120.0 BPM without error
+    std::vector<float> fluxSilent( 100, 0.0f );
+    check( estimateBpmFromFlux( fluxSilent.data(), (int)fluxSilent.size(), 50.0 ) == 120.0, "silent flux fallback 120 BPM" );
+    check( estimateBpmFromFlux( nullptr, 0, 0.0 ) == 120.0, "null safe" );
+
     std::puts( "SampleEditorActionsTests OK" );
     return 0;
 }

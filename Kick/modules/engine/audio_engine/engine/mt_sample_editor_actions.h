@@ -307,4 +307,19 @@ namespace mt{
     private:
         bool performAction( juce::AudioSampleBuffer& buffer, int& numSamples ) override;
     };
+
+    ///////////////////////////////////////////
+    /// ///////// MTSampleEditorBitReduceAction
+    //////////////////////////////////////////
+    class MTSampleEditorBitReduceAction : public MTSampleEditorActionsInterface{
+    public:
+        MTSampleEditorBitReduceAction() = default;
+        void initialize( const MTSampleRegion& r, const std::list<juce::var>& p, juce::File& source ) override;
+
+    private:
+        bool performAction( juce::AudioSampleBuffer& buffer, int& numSamples ) override;
+
+    private:
+        int bits = 8;
+    };
 }

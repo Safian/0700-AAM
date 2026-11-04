@@ -143,15 +143,53 @@ namespace kick_ui
 
             mt::utils::showOptions( "ASSIGN SAMPLE", p, [p, this]( int R ) {
                 auto index = p->getSelectedProgram();
-                if( index >= 0 )
+                if( index >= 0 && R == UI::APPLY )
                 {
-                    if( R == UI::APPLY )
+                    auto prog = ae.getProgram( index );
+                    auto file = ae.getAsset( mt::AssetTypes::Samples, sampleListBox.getSelectedIndex() );
+                    if( prog && file.isNotEmpty() )
                     {
-                        if( ae.getProgram( index )->getType() == mt::MTProgramType::Drum )
+                        // SE-05 + SE-23: Synchronize chop regions to asset slices in audio asset manager
+                        const size_t totalRegions = seData.getTotalRegions();
+                        if( totalRegions > 0 )
                         {
-                            //Based on the slice type and assign type need to assign the sample
-                            auto file = ae.getAsset( mt::AssetTypes::Samples, sampleListBox.getSelectedIndex() );
-                            ae.addSampleToProgram( p->getSelectedProgram(), p->getSelectedPadId(), file );
+                            for( size_t i = 0; i < totalRegions; ++i )
+                            {
+                                const auto& r = seData.getRegion( (int)i );
+                                auto sliceTree = createVTree( mt::IDs::SLICE, mt::IDs::id, CommonUtils::createID(),
+                                                              mt::IDs::loopStart, (int)r.getStart(),
+                                                              mt::IDs::loopEnd, (int)r.getEnd() );
+                                mt::ASoundSlice sliceObj{ sliceTree, &ae.getUndoManager() };
+                                ae.addAssetSlice( file, &sliceObj, (int)i + 1 );
+                            }
+                        }
+
+                        if( p->isCropSampleEnable() )
+                        {
+                            const auto& sel = seData.getSelectedRegion();
+                            if( sel.isValid() )
+                            {
+                                std::list<juce::var> cropParams;
+                                seData.performAction( mt::MTSampleEditorAction::seActionExtract, cropParams );
+                            }
+                        }
+
+                        const auto pType = prog->getType();
+                        if( pType == mt::MTProgramType::Drum || pType == mt::MTProgramType::Clip || pType == mt::MTProgramType::Keygroup )
+                        {
+                            int sliceNum = 0;
+                            if( p->getAssingType() == 0 && totalRegions > 0 )
+                            {
+                                const auto& sel = seData.getSelectedRegion();
+                                if( sel.isValid() )
+                                    sliceNum = sel.getIndex() + 1;
+                            }
+                            ae.addSampleToProgram( index, p->getSelectedPadId(), file, sliceNum );
+                        }
+                        else
+                        {
+                            ui::KickAlertWindow::showCancelAlert( ui::KickAlertWindow::KickAlertWindowType::Warning,
+                                                                  "The selected program does not support sample assignment.", "Sample Assign", []( int ) {} );
                         }
                     }
                 }
@@ -178,27 +216,15 @@ namespace kick_ui
                 case contracts::DeviceControlContracts::EN_PLAY: ae.setSequencePlay( aeSel.sequence, false, true ); return;
                 case contracts::DeviceControlContracts::EN_PLAYSTART: ae.setSequencePlay( aeSel.sequence, true, true ); return;
                 case contracts::DeviceControlContracts::EN_STOP: ae.setSequencePause(); return;
+                // SE-20: Hardware + and - buttons control waveform zoom
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS: editor.setViewArea( 0.24f ); return;
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS: editor.setViewArea( -0.24f ); return;
             }
         }
         else if( seData.isChopMode() )
             chopComp.handleCommand( f_HwMsg );
         else
             tuneComp.handleCommand( f_HwMsg );
-
-        if( contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )
-        {
-            auto knob  = contracts::DclContractsHelper::getKnobCode( f_HwMsg );
-            auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
-            switch( knob )
-            {
-                case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_9:
-                    editor.setViewArea( value );
-                    break;
-                case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_10:
-                    editor.setViewArea( -value );
-                    break;
-            }
-        }
 
         if( seData.isTrimMode() && contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) )
         {

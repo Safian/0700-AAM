@@ -275,6 +275,26 @@ namespace mt
 
         void SEViewComponent::mouseDown( const juce::MouseEvent& event )
         {
+            // SE-07: Touch screens generate mouseDown directly without prior mouseMove.
+            // Run hit tests on handles, cue, and loop positioner before deciding to split.
+            resizeRegion = nullptr;
+            cue.mouseMove( event );
+            loopPositioner.mouseMove( event );
+            for( RegionComponent* region : regions )
+            {
+                if( region->mouseMove( event ) )
+                {
+                    resizeRegion = region;
+                    break;
+                }
+            }
+
+            if( resizeRegion != nullptr || cue.hasMouseFocus() || loopPositioner.hasMouseFocus() )
+            {
+                // Handle/cue grabbed by touch: do not split.
+                return;
+            }
+
             if( isSplitManual( event.getMouseDownPosition() ) && resizeRegion == nullptr ) // edit tool
             {
                 juce::int64 posInSec = seData.getPosInSeconds( event.position.getX() );
@@ -475,6 +495,8 @@ namespace mt
             return false;
         }
 
+        static constexpr float kRegionTouchSlop = 20.0f;
+
         bool RegionSelector::mouseMove( const juce::MouseEvent& event )
         {
             mouseFocus = false;
@@ -484,11 +506,11 @@ namespace mt
             juce::Rectangle<float> resizeR  = getResizeRect();
             float                  posInPix = end ? resizeR.getBottomRight().getX() : resizeR.getTopLeft().getX();
 
-            if( event.position.getX() < ( posInPix + 5 ) && event.position.getX() > ( posInPix - 5 ) )
+            if( event.position.getX() <= ( posInPix + kRegionTouchSlop ) && event.position.getX() >= ( posInPix - kRegionTouchSlop ) )
             {
                 mouseFocus = true;
             }
-            else if( resizeR.contains( event.position ) )
+            else if( resizeR.expanded( kRegionTouchSlop ).contains( event.position ) )
             {
                 mouseFocus = true;
             }

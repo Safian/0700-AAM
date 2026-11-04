@@ -1012,22 +1012,47 @@ namespace mt
 
         void SampleEditorChopOPtions::knobCommand( int knob, int value )
         {
-            auto Value = pow( 10, knob % 4 == 0 ? 3 : ( knob % 4 ) - 1 );
-
-            if( knob >= contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1 && knob <= contracts::DeviceControlContracts::KnobSequence::EN_KNOB_4 )
+            // SE-20: 4 physical Q-Links on MPC Key 61
+            // Q1: Start coarse, Q2: End coarse, Q3: Start fine, Q4: End fine
+            // EN_KNOB_CENTER: Data Dial fine step
+            if( knob == contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1 )
             {
                 if( startNumber.getValue() < endNumber.getValue() && startNumber.getValue() >= startNumber.getMin() )
                 {
-                    startNumber.knobRotated( Value * value );
+                    startNumber.knobRotated( value * 1000 );
                     seData.moveTime( seData.getSelectedRegion(), startNumber.getValue(), false );
                 }
             }
-            else if( knob >= contracts::DeviceControlContracts::KnobSequence::EN_KNOB_5 && knob <= contracts::DeviceControlContracts::KnobSequence::EN_KNOB_8 )
+            else if( knob == contracts::DeviceControlContracts::KnobSequence::EN_KNOB_2 )
             {
                 if( endNumber.getValue() > startNumber.getValue() && endNumber.getValue() <= endNumber.getMax() )
                 {
-                    endNumber.knobRotated( Value * value );
+                    endNumber.knobRotated( value * 1000 );
                     seData.moveTime( seData.getSelectedRegion(), endNumber.getValue(), true );
+                }
+            }
+            else if( knob == contracts::DeviceControlContracts::KnobSequence::EN_KNOB_3 )
+            {
+                if( startNumber.getValue() < endNumber.getValue() && startNumber.getValue() >= startNumber.getMin() )
+                {
+                    startNumber.knobRotated( value * 10 );
+                    seData.moveTime( seData.getSelectedRegion(), startNumber.getValue(), false );
+                }
+            }
+            else if( knob == contracts::DeviceControlContracts::KnobSequence::EN_KNOB_4 )
+            {
+                if( endNumber.getValue() > startNumber.getValue() && endNumber.getValue() <= endNumber.getMax() )
+                {
+                    endNumber.knobRotated( value * 10 );
+                    seData.moveTime( seData.getSelectedRegion(), endNumber.getValue(), true );
+                }
+            }
+            else if( knob == contracts::DeviceControlContracts::KnobSequence::EN_KNOB_CENTER )
+            {
+                if( startNumber.getValue() < endNumber.getValue() )
+                {
+                    startNumber.knobRotated( value * 10 );
+                    seData.moveTime( seData.getSelectedRegion(), startNumber.getValue(), false );
                 }
             }
         }
@@ -1084,8 +1109,7 @@ namespace mt
             {
                 auto knob  = contracts::DclContractsHelper::getKnobCode( f_HwMsg );
                 auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
-                if( knob != contracts::DeviceControlContracts::EN_KNOB_CENTER )
-                    knobCommand( knob, value );
+                knobCommand( knob, value );
             }
         }
 
