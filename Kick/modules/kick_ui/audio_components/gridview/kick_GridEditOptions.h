@@ -48,6 +48,8 @@ namespace kick_ui
             info.eagerness           = eagerness.getValue();
             info.isNoteLengthEnabled = lengthCheckBox.getToggleState();
             info.noteLength          = strength.getValue();
+            info.isVelocityEnabled   = velocityCheckBox.getToggleState();
+            info.velocity            = velocity.getValue();
             return info;
         };
 
@@ -59,6 +61,8 @@ namespace kick_ui
         ui::KickLabel          noteLabel{ "Always Embarassingly late" };
         ui::KickCheckBoxButton lengthCheckBox{ "Humanize Note Length", "Humanize Note Length" };
         ui::KickSlider         strength{ "STRENGTH(%)", juce::Slider::LinearBar, juce::Slider::TextBoxAbove };
+        ui::KickCheckBoxButton velocityCheckBox{ "Humanize Velocity", "Humanize Velocity" };
+        ui::KickSlider         velocity{ "VELOCITY(%)", juce::Slider::LinearBar, juce::Slider::TextBoxAbove };
 
         mt::track::humanizeInfo info;
 
