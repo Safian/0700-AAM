@@ -69,6 +69,10 @@ namespace kick_ui
         ui::KickLabel assignedPadLabel{ "ASSIGNED PAD" };
 
         void stepColour( int Delta );
+        // Select the palette colour with this id (Shift + pad takes the colour of the touched / pressed pad).
+        void selectColour( int ColourId );
+        // Shift + tapping a colour button colours EVERY pad of the program with it (the manual); set by the screen.
+        std::function<void()> onColourAll;
 
         ui::KickColorButton                             padButtons[18];
         ui::KickColorButton*                            selectedColor;
@@ -77,6 +81,7 @@ namespace kick_ui
     private:
         float x;
         float y;
+        bool  selecting{ false }; // selectColour() is running: the colour was taken by dial / pad, not touched
 
         void resized() override;
         void paint( juce::Graphics& g ) override;
@@ -141,6 +146,8 @@ namespace kick_ui
 
         void buttonClicked( juce::Button* ) override{};
         void buttonClicked( int Id );
+        void colourAllPads();
+        void offerUndo( const juce::String& Message );
         void setBank( int, juce::String );
         void visibilityChanged() override;
 
