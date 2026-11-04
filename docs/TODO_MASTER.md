@@ -6,7 +6,7 @@ Az, ami ember vagy hardveres hallgatás nélkül nem igazolható, a B. szakaszba
 
 ## B. Ember kell — a pontos lépések a `docs/MORNING.md` "Ember kell" listájában és a `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` 20–51. pontjaiban
 - **Hallgatás** (indok: üres bemenet, nincs hangszóró-visszacsatolás a gépnek): Demo 01 zongora minden tartományban, képernyő-zongora (glissando/bend/vibrato/sustain), Looper Sync füllel, busz-insertek, XY FX presetek, Pad Perform/poly aftertouch, Sample Edit, Sampler felvétel, az `adsr.h` változás hatása a samplerre.
-- **Fizikai** (indok: ujj/gomb kell): strip Track Level ujjal, többujjas érintés, Q-Link/mixer, hardveres REC/OVERDUB/STOP/PLAY, **a bekapcsoló gomb rövid megnyomása és a tényleges Shut Down/Restart (R-12)**, Controller Mode mérés Mac-en.
+- **Fizikai** (indok: ujj/gomb kell; köztük a modális ablakok gombjai ujjal, mert az injektált érintés ezeket nem éri el): strip Track Level ujjal, többujjas érintés, Q-Link/mixer, hardveres REC/OVERDUB/STOP/PLAY, **a bekapcsoló gomb rövid megnyomása és a tényleges Shut Down/Restart (R-12)**, Controller Mode mérés Mac-en.
 - **Eszközön, visszafordíthatatlan vagy külső eszközt igényel** (indok: adatvesztés/hálózat): Format/Eject próba-pendrive-on, 300 MB másolás, dátum/idő, Ethernet/WiFi, Factory Reset, Firmware Update, pendrive-os telepítés/rollback.
 - **Owner-döntések** (indok: termékdöntés, nem műszaki): lista a lenti "Owner-döntések" sorban és a MORNING.md 4. pontjában (köztük a transzport-duplázás, a hivatalos plugin-aláíró kulcs, `assets/Default`, SW-00).
 - **Jogi átnézés**: Salamander CC BY 3.0 ↔ AGPL, Google API ToS, Splice ToS, libcurl/TLS licenc.
