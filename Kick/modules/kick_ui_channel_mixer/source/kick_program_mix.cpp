@@ -78,47 +78,11 @@ namespace kick_ui
 
     void ProgramMixer::knobCommand( int knob, int value )
     {
-        auto& rowComp       = getRowComponents();
-        auto  comp1         = dynamic_cast<ProgramMixerDisplay*>( rowComp[0] );
-        auto  elementBounds = comp1->getElementBounds( ( knob - 1 ) % 4 + 1 );
-        auto  numRows       = getNumRows();
-        auto  rows          = getRowNumbers( 3, ( ( knob - 1 ) / 4 ) + 1, elementBounds.getX(), elementBounds.getWidth(), 50 );
-
-        std::vector<ProgramMixerDisplay*> entry;
-
-        for( auto i = 0; i < rows.size(); i++ )
-        {
-            int rowIndex = rows[i];
-            if( rowIndex < numRows )
-            {
-                auto comp = dynamic_cast<ProgramMixerDisplay*>( rowComp[rowIndex] );
-                entry.push_back( comp );
-            }
-        }
-
-        switch( knob )
-        {
-            case contracts::DeviceControlContracts::EN_KNOB_1:
-            case contracts::DeviceControlContracts::EN_KNOB_2:
-            case contracts::DeviceControlContracts::EN_KNOB_3:
-            case contracts::DeviceControlContracts::EN_KNOB_4:
-                if( entry.size() > 0 && entry[0] ) entry[0]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_1 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_5:
-            case contracts::DeviceControlContracts::EN_KNOB_6:
-            case contracts::DeviceControlContracts::EN_KNOB_7:
-            case contracts::DeviceControlContracts::EN_KNOB_8:
-                if( entry.size() > 1 && entry[1] ) entry[1]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_5 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_9:
-            case contracts::DeviceControlContracts::EN_KNOB_10:
-            case contracts::DeviceControlContracts::EN_KNOB_11:
-            case contracts::DeviceControlContracts::EN_KNOB_12:
-                if( entry.size() > 2 && entry[2] ) entry[2]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_9 ), value );
-                break;
-        }
+        // Q-Link 1..4 act on the selected row (not the first visible one); an empty list does nothing.
+        if( knob < contracts::DeviceControlContracts::EN_KNOB_1 || knob > contracts::DeviceControlContracts::EN_KNOB_4 )
+            return;
+        if( auto* display = qlinkRowDisplay<ProgramMixerDisplay>() )
+            display->linkRotated( knob - contracts::DeviceControlContracts::EN_KNOB_1, value );
     }
 
     //==============================================================================
@@ -275,8 +239,8 @@ namespace kick_ui
         {
             auto& in  = pProg->readInMeter();
             auto& out = pProg->readOutMeter();
-            levelMeter1.setSignalStrength( in[0].rms, in[1].rms, in[0].peak, in[0].peak );
-            levelMeter2.setSignalStrength( out[0].rms, out[1].rms, out[1].peak, out[1].peak );
+            levelMeter1.setSignalStrength( in[0].rms, in[1].rms, in[0].peak, in[1].peak );
+            levelMeter2.setSignalStrength( out[0].rms, out[1].rms, out[0].peak, out[1].peak );
         }
     }
 
@@ -312,7 +276,10 @@ namespace kick_ui
             updateData();
 
         if( pProg )
+        {
             pProg->enableOutputMetering( visible );
+            pProg->enableInputMetering( visible );
+        }
     }
 
     void ProgramMixerDisplay::linkRotated( int ID, int value )
@@ -320,12 +287,9 @@ namespace kick_ui
         switch( ID )
         {
             case 0: ioListBox.knobRotated( value ); break;
-            case 1: levelSlider.knobRotated( value ); break;
-            case 2: panSlider.knobRotated( value ); break;
-            case 3:
-                mute.setToggleState( value > 0, juce::dontSendNotification );
-                solo.setToggleState( value <= 0, juce::dontSendNotification );
-                break;
+            case 1: levelSlider.knobRotated( mt::mixlogic::qlinkDelta( value, levelSlider.getIncrement() ) ); break;
+            case 2: panSlider.knobRotated( mt::mixlogic::qlinkDelta( value, panSlider.getIncrement() ) ); break;
+            case 3: qlinkMuteOrSolo( mute, &solo, value ); break;
         }
     }
 

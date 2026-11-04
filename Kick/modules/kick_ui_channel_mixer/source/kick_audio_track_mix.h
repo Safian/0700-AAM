@@ -17,7 +17,8 @@ namespace kick_ui
 
         void onProgramListChanged() override;
         void meterUpdate() override;
-        void updateProgramData();
+        bool updateProgramData();
+        void enableMetering( bool Enable );
 
         std::atomic_bool _initialized{ false };
         std::vector<int> audioData;

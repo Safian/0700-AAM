@@ -53,17 +53,35 @@ namespace kick_ui
         if( isVisible() )
         {
             ae.addListener( this );
-            updateProgramData();
+            if( updateProgramData() )
+                refresh();
+            enableMetering( true );
         }
         else
+        {
+            enableMetering( false );
             ae.removeListener( this );
+        }
+    }
+
+    void AudioTrackMixer::enableMetering( bool Enable )
+    {
+        for( auto idx : audioData )
+            if( auto* prog = ae.getProgram( idx ) )
+            {
+                prog->enableOutputMetering( Enable );
+                prog->enableInputMetering( Enable );
+            }
     }
 
     void AudioTrackMixer::meterUpdate()
     {
-        updateProgramData();
-        if( numAudioPrograms <= 0 )
+        // The program list is only rebuilt when it changed (it used to be rebuilt 25 times a second).
+        if( updateProgramData() )
+        {
             refresh();
+            enableMetering( isVisible() );
+        }
         else
         {
             auto& comps = getRowComponents();
@@ -77,64 +95,29 @@ namespace kick_ui
         }
     }
 
-    void AudioTrackMixer::updateProgramData()
+    bool AudioTrackMixer::updateProgramData()
     {
-        audioData.clear();
-
-        numAudioPrograms = 0;
+        std::vector<int> data;
         for( auto idx = 0; idx < ae.getNumPrograms(); ++idx )
         {
-            auto type = ae.getProgram( idx )->getType();
-            if( type == mt::MTProgramType::Audio )
-            {
-                audioData.push_back( idx );
-                ++numAudioPrograms;
-            }
+            auto* prog = ae.getProgram( idx );
+            if( prog && prog->getType() == mt::MTProgramType::Audio )
+                data.push_back( idx );
         }
+
+        const bool changed = ( data != audioData );
+        audioData          = std::move( data );
+        numAudioPrograms   = (int)audioData.size();
+        return changed;
     }
 
     void AudioTrackMixer::knobCommand( int knob, int value )
     {
-        auto&                           rowComp       = getRowComponents();
-        auto                            comp1         = dynamic_cast<AudioTrackDisplay*>( rowComp[0] );
-        auto                            elementBounds = comp1->getElementBounds( ( knob - 1 ) % 4 + 1 );
-        auto                            numRows       = getNumRows();
-        auto                            rows          = getRowNumbers( 3, ( knob - 1 ) / 4 + 1, elementBounds.getX(), elementBounds.getWidth(), 50 );
-        std::vector<AudioTrackDisplay*> entry;
-
-        for( auto i = 0; i < rows.size(); i++ )
-        {
-            int rowIndex = rows[i];
-            if( rowIndex >= 0 && rowIndex < numRows )
-            {
-                auto comp = dynamic_cast<AudioTrackDisplay*>( rowComp[rowIndex] );
-                entry.push_back( comp );
-            }
-        }
-
-        switch( knob )
-        {
-            case contracts::DeviceControlContracts::EN_KNOB_1:
-            case contracts::DeviceControlContracts::EN_KNOB_2:
-            case contracts::DeviceControlContracts::EN_KNOB_3:
-            case contracts::DeviceControlContracts::EN_KNOB_4:
-                if( entry.size() > 0 && entry[0] ) entry[0]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_1 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_5:
-            case contracts::DeviceControlContracts::EN_KNOB_6:
-            case contracts::DeviceControlContracts::EN_KNOB_7:
-            case contracts::DeviceControlContracts::EN_KNOB_8:
-                if( entry.size() > 1 && entry[1] ) entry[1]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_5 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_9:
-            case contracts::DeviceControlContracts::EN_KNOB_10:
-            case contracts::DeviceControlContracts::EN_KNOB_11:
-            case contracts::DeviceControlContracts::EN_KNOB_12:
-                if( entry.size() > 2 && entry[2] ) entry[2]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_9 ), value );
-                break;
-        }
+        // Q-Link 1..4 act on the selected row (not the first visible one); an empty list does nothing.
+        if( knob < contracts::DeviceControlContracts::EN_KNOB_1 || knob > contracts::DeviceControlContracts::EN_KNOB_4 )
+            return;
+        if( auto* display = qlinkRowDisplay<AudioTrackDisplay>() )
+            display->linkRotated( knob - contracts::DeviceControlContracts::EN_KNOB_1, value );
     }
 
     //////////////////////////////////////////////////////////////////////////////////
@@ -145,6 +128,12 @@ namespace kick_ui
         mt::utils::setTitleFontHeight( 16, levelSlider, panSlider, inputListBox, outputListBox );
         mt::utils::setValueFontHeight( 18, levelSlider, panSlider, audioName, inserts );
         mt::utils::setValueColour( ui::Theme::textColour( 1 ), audioHeader, inserts );
+
+        // Audio input choice, arm and monitor have no engine side for audio programs: not shown (kAudioInputAvailable).
+        constexpr bool kAudioInputAvailable = false;
+        inputListBox.setVisible( kAudioInputAvailable );
+        armButton.setVisible( kAudioInputAvailable );
+        monitorButton.setVisible( kAudioInputAvailable );
 
         std::vector<juce::String> busNames;
         auto&                     outBusNames = ae.getOutputBusNames();
@@ -288,8 +277,8 @@ namespace kick_ui
         {
             auto& in  = pProg->readInMeter();
             auto& out = pProg->readOutMeter();
-            levelMeter1.setSignalStrength( in[0].rms, in[1].rms, in[0].peak, in[0].peak );
-            levelMeter2.setSignalStrength( out[0].rms, out[1].rms, out[1].peak, out[1].peak );
+            levelMeter1.setSignalStrength( in[0].rms, in[1].rms, in[0].peak, in[1].peak );
+            levelMeter2.setSignalStrength( out[0].rms, out[1].rms, out[0].peak, out[1].peak );
         }
     }
 
@@ -317,12 +306,9 @@ namespace kick_ui
         switch( ID )
         {
             case 0: outputListBox.knobRotated( value ); break;
-            case 1: levelSlider.knobRotated( value ); break;
-            case 2: panSlider.knobRotated( value ); break;
-            case 3:
-                muteButton.setToggleState( value > 0, juce::dontSendNotification );
-                soloButton.setToggleState( value <= 0, juce::dontSendNotification );
-                break;
+            case 1: levelSlider.knobRotated( mt::mixlogic::qlinkDelta( value, levelSlider.getIncrement() ) ); break;
+            case 2: panSlider.knobRotated( mt::mixlogic::qlinkDelta( value, panSlider.getIncrement() ) ); break;
+            case 3: qlinkMuteOrSolo( muteButton, &soloButton, value ); break;
         }
     }
 

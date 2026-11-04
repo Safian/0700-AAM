@@ -33,6 +33,38 @@ namespace kick_ui
 
         virtual void setupProvider() = 0;
         virtual void meterUpdate(){};
+
+        // Q-Link 1..4 (1-based knob codes) act on the selected row. Views override it.
+        virtual void knobCommand( int /*knob*/, int /*value*/ ){};
+
+        // The display of the row the Q-Link acts on: the selected row, else the first one. Null for an empty list.
+        template<class Display>
+        Display* qlinkRowDisplay()
+        {
+            auto& comps = getRowComponents();
+            auto  row   = mt::mixlogic::qlinkRow( getSelectedRow(), comps.size() );
+            return row < 0 ? nullptr : dynamic_cast<Display*>( comps[row] );
+        }
     };
+
+    // Q-Link on a switch (mute / solo): turn right = on, turn left = off. Goes through onClick (sendNotification),
+    // so the engine is told - a silent setToggleState only changed the picture.
+    template<class Button>
+    inline void qlinkSwitch( Button& Btn, int Value )
+    {
+        const bool target = mt::mixlogic::toggleFromDelta( Btn.getToggleState(), Value );
+        if( target != Btn.getToggleState() )
+            Btn.setToggleState( target, juce::sendNotification );
+    }
+
+    // Fourth Q-Link: Mute, with Shift held Solo.
+    template<class Button>
+    inline void qlinkMuteOrSolo( Button& Mute, Button* Solo, int Value )
+    {
+        if( Solo != nullptr && contracts::DclContractsHelper::isShiftPressed() )
+            qlinkSwitch( *Solo, Value );
+        else
+            qlinkSwitch( Mute, Value );
+    }
 
 };
