@@ -199,24 +199,57 @@ namespace kick_ui
             refreshDeleteButton();
         };
 
+        // Delete asks first (Yes / No dialog, as Clear Sequence does); undo still brings the row back.
         tBar.del.onClick = [&]() {
+            tBar.del.setToggleState( false, juce::dontSendNotification );
+
+            juce::String what;
+            std::function<void()> doDelete;
             if( tabButtons[0].getToggleState() )
             {
-                ae.deleteSequence( ae.getSelectedSequence() );
-                mt::utils::makeHidden( seqoptions );
+                const int sel = ae.getSelectedSequence();
+                auto      sd  = ae.getSequenceData( sel );
+                if( !sd ) return;
+                what     = "sequence \"" + sd->name.get() + "\"";
+                doDelete = [this, sel]() {
+                    ae.deleteSequence( sel );
+                    mt::utils::makeHidden( seqoptions );
+                };
             }
             else if( tabButtons[1].getToggleState() )
             {
-                ae.deleteTrack( ae.getSelectedSequence(), ae.getSelectedTrack() );
-                mt::utils::makeHidden( trackoptions );
+                const int seqNo = ae.getSelectedSequence(), trkNo = ae.getSelectedTrack();
+                auto      td    = ae.getTrackData( seqNo, trkNo );
+                if( !td ) return;
+                what     = "track \"" + td->name.get() + "\" with its events";
+                doDelete = [this, seqNo, trkNo]() {
+                    ae.deleteTrack( seqNo, trkNo );
+                    mt::utils::makeHidden( trackoptions );
+                };
             }
             else if( tabButtons[2].getToggleState() )
             {
-                ae.deleteProgram( ae.getSelectedProgram() );
-                mt::utils::makeHidden( prgOptions );
+                const int sel = ae.getSelectedProgram();
+                auto      pd  = ae.getProgramData( sel );
+                if( !pd ) return;
+                what     = "program \"" + pd->name.get() + "\"";
+                doDelete = [this, sel]() {
+                    ae.deleteProgram( sel );
+                    mt::utils::makeHidden( prgOptions );
+                };
             }
-            refreshDeleteButton();
-            tBar.del.setToggleState( false, juce::dontSendNotification );
+            else
+                return;
+
+            auto p = new ui::FilePopup{ "Delete " + what + " ?", false, false };
+            mt::utils::showOptions(
+                "WARNING!", p, [this, p, doDelete]( int R ) {
+                    if( R == UI::APPLY )
+                        doDelete();
+                    if( p ) delete p;
+                    refreshDeleteButton();
+                },
+                ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
         };
 
         tBar.undo.onClick = [&]() {
