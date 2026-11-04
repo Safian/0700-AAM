@@ -349,3 +349,44 @@ set_tests_properties(kick-sampler-logic PROPERTIES TIMEOUT 10)
 add_executable(kick-sample-editor-actions-tests SampleEditorActionsTests.cpp)
 add_test(NAME kick-sample-editor-actions COMMAND kick-sample-editor-actions-tests)
 set_tests_properties(kick-sample-editor-actions PROPERTIES TIMEOUT 10)
+
+add_executable(kick-menu-logic-tests MenuLogicTests.cpp)
+add_test(NAME kick-menu-logic COMMAND kick-menu-logic-tests)
+set_tests_properties(kick-menu-logic PROPERTIES TIMEOUT 10)
+
+# System-resource helpers (CPU delta, MemAvailable, mount table, statvfs); JUCE-free, header only.
+add_executable(kick-sysinfo-tests SysInfoTests.cpp)
+add_test(NAME kick-sysinfo COMMAND kick-sysinfo-tests)
+set_tests_properties(kick-sysinfo PROPERTIES TIMEOUT 10)
+
+# Kick Update logic (VERSION parsing, version compare, package state, SHA-256, USB drive lookup); JUCE-free, header only.
+add_executable(kick-update-tests KickUpdateTests.cpp)
+add_test(NAME kick-update COMMAND kick-update-tests)
+set_tests_properties(kick-update PROPERTIES TIMEOUT 10)
+
+# Humanize arithmetic (time / length / velocity), JUCE-free header only.
+add_executable(kick-humanize-tests HumanizeTests.cpp)
+add_test(NAME kick-humanize COMMAND kick-humanize-tests)
+set_tests_properties(kick-humanize PROPERTIES TIMEOUT 10)
+
+# Numpad entry state + tap tempo estimator, JUCE-free headers only.
+add_executable(kick-numpad-taptempo-tests NumPadTapTempoTests.cpp)
+add_test(NAME kick-numpad-taptempo COMMAND kick-numpad-taptempo-tests)
+set_tests_properties(kick-numpad-taptempo PROPERTIES TIMEOUT 10)
+
+# Project name rules + template -> project decision (fake file system); JUCE-free header only.
+add_executable(kick-project-names-tests ProjectNamesTests.cpp)
+add_test(NAME kick-project-names COMMAND kick-project-names-tests)
+set_tests_properties(kick-project-names PROPERTIES TIMEOUT 10)
+
+# File browser safety rules (protected paths, folder into itself, collision-free names); JUCE-free header only.
+add_executable(kick-fsguard-tests FsGuardTests.cpp)
+add_test(NAME kick-fsguard COMMAND kick-fsguard-tests)
+set_tests_properties(kick-fsguard PROPERTIES TIMEOUT 10)
+
+# File browser folder-size cache and generation tracker; JUCE-free header only.
+add_executable(kick-folder-size-tests FolderSizeTests.cpp)
+find_package(Threads REQUIRED)
+target_link_libraries(kick-folder-size-tests PRIVATE Threads::Threads)
+add_test(NAME kick-folder-size COMMAND kick-folder-size-tests)
+set_tests_properties(kick-folder-size PROPERTIES TIMEOUT 30)

@@ -3,7 +3,7 @@
 namespace ui
 {
     FileBrowser::FileBrowser()
-        : kick_ui::IScreen( kick_ui::Screen::MenuFileBrowser ), ae( mt::getAudioInterface() ), fileList( ae.getFiles() ), dirList( ae.getDirectories() ), sampleAnimation( std::make_unique<LoadSamplesAndAnimation>() )
+        : kick_ui::IScreen( kick_ui::Screen::MenuFileBrowser ), ae( mt::getAudioInterface() ), dirList( ae.getDirectories() ), sampleAnimation( std::make_unique<LoadSamplesAndAnimation>() )
     {
         startTimer( 1000 ); //to monitor the external device
 
@@ -333,25 +333,42 @@ namespace ui
             }
             else
             {
-                if( top.cutBtn.getToggleState() )
+                // Never overwrites (juce replaces an existing target): an existing name gets " (2)", a folder is not pasted into
+                // itself, protected items are not moved. Failures are counted and reported once.
+                const bool  cutting = top.cutBtn.getToggleState();
+                const bool  copying = !cutting && top.copyBtn.getToggleState();
+                int         failed  = 0;
+                juce::File  targetDir( pwd );
+                for( auto sourceFile : source )
                 {
-                    for( auto sourceFile : source )
+                    if( !cutting && !copying )
+                        break;
+                    if( !sourceFile.exists() || ( cutting && isProtectedPath( sourceFile ) )
+                        || ( sourceFile.isDirectory() && kick_fsguard::pasteIntoItself( sourceFile.getFullPathName().toStdString(), targetDir.getFullPathName().toStdString() ) ) )
                     {
-                        destination = juce::File( pwd ).getChildFile( sourceFile.getFileName() );
-                        sourceFile.moveFileTo( destination );
+                        ++failed;
+                        continue;
                     }
-                }
-                else if( top.copyBtn.getToggleState() )
-                {
-                    for( auto sourceFile : source )
+                    if( cutting && sourceFile.getParentDirectory() == targetDir )
+                        continue; // moving into the folder it is already in: nothing to do
+                    const auto name = kick_fsguard::uniqueName( sourceFile.getFileName().toStdString(),
+                                                                [&]( const std::string& n ) { return targetDir.getChildFile( juce::String( n ) ).exists(); } );
+                    if( name.empty() )
                     {
-                        destination = juce::File( pwd ).getChildFile( sourceFile.getFileName() );
-                        if( sourceFile.isDirectory() )
-                            sourceFile.copyDirectoryTo( destination );
-                        else
-                            sourceFile.copyFileTo( destination );
+                        ++failed;
+                        continue;
                     }
+                    destination = targetDir.getChildFile( juce::String( name ) );
+                    bool ok;
+                    if( cutting )
+                        ok = sourceFile.moveFileTo( destination );
+                    else
+                        ok = sourceFile.isDirectory() ? sourceFile.copyDirectoryTo( destination ) : sourceFile.copyFileTo( destination );
+                    if( !ok )
+                        ++failed;
                 }
+                if( failed > 0 )
+                    warn( juce::String( failed ) + " item(s) could not be " + ( cutting ? "moved" : "copied" ) + " (protected, into itself, or no space)" );
 
                 top.cutBtn.setToggleState( false, juce::dontSendNotification );
                 top.copyBtn.setToggleState( false, juce::dontSendNotification );
@@ -425,7 +442,6 @@ namespace ui
 
         left.provider.cellComponent = [&]( int Row, Component* Existing ) -> juce::Component* {
             numRows      = 1;
-            static int c = 1;
             if( juce::isPositiveAndBelow( Row, juce::jmax( 5, static_cast<int>( deviceData.size() ) ) ) && Row < static_cast<int>( deviceData.size() ) )
             {
                 auto comp = static_cast<FileLeftEntry*>( Existing );
@@ -855,104 +871,6 @@ namespace ui
             true );
     }
 
-    void FileBrowser::startFolderSizeCalculation( const juce::File& folder, std::function<void( juce::int64 )> callback )
-    {
-        const int64_t     mtimeMs = folder.getLastModificationTime().toMilliseconds();
-        const std::string pathStd = folder.getFullPathName().toStdString();
-        int64_t           cachedSize = 0;
-
-        if( fileUtils::getFolderSizeCache().get( pathStd, mtimeMs, cachedSize ) )
-        {
-            if( callback )
-                callback( cachedSize );
-            return;
-        }
-
-        const uint64_t                            gen = generationTracker.getGeneration();
-        juce::Component::SafePointer<FileBrowser> safeThis( this );
-
-        folderSizeThreadPool.addJob(
-            new FolderSizeJob(
-                folder,
-                mtimeMs,
-                gen,
-                [safeThis]( uint64_t g ) -> bool {
-                    if( safeThis == nullptr )
-                        return true;
-                    return safeThis->isGenerationCancelled( g );
-                },
-                [safeThis, callback]( const juce::File& f, int64_t totalSize, int64_t mtime, uint64_t g ) {
-                    const std::string pStd = f.getFullPathName().toStdString();
-                    fileUtils::getFolderSizeCache().put( pStd, totalSize, mtime );
-
-                    juce::MessageManager::callAsync( [safeThis, callback, totalSize, g]() {
-                        if( safeThis != nullptr && safeThis->isGenerationCancelled( g ) )
-                            return;
-                        if( callback )
-                            callback( totalSize );
-                    } );
-                } ),
-            true );
-    }
-
-    void FolderSizeCalculator::run()
-    {
-        totalSize = fileUtils::calculateFolderSize( folderToCalculate, [this]() {
-            return threadShouldExit();
-        } );
-
-        if( threadShouldExit() || totalSize < 0 )
-            return;
-
-        auto cb   = resultCallback;
-        auto size = totalSize;
-        juce::MessageManager::callAsync( [cb, size]() {
-            if( cb )
-                cb( size );
-        } );
-    }
-
-    void FolderSizeCalculator::calculateFolderSize()
-    {
-        totalSize = fileUtils::calculateFolderSize( folderToCalculate );
-
-        auto cb   = resultCallback;
-        auto size = totalSize;
-        juce::MessageManager::callAsync( [cb, size]() {
-            if( cb )
-                cb( size );
-        } );
-    }
-
-    void FileBrowser::addMultipleAssets( juce::Array<juce::File> assetFiles )
-    {
-        int                       filesNum = 0;
-        std::vector<juce::String> assets   = ae.getAssets( mt::AssetTypes::Samples );
-
-        for( auto assetFile : assetFiles )
-        {
-            for( auto asset : assets )
-            {
-                if( asset == assetFile.getFullPathName() )
-                    filesNum++;
-                else
-                    ae.addAsset( assetFile.getFullPathName(), mt::AssetTypes::Samples );
-            }
-        }
-        if( !assets.size() )
-        {
-            for( auto dir : assetFiles )
-                if( dir.hasFileExtension( sampleFileList ) )
-                    ae.addAsset( dir.getFullPathName(), mt::AssetTypes::Samples );
-        }
-        if( filesNum )
-        {
-            auto p = new FilePopup{ juce::String( filesNum ) + " Samples has already Loaded", false, false };
-            mt::utils::showDialog(
-                "WARNING!", p, [this, p]( int R ) { delete p; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
-        }
-    }
-
     void FileBrowser::favouriteButtonImplementation()
     {
         for( auto& button : grpNum )
@@ -1041,30 +959,34 @@ namespace ui
 
     void FileBrowser::renameImplementation( juce::String newFileName )
     {
-        auto& prjSettings = settings.projects;
-        for( auto i = 0; i < prjSettings.getNumChildren(); i++ )
+        if( selectedFile.isEmpty() )
+            return;
+        juce::File sel = selectedFile.getLast();
+        if( isProtectedPath( sel ) )
         {
-            juce::File childFile = juce::File( prjSettings.getProject( i ) );
-            if( newFileName == childFile.getFileNameWithoutExtension() )
-            {
-                auto p = new FilePopup( "A project with the same name already exists ", false, false );
-                mt::utils::showDialog(
-                    "WARNING!", p, [&, p]( int R ) {
-                        delete p;
-                    },
-                    ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
-
-                return;
-            }
+            warn( "This item is protected and cannot be renamed" );
+            return;
         }
 
-        auto p = selectedFile.getLast().getFileExtension();
-        newFileName += p;
-        juce::File newFile = selectedFile.getLast().getParentDirectory().getChildFile( newFileName );
-        juce::File sel     = selectedFile.getLast();
-
-        if( selectedFile.getLast().exists() && !newFile.exists() )
-            selectedFile.getLast().moveFileTo( newFile );
+        // A legal name, and nothing of that name in the folder the item lives in (a move would replace it).
+        const auto trimmed = kick_project::trimName( newFileName.toStdString() );
+        if( const auto problem = kick_project::checkName( trimmed ); problem != kick_project::NameProblem::Ok )
+        {
+            warn( kick_project::describe( problem ) );
+            return;
+        }
+        newFileName = juce::String( trimmed ) + sel.getFileExtension();
+        juce::File newFile = sel.getParentDirectory().getChildFile( newFileName );
+        if( newFile.exists() )
+        {
+            warn( "An item with the same name already exists here" );
+            return;
+        }
+        if( !sel.exists() || !sel.moveFileTo( newFile ) )
+        {
+            warn( "The item could not be renamed" );
+            return;
+        }
 
         //If User Renaming the Project Directory , update the project file also
         juce::Array<juce::File> arr = newFile.findChildFiles( 2, false, "*.kickPrj" );
@@ -1403,16 +1325,31 @@ namespace ui
             hideAuditionComponent();
     }
 
+    bool FileBrowser::isProtectedPath( const juce::File& f ) const
+    {
+        std::vector<std::string> places;
+        places.push_back( ui::fileUtils::getSdCardMountedPath().toStdString() );
+        places.push_back( ui::fileUtils::getUsbMountedPath().toStdString() );
+        places.push_back( getAppDirs( MTProjects ).getFullPathName().toStdString() );
+        return kick_fsguard::isProtected( f.getFullPathName().toStdString(), mt::getSettings().projects.currentProject().toStdString(), places );
+    }
+
+    void FileBrowser::warn( const juce::String& message )
+    {
+        auto p = new FilePopup{ message, false, false };
+        mt::utils::showDialog(
+            "WARNING!", p, [p]( int ) { delete p; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
+    }
+
     bool FileBrowser::checkIsCurrProj()
     {
         for( auto sel : selectedFile )
         {
-            juce::String currProj = juce::File( mt::getSettings().projects.currentProject() ).getFileNameWithoutExtension();
-            if( sel.getFileNameWithoutExtension() == currProj )
+            if( isProtectedPath( sel ) )
             {
-                auto p = new FilePopup{ "Current Project is not allowed to Cut/Delete/Rename", false, false };
+                auto p = new FilePopup{ "The open project, a drive or library folder and system folders are not allowed to Cut/Delete/Rename", false, false };
                 mt::utils::showDialog(
-                    "WARNING!", p, [&, p]( int R ) { top.deleteBtn.setToggleState(false,juce::dontSendNotification);delete p; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
+                    "WARNING!", p, [this, p]( int ) { top.deleteBtn.setToggleState( false, juce::dontSendNotification ); delete p; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
 
                 return true;
             }
@@ -1474,21 +1411,32 @@ namespace ui
                 mt::utils::showDialog(
                     "DELETE CONFIRMATION", popup, [popup]( int R ) { delete popup; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
 
-                popup->button1.onClick = [&]() {
+                // The popup and the selection are captured by value: this function has returned long before a button is touched,
+                // and the old [&] captures pointed at its dead locals. Protected items were refused above; they are checked
+                // again at the moment of the delete (the selection may have changed under the dialog).
+                const auto toDelete = selectedFile;
+                popup->button1.onClick = [popup]() {
                     popup->close();
                 };
-                popup->button2.onClick = [&]() {
+                popup->button2.onClick = [this, popup, toDelete]() {
                     popup->close();
-                    for( auto sel : selectedFile )
+                    int refused = 0;
+                    for( auto sel : toDelete )
                     {
+                        if( isProtectedPath( sel ) )
+                        {
+                            ++refused;
+                            continue;
+                        }
                         settings.projects.removeProject( sel );
                         sel.deleteRecursively();
                     }
                     enterDirectory( -1 );
-                    selectedFile = juce::File( tempList[right.table->getSelectedRow()] );
                     right.table->clearSelection();
                     selectedFile.clear();
                     right.table->selectRow( 0 );
+                    if( refused > 0 )
+                        warn( juce::String( refused ) + " protected item(s) were not deleted" );
                 };
             }
 
@@ -1499,30 +1447,6 @@ namespace ui
                     "WARNING!", p, [&, p]( int R ) { delete p; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
             }
         }
-    }
-
-    void FileBrowser::createProject( juce::String value )
-    {
-        auto nChild = settings.projects.getNumChildren();
-        for( auto i = 0; i < nChild; i++ )
-        {
-            juce::String childProperty = settings.projects.getProject( i );
-            juce::File   childFile     = juce::File( childProperty );
-            if( value == childFile.getFileName() )
-            {
-                auto p = new FilePopup( "A project with the same name already exists ", false, false );
-                mt::utils::showDialog(
-                    "WARNING!", p, [&, p]( int R ) {
-                        delete p;
-                    },
-                    ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
-                return;
-            }
-        }
-        auto       seprator = juce::File::getSeparatorString();
-        juce::File file     = getAppDirs( MTProjects ).getFullPathName() + seprator + value;
-        settings.projects.createProject( file );
-        ui::LoadProjectAndAnimation::getInstance().startLoading( file );
     }
 
     void FileBrowser::loadSample( const juce::Array<juce::File>& assetFiles, bool IsMultiple, std::function<void()> onFinished )

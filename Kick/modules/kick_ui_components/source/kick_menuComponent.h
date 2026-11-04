@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "kick_menu_logic.h"
+
 namespace ui
 {
     ///
@@ -56,6 +58,10 @@ namespace ui
 
         void visibilityChanged();
 
+        // Keyboard / dial highlight of one tile, and graying out a tile that cannot be used now.
+        void setHighlight( int Index );
+        void setItemEnabled( int Index, bool Enabled );
+
     private:
         struct MenuGroup
         {
@@ -67,6 +73,7 @@ namespace ui
         juce::OwnedArray<MenuGroup> model;
         juce::Rectangle<int>        headerSize;
 
+        void refreshHighlight();
         void AddOptionInternal( const std::vector<MenuItem>& Items, const juce::String& Group = "" );
         void resized() override;
 

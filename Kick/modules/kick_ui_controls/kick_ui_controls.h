@@ -66,6 +66,7 @@
     #include "source/kick_AnimatedText.h"
     #include "source/kick_image.h"
     #include "source/kick_serialNumber.h"
+    #include "source/kick_tap_tempo.h"
     #include "source/kick_Tempo.h"
     #include "source/kick_Grid.h"
     #include "source/kick_WaveRenderer.h"

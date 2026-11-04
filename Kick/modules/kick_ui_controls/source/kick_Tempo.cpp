@@ -139,20 +139,10 @@ namespace ui
         };
 
         tap.onClick = [&]() {
-            auto curTime = juce::Time::getMillisecondCounterHiRes();
-
-            if( 0 == tapCount )
-                startMs = curTime;
-
-            ++tapCount;
-            if( numTapsForTempo <= tapCount )
-            {
-                const auto timeDiff       = curTime - startMs;
-                const auto secondsElapsed = ( timeDiff ) / 1000;
-                double     bpm            = ( ( 60.0 * tapCount ) / secondsElapsed );
+            // N taps = N-1 intervals; a pause of 2 s starts a new series (ui::TapTempo).
+            const double bpm = tapTempo.tap( juce::Time::getMillisecondCounterHiRes() );
+            if( bpm > 0.0 )
                 slider.setValue( bpm );
-                tapCount = 0;
-            }
             tap.setToggleState( false, juce::dontSendNotification );
         };
 

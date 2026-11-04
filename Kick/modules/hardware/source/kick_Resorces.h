@@ -21,48 +21,49 @@
 
 #pragma once
 #include <string>
-#if( JUCE_LINUX || __linux__ )
-    #include <iostream>
-    #include <sys/sysinfo.h>
-    #include <chrono>
-    #include <cstdio>
-    #include <cstring>
-    #include <thread>
-    #include <fstream>
-    #include <sstream>
-    #include <unistd.h>
-#endif
+#include "kick_sysinfo.h"
+
 namespace mt
 {
-
     struct sysSizeInfo
     {
-        bool   status;
-        double avaSize;
-        double usedSize;
-        double totalSize;
-        int    perSize;
+        bool   status    = false; // false: the volume is not there / cannot be read (the other fields are 0)
+        double avaSize   = 0.0;   // MB
+        double usedSize  = 0.0;   // MB
+        double totalSize = 0.0;   // MB
+        int    perSize   = 0;     // used, percent
     };
     struct sysRamInfo
     {
-        double totalRam;
-        double usedRam;
-        double freeRam;
-        int    perRam;
+        bool   status     = false; // false: the platform could not report memory
+        double totalRam   = 0.0;   // MB
+        double usedRam    = 0.0;   // MB (total - available: page cache counts as available)
+        double freeRam    = 0.0;   // MB available
+        double processRam = 0.0;   // MB resident set of this process
+        int    perRam     = 0;     // used, percent
     };
     class SystemResource
     {
     public:
         SystemResource() = default;
 
-        void                   ramInfo( sysRamInfo& info );
-        void                   sizeInfo( std::string& path, sysSizeInfo& info );
-        void                   cpuInfo( double& cpuUsage );
-        void                   folderSize( std::string folderPath );
+        // CPU load in percent since the previous call. Returns false (and leaves cpuUsage at 0) for the very first call, when
+        // there is no interval to measure yet, or on a platform without a source.
+        bool cpuInfo( double& cpuUsage );
+        void ramInfo( sysRamInfo& info );
+        // Size of the file system holding `path` (statvfs).
+        void sizeInfo( const std::string& path, sysSizeInfo& info );
+        // Mount point of the internal storage / SD card / USB drive from the mount table; "" when absent.
+        // Off the MPC (macOS / desktop) the internal volume is the user's home directory and there is no SD / USB.
+        std::string volumePath( kick_sysinfo::Volume volume );
+
         static SystemResource& getResourceInterface()
         {
             static SystemResource _sysResource;
             return _sysResource;
         }
+
+    private:
+        kick_sysinfo::CpuTimes prevCpu_;
     };
 }

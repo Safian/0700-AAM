@@ -34,6 +34,9 @@ namespace kick_ui
 
         KickModeHeader( const juce::String& Name, const juce::String& Image );
 
+        /// Opens the System Resources dialog (header button, Menu tile, smoke test).
+        static void showSystemResources();
+
         void showAutoLoad( bool show );
         void showBackButton( bool Show );
         void setPlayState( bool State, juce::NotificationType Notify = juce::sendNotification );
@@ -84,6 +87,7 @@ namespace kick_ui
         void paint( juce::Graphics& g ) override;
         void resized() override;
         void visibilityChanged() override;
+        void syncAutomationButton();
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( KickModeHeader )
     };
 
@@ -114,6 +118,8 @@ namespace kick_ui
         ui::KickListBox       rate{ "RATE", { "1/16", "1/8", "1/4", "1/2" }, 2 };
         ui::KickListBox       style{ "STYLE", { "STYLE-1", "STYLE-2", "STYLE-3", "STYLE-4", "STYLE-5", "STYLE-6", "STYLE-7" }, 0, 2 };
 
+        static constexpr bool kShowUnusedControls = false; // mode / count-in / style have no effect in the engine yet
+        void                  syncFromSettings();
         void resized();
         void close();
     };

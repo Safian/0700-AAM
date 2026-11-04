@@ -57,6 +57,7 @@
 // preferences
 #include "swupdate/kick_SWUpdateView.cpp"
 #include "swupdate/kick_SWUpdateScreen.cpp"
+#include "swupdate/kick_KickUpdate.cpp"
 
 // erase
 #include "modes/kick_Erase.cpp"
