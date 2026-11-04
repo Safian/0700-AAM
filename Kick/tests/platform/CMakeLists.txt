@@ -123,9 +123,13 @@ set_tests_properties(kick-audio-platform PROPERTIES TIMEOUT 20)
 add_executable(kick-key-transpose-tests KeyTransposeTests.cpp)
 add_test(NAME kick-key-transpose COMMAND kick-key-transpose-tests)
 set_tests_properties(kick-key-transpose PROPERTIES TIMEOUT 10)
+if(TARGET Kick)
+    # The in-app smoke hooks (KICK_SMOKE_* env, AppSmoke.h) exist whenever the platform tests are built; the CLAP fixture
+    # is only needed by the Python supervisor tests below.
+    target_compile_definitions(Kick PRIVATE KICK_APP_SMOKE_TEST=1)
+endif()
 if(TARGET Kick AND TARGET kick-clap-fixture-normal)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    target_compile_definitions(Kick PRIVATE KICK_APP_SMOKE_TEST=1)
     add_dependencies(Kick kick-clap-fixture-normal)
     add_test(NAME kick-app-smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/AppSmoke.py"
         $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}" $<TARGET_FILE:kick-clap-fixture-normal>)
@@ -137,6 +141,20 @@ endif()
 # Timing correct (note quantize) logic; JUCE-free, header only.
 add_executable(kick-timing-correct-tests TimingCorrectTests.cpp)
 add_test(NAME kick-timing-correct COMMAND kick-timing-correct-tests)
+# Step sequencer pure logic (pages, step mapping, value ranges, nudge wrap, TIME DIV list); JUCE-free, header only.
+add_executable(kick-step-model-tests StepModelTests.cpp)
+add_test(NAME kick-step-model COMMAND kick-step-model-tests)
+set_tests_properties(kick-step-model PROPERTIES TIMEOUT 10)
+# Next Sequence / Song / Color Edit / List Edit pure logic; JUCE-free, header only.
+add_executable(kick-sequence-logic-tests SequenceLogicTests.cpp)
+add_test(NAME kick-sequence-logic COMMAND kick-sequence-logic-tests)
+set_tests_properties(kick-sequence-logic PROPERTIES TIMEOUT 10)
+add_executable(kick-list-edit-logic-tests ListEditLogicTests.cpp)
+add_test(NAME kick-list-edit-logic COMMAND kick-list-edit-logic-tests)
+set_tests_properties(kick-list-edit-logic PROPERTIES TIMEOUT 10)
+add_executable(kick-pad-color-logic-tests PadColorLogicTests.cpp)
+add_test(NAME kick-pad-color-logic COMMAND kick-pad-color-logic-tests)
+set_tests_properties(kick-pad-color-logic PROPERTIES TIMEOUT 10)
 # Button LED helpers (note map, levels, write cache); JUCE-free, header only.
 add_executable(kick-led-map-tests LedMapTests.cpp)
 add_test(NAME kick-led-map COMMAND kick-led-map-tests)

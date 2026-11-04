@@ -52,8 +52,7 @@ namespace kick_ui
         operator int() const { return value; }
 
     private:
-        int                        value;
-        std::function<void( int )> onValueChange;
+        int value;
     };
 
     class KickNextSequenceDisplay : public juce::Component
@@ -81,9 +80,12 @@ namespace kick_ui
         KickNextSequenceContent();
         ~KickNextSequenceContent();
 
-        void onPlay();
+        void onPlay( bool FromBeginning = false );
         void onStop();
         void handleCommand( CPktMgr::HWMsg_t& );
+
+        // Header Play button follows the engine (called with the real transport state).
+        std::function<void( bool )> onPlayingChanged;
         void enableRowSelection( bool State );
 
     private:
@@ -93,7 +95,7 @@ namespace kick_ui
         std::unique_ptr<ui::KickPadButtonGroupComponent> pads;
         SequenceData                                     seqData;
 
-        ui::KickToggleButton nextBar{ "NextT Bar", "Next Bar", "Next Bar" };
+        ui::KickToggleButton nextBar{ "Next Bar", "Next Bar", "Next Bar" };
         ui::KickToggleButton sudden{ "Sudden", "Sudden", "Sudden" };
         ui::KickToggleButton clear{ "Clear", "Clear", " Clear" };
         ui::KickToggleButton hold{ "Hold", "Hold", "Hold" };
@@ -106,6 +108,8 @@ namespace kick_ui
 
         bool isPlaying{ false };
 
+        sigslot::scoped_connection nextPlayConn, playStateConn, themeConn, bankConn;
+
         void onSequenceSelectionChange( const mt::MTSelected& Selected ) override;
 
         void paint( juce::Graphics& g ) override;
@@ -117,8 +121,9 @@ namespace kick_ui
 
         void changePlayingPad( int OldPlayingPad, int NewPlayingPad );
         void clearNextSequence();
-        void startPlaying();
-        void stopPlaying();
+        void startPlaying( bool FromBeginning, bool Engine );
+        void stopPlaying( bool Engine );
+        void syncTransport();
         void restoreData();
 
         void setPadLED( const int id, int state, int color );
@@ -126,6 +131,9 @@ namespace kick_ui
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( KickNextSequenceContent )
     };
+
+    // Q-Link on the selected sequence / track (Next Sequence and Song).
+    void applySequenceKnob( mt::MTAudioInterface& ae, kick_ui::MetronomePopup& metronome, int knob, int value );
 
     class KickNextSequenceMode : public kick_ui::IScreen
         , public juce::Component

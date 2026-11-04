@@ -163,7 +163,7 @@ namespace kick_ui
     public:
         StepPresets( StepSequencerData& Data );
 
-        std::function<void( std::vector<int>& )> addValues;
+        std::function<void( StepPresetType )>    structuralPreset; // Flip / Mirror: whole steps, all parameters
         std::function<void( std::vector<int>& )> modifyValues;
 
         std::function<void( int Value )> sliderOffsetOnDragOn;

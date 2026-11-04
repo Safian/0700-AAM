@@ -630,6 +630,13 @@ namespace mt
         return -1;
     }
 
+    int MTAudioInterface::resetProgramPadColours( int Program )
+    {
+        if( auto p = getProgram( Program ) )
+            return p->resetPadColors();
+        return -1;
+    }
+
     std::vector<juce::String> MTAudioInterface::getProgramNames( MTProgramCategory cateogryType )
     {
         std::vector<std::unique_ptr<MTIProgram>> const& programData = manager->getPrograms();
@@ -1812,7 +1819,9 @@ namespace mt
         if( !t )
             return -1;
         tcParams = Info;
-        manager->getUndoManager().beginNewTransaction( "Timing Correct" );
+        // ONE undo step for the whole pass: every note change inside goes through CachedValues, which would
+        // otherwise each open an undo transaction of their own (N notes = N UNDO presses).
+        ScopedUndoTransaction undoScope( manager->getUndoManager(), "Timing Correct" );
         return t->timingCorrectLocked( Info );
     }
 
@@ -2263,6 +2272,7 @@ namespace mt
 
     void       MTAudioInterface::createSong( const juce::String& Name ) { manager->createSong( Name ); }
     void       MTAudioInterface::deleteSong( const juce::String& Name ) { manager->deleteSong( Name ); }
+    void       MTAudioInterface::renameSong( const juce::String& OldName, const juce::String& NewName ) { manager->renameSong( OldName, NewName ); }
     MTSongInfo MTAudioInterface::getSongInfo( const juce::String& SongName ) { return manager->getSongInfo( SongName ); }
     void       MTAudioInterface::addSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex ) { manager->addSongStep( SongName, Step, AtIndex ); }
     void       MTAudioInterface::editSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex ) { manager->editSongStep( SongName, Step, AtIndex ); }

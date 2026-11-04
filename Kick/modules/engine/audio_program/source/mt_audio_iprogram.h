@@ -34,14 +34,29 @@ namespace mt
     static sigslot::signal<MTIProgram*> programNameChanged;
     static sigslot::signal<MTIProgram*> programBeingDeleted;
 
-    const std::array<int, 128> defaultDrumColours = { contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourOrange1, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourPink,
-                                                      contracts::DeviceControlContracts::PadColourNeutralWhite, contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::padColourDarkRed, contracts::DeviceControlContracts::PadColourOrange,
-                                                      contracts::DeviceControlContracts::PadColourPink, contracts::DeviceControlContracts::padColourlightGreen4, contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourLightSkyBlue,
-                                                      contracts::DeviceControlContracts::PadColourPink2, contracts::DeviceControlContracts::padColourlightGreen4, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourRed };
-    const std::array<int, 128> defaultClipColours = { contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourOrange1, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourPink,
-                                                      contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourOrange1, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourPink,
-                                                      contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourOrange1, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourPink,
-                                                      contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourOrange1, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourPink };
+    namespace detail
+    {
+        // The 16 pad pattern of a program type repeated for all 8 banks (A..H): without this the 112 pads of the
+        // banks B..H fell back to colour 0 (dark red).
+        inline std::array<int, 128> repeatBank( const std::array<int, 16>& Bank )
+        {
+            std::array<int, 128> all{};
+            for( size_t i = 0; i < all.size(); ++i )
+                all[i] = Bank[i % Bank.size()];
+            return all;
+        }
+    }
+
+    const std::array<int, 128> defaultDrumColours = detail::repeatBank( std::array<int, 16>{ contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourOrange1, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourPink,
+                                                                                            contracts::DeviceControlContracts::PadColourNeutralWhite, contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::padColourDarkRed, contracts::DeviceControlContracts::PadColourOrange,
+                                                                                            contracts::DeviceControlContracts::PadColourPink, contracts::DeviceControlContracts::padColourlightGreen4, contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourLightSkyBlue,
+                                                                                            contracts::DeviceControlContracts::PadColourPink2, contracts::DeviceControlContracts::padColourlightGreen4, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourRed } );
+    const std::array<int, 128> defaultClipColours = detail::repeatBank( std::array<int, 16>{ contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourOrange1, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourPink,
+                                                                                            contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourOrange1, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourPink,
+                                                                                            contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourOrange1, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourPink,
+                                                                                            contracts::DeviceControlContracts::PadColourRed, contracts::DeviceControlContracts::PadColourOrange1, contracts::DeviceControlContracts::PadColourOrange, contracts::DeviceControlContracts::PadColourPink } );
+    // All other program types keep their previous default (pad 1 red, the rest colour 0): which colours a
+    // keygroup / MIDI / plugin program should start with is a design decision, not a bug fix.
     const std::array<int, 128> defaultPadColours{ contracts::DeviceControlContracts::PadColourRed };
 
     struct IMidiMsgProcessor
@@ -220,6 +235,7 @@ namespace mt
         int setColorMode( PadColorMode Mode );
         int setEmptyColorMode( EmptyPadColorMode Mode );
         int setPadColor( int Color, int Pad = -1 ); // Negative, set color for all pads. // 0 and Positive, pad index.
+        int resetPadColors();                       // Every pad back to the default colour of the program type.
 
         ///
         /// SOLO API's

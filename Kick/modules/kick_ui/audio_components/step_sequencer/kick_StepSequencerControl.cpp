@@ -4,7 +4,7 @@ namespace kick_ui
 {
     StepSequencerControl::StepSequencerControl()
     {
-        mt::utils::addAndMakeVisible( this, trkVolumeButton, leftNudgeButton, rightNudgeButton, nudgeText, clearbar, clearpad, padSelect, barLabel, padLabel, barMinus, barPlus, padMinus, padPlus );
+        mt::utils::addAndMakeVisible( this, leftNudgeButton, rightNudgeButton, nudgeText, clearbar, clearpad, padSelect, barLabel, padLabel, barMinus, barPlus, padMinus, padPlus );
         nudgeText.setInterceptsMouseClicks( false, false );
 
         mt::utils::setValueBackgroundColour( ui::Theme::backgroundColour( 3 ), barLabel, padLabel, nudgeText );

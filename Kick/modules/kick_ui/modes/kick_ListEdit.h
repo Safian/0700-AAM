@@ -20,9 +20,12 @@
  */
 #pragma once
 #include "kick_ui/audio_components/gridview/kick_GridData.h"
+#include "kick_ui/audio_components/step_sequencer/kick_NoteListWatcher.h"
 
 namespace kick_ui
 {
+    class ListEntry;
+
     class ListEditTimingCorrect : public juce::Component
     {
     public:
@@ -46,7 +49,8 @@ namespace kick_ui
         ui::KickListBox       timeDivList{ ui::KickListBox::withoutTitleBar, "", CommonUtils::getDefaultTimeDivisions(), 3 };
         ui::KickImageButton   triplet{ "TRIPLET" };
         ui::KickListBox       type{ "TYPE", { "Start", "End", "Length", "Legato" } };
-        ui::KickListBox       events{ "EVENTS", { "All", "Selected", "Range" } };
+        // "Range" is not supported by the engine (it always answered "range not supported"): not offered.
+        ui::KickListBox       events{ "EVENTS", { "All", "Selected" } };
         ui::KickSlider        swing{ "SWING", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
         ui::KickSlider        shiftTiming{ "SHIFT  TIMING", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
         ui::KickSlider        window{ "WINDOW", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
@@ -89,12 +93,25 @@ namespace kick_ui
         ui::KickToggleButton insertButton{ "Insert", "Insert", "Insert" };
         ui::KickButton       tcButton{ "TC", "TC" };
 
+        // Mod Type / Value columns have no events behind them (only notes exist): hidden.
         std::vector<juce::String>                   headerTitles{ "Event", "Time", "Pad/Note", "Length", "Velocity", "Mod Type", "Value", "Prob", "Rat" };
         std::vector<std::unique_ptr<ui::KickLabel>> tableHeaderData;
         int                                         numNotes{ 0 };
         juce::ValueTree                             noteList;
 
+        NoteListWatcher noteWatcher;
+        unsigned        lastTouchMs{ 0 };
+
         void refreshData();
+        void reloadNotes( int SelectRow = -2 ); // -2 keep the selection
+        void externalNotesChanged();
+        void updateNoteNaming();
+        void editTime( ListEntry* Entry );
+        void editPad( ListEntry* Entry );
+        void stepRowBy( int Delta );
+        void mouseDown( const juce::MouseEvent& ) override;
+        void mouseDrag( const juce::MouseEvent& ) override;
+        void mouseWheelMove( const juce::MouseEvent&, const juce::MouseWheelDetails& ) override;
         void paint( juce::Graphics& g ) override;
         void resized() override;
         void visibilityChanged() override;
@@ -111,17 +128,89 @@ namespace kick_ui
         void                 refreshData();
         void                 setSelected( bool Select );
         void                 linkRotated( int ID, int value );
+        void                 adjust( list_edit_logic::Cell C, int Delta ); // relative edit, straight on the note
         juce::Rectangle<int> getElementBounds( int state );
+        juce::ValueTree      getValueTree() const { return vt; }
+
+        std::function<void( ListEntry* )> onPadTapped;
+        std::function<void( ListEntry* )> onTimeTapped;
+        std::function<void()>             onEdited;
+
+        // Keygroup / MIDI programs show note names (C3), drum programs pad names (A01).
+        static bool useNoteNames;
 
     private:
         juce::ValueTree    vt;
         bool               isSelected{ false };
         ui::KickTitleLabel time{ "" };
-        ui::KickListBox    note{ ui::KickListBox::withoutTitleBar, "", mt::Kick::padNames };
-        ui::KickNumber     length{ "Length", 1, 9999, 1, 1, false }, velocity{ "Velocity", MIDI::MIN, MIDI::MAX, 1, 1, false }, rat{ "Rat", 1, 8, 0, 1, false }, prob{ "Probability", 0, 100, 100, 1, false }, value{ "Value", MIDI::MIN, MIDI::MAX, 1, 1, false };
-        ui::KickLabel      row{ "" }, type{ "" };
+        ui::KickLabel      noteLabel{ "" };
+        ui::KickNumber     length{ "Length", 1, 9999, 1, 1, false }, velocity{ "Velocity", 1, MIDI::MAX, 1, 1, false }, rat{ "Rat", 1, 8, 1, 1, false }, prob{ "Probability", 0, 100, 100, 1, false };
+        ui::KickLabel      row{ "" };
 
+        void writeProperty( const juce::Identifier& Id, int Value );
+        void mouseUp( const juce::MouseEvent& ) override;
         void resized() override;
+    };
+
+    // Edit the time of one note: BAR / BEAT / TICK (same fields as Insert).
+    class ListEditTimeDialog : public juce::Component
+    {
+    public:
+        ListEditTimeDialog( int Bar1, int Beat1, int Tick0, int Bars )
+        {
+            mt::utils::addAndMakeVisible( this, bar, beat, tick, barLabel, beatLabel, tickLabel );
+            mt::utils::setValueColour( ui::Theme::textColour( 1 ), barLabel, beatLabel, tickLabel );
+            mt::utils::setValueBackgroundColour( ui::Theme::backgroundColour( 9 ), barLabel, beatLabel, tickLabel );
+            mt::utils::setValueFontHeight( 16, barLabel, beatLabel, tickLabel, bar, beat, tick );
+            const auto beats = juce::jmax( 1, gridData.getBeatsPerBar( Bar1 - 1 ) );
+            const auto tpb   = juce::jmax( 1, gridData.getTicksPerBar( Bar1 - 1 ) / beats );
+            bar.setRange( 1, juce::jmax( 1, Bars ), 1 );
+            beat.setRange( 1, beats, 1 );
+            tick.setRange( 0, list_edit_logic::maxTick( tpb ), 1 );
+            bar.setValue( Bar1, juce::dontSendNotification );
+            beat.setValue( Beat1, juce::dontSendNotification );
+            tick.setValue( Tick0, juce::dontSendNotification );
+            setName( "EDIT TIME" );
+        }
+        int getBar() const { return bar.getValue(); }
+        int getBeat() const { return beat.getValue(); }
+        int getTick() const { return tick.getValue(); }
+
+    private:
+        GridData&      gridData{ GridData::Instance() };
+        ui::KickNumber bar{ "", BAR::MIN, BAR::MAX, 1 }, beat{ "", BAR::MIN, BAR::MAX, 1 }, tick{ "", BAR::MIN, BAR::MAX, 0 };
+        ui::KickLabel  barLabel{ "BAR" }, beatLabel{ "BEAT" }, tickLabel{ "TICK" };
+
+        void resized() override
+        {
+            barLabel.setBoundsRelative( .083f, .1f, .167f, .2f );
+            beatLabel.setBoundsRelative( .083f, .4f, .167f, .2f );
+            tickLabel.setBoundsRelative( .083f, .7f, .167f, .2f );
+            bar.setBoundsRelative( .334f, .1f, .582f, .22f );
+            beat.setBoundsRelative( .334f, .4f, .582f, .22f );
+            tick.setBoundsRelative( .334f, .7f, .582f, .22f );
+        }
+    };
+
+    // Pick the pad / note of one note.
+    class ListEditPadDialog : public juce::Component
+    {
+    public:
+        ListEditPadDialog( const std::vector<juce::String>& Names, int Current )
+        {
+            addAndMakeVisible( list );
+            list.setJustificationType( juce::Justification::centred );
+            list.setListOptions( Names, Current );
+            list.onSelectionChanged = [this]( int Index, const juce::String& ) { selected = Index; };
+            selected                = Current;
+            setName( "EDIT PAD / NOTE" );
+        }
+        int getSelected() const { return selected; }
+
+    private:
+        ui::KickListBox list{ ui::KickListBox::withoutTitleBar, "", {} };
+        int             selected{ 0 };
+        void            resized() override { list.setBoundsRelative( .2f, .4f, .6f, .2f ); }
     };
 
     class ListEditInsertDialog : public juce::Component
@@ -138,7 +227,7 @@ namespace kick_ui
 
         int getStartBar() const { return bar.getValue(); }
         int getStartBeat() const { return beat.getValue(); }
-        int getStartTick() const { return tick.getValue(); }
+        int getStartTick() const { return tick.getValue(); } // 0-based, like the list
 
         ListEditInsertDialog()
         {
@@ -153,14 +242,14 @@ namespace kick_ui
 
             auto numBars = ae.getSequenceLength( ae.getSelectedSequence() );
             bar.setRange( 1, numBars, 1 );
-            beat.setRange( 1, gridData.getBeatsPerBar( numBars ), 1 );
-            tick.setRange( 1, ( gridData.getTicksPerBar( numBars ) ) / beat.getMax(), 1 );
+            updateRanges( 0 );
 
-            bar.onValueChanged          = [&]( int Value ) { info.bar = Value; };
+            bar.onValueChanged          = [&]( int Value ) { info.bar = Value; updateRanges( Value - 1 ); };
             beat.onValueChanged         = [&]( int Value ) { info.beats = Value; };
             tick.onValueChanged         = [&]( int Value ) { info.tick = Value; };
             padsList.onSelectionChanged = [&]( int Index, const juce::String& value ) { info.padIndex = Index; };
             typeList.onSelectionChanged = [&]( int Index, const juce::String& Value ) {};
+            // Automation events have no model yet (the list only holds notes): only "Notes" is offered.
 
             padsList.setValueBackgroundColour( ui::Theme::backgroundColour( 13 ) );
 
@@ -180,19 +269,28 @@ namespace kick_ui
             padsList.setSelected( 0, juce::sendNotification );
         }
 
+        // BEAT 1..beats of the bar, TICK 0..ticksPerBeat-1 (the list shows ticks 0-based).
+        void updateRanges( int Bar0 )
+        {
+            const auto beats = juce::jmax( 1, gridData.getBeatsPerBar( Bar0 ) );
+            const auto tpb   = juce::jmax( 1, gridData.getTicksPerBar( Bar0 ) / beats );
+            beat.setRange( 1, beats, 1 );
+            tick.setRange( 0, list_edit_logic::maxTick( tpb ), 1 );
+        }
+
         ~ListEditInsertDialog() {}
         ListInsertOptions& getData() { return info; }
 
     private:
-        ListInsertOptions         info;
+        ListInsertOptions         info{ 1, 1, 0, {}, 0 };
         mt::MTAudioInterface&     ae{ mt::getAudioInterface() };
         GridData&                 gridData{ GridData::Instance() };
         std::vector<juce::String> padData;
         ui::KickListBox           padsList{ ui::KickListBox::withoutTitleBar, "", {} };
         ui::KickNumber            bar{ "", BAR::MIN, BAR::MAX, 1 };
         ui::KickNumber            beat{ "", BAR::MIN, BAR::MAX, 1 };
-        ui::KickNumber            tick{ "", BAR::MIN, BAR::MAX, 1 };
-        ui::KickListBox           typeList{ ui::KickListBox::withoutTitleBar, "", { "Notes", "Program Automation", "Program Mixer Automation", "Track Automation" } };
+        ui::KickNumber            tick{ "", BAR::MIN, BAR::MAX, 0 };
+        ui::KickListBox           typeList{ ui::KickListBox::withoutTitleBar, "", { "Notes" } };
         ui::KickLabel             barLabel{ "BAR" }, beatLabel{ "BEAT" }, tickLabel{ "TICK" }, typeLabel{ "TYPE" }, padLabel{ "PAD" };
         int                       barValue, beatValue, tickValue;
 

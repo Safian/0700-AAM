@@ -91,7 +91,11 @@ namespace kick_ui
 
         provider.cellComponent = [&]( int Row, juce::Component* Existing ) -> juce::Component* {
             auto comp = dynamic_cast<KickNextSequenceDisplay*>( Existing );
+            if( !juce::isPositiveAndBelow( Row, ae.getNumSequences() ) )
+                return nullptr;
             auto data = ae.getSequenceData( Row );
+            if( data == nullptr )
+                return nullptr;
 
             seqData.srNo   = juce::String( Row + 1 );
             seqData.name   = data->name.get();
@@ -99,14 +103,10 @@ namespace kick_ui
             seqData.bpm    = data->tempo;
             seqData.index  = Row;
 
-            if( juce::isPositiveAndBelow( Row, ae.getNumSequences() ) )
-            {
-                if( comp == nullptr )
-                    comp = new KickNextSequenceDisplay( seqData );
-                comp->updateData( seqData );
-                return comp;
-            }
-            return nullptr;
+            if( comp == nullptr )
+                comp = new KickNextSequenceDisplay( seqData );
+            comp->updateData( seqData );
+            return comp;
         };
 
         provider.onRowSelected = [&]( int Index ) {
@@ -146,7 +146,7 @@ namespace kick_ui
         hold.onClick = [&]() {
             if( hold.getToggleState() && isPlaying )
             {
-                if( nextSequence >= 0 )
+                if( sequence_logic::holdOn( { playingSequence, nextSequence, true } ).next < 0 && nextSequence >= 0 )
                 {
                     pads->removeBreathing( nextSequence );
                     setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::PadColourOrange );
@@ -200,10 +200,16 @@ namespace kick_ui
             clear.setToggleState( false, juce::dontSendNotification );
         };
 
-        mt::signals::onNextSequencePlay.connect( [&]( int Sequence ) {
+        nextPlayConn = mt::signals::onNextSequencePlay.connect( [&]( int Sequence ) {
             juce::MessageManager::callAsync( [this, Sequence] {
                 changePlayingPad( playingSequence, Sequence );
             } );
+        } );
+
+        // The transport state comes from the engine, not from this screen's own buttons: STOP on another
+        // screen or a song / looper start is picked up here too.
+        playStateConn = mt::signals::playStateChanged.connect( [this]( mt::TransportState ) {
+            juce::MessageManager::callAsync( [this] { syncTransport(); } );
         } );
 
         nextSequence.onValueChanged = [&]( int value ) {
@@ -212,17 +218,16 @@ namespace kick_ui
             else if( !clear.isEnabled() )
                 clear.setEnabled( true );
         };
-        ui::themeChanged.connect( [&]() {
+        themeConn = ui::themeChanged.connect( [&]() {
             nextBar.setToggleButtonText( "Next Bar", "Next Bar" );
             sudden.setToggleButtonText( "Sudden", "Sudden" );
             clear.setToggleButtonText( "Clear", "Clear" );
             hold.setToggleButtonText( "Hold", "Hold" );
         } );
 
-        mt::signals::bankChanged.connect( [&]( int Index, juce::String Bank ) {
+        bankConn = mt::signals::bankChanged.connect( [&]( int Index, juce::String Bank ) {
             if( kick_ui ::KickHome::Instance().getCurrentScreen() == kick_ui::Screen::MenuNextSequence )
             {
-                ui::fileUtils::lastPressedPad = -1;
                 pads->setBank( Index );
                 if( pads->isBreathing( playingSequence ) ) //while not Playing
                     setPadBlinking( playingSequence, contracts::DeviceControlContracts::PadButtonState::StateOffBlink, contracts::DeviceControlContracts::PadColourTrans );
@@ -236,6 +241,10 @@ namespace kick_ui
 
     KickNextSequenceContent::~KickNextSequenceContent()
     {
+        nextPlayConn.disconnect();
+        playStateConn.disconnect();
+        themeConn.disconnect();
+        bankConn.disconnect();
         ae.removeListener( this );
         tableView.reset();
         pads.reset();
@@ -245,21 +254,23 @@ namespace kick_ui
     {
         if( isPlaying )
         {
+            const int before = nextSequence;
+            const int after  = sequence_logic::queueNext( { playingSequence, before, true }, Index ).next;
+
             // turn off old next seq
-            if( nextSequence >= 0 && nextSequence != Index ) //remove the old blinking next sequence,no change if we press the same next seq pad
+            if( before >= 0 && before != after )
             {
-                pads->removeBreathing( nextSequence );
-                pads->setBorderColor( nextSequence, ui::Theme::outlineColour( 1 ), 1, juce::dontSendNotification );
-                setPadBlinking( nextSequence, contracts::DeviceControlContracts::PadButtonState::StateOffBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::PadColourOrange );
-                nextSequence = -1;
+                pads->removeBreathing( before );
+                pads->setBorderColor( before, ui::Theme::outlineColour( 1 ), 1, juce::dontSendNotification );
+                setPadBlinking( before, contracts::DeviceControlContracts::PadButtonState::StateOffBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::PadColourOrange );
             }
-            // turn on new next seq
-            if( !pads->isBreathing( Index ) && playingSequence != Index ) //should not allow to blink the already blinking pad and no need to blink when we press the playing seq
+            // turn on new next seq (pressing the playing sequence or the queued one again changes nothing)
+            if( after >= 0 && after != before )
             {
-                pads->setBreathing( Index ); //no matter whether nextseq is there or not , this will work
-                setPadBlinking( Index, contracts::DeviceControlContracts::PadButtonState::StateOnBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::PadColourOrange );
-                nextSequence = Index;
+                pads->setBreathing( after );
+                setPadBlinking( after, contracts::DeviceControlContracts::PadButtonState::StateOnBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::PadColourOrange );
             }
+            nextSequence = after;
         }
 
         else if( !isPlaying )
@@ -322,22 +333,19 @@ namespace kick_ui
         }
         else
         {
-            if( playingSequence >= 0 )
-            {
-                pads->removeBreathing( nextSequence ); //orange
-                setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::PadColourOrange );
+            playingSequence = sequence_logic::clearNext( { playingSequence, nextSequence, false }, ae.getSelectedSequence() ).playing;
 
-                pads->setBreathing( playingSequence );
-                setPadBlinking( playingSequence, contracts::DeviceControlContracts::DeviceControlContracts::StateOnBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
+            pads->removeBreathing( nextSequence ); //orange
+            setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::PadColourOrange );
 
-                nextSequence = -1;
-            }
-            else
-                std::abort(); // Forces a crash here
+            pads->setBreathing( playingSequence );
+            setPadBlinking( playingSequence, contracts::DeviceControlContracts::DeviceControlContracts::StateOnBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
+
+            nextSequence = -1;
         }
     }
 
-    void KickNextSequenceContent::startPlaying()
+    void KickNextSequenceContent::startPlaying( bool FromBeginning, bool Engine )
     {
         pads->removeBreathing( playingSequence );
         pads->setBorderColor( playingSequence, ui::Theme::selectionColour( 2 ), 1, juce::dontSendNotification ); //Green
@@ -349,10 +357,11 @@ namespace kick_ui
             pads->setBreathing( nextSequence );
             setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOnBlink, contracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
         }
-        ae.playSequence( playingSequence );
+        if( Engine )
+            ae.setSequencePlay( playingSequence, FromBeginning, true ); // PLAY continues, PLAY START restarts: as on every other screen
     }
 
-    void KickNextSequenceContent::stopPlaying()
+    void KickNextSequenceContent::stopPlaying( bool Engine )
     {
         if( nextSequence >= 0 )
         {
@@ -365,20 +374,39 @@ namespace kick_ui
             pads->setBreathing( playingSequence );
             setPadBlinking( playingSequence, contracts::DeviceControlContracts::StateOnBlink, contracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
         }
-        ae.stopSequence();
+        if( Engine )
+            ae.setSequencePause();
     }
 
     void KickNextSequenceContent::restoreData()
     {
-        if( playingSequence == -1 )
-            playingSequence = ae.getSelectedSequence();
+        const int oldNext = nextSequence;
+        auto      r       = sequence_logic::restore( { playingSequence, oldNext, isPlaying }, ae.isSequencePlaying(), ae.getSelectedSequence() );
+        playingSequence   = r.state.playing;
+        isPlaying         = r.state.isPlaying;
 
-        isPlaying = ae.isSequencePlaying();
+        // A queue that cannot exist any more (the engine stopped while this screen was away or a bank was
+        // changed after STOP) is dropped; it used to abort the application here.
+        if( oldNext >= 0 && r.state.next < 0 )
+        {
+            pads->removeBreathing( oldNext );
+            setPadBlinking( oldNext, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
+            nextSequence = -1;
+        }
+        if( r.clearEngineNext )
+            ae.setNextSequence( -1 );
+
         if( isPlaying )
         {
             pads->removeBreathing( playingSequence );
             pads->setBorderColor( playingSequence, ui::Theme::selectionColour( 2 ), 1, juce::dontSendNotification ); //Green
             setPadLED( playingSequence, contracts::DeviceControlContracts::StateOn, contracts::DeviceControlContracts::PadColourIds::padColourlightGreen1 );
+
+            if( nextSequence >= 0 )
+            {
+                pads->setBreathing( nextSequence );
+                setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOnBlink, contracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
+            }
         }
         else
         {
@@ -386,37 +414,58 @@ namespace kick_ui
             setPadBlinking( playingSequence, contracts::DeviceControlContracts::StateOnBlink, contracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
         }
 
-        if( isPlaying )
-        {
-            if( nextSequence >= 0 )
-            {
-                pads->setBreathing( nextSequence );
-                setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOnBlink, contracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
-            }
-        }
-        else if( nextSequence >= 0 )
-        {
-            std::abort();
-        }
-
+        nextBar.setEnabled( isPlaying );
+        tableView->setInterceptsMouseClicks( !isPlaying, !isPlaying );
         tableView->selectRow( playingSequence, juce::dontSendNotification );
         ae.setSelectedSequence( playingSequence );
+        if( onPlayingChanged )
+            onPlayingChanged( isPlaying );
     }
 
-    void KickNextSequenceContent::onPlay()
+    void KickNextSequenceContent::onPlay( bool FromBeginning )
     {
+        if( isPlaying )
+        {
+            // Already running: PLAY START restarts it, PLAY changes nothing.
+            if( FromBeginning )
+                ae.setSequencePlay( playingSequence, true, true );
+            return;
+        }
         isPlaying = true;
-        startPlaying();
+        startPlaying( FromBeginning, true );
         nextBar.setEnabled( true );
         tableView->setInterceptsMouseClicks( false, false );
+        if( onPlayingChanged )
+            onPlayingChanged( true );
     }
 
     void KickNextSequenceContent::onStop()
     {
         isPlaying = false;
-        stopPlaying();
+        stopPlaying( true );
         nextBar.setEnabled( false );
         tableView->setInterceptsMouseClicks( true, true );
+        if( onPlayingChanged )
+            onPlayingChanged( false );
+    }
+
+    // The engine's transport changed by something other than this screen's buttons: follow it (UI only).
+    void KickNextSequenceContent::syncTransport()
+    {
+        if( !isVisible() || !ae.isProjectLoaded() )
+            return;
+        const bool enginePlaying = ae.isSequencePlaying();
+        if( enginePlaying == isPlaying )
+            return;
+        isPlaying = enginePlaying;
+        if( enginePlaying )
+            startPlaying( false, false );
+        else
+            stopPlaying( false );
+        nextBar.setEnabled( isPlaying );
+        tableView->setInterceptsMouseClicks( !isPlaying, !isPlaying );
+        if( onPlayingChanged )
+            onPlayingChanged( isPlaying );
     }
 
     void KickNextSequenceContent::enableRowSelection( bool State )
@@ -539,10 +588,11 @@ namespace kick_ui
 
                 if( nextSequence >= 0 )
                 {
-                    ae.setSelectedSequence( nextSequence );
+                    auto h = sequence_logic::hiddenWhileStopped( { playingSequence, nextSequence, false } );
+                    ae.setSelectedSequence( h.playing );
 
-                    playingSequence = nextSequence;
-                    nextSequence    = -1;
+                    playingSequence = h.playing;
+                    nextSequence    = h.next;
                 }
             }
             contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::clearAllPadsMessage() );
@@ -565,6 +615,16 @@ namespace kick_ui
         mt::utils::addChildComponents( this, header, content );
 
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
+
+        // Touch Play / Stop in the header (no hardware needed); its state follows the engine.
+        header.showPlayButton( true );
+        header.onPlayStopClick = [this]( bool Play ) {
+            if( Play )
+                content.onPlay( false );
+            else
+                content.onStop();
+        };
+        content.onPlayingChanged = [this]( bool Playing ) { header.setPlayState( Playing, juce::dontSendNotification ); };
 
         ui::themeChanged.connect( [&]() {
             header.setIcon( "Icon_NextSeq" );
@@ -620,11 +680,8 @@ namespace kick_ui
     {
         switch( PlayType )
         {
-            case contracts::DeviceControlContracts::EN_PLAY:
-            case contracts::DeviceControlContracts::EN_PLAYSTART:
-                if( !ae.isSequencePlaying() )
-                    content.onPlay();
-                break;
+            case contracts::DeviceControlContracts::EN_PLAY: content.onPlay( false ); break;
+            case contracts::DeviceControlContracts::EN_PLAYSTART: content.onPlay( true ); break;
             case contracts::DeviceControlContracts::EN_STOP:
                 content.onStop();
                 break;
@@ -633,46 +690,64 @@ namespace kick_ui
 
     void KickNextSequenceMode::knobCommand( int knob, int value )
     {
-        auto seqData   = ae.getSequenceData( ae.getSelectedSequence() );
-        auto trackData = ae.getTrackData( ae.getSelectedSequence(), ae.getSelectedTrack() );
+        applySequenceKnob( ae, metronome, knob, value );
+    }
+
+    // Q-Link on the selected sequence / track. Shared with the Song screen. Knobs 1-4 exist on the
+    // Key 61; 5-13 are the Behringer layout. A missing sequence or track does nothing.
+    void applySequenceKnob( mt::MTAudioInterface& ae, kick_ui::MetronomePopup& metronome, int knob, int value )
+    {
+        using K = contracts::DeviceControlContracts;
+        const auto seq = ae.getSelectedSequence();
+
+        if( knob >= K::KnobSequence::EN_KNOB_1 && knob <= K::KnobSequence::EN_KNOB_4 )
+        {
+            auto* seqData = ae.getSequenceData( seq );
+            if( seqData == nullptr )
+                return;
+            sequence_logic::SeqValues v;
+            v.valid     = true;
+            v.bpm       = (int)seqData->tempo;
+            v.length    = seqData->length.get();
+            v.loopStart = seqData->loopStart.get();
+            v.loopEnd   = seqData->loopEnd.get();
+            const auto e = sequence_logic::sequenceQLink( knob - K::KnobSequence::EN_KNOB_1 + 1, v, value );
+            switch( e.kind )
+            {
+                case sequence_logic::QLinkEdit::Kind::Bpm: ae.setSequenceBPM( seq, e.a ); break;
+                case sequence_logic::QLinkEdit::Kind::Length: ae.setSequenceLength( seq, e.a ); break;
+                case sequence_logic::QLinkEdit::Kind::LoopPoints: ae.setSequenceLoopPoints( seq, e.a, e.b ); break;
+                default: break;
+            }
+            return;
+        }
+
+        auto trackData = ae.getTrackData( seq, ae.getSelectedTrack() );
         switch( knob )
         {
-            //sequence
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1:
-                ae.setSequenceBPM( ae.getSelectedSequence(), (int)seqData->tempo + value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_2:
-                ae.setSequenceLength( ae.getSelectedSequence(), seqData->length.get() + value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_3:
-                ae.setSequenceLoopPoints( ae.getSelectedSequence(), seqData->loopStart.get() + value, seqData->loopEnd.get() );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_4:
-                ae.setSequenceLoopPoints( ae.getSelectedSequence(), seqData->loopStart.get(), seqData->loopEnd.get() + value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_5:
-                ae.setSelectedSequence( ae.getSelectedSequence() + value );
+            case K::KnobSequence::EN_KNOB_5:
+                ae.setSelectedSequence( seq + value );
                 break;
             //track
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_6:
-                ae.setTrackMidiChannel( ae.getSelectedSequence(), ae.getSelectedTrack(), trackData ? trackData->midiChannel.get() + value : value );
+            case K::KnobSequence::EN_KNOB_6:
+                ae.setTrackMidiChannel( seq, ae.getSelectedTrack(), trackData ? trackData->midiChannel.get() + value : value );
                 break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_7:
-                ae.setTrackLength( ae.getSelectedSequence(), ae.getSelectedTrack(), trackData ? trackData->length.get() + value : value );
+            case K::KnobSequence::EN_KNOB_7:
+                ae.setTrackLength( seq, ae.getSelectedTrack(), trackData ? trackData->length.get() + value : value );
                 break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_8:
-                ae.setTrackLevel( ae.getSelectedSequence(), ae.getSelectedTrack(), trackData ? trackData->level.get() + value : value );
+            case K::KnobSequence::EN_KNOB_8:
+                ae.setTrackLevel( seq, ae.getSelectedTrack(), trackData ? trackData->level.get() + value : value );
                 break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_9:
-                ae.setTrackTranspose( ae.getSelectedSequence(), ae.getSelectedTrack(), trackData ? trackData->transpose.get() + value : value );
+            case K::KnobSequence::EN_KNOB_9:
+                ae.setTrackTranspose( seq, ae.getSelectedTrack(), trackData ? trackData->transpose.get() + value : value );
                 break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_10:
+            case K::KnobSequence::EN_KNOB_10:
                 ae.setSelectedTrack( ae.getSelectedTrack() + value );
                 break;
                 //metronome
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_11:
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_12:
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_13:
+            case K::KnobSequence::EN_KNOB_11:
+            case K::KnobSequence::EN_KNOB_12:
+            case K::KnobSequence::EN_KNOB_13:
                 metronome.linkRotated( knob % 10, value );
                 break;
         }

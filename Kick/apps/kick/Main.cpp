@@ -20,6 +20,7 @@
  */
 
 #include "kick_ui/kick_ui.h"
+#include "kick_ui/kick_ui_grid.h"
 #include "audio_engine/audio_engine.h"
 #include "kick_device_adapter.h"
 #include "kick_audio_engine_adapter.h"
@@ -178,6 +179,13 @@ public:
         Screen     screen = Screen::Invalid;
         for( const auto& e : table )
             if( name.equalsIgnoreCase( e.first ) ) screen = e.second;
+        // "HomeSequencerGrid": the Step Sequencer in its GRID view ("HomeSequencerView" shows CLASSIC).
+        if( name.equalsIgnoreCase( "HomeSequencerGrid" ) || name.equalsIgnoreCase( "HomeSequencerView" ) )
+        {
+            screen = Screen::HomeSequencerView;
+            if( auto* ss = dynamic_cast<kick_ui::StepSequencer*>( kick_ui::KickHome::Instance().findScreen( Screen::HomeSequencerView ) ) )
+                ss->showGridView( name.equalsIgnoreCase( "HomeSequencerGrid" ) );
+        }
 
         if( screen == Screen::Invalid )
         {
