@@ -218,22 +218,65 @@ namespace mt
     ////////////////////////////
     //// Project
     ////////////////////////////
-    bool MTAudioManager::loadProject( juce::File& ProjectFile )
+    void MTAudioManager::settleAudioThread( int callbacks, int timeoutMs )
+    {
+        // The audio device runs its callbacks on its own thread; after the engine objects were replaced, `callbacks` completed
+        // callbacks mean it holds no reference to the old ones. Nothing to wait for when no device is running (headless).
+        if( !dm || !dm->isRunning() )
+            return;
+        const auto target   = dm->completedCallbacks() + static_cast<uint64_t>( callbacks );
+        const auto deadline = juce::Time::getMillisecondCounter() + static_cast<juce::uint32>( timeoutMs );
+        while( dm->completedCallbacks() < target && juce::Time::getMillisecondCounter() < deadline )
+            std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+    }
+
+    MTAudioManager::SaveAsResult MTAudioManager::saveProjectAs( const juce::File& newDir, bool switchToNew, const CopyFolderFn& copyFolder, const std::atomic<bool>& cancel )
+    {
+        if( !projectLoaded )
+        {
+            SaveAsResult r;
+            r.error = "No project is open";
+            return r;
+        }
+        const auto r = projectManager::saveAs( newDir, switchToNew, copyFolder, cancel );
+        kick_log( r.ok ? "info" : "warn", "[%s] [PROJ] Save as '%s': %s\n", r.ok ? "INFO" : "WARN", newDir.getFullPathName().toRawUTF8(), r.ok ? "ok" : r.error.toRawUTF8() );
+        return r;
+    }
+
+    bool MTAudioManager::loadProject( juce::File& ProjectFile, bool createIfMissing )
     {
         const auto start_ms = kick_logger::get_uptime_ms();
         const auto projName = ProjectFile.getFullPathName();
         kick_log( "info", "[INFO] [PROJ] Project load begin: '%s'\n", projName.toRawUTF8() );
+        lastLoadError.clear();
+
+        // An existing project is opened, never made up: a missing / deleted one is reported and the open project stays as it is.
+        if( !createIfMissing )
+        {
+            const bool exists = ProjectFile.existsAsFile() || ( ProjectFile.isDirectory() && ProjectFile.getChildFile( ProjectFile.getFileName() + __projectFileExtension ).existsAsFile() );
+            if( !exists )
+            {
+                lastLoadError = "The project was not found: " + ProjectFile.getFullPathName();
+                kick_log( "info", "[INFO] [PROJ] Project load end: '%s' (not found)\n", projName.toRawUTF8() );
+                projectManager::clearDiscard();
+                return false;
+            }
+        }
 
         if (!closeProject())
         {
+            lastLoadError = "The open project could not be saved first: " + projectManager::getLastSaveError();
+            projectManager::clearDiscard();
             kick_log( "info", "[INFO] [PROJ] Project load end: '%s' (failed to close previous, took %llu ms)\n",
                       projName.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ) );
             return false;
         }
+        projectManager::clearDiscard(); // "Don't save" applies to that one close only
         undoManager.clearUndoHistory();
         vTree = projectManager::loadOrCreate( ProjectFile );
         if (!vTree.isValid())
         {
+            lastLoadError = projectManager::getLastSaveError().isNotEmpty() ? projectManager::getLastSaveError() : juce::String( "The project file is not valid" );
             kick_log( "info", "[INFO] [PROJ] Project load end: '%s' (invalid project, took %llu ms)\n",
                       projName.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ) );
             return false;
@@ -262,7 +305,7 @@ namespace mt
         MTAudioProgramManager::setup( vTree.getOrCreateChildWithName( IDs::PROGRAMS, nullptr ), &undoManager );
         //DBG( "LP: FM3: " << engine.getFeeMemory() );
 
-        std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
+        settleAudioThread( 3, 300 ); // the programs are live on the audio thread before songs / sequences refer to them
 
         // Initialize Song Manager...
         MTSongManager::init( vTree.getOrCreateChildWithName( IDs::SONGS, nullptr ), &undoManager );
@@ -339,13 +382,13 @@ namespace mt
 
         //DBG( "CP: FM2: " << engine.getFeeMemory() );
         engine.reset();
-        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+        settleAudioThread( 2, 200 );
         //DBG( "CP: FM3: " << engine.getFeeMemory() );
 
         MTAudioSequenceManager::close();
         MTAudioProgramManager::close();
 
-        std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
+        settleAudioThread( 3, 300 ); // the audio thread no longer touches the closed programs
         //DBG( "CP: End FM: " << engine.getFeeMemory() );
 
         // Reset Selection.

@@ -31,8 +31,11 @@ namespace mt
         juce::String getPathAssignedToButton( juce::String );
         juce::var    getSelectedLeftRow( juce::String buttonName );
         int          getNumProperties();
+        // Browser options (void when never set)
+        juce::var getOption( const juce::String& name );
 
         // Setters...
+        void setOption( const juce::String& name, const juce::var& value );
         void setPathToButton( juce::String buttonName, juce::String path );
         void setSelectedLeftRow( juce::String buttonName, int row );
     };
@@ -56,7 +59,10 @@ namespace mt
         Atomic<int>  maxRecentProjects;
         Atomic<int>  defProjectState;
 
+        // Start-up behaviour: "Selector" (the Projects screen), "Last Used" (auto-load the last project), "New Project" (a new
+        // project made from launchTemplate, a project folder under /data/templates; empty = an empty project).
         AtomicString onLaunch;
+        AtomicString launchTemplate;
         AtomicString bitDepth;
         AtomicString saveAfter;
         AtomicString numerator;
