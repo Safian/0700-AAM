@@ -16,32 +16,18 @@ namespace ui
         {
             if( !filePath.isDirectory() )
                 return filePath.getSize();
-            auto&       cache = getFolderSizeCache();
-            juce::int64 total = 0;
-            // Each direct sub-folder is one unit of work and is cached when it is done: a scan of a big SD card that is cancelled
-            // keeps what it finished. Files directly in the folder are added up on the way.
-            for( const auto& entry : juce::RangedDirectoryIterator( filePath, false, "*", juce::File::findFilesAndDirectories ) )
-            {
-                if( shouldExit && shouldExit() )
-                    return -1;
-                if( entry.isDirectory() )
+            // The walk itself is scanFolderSize (host-tested with a real temp folder); this lists one folder through JUCE.
+            const auto list = []( const std::string& dir ) {
+                std::vector<DirEntry> out;
+                for( const auto& entry : juce::RangedDirectoryIterator( juce::File( juce::String( dir ) ), false, "*", juce::File::findFilesAndDirectories, juce::File::FollowSymlinks::no ) )
                 {
-                    const auto  sub   = entry.getFile();
-                    const auto  mtime = sub.getLastModificationTime().toMilliseconds();
-                    juce::int64 subSize = 0;
-                    if( !cache.get( sub.getFullPathName().toStdString(), mtime, subSize ) )
-                    {
-                        subSize = calculateFolderSize( sub, shouldExit );
-                        if( subSize < 0 )
-                            return -1;
-                        cache.put( sub.getFullPathName().toStdString(), subSize, mtime );
-                    }
-                    total += subSize;
+                    const auto f = entry.getFile();
+                    out.push_back( { f.getFullPathName().toStdString(), entry.isDirectory(), f.isSymbolicLink(), (int64_t)entry.getFileSize(),
+                                     entry.isDirectory() ? f.getLastModificationTime().toMilliseconds() : 0 } );
                 }
-                else
-                    total += entry.getFileSize();
-            }
-            return total;
+                return out;
+            };
+            return scanFolderSize( filePath.getFullPathName().toStdString(), list, getFolderSizeCache(), shouldExit );
         }
 
         void invalidateFolderSizes( const juce::File& changed )

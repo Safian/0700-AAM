@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace ui
 {
@@ -65,6 +66,51 @@ namespace ui
             mutable std::mutex mutex;
             std::unordered_map<std::string, Entry> entries;
         };
+
+        /// One entry of a folder listing for scanFolderSize.
+        struct DirEntry
+        {
+            std::string path;
+            bool        isDirectory{ false };
+            bool        isSymlink{ false }; // a link counts with its own size and is never followed (no loops, no double counting)
+            int64_t     size{ 0 };
+            int64_t     mtime{ 0 };
+        };
+
+        /**
+         * Folder size by one scan. `list(dir)` returns the entries of one folder (the caller's file system: JUCE on the device,
+         * std::filesystem in the host test). Each direct sub-folder is one unit of work and is cached (path, mtime) when done, so a
+         * cancelled scan keeps what it finished. Symbolic links are not followed; the depth is bounded (a mount loop cannot run
+         * away). Returns -1 when `shouldExit` asked to stop.
+         */
+        template<class Lister>
+        int64_t scanFolderSize( const std::string& dir, Lister&& list, FolderSizeCache& cache, const std::function<bool()>& shouldExit, int depth = 0 )
+        {
+            constexpr int kMaxDepth = 64;
+            if( depth > kMaxDepth )
+                return 0;
+            int64_t total = 0;
+            for( const DirEntry& e : list( dir ) )
+            {
+                if( shouldExit && shouldExit() )
+                    return -1;
+                if( e.isDirectory && !e.isSymlink )
+                {
+                    int64_t sub = 0;
+                    if( !cache.get( e.path, e.mtime, sub ) )
+                    {
+                        sub = scanFolderSize( e.path, list, cache, shouldExit, depth + 1 );
+                        if( sub < 0 )
+                            return -1;
+                        cache.put( e.path, sub, e.mtime );
+                    }
+                    total += sub;
+                }
+                else
+                    total += e.size;
+            }
+            return total;
+        }
 
         /**
          * Generation tracker for cancelling ongoing asynchronous tasks.

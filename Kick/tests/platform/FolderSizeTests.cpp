@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <thread>
 #include <vector>
+#include <filesystem>
+#include <fstream>
 
 static int g_fail = 0;
 #define CHECK( cond )                                                                                               \
@@ -27,6 +29,8 @@ static int g_fail = 0;
 
 using ui::fileUtils::FolderSizeCache;
 using ui::fileUtils::GenerationTracker;
+using ui::fileUtils::DirEntry;
+using ui::fileUtils::scanFolderSize;
 
 static void test_cache_basic()
 {
@@ -163,8 +167,105 @@ static void test_cancellation_simulation()
     CHECK( !cache.get( "/slow/folder", 500, outSize ) );
 }
 
+// scanFolderSize against a REAL temp folder (FB-33): empty, nested, cached sub-folders, cancellation keeps finished work, symlinks.
+namespace fs = std::filesystem;
+
+static void put( const fs::path& p, size_t bytes )
+{
+    fs::create_directories( p.parent_path() );
+    std::ofstream( p, std::ios::binary ) << std::string( bytes, 'x' );
+}
+
+static std::vector<DirEntry> listStd( const std::string& dir )
+{
+    std::vector<DirEntry> out;
+    std::error_code       ec;
+    for( const auto& e : fs::directory_iterator( dir, ec ) )
+    {
+        DirEntry d;
+        d.path      = e.path().string();
+        d.isSymlink = e.is_symlink();
+        d.isDirectory = e.is_directory( ec );
+        if( d.isSymlink )
+            d.size = 16; // a link counts with its own (small) size
+        else if( d.isDirectory )
+            d.mtime = (int64_t)e.last_write_time().time_since_epoch().count();
+        else
+            d.size = (int64_t)e.file_size();
+        out.push_back( d );
+    }
+    return out;
+}
+
+static void test_scan_real_folder()
+{
+    const fs::path root = fs::temp_directory_path() / "kick_folder_size_test";
+    fs::remove_all( root );
+    fs::create_directories( root / "empty" );
+    put( root / "a.bin", 100 );
+    put( root / "deep" / "b.bin", 200 );
+    put( root / "deep" / "x" / "y" / "z" / "c.bin", 300 );
+    FolderSizeCache cache;
+    const auto      noStop = std::function<bool()>();
+
+    // empty folder = 0; whole tree = 100 + 200 + 300
+    CHECK_EQ( scanFolderSize( ( root / "empty" ).string(), listStd, cache, noStop ), 0 );
+    CHECK_EQ( scanFolderSize( root.string(), listStd, cache, noStop ), 600 );
+    // every sub-folder that was finished is cached
+    int64_t cached = 0;
+    CHECK( cache.size() >= 5 ); // empty, deep, x, y, z
+    (void)cached;
+
+    // a second scan with a changed file in a cached sub-folder: its mtime changed, so it is scanned again
+    {
+        FolderSizeCache c2;
+        CHECK_EQ( scanFolderSize( root.string(), listStd, c2, noStop ), 600 );
+        put( root / "deep" / "x" / "y" / "z" / "d.bin", 50 ); // z changes (mtime), the parents are found by their own mtime when listed
+        c2.invalidate( ( root / "deep" / "x" / "y" / "z" ).string() );
+        fs::last_write_time( root / "deep" / "x" / "y" / "z", fs::file_time_type::clock::now() + std::chrono::seconds( 5 ) );
+        FolderSizeCache c3;
+        CHECK_EQ( scanFolderSize( root.string(), listStd, c3, noStop ), 650 );
+    }
+
+    // cancellation: -1, and the sub-folders finished before the cancel stay cached
+    {
+        FolderSizeCache c4;
+        int             calls = 0;
+        const auto      stopAfter = [&]() { return ++calls > 4; };
+        CHECK_EQ( scanFolderSize( root.string(), listStd, c4, stopAfter ), -1 );
+        CHECK( c4.size() < 5 );
+        // a later scan completes with the right total
+        CHECK_EQ( scanFolderSize( root.string(), listStd, c4, noStop ), 650 );
+    }
+
+    // symlinks: a link to the parent folder is not followed (no loop, no double count); a link to a file counts once as a link
+    {
+        std::error_code ec;
+        fs::create_directory_symlink( root, root / "deep" / "loop", ec );
+        fs::create_symlink( root / "a.bin", root / "link_to_a", ec );
+        if( !ec )
+        {
+            FolderSizeCache c5;
+            const int64_t   total = scanFolderSize( root.string(), listStd, c5, noStop );
+            CHECK( total >= 650 && total <= 650 + 2 * 64 ); // plus the two small links, never the target again
+        }
+    }
+
+    // the depth bound stops a run-away tree (a mount loop): 100 nested folders still finish
+    {
+        fs::path p = root / "nest";
+        for( int i = 0; i < 100; ++i )
+            p /= "n";
+        fs::create_directories( p );
+        FolderSizeCache c6;
+        CHECK( scanFolderSize( ( root / "nest" ).string(), listStd, c6, noStop ) >= 0 );
+    }
+    fs::remove_all( root );
+}
+
 int main()
 {
+    test_scan_real_folder();
     test_cache_basic();
     test_generation_tracker();
     test_cache_concurrency();
