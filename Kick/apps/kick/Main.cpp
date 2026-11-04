@@ -158,7 +158,7 @@ public:
             { "HomeGridView", Screen::HomeGridView }, { "HomeSequencerView", Screen::HomeSequencerView },
             { "HomeXYView", Screen::HomeXYView }, { "HomePreferencesView", Screen::HomePreferencesView },
             { "MenuSampleEdit", Screen::MenuSampleEdit }, { "MenuProgramEdit", Screen::MenuProgramEdit },
-            { "MenuSampler", Screen::MenuSampler }, { "MenuLooper", Screen::MenuLooper },
+            { "MenuSampler", Screen::MenuSampler }, { "MenuAssignSample", Screen::MenuAssignSample }, { "MenuLooper", Screen::MenuLooper },
             { "MenuPadMute", Screen::MenuPadMute }, { "MenuTrackMute", Screen::MenuTrackMute },
             { "MenuPadMixer", Screen::MenuPadMixer }, { "MenuChannelMixer", Screen::MenuChannelMixer },
             { "MenuKnobEdit", Screen::MenuKnobEdit }, { "MenuListEdit", Screen::MenuListEdit },
