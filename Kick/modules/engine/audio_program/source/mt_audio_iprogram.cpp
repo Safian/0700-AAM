@@ -258,6 +258,13 @@ namespace mt
         return 0;
     }
 
+    int MTIProgram::resetPadColors()
+    {
+        for( auto i = MIDI::MIN; i < MIDI::NUMERIC_MAX; ++i )
+            MTIProgramData::padColour[i].resetToDefault(); // back to the program type's default
+        return 0;
+    }
+
     void MTIProgram::resetPerformance()
     {
         // stop() (tick/message thread) races live input; SustainState is internally locked. It releases pedal-held notes (also muted).
