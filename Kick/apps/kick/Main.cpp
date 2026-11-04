@@ -36,6 +36,7 @@
  #include "../../tests/platform/AppSmoke.h"
 #endif
 #include "contracts/utils/keyboard/keyboard_detector.h"
+#include "common/source/kick_logger.h"
 #if JUCE_LINUX
  #include <execinfo.h>
  #include <dlfcn.h>
@@ -202,6 +203,8 @@ public:
 
     void initialise( const juce::String& commandLine ) override
     {
+        kick_logger::init();
+        kick_log( "info", "[INFO] [APP] Kick %s initialising...\n", getApplicationVersion().toRawUTF8() );
 #if JUCE_LINUX
         // A crash (SIGSEGV/SIGBUS/...) leaves its signal, fault address, registers and call stack in /data/kick.crash
         // (module-relative addresses: resolve with arm-linux-gnueabihf-addr2line against the unstripped binary). On ARM the
@@ -248,6 +251,7 @@ public:
                 backtrace_symbols_fd( frames, n, fd );
                 close( fd );
             }
+            kick_logger::dump_crash_log_async_signal_safe( "/data/kick.crash.log" );
             signal( sig, SIG_DFL );
             raise( sig );
         };
@@ -368,6 +372,7 @@ public:
 
     void shutdown() override
     {
+        kick_log( "info", "[INFO] [APP] Kick shutting down...\n" );
 #if PERFETTO
         MelatoninPerfetto::get().endSession();
 #endif
@@ -380,6 +385,7 @@ public:
         mt::getAudioInterface().closeProject();
         w = nullptr;
         adapter = nullptr;
+        kick_logger::shutdown();
     }
 
     //==============================================================================
