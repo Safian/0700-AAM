@@ -196,6 +196,13 @@ namespace mt
         // Drops the recorded lane. Undoable through the track's UndoManager when Undoable (the caller opens the transaction).
         void clearAutomation( bool Undoable );
         bool hasAutomation() const;
+        // Lane points as list events (List Edit). Param = automation::Param (Level / Pan). Message thread. The edits go
+        // through the track's UndoManager (the caller opens the transaction); the ValueTree listener reloads the lane,
+        // so playback follows. setLanePoint: OldTick < 0 inserts at NewTick, else the point at OldTick moves to NewTick
+        // with Value; false when refused (lane full, bad parameter, the pan lane belongs to another program).
+        std::vector<automation::Point> getLanePoints( int Param ) const;
+        bool                           setLanePoint( int Param, int OldTick, int NewTick, int Value );
+        bool                           eraseLanePoint( int Param, int Tick );
         // PAN lane (see mt_automation.h): keyed to the PROGRAM the track plays; applies only while the track's program
         // id equals the id the lane was recorded for. Playback never touches the ValueTree from the tick thread: onTick
         // publishes the lane value in panTarget, and MTAudioManager::applyAutomatedPans (message thread, 25 Hz timer)

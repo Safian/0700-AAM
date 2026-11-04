@@ -150,5 +150,129 @@ namespace kick_ui
 
         // Group velocity edit.
         inline int velocityDelta( int Velocity, int Delta ) { return clampCell( Cell::Velocity, Velocity + Delta ); }
+
+        // ---- event rows (notes and automation breakpoints in one list) -------------------------------------
+        // View menu of the manual: All / Notes / Track Automation (the other event types have no model here).
+        enum class EventFilter
+        {
+            All,
+            Notes,
+            Automation
+        };
+
+        struct EventRef
+        {
+            bool automation{ false };
+            int  index{ 0 };      // index in the note list / in the automation event list
+            int  tick{ 0 };
+            bool sameTime{ false }; // same position as the row above: its time is shown greyed
+        };
+
+        // Rows of the list: both sources are sorted by tick; at equal ticks notes come first. Equal times grey out.
+        inline std::vector<EventRef> mergeEvents( const std::vector<int>& NoteTicks, const std::vector<int>& AutoTicks, EventFilter F )
+        {
+            std::vector<EventRef> rows;
+            const bool            wantNotes = F != EventFilter::Automation;
+            const bool            wantAuto  = F != EventFilter::Notes;
+            size_t                n = 0, a = 0;
+            const size_t          nn = wantNotes ? NoteTicks.size() : 0, na = wantAuto ? AutoTicks.size() : 0;
+            while( n < nn || a < na )
+            {
+                EventRef r;
+                if( a >= na || ( n < nn && NoteTicks[n] <= AutoTicks[a] ) )
+                {
+                    r.automation = false;
+                    r.index      = (int)n;
+                    r.tick       = NoteTicks[n++];
+                }
+                else
+                {
+                    r.automation = true;
+                    r.index      = (int)a;
+                    r.tick       = AutoTicks[a++];
+                }
+                r.sameTime = !rows.empty() && rows.back().tick == r.tick;
+                rows.push_back( r );
+            }
+            return rows;
+        }
+
+        // The row the playhead has reached: the last row starting at or before it (-1 when the playhead is before the first).
+        inline int rowAtPlayhead( const std::vector<EventRef>& Rows, int PlayTick )
+        {
+            int found = -1;
+            for( size_t i = 0; i < Rows.size(); ++i )
+            {
+                if( Rows[i].tick > PlayTick )
+                    break;
+                found = (int)i;
+            }
+            return found;
+        }
+
+        // "Go to playhead": the row to bring into view = the row at the playhead, else the first row.
+        inline int goToPlayheadRow( const std::vector<EventRef>& Rows, int PlayTick )
+        {
+            if( Rows.empty() )
+                return -1;
+            const int r = rowAtPlayhead( Rows, PlayTick );
+            return r < 0 ? 0 : r;
+        }
+
+        // ---- automation values -----------------------------------------------------------------------------
+        constexpr int kAutoLevel    = 0;
+        constexpr int kAutoPan      = 1;
+        constexpr int kAutoPanScale = 1000; // lane value = pan * 1000
+
+        inline const char* autoName( int Param ) { return Param == kAutoPan ? "Pan" : "Level"; }
+
+        // Shown / edited value: Level 0..127, Pan -100..100 (percent, left negative).
+        inline int autoDisplay( int Param, int LaneValue ) { return Param == kAutoPan ? ( LaneValue < 0 ? -( ( -LaneValue + 5 ) / 10 ) : ( LaneValue + 5 ) / 10 ) : std::min( 127, std::max( 0, LaneValue ) ); }
+        inline int autoFromDisplay( int Param, int Shown )
+        {
+            if( Param == kAutoPan )
+                return std::min( 100, std::max( -100, Shown ) ) * 10;
+            return std::min( 127, std::max( 0, Shown ) );
+        }
+        inline int autoMinShown( int Param ) { return Param == kAutoPan ? -100 : 0; }
+        inline int autoMaxShown( int Param ) { return Param == kAutoPan ? 100 : 127; }
+
+        // ---- group edits -----------------------------------------------------------------------------------
+        // A note moved by Delta ticks stays inside the sequence: [0, SeqTicks - 1].
+        inline int nudgeStart( int Start, int Delta, int SeqTicks )
+        {
+            const int hi = std::max( 0, SeqTicks - 1 );
+            return std::min( hi, std::max( 0, Start + Delta ) );
+        }
+
+        // Selection set kept sorted and unique: touch / Shift toggles a row.
+        inline std::vector<int> toggleRow( std::vector<int> Sel, int Row )
+        {
+            auto it = std::find( Sel.begin(), Sel.end(), Row );
+            if( it != Sel.end() )
+                Sel.erase( it );
+            else
+            {
+                Sel.push_back( Row );
+                std::sort( Sel.begin(), Sel.end() );
+            }
+            return Sel;
+        }
+
+        // The selection after rows [LowestDeleted...] were deleted: the row that moved up into the first deleted slot.
+        inline int selectionAfterGroupDelete( int NumRowsBefore, const std::vector<int>& Deleted )
+        {
+            if( Deleted.empty() )
+                return -1;
+            const int lowest = *std::min_element( Deleted.begin(), Deleted.end() );
+            return selectionAfterDelete( NumRowsBefore, lowest, (int)Deleted.size() );
+        }
+
+        // Step record (REC armed, stopped, pad pressed): the note starts at the playhead and is one TC division long
+        // (0 = BAR in the TC list: then the fallback, one grid step of the screen); velocity 1..127.
+        inline int stepRecordLength( int TcGridTicks, int FallbackTicks ) { return std::max( 1, TcGridTicks > 0 ? TcGridTicks : FallbackTicks ); }
+        inline int stepRecordVelocity( int PadVelocity ) { return std::min( 127, std::max( 1, PadVelocity ) ); }
+        // Auto-advance: the playhead moves by the note length, never past the end of the sequence.
+        inline int stepRecordNextTick( int Start, int Length, int SeqTicks ) { return std::min( std::max( 0, SeqTicks ), Start + Length ); }
     }
 }

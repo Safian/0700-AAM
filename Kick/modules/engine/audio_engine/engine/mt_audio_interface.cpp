@@ -1864,6 +1864,31 @@ namespace mt
 
     void MTAudioInterface::clearAllAutomation() { manager->clearAutomation( 2 ); }
 
+    std::vector<MTAutomationEvent> MTAudioInterface::getAutomationEvents( const MTSelected& Selection )
+    {
+        std::vector<MTAutomationEvent> out;
+        auto                           t = manager->getTrack( Selection );
+        if( !t )
+            return out;
+        for( int param : { kAutomationLevel, kAutomationPan } )
+            for( auto& p : t->getLanePoints( param ) )
+                out.push_back( { param, (int)p.tick, (int)p.value } );
+        std::stable_sort( out.begin(), out.end(), []( const MTAutomationEvent& a, const MTAutomationEvent& b ) { return a.tick < b.tick; } );
+        return out;
+    }
+
+    int MTAudioInterface::setAutomationEvent( const MTSelected& Selection, int Param, int OldTick, int NewTick, int Value )
+    {
+        auto t = manager->getTrack( Selection );
+        return t && t->setLanePoint( Param, OldTick, NewTick, Value ) ? 0 : -1;
+    }
+
+    int MTAudioInterface::deleteAutomationEvent( const MTSelected& Selection, int Param, int Tick )
+    {
+        auto t = manager->getTrack( Selection );
+        return t && t->eraseLanePoint( Param, Tick ) ? 0 : -1;
+    }
+
     int MTAudioInterface::humanizeNotes( const MTSelected& Selection, const track::humanizeInfo& Info )
     {
         if( auto t = manager->getTrack( Selection ) )
