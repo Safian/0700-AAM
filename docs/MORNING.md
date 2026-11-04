@@ -1,7 +1,7 @@
 # Reggeli összefoglaló (2026-11-04 éjszaka → 11-05)
 
-Állapot: **folyamatban**: három agy-worker még fut (R-9 mixer/mute maradék, R-10 Program Edit/Pad Perform maradék, R-11 Inserts/XY FX/Q-Link/MIDI Control/Looper UI maradék). A végleges verzió akkor lesz kész, amikor azok is bent vannak. Utolsó frissítés: 2026-11-04 ~09:00.
-Minden itt "kész"-nek mondott tétel: merge-elve `safian/main`-re (`e5f88949`), **ARM-build és Mac-build tiszta, a teljes host-tesztkészlet (ctest) 93/93 PASS, hét motoros/képernyő smoke PASS**, az MPC-n a build telepítve, a Kick indul és a képernyők nyílnak összeomlás nélkül. Ahol hangot, LED-et vagy fizikai vezérlőt kell ellenőrizni, azt az "Ember kell" listában jelzem: azt senki sem hallotta/látta.
+Állapot: **kész, a worker-ágak merge-elve és törölve**; az A. lista (docs/TODO_MASTER.md) minden tétele bent van. Utolsó frissítés: 2026-11-04 este.
+Minden "kész" tétel: merge-elve `safian/main`-re (`0c15cf9a`), **ARM-build 0 hiba, Mac-build tiszta, host-tesztkészlet (ctest) 102/102 PASS, a motoros/képernyő smoke-ok PASS**, az MPC-n a végleges build telepítve (mentés: `/data/Kick.prev.*`), a Kick indul és a képernyők nyílnak összeomlás nélkül (`/data/kick.crash` nincs, 0 ERROR sor). Ahol hangot, LED-et vagy fizikai vezérlőt kell ellenőrizni, azt az "Ember kell" listában jelzem: azt senki sem hallotta/látta.
 
 ## Kész és az MPC-n legalább indulásig/megnyitásig ellenőrizve
 - **Zongora**: Demo 01 = zongora (többmintás Keygroup), a Piano projekt betöltése összeomlás nélkül megy. **Képernyő-zongora** (Menü → Keyboard): két gyökérok javítva, **három egyidejű ujj** külön hangot ad (mért: érintés → motor ≈ 42 ms).
@@ -9,16 +9,16 @@ Minden itt "kész"-nek mondott tétel: merge-elve `safian/main`-re (`e5f88949`),
 - **Aura soak**: 46 perc üresjárat összeomlás nélkül (a régi hiba ~25 perc után jött).
 - **Looper**: SYNC gyökérok (`MTSequence::play()` csak a taktust nullázta, a beat/tick a STOP-kori maradt; általános hiba, minden STOP→PLAY érintett) javítva, mért eltérés −1,34 s → −0,14 s. A Recorder átalakítása (overdub, gain/pan, lock-free pillanatkép, marker-FIFO, ütemre-pontos export) bent van, az MPC-n a felvétel/overdub/lejátszás fut.
 - **Oktáv**: két OCT + billentyű akkord és az oktáv-LED sor (gyári MPC-ből mért), te megerősítetted.
+- **Leállítás (R-12, kérésedre)**: a bekapcsoló gomb rövid megnyomására "Power" ablak (Shut Down / Restart / Cancel), Menü 2. oldal "Power" csempe, mentetlen-változás kérdés, transzport/felvétel leállítása, projekt-lezárás, `sync`, majd poweroff. MPC-n mérve: a gomb `gpio-keys` (`/dev/input/event1`), a Kick megtalálja és figyeli; az ablak megnyílik és a MAIN gombbal zárható. **A tényleges Shut Down/Restart-ot nem próbáltam (te végezd).**
+- **R-9..R-11 (mixer/mute, Program Edit/Pad Perform, Inserts/XY FX/Q-Link/MIDI Control/Looper UI maradékai)**: bent, host-tesztelt, az MPC-n a képernyők nyílnak; hangot/LED-et nem ellenőriztem.
 - **Naplózás**: időbélyeg, szálazonosító, kategóriák, rotáció, lépés-napló, főhangerő-napló; `/data/kick.crash` pc/lr + veremátfésülés.
 - **Új funkciók (buildelt, host-tesztelt, az MPC-n nyílnak)**: Preferences-csomag (+Plugins fül), Grid-javítások, MIDI program, CLAP-FX + `clap.gui`, indítóképernyő + állapotsor + biztonságos mód, főképernyő tabok (időjel, Monitor, törlés-megerősítés, undo), fájlböngésző (helyi + WebDAV, háttér-másolás, eject/format, Places), projekt-műveletek (Save As, Rename/Duplicate/Delete/Info, mentetlen-változás kérdés), mixer/mute, szekvencer-szerkesztők (Step Seq, List Edit virtuális sorokkal, Next Sequence, Song, Color Edit), minta/sampler/assign képernyők, XY FX (valódi DSP) és busz-insertek, Q-Link Edit és MIDI Control, híd (Q-Link bank, pad-LED réteg, Touch FX/Notes strip, poly aftertouch), menü (2 oldal, testreszabható), fejléc/státuszsáv (BPM, ütemmutató, Undo History), Kick Update képernyő, `.kickplug` manifest + Ed25519 + atomi telepítő.
 - **Mobil app**: hardverkinézet kivéve, csak teljes képernyős UI + külső MIDI (`feat/mobile-slideout-ui` pusholva a forkra; iOS nem ellenőrzött).
 - **Pendrive-telepítő**: `tkgl_bootstrap` + csomagoló + uninstall + teszt (101/101), új SHA-256-os verzió-ellenőrzés (az MPC-n megvan a `sha256sum`). A Demo 01 mentése: `/data/demos_backup/Demo01.orig`.
 - **Upstream-triázs**: `docs/UPSTREAM_TRIAGE.md` újraépítve és **ellenőrző szkripttel** (`docs/tools/check_upstream_triage.py`) igazolva: 565 commit, 78 ticket, 0 hibás hash/útvonal/méret; a régi triázsban 36 méret-hiba, 2 duplán listázott commit, 41 rossz ticketbe sorolt commit volt. Elsőnek beadandó: FIX-04, 09, 02, 08, 01, 06, 03, 07, PLAT-03 (a doksi 2. szakasza); PR-t nem nyitottam.
 
-## Folyamatban
-- R-9 / R-10 / R-11 (agy). Ha elkészülnek: átnézés, merge, a teljes ellenőrzés, telepítés.
-
 ## Ember kell (pontos lépésekkel; a részletek a worker-jelentésekben és `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` 20–51. pontjaiban, R8-n címkékkel)
+0. **Először (2 perc)**: nyomd meg röviden a bekapcsoló gombot → "Power" ablak jön-e; Cancel; majd Shut Down egy mentett projekttel: tiszta leállás-e (nincs szükség hosszú nyomásra), és mentetlen változással rákérdez-e.
 1. **Hallgatás**: Demo 01 zongora alul/középen/fent, halk/hangos; képernyő-zongora (glissando, bend, vibrato, sustain-gomb, velocity-módok); Looper Sync be → REC 4 ütem → STOP → PLAY; busz-insertek hallhatósága (Reverb egy Return-ön); XY FX mind a 11 preset track/return/submix/output célon (CPU/xrun ARM-on); Pad Perform akkord/progression, Layer Play, poly aftertouch; Sample Edit Fade/Normalize/Stereo>Mono; Sampler felvétel.
 2. **Fizikai**: strip Track Level ujjal; többujjas érintés; Q-Link/mixer ellenőrzések; Controller Mode mérés Mac-en; hardveres REC/OVERDUB/STOP/PLAY képernyőnként.
 3. **Eszközön futtatandó, én nem futtattam (rendszer/hálózat/tárolók)**: Preferences-ben dátum/idő, Ethernet/WiFi, fényerő, Factory Reset, Firmware Update; **Format és Eject egy üres próba-pendrive-on** (mkfs/umount); 300 MB másolás belső↔SD; pendrive-os telepítés/rollback (üres `ROLLBACK` fájl).
@@ -27,7 +27,7 @@ Minden itt "kész"-nek mondott tétel: merge-elve `safian/main`-re (`e5f88949`),
 6. **iOS**: szimulátor/eszköz indulás és külső MIDI a mobil ágon.
 
 ## Hibás / nyitott
-- **Looper**: a felvétel elején mért ~0,3 s loop-óra-vesztés és lassú drift okát az R-2 a hullámforma-pillanatkép spinlock alatti másolásában vélte; a lock-free pillanatkép bent van, **az MPC-n nincs újramérve** (a [LOOP] nyomkövetés patch: scratchpad `loop_trace3.patch`).
+- **Looper**: a felvétel elején mért ~0,3 s loop-óra-vesztés és lassú drift okát az R-2 a hullámforma-pillanatkép spinlock alatti másolásában vélte; a lock-free pillanatkép bent van, **az MPC-n nincs újramérve** (a [LOOP] nyomkövető build kell; nem hallgatás-függő, de külön ARM-build és mérés).
 - **Nem javított, owner-döntés nélkül**: transzport-duplázás; Step Automation (L méretű egység), Convert > Seq (nincs motor-függvény), Song végtelen ismétlés, LE-21 többi eseménytípus (nincs modell).
 - **Ismert korlát**: WebDAV https az MPC-n nem működik (nincs TLS-könyvtár); a jelszó bevitele nyílt szövegben látszik; a `KT_KickEM` szimulátor target Mac-en nem fordul (`config.h` hiányzik, a mi változtatásainktól független).
 - `kick_hardware_bridge.h` Linux-kód: Mac-en csak `-fsyntax-only` (stubolt device_factory); a teljes forgatás az ARM-build és az MPC.
