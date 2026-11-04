@@ -208,8 +208,10 @@ Függőségek: FB-26 ← FB-02, FB-18, FB-10; FB-14 ← kick_table változtatás
   **R-6:** Held Play (MAN mode) auditions while the finger is on the button. Not done: Sync / Warp (the engine preview has no tempo sync / time stretch: an audio feature, needs a decision) and background loading of a big file (the engine's `previewOn` call; needs a measurement on the MPC).
 - [x] **FB-26** (P1, L) `FileBrowserSource` absztrakció + `LocalFolderSource` (a mostani logika átemelve) + `ListingCache`/`ContentCache` + konfigurálható helyi gyökerek (desktop `~/Splice`); hálózati szálmodell váz — `cloud-sources.md` §3. Függ: FB-02, FB-10, FB-18.  
   **R-6:** W2-C source layer + `+ Folder` (local folder location, e.g. `~/Splice`) next to `+ WebDAV`.
-- [ ] **FB-27** (P2, L) WebDAV forrás (M1: PROPFIND, Range GET, TLS, `.part` folytatás); HTTP-kliens döntés (libcurl vs. más; `JUCE_USE_CURL=0`), ARMv7 keresztfordítás. Függ: FB-26. Jogi átnézés (libcurl/TLS licenc) előfeltétel.
+- [~] **FB-27** (P2, L) WebDAV forrás (M1: PROPFIND, Range GET, TLS, `.part` folytatás); HTTP-kliens döntés (libcurl vs. más; `JUCE_USE_CURL=0`), ARMv7 keresztfordítás. Függ: FB-26. Jogi átnézés (libcurl/TLS licenc) előfeltétel.
+  **R-7:** M1 exists (W2-C): WebDavSource on JUCE URL (PROPFIND, Range GET), shared cache with `.part` + Range resume, download queue, host + local-server tests; plain http:// works everywhere. Not done: https:// on Linux / MPC (JUCE_USE_CURL=0 has no TLS). Needs the owner: libcurl (or mbedTLS) yes / no after the licence review, then an ARMv7 cross build + a run on the MPC.
 - [ ] **FB-28** (P2, L) Nyilvános Drive-mappa + BYO API-kulcs (M2); OneDrive eszköz-folyam (M3). **Blokkoló: jogi átnézés** (Google ToS 4(b)(1) vs. AGPL, Splice ToS) — `cloud-sources.md` §3.6. Függ: FB-27.
+  **R-7:** Not done: blocked by the legal review (Google ToS 4(b)(1) vs AGPL, Splice ToS) in cloud-sources.md section 3.6, and it depends on https (FB-27).
 
 *Javaslatok*
 - [x] **FB-29** (P1, S) Hardveres ergonómia: feljebb (Shift+Dial / `−`), modális ablakok HW-zárása (ENTER/MAIN) Delete/Rename/Eject/Format-ra — `bridge:893-905`, `A/hardware/modal_dialog_keys.h`.  
@@ -222,15 +224,18 @@ Függőségek: FB-26 ← FB-02, FB-18, FB-10; FB-14 ← kick_table változtatás
   **R-6:** Load copies a sample from outside the project into `<project>/samples` (option, default on; an identical copy is reused).
 
 *Tesztek*
-- [ ] **FB-33** (P1, S) `FolderSizeTests.cpp` felvétele a `Kick/tests/platform/CMakeLists.txt`-be (`add_test`), + a `calculateFolderSize` tmp-könyvtár-teszt (üres, mély, lemondás, symlink).
+- [x] **FB-33** (P1, S) `FolderSizeTests.cpp` felvétele a `Kick/tests/platform/CMakeLists.txt`-be (`add_test`), + a `calculateFolderSize` tmp-könyvtár-teszt (üres, mély, lemondás, symlink).
+  **R-7:** FolderSizeTests is registered (`kick-folder-size`); the walk is now `scanFolderSize` (pure, in kick_folderSizeHelper.h) with tests on a REAL temp folder: empty, nested, cached sub-folders re-scanned when their mtime changes, cancellation keeps finished work, symbolic links (loop) not followed, depth bound. `calculateFolderSize` lists through JUCE with FollowSymlinks::no.
 - [x] **FB-34** (P1, M) `mountPointOf` / SD-USB felismerés tiszta függvénybe + egységteszt (`/proc/mounts` minták: SD `/sdcard`, USB `/media/PenDrive`, `\040`, EFI, több partíció, hiányzó eszköz).  
   **R-6:** `kick_mounts.h` + `MountsTests.cpp` (SD, USB, several partitions, `\040`, EFI, duplicates, reconcile).
-- [ ] **FB-35** (P1, M) Fájlművelet-logika (védett útvonalak, névvalidáció, felülírás-döntés) tiszta modulba + tmp-könyvtár egységteszt. Függ: FB-02, FB-03.
+- [x] **FB-35** (P1, M) Fájlművelet-logika (védett útvonalak, névvalidáció, felülírás-döntés) tiszta modulba + tmp-könyvtár egységteszt. Függ: FB-02, FB-03.
+  **R-7:** Already in place from R-6 (verified): kick_fsGuard.h (protected paths, paste into itself, unique names) + kick_fileOps.h (copy / move / delete, no overwrite, cancel removes the partial target, protected refused) with FsGuardTests and FileOpsTests on real temp folders; name validation is `kick_project::checkName` (ProjectNamesTests).
 - [x] **FB-36** (P2, S) `addAsset`-státusz leképezés és pad-felengedés host-teszt. Függ: FB-06, FB-07.  
   **R-6:** `FbLogicTests.cpp`: asset status mapping, held pads / release, pad text, listing status.
 - [x] **FB-37** (P2, S) AppSmoke: `MenuFileBrowser` képernyőkép fixture-könyvtárral (rendezett lista, rejtett fájlok nélkül).  
   **R-6:** `ProjectsBrowserSmoke.py browser` (`kick-browser-smoke`): fixture folder, expected sorted rows without hidden files, screenshots.
 - [ ] **FB-38** (P1, M) MPC hardveres ellenőrzőlista végrehajtása (6. szakasz) — a hardveres session végezze.
+  **R-7:** Hardware session: not done here.
 
 ## 8. R-6 hardware checklist (what only the MPC can show)
 1. SD + USB: `/proc/mounts` shows up as places (several partitions, a name with a space); pull a drive while it is shown.

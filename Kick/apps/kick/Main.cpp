@@ -260,7 +260,7 @@ public:
         } );
     }
 
-    // KICK_SMOKE_DIALOGS="Metronome,TimeSignature,Locate,Stp,Tempo,SystemResources" (+ KICK_SMOKE_SHOTS_DIR for the pictures,
+    // KICK_SMOKE_DIALOGS="Metronome,TimeSignature,Locate,Stp,Tempo,UndoHistory,SystemResources" (+ KICK_SMOKE_SHOTS_DIR for the pictures,
     // KICK_SMOKE_DIALOG_CYCLES, default 3): each dialog is opened and closed the way the hardware closes it, the cycle is repeated with a
     // theme reload after every round (the slots of a closed dialog must not run). Prints "DIALOG ..." per step and "PASS: dialogs".
     void smokeDialogs( juce::StringArray names, juce::File dir, int index, int cycle, int cycles )
@@ -291,6 +291,7 @@ public:
         else if( name.equalsIgnoreCase( "Locate" ) ) bar.showBbtPopup();
         else if( name.equalsIgnoreCase( "Stp" ) ) bar.showStpPopup();
         else if( name.equalsIgnoreCase( "Tempo" ) ) bar.showTempoEditor();
+        else if( name.equalsIgnoreCase( "UndoHistory" ) ) kick_ui::UndoHistory::show();
         else if( name.equalsIgnoreCase( "SystemResources" ) ) kick_ui::KickModeHeader::showSystemResources();
         else
         {
@@ -372,7 +373,7 @@ public:
             const bool clicked    = menu->activateItem( item );
             juce::Timer::callAfterDelay( 700, [this, item, withProject, fail, shouldWork, clicked] {
                 auto& home = kick_ui::KickHome::Instance();
-                const Screen want = item < ml::kTileCount ? ml::tileScreen<Screen>( item ) : item == ml::kCommandKickUpdate ? Screen::KickUpdate : Screen::HomeOptions;
+                const Screen want = item < ml::kTileCount ? ml::tileScreen<Screen>( item ) : item == ml::kCommandKickUpdate ? Screen::KickUpdate : item == ml::kCommandFavorites ? Screen::MenuFileBrowser : Screen::HomeOptions;
                 const Screen expect = shouldWork ? want : Screen::HomeOptions;
                 const bool   ok     = clicked == shouldWork && home.getCurrentScreen() == expect;
                 std::cout << "MENUTILE " << ( withProject ? "project" : "no-project" ) << " item " << item << " '" << ml::tileDef<Screen>( item ).name << "' clicked=" << clicked

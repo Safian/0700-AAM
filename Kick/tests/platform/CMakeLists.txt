@@ -412,6 +412,11 @@ if(TARGET audio_file_manager)
     set_tests_properties(kick-sound-cache PROPERTIES TIMEOUT 30)
 endif()
 
+# New project from a template against a real temp folder (collision, invalid names, half-made folder cleanup).
+add_executable(kick-project-template-fs-tests ProjectTemplateFsTests.cpp)
+add_test(NAME kick-project-template-fs COMMAND kick-project-template-fs-tests)
+set_tests_properties(kick-project-template-fs PROPERTIES TIMEOUT 20)
+
 add_executable(kick-recent-list-tests RecentListTests.cpp)
 add_test(NAME kick-recent-list COMMAND kick-recent-list-tests)
 set_tests_properties(kick-recent-list PROPERTIES TIMEOUT 10)
