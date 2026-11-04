@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:" xmlns:lp1="DAV:">
+  <!-- self -->
+  <D:response>
+    <D:href>/dav/Samples/</D:href>
+    <D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype><D:getlastmodified>Mon, 02 Nov 2026 10:00:00 GMT</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat>
+  </D:response>
+  <D:response>
+    <D:href>/dav/Samples/Kick%20Loops/</D:href>
+    <D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype><D:getlastmodified>Sun, 06 Nov 1994 08:49:37 GMT</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat>
+  </D:response>
+  <D:response>
+    <D:href>http://example.test:8080/dav/Samples/Snare%20&amp;%20Hat%20%C3%A1.wav</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:resourcetype/>
+        <D:getcontentlength>123456</D:getcontentlength>
+        <D:getlastmodified>Tue, 03 Nov 2026 12:30:45 GMT</D:getlastmodified>
+        <D:getetag>"abc123"</D:getetag>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+    <D:propstat><D:prop><D:displayname/></D:prop><D:status>HTTP/1.1 404 Not Found</D:status></D:propstat>
+  </D:response>
+  <D:response>
+    <D:href>/other/escape.wav</D:href>
+    <D:propstat><D:prop><D:resourcetype/><D:getcontentlength>1</D:getcontentlength></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat>
+  </D:response>
+  <D:response>
+    <D:href>/dav/Samples/..%2F..%2Fetc/passwd</D:href>
+    <D:propstat><D:prop><D:resourcetype/><D:getcontentlength>1</D:getcontentlength></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat>
+  </D:response>
+  <D:response>
+    <D:href>/dav/Samples/cdata.wav</D:href>
+    <D:propstat><D:prop><D:resourcetype/><D:getcontentlength>42</D:getcontentlength><D:getetag><![CDATA[W/"x<y"]]></D:getetag></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat>
+  </D:response>
+</D:multistatus>

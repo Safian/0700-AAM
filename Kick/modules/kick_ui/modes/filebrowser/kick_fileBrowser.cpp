@@ -23,6 +23,12 @@ namespace ui
         addData( "Icon_Internal", "Icon_InternalActive", 16.0f, 16.0f, "Internal", false );
         addData( "Icon_Library", "Icon_LibraryActive", 18.0f, 16.0f, "Factory Sample Library", false );
         addData( "Icon_Demo", "Icon_DemoActive", 16.0f, 16.0f, "Demos", false );
+        {
+            const auto prefs = getAppDirs( MTPrefs );
+            hub              = std::make_unique<fileSource::SourceHub>( prefs.getFullPathName().toStdString(), prefs.getSiblingFile( "source_cache" ).getFullPathName().toStdString(), 512ll * 1024 * 1024 );
+            refreshSourceRows();
+        }
+        left.sourceButton.onClick = [this]() { editWebDavSource(); };
         mt::utils::addAndMakeVisible( this, header, left, right, bottom, pathLabel, top, auditionComp );
         mt::utils::makeHidden( auditionComp );
 
@@ -88,11 +94,21 @@ namespace ui
         top.searchLabel.setText( originalFullPath, juce::dontSendNotification );
 
         top.searchLabel.onKeyBoardEnd = [&]() {
+            if( remoteActive )
+            {
+                remoteSearch = top.searchLabel.getText().trim().toLowerCase();
+                applyRemoteFilter();
+                right.table->refresh();
+                right.backButton.setEnabled( true );
+                return;
+            }
             searchImplementation();
             right.backButton.setEnabled( true );
             searchMode = true;
         };
         top.deleteBtn.onClick = [&]() {
+            if( remoteActive )
+                return; // remote locations are read-only
             deleteSystem();
         };
 
@@ -142,6 +158,12 @@ namespace ui
         };
 
         right.backButton.onClick = [&]() {
+            if( remoteActive )
+            {
+                remoteBack();
+                right.backButton.setWantsKeyboardFocus( false );
+                return;
+            }
             if( searchMode )
             {
                 enterDirectory( -1 );
@@ -208,10 +230,22 @@ namespace ui
         };
 
         bottom.loadButton.onClick = [&]() {
+            if( remoteActive )
+            {
+                const int r = right.table->getSelectedRow();
+                if( juce::isPositiveAndBelow( r, static_cast<int>( remoteShown.size() ) ) && !remoteShown[static_cast<size_t>( r )].isDir )
+                    remoteActivate( r );
+                return;
+            }
             loadSample( selectedFile, false );
         };
 
         bottom.loadAllButton.onClick = [&]() {
+            if( remoteActive )
+            {
+                statusBar.setBoxInfo( "Load All works on local folders only" );
+                return;
+            }
             loadSample( dirList, true );
         };
         bottom.auditionButton.onClick = [&]() {
@@ -392,7 +426,7 @@ namespace ui
         left.provider.cellComponent = [&]( int Row, Component* Existing ) -> juce::Component* {
             numRows      = 1;
             static int c = 1;
-            if( juce::isPositiveAndBelow( Row, 5 ) )
+            if( juce::isPositiveAndBelow( Row, juce::jmax( 5, static_cast<int>( deviceData.size() ) ) ) && Row < static_cast<int>( deviceData.size() ) )
             {
                 auto comp = static_cast<FileLeftEntry*>( Existing );
                 if( comp == nullptr )
@@ -425,16 +459,16 @@ namespace ui
                     if( rowId == sdCardRow )
                     {
                         sdCardRow = -1;
-                        if( deviceData.size() == 4 )
-                            USBRow = 3;
+                        if( deviceData.size() == static_cast<size_t>( 4 + sourceRowCount ) )
+                            USBRow = 3 + sourceRowCount;
                         sdCardFirstTime = 1;
                     }
 
                     else if( rowId == USBRow )
                     {
                         USBRow = -1;
-                        if( deviceData.size() == 4 )
-                            sdCardRow = 3;
+                        if( deviceData.size() == static_cast<size_t>( 4 + sourceRowCount ) )
+                            sdCardRow = 3 + sourceRowCount;
                         usbFirstTime = 1;
                     }
 
@@ -450,6 +484,25 @@ namespace ui
         };
 
         left.provider.onRowSelected = [&]( int Row ) {
+            if( isSourceRow( Row ) )
+            {
+                top.pasteBtn.setEnabled( false );
+                top.renameBtn.setEnabled( false );
+                top.cutBtn.setEnabled( false );
+                top.deleteBtn.setEnabled( false );
+                header.setEnableNewProject( false );
+                onFirstLaunch = false;
+                boolLoad      = false;
+                openSource( Row );
+                auto& srcComps = left.table->getRowComponents();
+                for( auto& it : srcComps )
+                {
+                    auto* comp = static_cast<FileLeftEntry*>( it );
+                    comp->setHighlight( comp->getRowID() == Row );
+                }
+                return;
+            }
+            leaveSource();
             if( Row == 1 || Row == 2 )
             {
                 top.pasteBtn.setEnabled( false );
@@ -514,12 +567,16 @@ namespace ui
         };
 
         right.provider.numRows = [&]() -> int {
+            if( remoteActive )
+                return static_cast<int>( remoteShown.size() );
             if( filterNum != Null )
                 return static_cast<int>( tempList.size() );
             else return 0;
         };
 
         right.provider.cellComponent = [&]( int Row, Component* Existing ) -> juce::Component* {
+            if( remoteActive )
+                return remoteCell( Row, Existing );
             auto comp = static_cast<FileRightEntry*>( Existing );
             if( comp == nullptr )
             {
@@ -623,6 +680,11 @@ namespace ui
         //Double Click
 
         right.table->onRowDoubleClicked = [&]( int Row ) {
+            if( remoteActive )
+            {
+                remoteActivate( Row );
+                return;
+            }
             if( !top.selectBtn.getToggleState() )
             {
                 if( tempList[Row].isDirectory() )
@@ -648,6 +710,11 @@ namespace ui
         //Single Click
 
         right.provider.onRowSelected = [&]( int Row ) {
+            if( remoteActive )
+            {
+                selectedFile.clear(); // nothing local to audition/copy/delete until the file is downloaded
+                return;
+            }
             if( !ui::RecentProject::isProjectLoading )
             {
                 if( top.selectBtn.getToggleState() && tempList.size() )
@@ -1058,6 +1125,11 @@ namespace ui
     void FileBrowser::updateTemp( int num )
     {
         cancelFolderSizeCalculations();
+        if( remoteActive )
+        {
+            applyRemoteFilter();
+            return;
+        }
         switch( num )
         {
             default:
@@ -1107,6 +1179,7 @@ namespace ui
 
     void FileBrowser::load( juce::String dir )
     {
+        leaveSource();
         juce::File buttonFile = juce::File( dir );
         ae.setCurrentDir( buttonFile );
         enterDirectory( -1 );
@@ -1114,6 +1187,11 @@ namespace ui
 
     FileBrowser::~FileBrowser()
     {
+        if( hub )
+        {
+            hub->cancelListing();
+            hub->getQueue().cancelAll();
+        }
         cancelFolderSizeCalculations();
         folderSizeThreadPool.removeAllJobs( true, 2000 );
     }
@@ -1250,6 +1328,11 @@ namespace ui
         }
         else
         {
+            if( hub )
+            {
+                hub->cancelListing();
+                hub->getQueue().cancelAll();
+            }
             ae.stopPreview();
             if( ae.isPreviewRunning() )
             {
@@ -1442,10 +1525,12 @@ namespace ui
         ui::LoadProjectAndAnimation::getInstance().startLoading( file );
     }
 
-    void FileBrowser::loadSample( const juce::Array<juce::File>& assetFiles, bool IsMultiple )
+    void FileBrowser::loadSample( const juce::Array<juce::File>& assetFiles, bool IsMultiple, std::function<void()> onFinished )
     {
-        sampleAnimation->startLoading( assetFiles, IsMultiple, [&, assetFiles]() {
+        sampleAnimation->startLoading( assetFiles, IsMultiple, [&, assetFiles, onFinished]() {
             sampleAnimation->stopAnimation();
+            if( onFinished )
+                onFinished();
             if( sampleAnimation->isSampleLoaded() )
             {
                 for( auto asset : assetFiles )
@@ -1506,8 +1591,8 @@ namespace ui
                         row.erase( row.begin() + sdCardRow );
 
                         sdCardRow = -1;
-                        if( deviceData.size() == 4 )
-                            USBRow = 3;
+                        if( deviceData.size() == static_cast<size_t>( 4 + sourceRowCount ) )
+                            USBRow = 3 + sourceRowCount;
                         sdCardFirstTime = true;
                         left.table->refresh();
                         left.table->selectRow( 0 );
@@ -1544,8 +1629,8 @@ namespace ui
                         deviceData.erase( deviceData.begin() + USBRow );
                         row.erase( row.begin() + USBRow );
                         USBRow = -1;
-                        if( deviceData.size() == 4 )
-                            sdCardRow = 3;
+                        if( deviceData.size() == static_cast<size_t>( 4 + sourceRowCount ) )
+                            sdCardRow = 3 + sourceRowCount;
                         usbFirstTime = true;
                         left.table->refresh();
                         left.table->selectRow( 0 );
@@ -1561,12 +1646,361 @@ namespace ui
     }
 
     ///////////////////////////////////////
+    // Extra locations: WebDAV / local-folder sources (FileBrowserSource). All network work runs on the hub's worker threads;
+    // the callbacks below only marshal back to the message thread.
+    ///////////////////////////////////////
+    bool FileBrowser::isSourceRow( int rowIndex ) const
+    {
+        return juce::isPositiveAndBelow( rowIndex, static_cast<int>( row.size() ) ) && row[static_cast<size_t>( rowIndex )].startsWith( sourceRowPrefix );
+    }
+
+    void FileBrowser::refreshSourceRows()
+    {
+        // drop the old source rows (they sit right after the three fixed rows), then add the configured ones
+        for( int i = 0; i < sourceRowCount; ++i )
+        {
+            deviceData.erase( deviceData.begin() + 3 );
+            row.erase( row.begin() + 3 );
+        }
+        sourceRowCount = 0;
+        if( hub )
+        {
+            for( auto& cfg : hub->allConfigs() )
+            {
+                DeviceData d;
+                d.imgBtn       = "Icon_Library";
+                d.imgBtnActive = "Icon_LibraryActive";
+                d.width        = 18.0f;
+                d.height       = 16.0f;
+                d.fileName     = juce::String::fromUTF8( cfg.name.c_str() );
+                d.isEjectBtn   = false;
+                deviceData.insert( deviceData.begin() + 3 + sourceRowCount, d );
+                row.insert( row.begin() + 3 + sourceRowCount, juce::String( sourceRowPrefix ) + juce::String::fromUTF8( cfg.id.c_str() ) );
+                ++sourceRowCount;
+            }
+        }
+        sdCardRow = USBRow = -1; // recomputed when the rows are rebuilt
+        if( left.table )
+            left.table->refresh();
+    }
+
+    void FileBrowser::leaveSource()
+    {
+        if( !remoteActive )
+            return;
+        remoteActive = false;
+        remoteSearch = {};
+        remoteEntries.clear();
+        remoteShown.clear();
+        activeSource.reset();
+        if( hub )
+        {
+            hub->cancelListing();
+            hub->getQueue().cancelAll();
+        }
+    }
+
+    void FileBrowser::openSource( int rowIndex )
+    {
+        if( !hub )
+            return;
+        const auto id = row[static_cast<size_t>( rowIndex )].fromFirstOccurrenceOf( sourceRowPrefix, false, false ).toStdString();
+        auto       src = hub->find( id );
+        if( !src )
+            return;
+        cancelFolderSizeCalculations();
+        ae.stopPreview();
+        leaveSource();
+        activeSource = src;
+        remoteActive = true;
+        remotePath   = "/";
+        tempList.clear();
+        selectedFile.clear();
+        right.table->clearSelection();
+        right.backButton.setEnabled( false );
+        listRemote( "/" );
+    }
+
+    void FileBrowser::listRemote( const std::string& path )
+    {
+        if( !hub || !activeSource )
+            return;
+        remoteSearch = {};
+        statusBar.setBoxInfo( "Loading..." );
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+        remoteReq = hub->listAsync( activeSource, path, [safeThis, path]( uint64_t gen, const fileSource::ListResult& lr ) {
+            juce::MessageManager::callAsync( [safeThis, path, gen, lr]() {
+                if( safeThis != nullptr )
+                    safeThis->onRemoteListed( gen, path, lr );
+            } );
+        } );
+    }
+
+    void FileBrowser::onRemoteListed( uint64_t gen, const std::string& path, const fileSource::ListResult& lr )
+    {
+        if( !remoteActive || gen != remoteReq )
+            return;
+        if( !lr.result.ok() )
+        {
+            juce::String msg;
+            switch( lr.result.status )
+            {
+                case fileSource::Status::AuthFailed: msg = "Login failed: check user/password (+ WebDAV)"; break;
+                case fileSource::Status::NetworkError: msg = "Cannot reach the server"; break;
+                case fileSource::Status::Unsupported: msg = "https is not available here: use an http:// address"; break;
+                case fileSource::Status::NotFound: msg = "Folder not found"; break;
+                case fileSource::Status::Cancelled: return;
+                default: msg = "Server error"; break;
+            }
+            statusBar.setBoxInfo( msg );
+            kick_log( "FILESRC", "list failed: status=%d http=%d", static_cast<int>( lr.result.status ), lr.result.httpStatus );
+            if( remoteEntries.empty() )
+            {
+                remoteShown.clear();
+                right.table->refresh();
+            }
+            return;
+        }
+        remoteEntries = lr.entries;
+        remotePath    = path;
+        applyRemoteFilter();
+        top.searchLabel.setText( juce::String( activeSource->displayName() ) + ":" + juce::String::fromUTF8( remotePath.c_str() ), juce::dontSendNotification );
+        right.backButton.setEnabled( remotePath != "/" );
+        right.table->refresh();
+        right.table->clearSelection();
+        statusBar.setBoxInfo( "Box Info" );
+        if( !remoteShown.empty() )
+            right.table->selectRow( 0 );
+    }
+
+    void FileBrowser::applyRemoteFilter()
+    {
+        remoteShown.clear();
+        for( auto& e : remoteEntries )
+        {
+            const juce::File asFile( juce::String::fromUTF8( e.name.c_str() ) );
+            if( !e.isDir )
+            {
+                if( filterNum == Samples && !asFile.hasFileExtension( sampleFileList ) )
+                    continue;
+                if( filterNum == Projects && !asFile.hasFileExtension( projectFileList ) )
+                    continue;
+            }
+            if( remoteSearch.isNotEmpty() && !juce::String::fromUTF8( e.name.c_str() ).toLowerCase().contains( remoteSearch ) )
+                continue;
+            remoteShown.push_back( e );
+        }
+    }
+
+    juce::Component* FileBrowser::remoteCell( int rowIndex, juce::Component* existing )
+    {
+        auto comp = static_cast<FileRightEntry*>( existing );
+        if( comp == nullptr )
+        {
+            comp = new FileRightEntry();
+            comp->setInterceptsMouseClicks( false, true );
+        }
+        if( !juce::isPositiveAndBelow( rowIndex, static_cast<int>( remoteShown.size() ) ) )
+            return comp;
+        const auto&        e    = remoteShown[static_cast<size_t>( rowIndex )];
+        const auto         name = juce::String::fromUTF8( e.name.c_str() );
+        const juce::File   asFile( name );
+        juce::String       icon = "Icon_DefaultFile";
+        bool               folderFlag = true;
+        float              w = 22.0f, h = 16.0f;
+        if( e.isDir )
+            icon = "Vector";
+        else if( asFile.hasFileExtension( projectFileList ) )
+            icon = "Icon_ProjectFile", folderFlag = false, w = 14.0f;
+        else if( asFile.hasFileExtension( sampleFileList ) )
+            icon = "Icon_SampleFile", folderFlag = false, w = 14.0f;
+        const juce::Time   t( e.mtimeMs );
+        const juce::String dateStr = e.mtimeMs > 0 ? t.toString( true, false, false, false ) : juce::String();
+        const juce::String timeStr = e.mtimeMs > 0 ? t.toString( false, true, false, true ) : juce::String();
+        const juce::String sizeStr = e.isDir || e.size < 0 ? juce::String() : juce::File::descriptionOfSizeInBytes( e.size );
+        comp->setCurrentPath( juce::String::fromUTF8( e.path.c_str() ) );
+        comp->setProperties( icon, folderFlag, w, h, name, dateStr, timeStr, sizeStr );
+        return comp;
+    }
+
+    void FileBrowser::remoteActivate( int rowIndex )
+    {
+        if( !juce::isPositiveAndBelow( rowIndex, static_cast<int>( remoteShown.size() ) ) )
+            return;
+        const auto e = remoteShown[static_cast<size_t>( rowIndex )];
+        if( e.isDir )
+            listRemote( e.path );
+        else if( juce::File( juce::String::fromUTF8( e.name.c_str() ) ).hasFileExtension( sampleFileList ) )
+            remoteFetchAndLoad( e );
+        else
+            statusBar.setBoxInfo( "Only samples can be loaded from a remote location" );
+    }
+
+    void FileBrowser::remoteBack()
+    {
+        if( remoteSearch.isNotEmpty() )
+        {
+            remoteSearch = {};
+            applyRemoteFilter();
+            top.searchLabel.setText( juce::String( activeSource ? activeSource->displayName() : std::string() ) + ":" + juce::String::fromUTF8( remotePath.c_str() ), juce::dontSendNotification );
+            right.table->refresh();
+            right.backButton.setEnabled( remotePath != "/" );
+            return;
+        }
+        if( remotePath != "/" )
+            listRemote( fileSource::webdav::parentPath( remotePath ) );
+    }
+
+    // Download (low-priority thread, resumable) into the cache; the sample is loaded only from the completely downloaded file.
+    void FileBrowser::remoteFetchAndLoad( const fileSource::Entry& e )
+    {
+        if( !hub || !activeSource )
+            return;
+        hub->getQueue().cancelAll();
+        lastDownloadPercent = -1;
+        const auto  name    = juce::String::fromUTF8( e.name.c_str() );
+        statusBar.setBoxInfo( "Downloading " + name );
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+        auto*                                    hubPtr = hub.get();
+        const auto                               key    = fileSource::SourceCache::makeKey( activeSource->id(), e.path );
+
+        fileSource::DownloadJob job;
+        job.source = activeSource;
+        job.remote = e;
+        job.onProgress = [safeThis, name]( uint64_t, int64_t done, int64_t total ) {
+            if( total <= 0 )
+                return;
+            const int pct = static_cast<int>( done * 100 / total );
+            juce::MessageManager::callAsync( [safeThis, name, pct]() {
+                if( safeThis == nullptr || pct == safeThis->lastDownloadPercent )
+                    return;
+                safeThis->lastDownloadPercent = pct;
+                safeThis->statusBar.setBoxInfo( "Downloading " + name + " " + juce::String( pct ) + "%" );
+            } );
+        };
+        job.onDone = [safeThis, name, hubPtr, key]( uint64_t, const fileSource::Result& res, const std::string& file ) {
+            const auto status = res.status;
+            const auto msg    = juce::String( res.message );
+            if( res.ok() )
+                hubPtr->getCache().pin( key ); // keep it from being evicted while the sample loads
+            juce::MessageManager::callAsync( [safeThis, name, status, msg, file, hubPtr, key]() {
+                if( safeThis == nullptr )
+                    return;
+                if( status != fileSource::Status::Ok )
+                {
+                    safeThis->statusBar.setBoxInfo( status == fileSource::Status::Cancelled ? juce::String( "Download cancelled" ) : "Download failed: " + name );
+                    return;
+                }
+                juce::Array<juce::File> files;
+                files.add( juce::File( juce::String::fromUTF8( file.c_str() ) ) );
+                safeThis->loadSample( files, false, [hubPtr, key, safeThis]() {
+                    if( safeThis != nullptr )
+                        hubPtr->getCache().unpin( key );
+                } );
+            } );
+        };
+        remoteDownloadId = hub->getQueue().enqueue( std::move( job ) );
+    }
+
+    void FileBrowser::askText( const juce::String& title, const juce::String& initial, std::function<void( juce::String )> done )
+    {
+        auto& keyboard          = ui::KickVirtualKeyBoard::getWithText( initial );
+        keyboard.onEnterPressed = [&keyboard]( int ) {
+            mt::utils::exitDialog( keyboard.getCurrentlyFocusedComponent(), UI::APPLY );
+        };
+        keyboard.show(
+            title, ui::KickVirtualKeyBoard::Type::KEYS_LOWERCASE_ALPHABETIC,
+            [&keyboard, done]( int R ) {
+                if( R == UI::APPLY )
+                {
+                    const auto text = keyboard.getInputText();
+                    juce::MessageManager::callAsync( [done, text]() { done( text ); } ); // after this keyboard has closed
+                }
+            },
+            ui::layout::keyBoardPopup );
+    }
+
+    // Add a WebDAV location, or (when a source row is selected) edit it; an empty URL removes the edited one.
+    void FileBrowser::editWebDavSource()
+    {
+        if( !hub )
+            return;
+        fileSource::SourceConfig cfg;
+        bool                     editing = false;
+        const int                sel     = left.table->getSelectedRow();
+        if( isSourceRow( sel ) )
+        {
+            const auto id = row[static_cast<size_t>( sel )].fromFirstOccurrenceOf( sourceRowPrefix, false, false ).toStdString();
+            for( auto& c : hub->allConfigs() )
+                if( c.id == id && c.type == "webdav" )
+                {
+                    cfg     = c;
+                    editing = true;
+                }
+        }
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+        askText( editing ? "WEBDAV URL (EMPTY = REMOVE)" : "WEBDAV URL (http://host/path)", editing ? juce::String::fromUTF8( cfg.location.c_str() ) : juce::String( "http://" ), [safeThis, cfg, editing]( juce::String url ) mutable {
+            if( safeThis == nullptr )
+                return;
+            url = url.trim();
+            if( editing && ( url.isEmpty() || url == "http://" ) )
+            {
+                safeThis->hub->removeSource( cfg.id );
+                safeThis->leaveSource();
+                safeThis->refreshSourceRows();
+                safeThis->left.table->selectRow( 0 );
+                return;
+            }
+            if( url.isEmpty() || !fileSource::webdav::parseUrl( url.toStdString() ).ok )
+            {
+                safeThis->statusBar.setBoxInfo( "Invalid WebDAV URL" );
+                return;
+            }
+            cfg.location = url.toStdString();
+            safeThis->askText( "USER (EMPTY = NONE)", juce::String::fromUTF8( cfg.user.c_str() ), [safeThis, cfg, editing]( juce::String user ) mutable {
+                if( safeThis == nullptr )
+                    return;
+                cfg.user = user.trim().toStdString();
+                safeThis->askText( editing ? "PASSWORD (EMPTY = KEEP)" : "PASSWORD", "", [safeThis, cfg, editing]( juce::String pass ) mutable {
+                    if( safeThis == nullptr )
+                        return;
+                    if( !editing )
+                    {
+                        const auto u = fileSource::webdav::parseUrl( cfg.location );
+                        std::string id;
+                        for( char c : u.host )
+                            id += ( std::isalnum( static_cast<unsigned char>( c ) ) ? static_cast<char>( std::tolower( static_cast<unsigned char>( c ) ) ) : '-' );
+                        auto key = fileSource::SourceCache::makeKey( "cfg", cfg.location + "\n" + cfg.user );
+                        cfg.id   = ( id.size() > 20 ? id.substr( 0, 20 ) : id ) + "-" + key.substr( 0, 6 );
+                        cfg.name = u.host.size() > 24 ? u.host.substr( 0, 24 ) : u.host;
+                    }
+                    cfg.type = "webdav";
+                    cfg.auth = "basic";
+                    if( !safeThis->hub->upsertWebDav( cfg, pass.toStdString() ) )
+                    {
+                        safeThis->statusBar.setBoxInfo( "Could not save the WebDAV location" );
+                        return;
+                    }
+                    safeThis->leaveSource();
+                    safeThis->refreshSourceRows();
+                    int idx = -1;
+                    for( int i = 0; i < static_cast<int>( safeThis->row.size() ); ++i )
+                        if( safeThis->row[static_cast<size_t>( i )] == juce::String( sourceRowPrefix ) + juce::String::fromUTF8( cfg.id.c_str() ) )
+                            idx = i;
+                    if( idx >= 0 )
+                        safeThis->left.table->selectRow( idx );
+                } );
+            } );
+        } );
+    }
+
+    ///////////////////////////////////////
     // Class FileBrowserLeftPanel
     ///////////////////////////////////////
     FileBrowserLeftPanel::FileBrowserLeftPanel()
     {
         setLookAndFeel( KickLooknFeel::getLnf() );
-        mt::utils::addAndMakeVisible( this, places, content, expansion, location );
+        mt::utils::addAndMakeVisible( this, places, content, expansion, location, sourceButton );
 
         location.setPadding( labelLeftMargin );
         location.setFontHeight( labelFontHeight );
@@ -1613,6 +2047,7 @@ namespace ui
         auto b = getLocalBounds();
         table->setBoundsRelative( 0.0f, 0.16f, 1.0f, 0.8421f );
         location.setBoundsRelative( 0.0292f, 0.012f, 0.35f, 0.1294f );
+        sourceButton.setBoundsRelative( 0.58f, 0.016f, 0.39f, 0.1222f );
     }
 
     //////////////////////////////////

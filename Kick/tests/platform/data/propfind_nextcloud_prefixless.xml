@@ -1,0 +1,3 @@
+<?xml version="1.0"?>
+<multistatus xmlns="DAV:"><response><href>/remote.php/dav/files/u/</href><propstat><prop><resourcetype><collection/></resourcetype></prop><status>HTTP/1.1 200 OK</status></propstat></response>
+<response><href>/remote.php/dav/files/u/a.wav</href><propstat><prop><getcontentlength>10</getcontentlength><getlastmodified>2024-03-01T10:20:30Z</getlastmodified><resourcetype/></prop><status>HTTP/1.1 200 OK</status></propstat></response></multistatus>
