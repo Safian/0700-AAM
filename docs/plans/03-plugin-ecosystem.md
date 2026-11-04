@@ -80,3 +80,5 @@ Ha a végleges platformszabály-ellenőrzés szerint mobilon nem engedett a let�
 
 ## DÖNTÉS (owner, 2026-11-04): SynthyBoy iOS-en saját motorral
 A Vital README fizetett GPL-kivétel nélkül tiltja az iOS App Store-os terjesztést, ezért a SynthyBoy **iOS-re (és szükség esetén Androidra) saját, a Vital-kódtól tiszta motorral** készül, ugyanazon `Engine` interfész mögött (SynthyBoyVST `docs/ARCHITECTURE.md` §2.2); a Vital-eredetű kód külön modulban él, amely a mobil-célból kizárható. Nyitott: a termék-név (`SynthyBoy`, a CMake terméknevéből a „VST” elhagyása — Steinberg védjegy) és a védjegy-/névütközés-ellenőrzés; jogi átnézés a Kick AGPL-kódjának iOS-terjesztéséről.
+
+> **Átnevezés (owner, 2026-11-04):** a termék és a GitHub-repó neve **SynthyBoy** (https://github.com/Safian/SynthyBoy; a régi `Safian/SynthyBoyVST` URL átirányít). A „VST” a Steinberg védjegye, ezért nem szerepel a névben. Védjegy-/névütközés-ellenőrzés: a repó `docs/NAMING.md`-jében.
