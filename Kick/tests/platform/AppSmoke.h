@@ -4,6 +4,7 @@
 #include <kick_clap/Discovery.h>
 #include <iostream>
 #include "MainTabsSmoke.h"
+#include "MixersSmoke.h"
 
 // Runs on the application's message thread against its real manager and graph.
 // The Python supervisor supplies an isolated data root and trusted test fixture.
@@ -27,6 +28,8 @@ inline juce::String runKickAppSmoke() {
     }
     // KICK_SMOKE_MAINTABS=1: Sequence / Track / Program tab logic (undo/redo follow, time signature, monitor).
     if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_MAINTABS", {}).isNotEmpty()) return runKickMainTabsSmoke();
+    // KICK_SMOKE_MIXERS=1: Clear Solos, mute-group propagation, read-only pad getters (MixersSmoke.h).
+    if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_MIXERS", {}).isNotEmpty()) return runKickMixersSmoke();
     const auto path = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_CLAP_PATH", {});
     if (path.isEmpty()) return {};
     const auto catalog = kick::clap::inspect(path.toStdString());

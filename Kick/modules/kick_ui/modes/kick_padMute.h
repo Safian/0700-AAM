@@ -66,7 +66,6 @@ namespace kick_ui
         void showGroups();
         void refreshData();
         void refreshAllLEDs();
-        void setPadLED( int );
         void changeBank( juce::String bank );
         void knobCommand( int knob, int value );
         void assignKnobToPad( int knobId, int value );

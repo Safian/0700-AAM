@@ -52,7 +52,7 @@ float CommonUtils::midiToGain( int MidiValue ) noexcept
 
 int CommonUtils::gainToMidi( float Gain ) noexcept
 {
-    return (int)juce::jlimit( MIDI::MIN, MIDI::MAX, (int)( Gain * MIDI::MAX ) );
+    return mt::mixlogic::gainToMidi127( Gain );
 }
 
 int CommonUtils::getDefaultMuteGroupForClipProgram( int Note ) noexcept

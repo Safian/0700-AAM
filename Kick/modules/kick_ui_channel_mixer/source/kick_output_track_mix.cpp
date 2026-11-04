@@ -2,6 +2,8 @@
 
 namespace kick_ui
 {
+    static constexpr bool kOutputBusSoloAvailable = false;
+
     OutputTrackMixer::OutputTrackMixer()
         : kick_ui::IRowView( "OUTPUT TRACK" )
     {
@@ -52,46 +54,11 @@ namespace kick_ui
 
     void OutputTrackMixer::knobCommand( int knob, int value )
     {
-        auto&                            rowComp       = getRowComponents();
-        auto                             comp1         = dynamic_cast<OutputTrackDisplay*>( rowComp[0] );
-        auto                             elementBounds = comp1->getElementBounds( ( knob - 1 ) % 4 + 1 );
-        auto                             numRows       = getNumRows();
-        auto                             rows          = getRowNumbers( 3, ( ( knob - 1 ) / 4 ) + 1, elementBounds.getX(), elementBounds.getWidth(), 50 );
-        std::vector<OutputTrackDisplay*> entry;
-
-        for( auto i = 0; i < rows.size(); i++ )
-        {
-            int rowIndex = rows[i];
-            if( rowIndex < numRows )
-            {
-                auto comp = dynamic_cast<OutputTrackDisplay*>( rowComp[rowIndex] );
-                entry.push_back( comp );
-            }
-        }
-
-        switch( knob )
-        {
-            case contracts::DeviceControlContracts::EN_KNOB_1:
-            case contracts::DeviceControlContracts::EN_KNOB_2:
-            case contracts::DeviceControlContracts::EN_KNOB_3:
-            case contracts::DeviceControlContracts::EN_KNOB_4:
-                if( entry.size() > 0 && entry[0] ) entry[0]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_1 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_5:
-            case contracts::DeviceControlContracts::EN_KNOB_6:
-            case contracts::DeviceControlContracts::EN_KNOB_7:
-            case contracts::DeviceControlContracts::EN_KNOB_8:
-                if( entry.size() > 1 && entry[1] ) entry[1]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_5 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_9:
-            case contracts::DeviceControlContracts::EN_KNOB_10:
-            case contracts::DeviceControlContracts::EN_KNOB_11:
-            case contracts::DeviceControlContracts::EN_KNOB_12:
-                if( entry.size() > 2 && entry[2] ) entry[2]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_9 ), value );
-                break;
-        }
+        // Q-Link 1..4 act on the selected row (not the first visible one); an empty list does nothing.
+        if( knob < contracts::DeviceControlContracts::EN_KNOB_1 || knob > contracts::DeviceControlContracts::EN_KNOB_4 )
+            return;
+        if( auto* display = qlinkRowDisplay<OutputTrackDisplay>() )
+            display->linkRotated( knob - contracts::DeviceControlContracts::EN_KNOB_1, value );
     }
 
     //////////////////////////////////////////////////////////////////////////
@@ -130,8 +97,6 @@ namespace kick_ui
         };
 
         solo.onClick = [&]() {
-            //busMgr.setBusSolo( busName, solo.getToggleState() );
-
             if( onSoloChanged )
                 onSoloChanged();
         };
@@ -206,8 +171,8 @@ namespace kick_ui
     {
         auto& in  = pBus ? pBus->readInMeter() : AudIO::_emptyMeterData;
         auto& out = pBus ? pBus->readOutMeter() : AudIO::_emptyMeterData;
-        levelMeter1.setSignalStrength( in[0].rms, in[1].rms, in[0].peak, in[0].peak );
-        levelMeter2.setSignalStrength( out[0].rms, out[1].rms, out[1].peak, out[1].peak );
+        levelMeter1.setSignalStrength( in[0].rms, in[1].rms, in[0].peak, in[1].peak );
+        levelMeter2.setSignalStrength( out[0].rms, out[1].rms, out[0].peak, out[1].peak );
     }
 
     void OutputTrackDisplay::resized()
@@ -229,12 +194,9 @@ namespace kick_ui
     {
         switch( ID )
         {
-            case 1: levelSlider.knobRotated( value ); break;
-            case 2: panSlider.knobRotated( value ); break;
-            case 3:
-                mute.setToggleState( value > 0, juce::dontSendNotification );
-                solo.setToggleState( value <= 0, juce::dontSendNotification );
-                break;
+            case 1: levelSlider.knobRotated( mt::mixlogic::qlinkDelta( value, levelSlider.getIncrement() ) ); break;
+            case 2: panSlider.knobRotated( mt::mixlogic::qlinkDelta( value, panSlider.getIncrement() ) ); break;
+            case 3: qlinkSwitch( mute, value ); break; // no bus solo for the output buses (the engine has none)
         }
     }
 
@@ -255,8 +217,16 @@ namespace kick_ui
 
         for( auto child : getChildren() )
             child->setVisible( visible );
+        // The engine only solos send/return and submix buses (DawBus::setSolo): no dead solo button on the output bus.
+        solo.setVisible( visible && kOutputBusSoloAvailable );
 
         if( visible )
             updateData();
+
+        if( pBus )
+        {
+            pBus->enableInMetering( visible );
+            pBus->enableOutMetering( visible );
+        }
     }
 }
