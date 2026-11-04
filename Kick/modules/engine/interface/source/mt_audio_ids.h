@@ -94,6 +94,7 @@ namespace mt
         DECLARE_ID( no )
 
         DECLARE_ID( filter )
+        DECLARE_ID( filterType )
         DECLARE_ID( pitch )
         DECLARE_ID( semi )
         DECLARE_ID( fine )

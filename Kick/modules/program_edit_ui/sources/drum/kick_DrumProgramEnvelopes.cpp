@@ -66,6 +66,16 @@ namespace kick_ui
             s[i].setDoubleClickReturnValue( true, 127, 0 );
             dep[i].setDoubleClickReturnValue( true, 0, 0 );
 
+            envEnable[i].setToggleButtonText( "ON", "ON" );
+            envEnable[i].setTitle( "ENABLE" );
+            envEnable[i].setValueFontHeight( 16.f );
+            envEnable[i].setValueColour( ui::Theme::textColour( 1 ) );
+            addComponent( envEnable[i], i, 0 );
+            envEnable[i].onClick = [&, i]() {
+                if( pDrum && pads.size() )
+                    pDrum->setEnvEnabled( pads[0], toEnum<mt::EnvelopeType>( i ), envEnable[i].getToggleState() );
+            };
+
             addComponent( env[i], i, 1 );
             addComponent( a[i], i, 2 );
             addComponent( h[i], i, 3 );
@@ -120,6 +130,7 @@ namespace kick_ui
             for( auto index = 0; index < 3; ++index )
             {
                 // No notification: showing the page must not write the model (modified flag, undo step) on every pad change.
+                envEnable[index].setToggleState( pDrum->isEnvEnabled( pads[0], toEnum<mt::EnvelopeType>( index ) ), juce::dontSendNotification );
                 env[index].setSelected( pDrum->getEnvType( pads[0], toEnum<mt::EnvelopeType>( index ) ), juce::dontSendNotification );
                 showFor( index, env[index].getSelectedIndex() );
                 a[index].setValue( pDrum->getEnvelopeAttack( pads[0], toEnum<mt::EnvelopeType>( index ) ), juce::dontSendNotification );

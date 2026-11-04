@@ -541,3 +541,20 @@ set_tests_properties(kick-power-key PROPERTIES TIMEOUT 20)
 # Bootstrap script (pendrive install / update / rollback / power key inhibitor), offline with mock binaries.
 add_test(NAME kick-tkgl-bootstrap COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/../../../docs/akai_mpc_hardware/tools/test_tkgl_bootstrap.sh")
 set_tests_properties(kick-tkgl-bootstrap PROPERTIES TIMEOUT 300 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
+
+# Keybed processor: transpose, channel, velocity curves, scale filter, routing, pedals (PP-21, PP-21a-e, PP-30b)
+add_executable(kick-keybed-processor-tests KeybedProcessorTests.cpp)
+add_test(NAME kick-keybed-processor COMMAND kick-keybed-processor-tests)
+set_tests_properties(kick-keybed-processor PROPERTIES TIMEOUT 10)
+
+# Drum voice DSP: ADSR bypass vs decay, LFO modulation, amplitude modulation formula (PE-02, PE-21)
+add_executable(kick-drum-voice-dsp-tests DrumVoiceDspTests.cpp ../../../AudIO/AudIO/Dsp/lfo.cpp)
+target_include_directories(kick-drum-voice-dsp-tests PRIVATE
+    ../../..
+    ../../../AudIO/AudIO/Dsp
+    ../../../AudIO/AudIO/Includes
+)
+add_test(NAME kick-drum-voice-dsp COMMAND kick-drum-voice-dsp-tests)
+set_tests_properties(kick-drum-voice-dsp PROPERTIES TIMEOUT 10)
+
+

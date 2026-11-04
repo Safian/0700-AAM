@@ -102,6 +102,7 @@ namespace mt
                     // Start playback.
                     if( auto voice = dynamic_cast<DrumVoice*>( getFreeVoice( Note, notePoly ) ) )
                     {
+                        voice->bindParams( pNote->voiceParams ); // the clip's LFO / envelope / filter atomics (PE-02, PE-21)
                         voice->setPadGains( pNote->gL.load(), pNote->gR.load() );
                         voice->setSlice( soundSlice );
                         voice->noteOn( Note, Velocity );

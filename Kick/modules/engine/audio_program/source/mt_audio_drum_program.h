@@ -25,6 +25,16 @@
 
 namespace mt
 {
+    /// A drum clip plus the atomic view of its LFO / envelopes / filter that its voices read (PE-02, PE-21).
+    struct MTDrumClip : public MTIDrum
+    {
+        MTDrumClip( juce::ValueTree& VT, juce::UndoManager* UM )
+            : MTIDrum( VT, UM ), voiceParams( std::make_shared<MTDrumVoiceParams>( VT ) )
+        {
+        }
+
+        std::shared_ptr<MTDrumVoiceParams> voiceParams;
+    };
 
     class MTDrumProgram : public MTCommonProgram
     {
@@ -32,7 +42,7 @@ namespace mt
         explicit MTDrumProgram( AudIO::DawEngine& Engine, juce::ValueTree& VT, juce::UndoManager* UM = nullptr );
         ~MTDrumProgram();
 
-        MTIDrum* getDrumClip( int Note );
+        MTDrumClip* getDrumClip( int Note );
 
         LayerPlayType  getNoteLayerPlay( int Note );
         SamplePlayType getNoteSamplePlay( int Note );
