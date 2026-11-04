@@ -403,6 +403,10 @@ namespace mt
     {
         return projectManager::save(); // G10 pan write-back lives in patchSnapshot (all save paths)
     }
+    bool MTAudioManager::autosaveNow()
+    {
+        return projectManager::save( projectManager::SaveReason::Autosave );
+    }
     ////////////////////////////
     //// Undo/Redo..
     ////////////////////////////

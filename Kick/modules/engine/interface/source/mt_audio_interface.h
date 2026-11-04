@@ -137,6 +137,7 @@ namespace mt
         bool loadProject( juce::File& ProjectFile, bool createIfMissing = false );
         bool closeProject();
         bool saveProject();
+        bool autosaveNow(); // the autosave path, synchronously (smoke tests)
         juce::String getProjectSaveError() const;
         juce::String getProjectLoadError() const;
         bool isProjectDirty() const;

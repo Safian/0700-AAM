@@ -161,6 +161,7 @@ namespace mt
     bool MTAudioInterface::loadProject( juce::File& ProjectFile, bool createIfMissing ) { return manager->loadProject( ProjectFile, createIfMissing ); }
     bool MTAudioInterface::closeProject() { return manager->closeProject(); }
     bool MTAudioInterface::saveProject() { return manager->saveProject(); }
+    bool MTAudioInterface::autosaveNow() { return manager->autosaveNow(); }
     juce::String MTAudioInterface::getProjectSaveError() const { return manager->getLastSaveError(); }
     juce::String MTAudioInterface::getProjectLoadError() const { return manager->getLastLoadError(); }
     bool MTAudioInterface::isProjectDirty() const { return manager->isDirty(); }
