@@ -73,14 +73,23 @@ namespace kick_ui
             mt::utils::makeVisible( snapMode, hittingPadsMode, autoScroll );
             snapMode.setBoundsRelative( .1076f, .1458f, .784f, .2083f );
             hittingPadsMode.setBoundsRelative( .1076f, .396f, .784f, .2083f );
+            autoScroll.setBoundsRelative( .1076f, .645f, .784f, .2083f );
         }
         else if( screenType == ListEdit )
         {
-            mt::utils::makeVisible( hittingPadsMode, autoAdvance, autoScroll );
+            // "Auto advance on step record" has no step-record mode behind it (nothing reads it): not shown.
+            constexpr bool kAutoAdvanceAvailable = false;
+            mt::utils::makeVisible( hittingPadsMode, autoScroll );
             hittingPadsMode.setBoundsRelative( .1076f, .1458f, .784f, .2083f );
-            autoAdvance.setBoundsRelative( .1076f, .396f, .784f, .2083f );
+            if( kAutoAdvanceAvailable )
+            {
+                mt::utils::makeVisible( autoAdvance );
+                autoAdvance.setBoundsRelative( .1076f, .396f, .784f, .2083f );
+                autoScroll.setBoundsRelative( .1076f, .645f, .784f, .2083f );
+            }
+            else
+                autoScroll.setBoundsRelative( .1076f, .396f, .784f, .2083f );
         }
-        autoScroll.setBoundsRelative( .1076f, .645f, .784f, .2083f );
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
