@@ -8,7 +8,7 @@ namespace kick_ui
 
     SamplerRecorder::SamplerRecorder()
     {
-        mt::utils::addAndMakeVisible( this, timerControl, maxLengthTimerControl, recordButton, progressBar, maxLengthLabel );
+        mt::utils::addAndMakeVisible( this, timerControl, maxLengthTimerControl, recordButton, progressBar, maxLengthLabel, ramBudgetLabel );
         mt::utils::addChildComponents( this, recordLabel, statusImage );
 
         recordLabel.setColours( ui::Theme::textColour( 2 ), juce::Colours::transparentBlack );
@@ -18,11 +18,16 @@ namespace kick_ui
         maxLengthLabel.setValueJustification( juce::Justification::centredBottom );
         maxLengthLabel.setValueFontHeight( 18 );
 
+        ramBudgetLabel.setColours( ui::Theme::textColour( 2 ), juce::Colours::transparentBlack );
+        ramBudgetLabel.setValueJustification( juce::Justification::centred );
+        ramBudgetLabel.setValueFontHeight( 14 );
+
         maxLengthTimerControl.setDisplayFormat( ui::KickTimerControl::DisplayFormat::displayFormatSS );
         maxLengthTimerControl.setTime( 20.0 );
         maxLengthTimerControl.setMaxTime( sampler_logic::kMaxRecordSeconds ); // the engine clamps to 600 s: offer exactly that
         maxLengthTimerControl.setValueColour( ui::Theme::textColour( 2 ) );
         maxLengthTimerControl.setNumberDisplay( ui::ViewType::withTitleBottom );
+        ramBudgetLabel.setText( juce::String( sampler_logic::formatRamBudget( 20.0 ) ), juce::dontSendNotification );
         timerControl.setEditable( false );
         timerControl.setTime( 0.0f );
         timerControl.setNumberDisplay( ui::ViewType::withTitleBottom );
@@ -96,6 +101,24 @@ namespace kick_ui
 
         g.setColour( ui::Theme::waveformColour( 1 ) );
         thumbnail.drawChannels( g, getThumbnailRectangle().reduced( 2 ), 0.0, thumbnail.getTotalLength(), 2.0f );
+
+        // SA-16: draw slice markers on the waveform
+        if( !sliceMarkers.empty() && _recordLength > 0.0 )
+        {
+            const auto thumbRect = getThumbnailRectangle();
+            g.setColour( ui::Theme::selectionColour( 1 ) );
+            g.setFont( 11.0f );
+            for( size_t i = 0; i < sliceMarkers.size(); ++i )
+            {
+                const double sec = sliceMarkers[i];
+                const float  x   = (float)thumbRect.getX() + static_cast<float>( ( sec / _recordLength ) * thumbRect.getWidth() );
+                if( x >= (float)thumbRect.getX() && x <= (float)thumbRect.getRight() )
+                {
+                    g.drawVerticalLine( static_cast<int>( x ), (float)thumbRect.getY(), (float)thumbRect.getBottom() );
+                    g.drawText( juce::String( (int)i + 1 ), static_cast<int>( x ) + 2, thumbRect.getY() + 2, 24, 14, juce::Justification::left );
+                }
+            }
+        }
 
         // draw scale
         g.setColour( ui::Theme::backgroundColour( 8 ) );
@@ -219,8 +242,9 @@ namespace kick_ui
     void SamplerRecorder::resized()
     {
         statusImage.setBoundsRelative( .07f, .502f, .095f, .07f );
-        maxLengthLabel.setBoundsRelative( .03f, .70f, .1564f, .05f );
-        maxLengthTimerControl.setBoundsRelative( .03f, .745f, .1564f, .2020f );
+        maxLengthLabel.setBoundsRelative( .03f, .69f, .1564f, .04f );
+        ramBudgetLabel.setBoundsRelative( .03f, .73f, .1564f, .035f );
+        maxLengthTimerControl.setBoundsRelative( .03f, .77f, .1564f, .18f );
         timerControl.setBoundsRelative( .217f, .715f, .565f, .2020f );
         recordButton.setBoundsRelative( .813f, .7350f, .1564f, .2020f );
         progressBar.setBoundsRelative( .217f, .947f, .565f, .0252f );
@@ -255,6 +279,7 @@ namespace kick_ui
                 maxLengthTimerControl.knobRotated( value, true );
                 break;
         }
+        ramBudgetLabel.setText( juce::String( sampler_logic::formatRamBudget( maxLengthTimerControl.getTime() ) ), juce::dontSendNotification );
     }
 
     SamplerRecorder::RecordChannels SamplerRecorder::getRecordChannels()
