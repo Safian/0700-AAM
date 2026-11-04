@@ -50,6 +50,7 @@ namespace mt
 
         void setupRecorder( double timeInSeconds, float Gain, float Pan, bool Looping, bool Overdub );
         void setMonitorOn( bool Monitor );
+        void setMonitorGain( float Gain );
         void setRecorderLoop( bool Looping );
         void setRecorderOverdub( bool Overdub );
         void setRecorderPan( float Pan );

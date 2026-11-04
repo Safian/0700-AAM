@@ -268,3 +268,13 @@ endif()
 add_executable(kick-startup-tests StartupTests.cpp)
 add_test(NAME kick-startup COMMAND kick-startup-tests)
 set_tests_properties(kick-startup PROPERTIES TIMEOUT 20)
+
+# Sample Assign pure logic: bank/pad index maths, pool mapping, Keygroup zones, audition debounce; JUCE-free, header only.
+add_executable(kick-assign-sample-logic-tests AssignSampleLogicTests.cpp)
+add_test(NAME kick-assign-sample-logic COMMAND kick-assign-sample-logic-tests)
+set_tests_properties(kick-assign-sample-logic PROPERTIES TIMEOUT 10)
+
+# Sampler pure logic: slice maths in the real sample rate, time-ordered pad slices, collision-free file names; JUCE-free, header only.
+add_executable(kick-sampler-logic-tests SamplerLogicTests.cpp)
+add_test(NAME kick-sampler-logic COMMAND kick-sampler-logic-tests)
+set_tests_properties(kick-sampler-logic PROPERTIES TIMEOUT 10)

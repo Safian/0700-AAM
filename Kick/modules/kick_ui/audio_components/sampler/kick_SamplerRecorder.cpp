@@ -1,4 +1,5 @@
 #include "kick_SamplerRecorder.h"
+#include "kick_sampler_logic.h"
 
 namespace kick_ui
 {
@@ -19,7 +20,7 @@ namespace kick_ui
 
         maxLengthTimerControl.setDisplayFormat( ui::KickTimerControl::DisplayFormat::displayFormatSS );
         maxLengthTimerControl.setTime( 20.0 );
-        maxLengthTimerControl.setMaxTime( 1200 );
+        maxLengthTimerControl.setMaxTime( sampler_logic::kMaxRecordSeconds ); // the engine clamps to 600 s: offer exactly that
         maxLengthTimerControl.setValueColour( ui::Theme::textColour( 2 ) );
         maxLengthTimerControl.setNumberDisplay( ui::ViewType::withTitleBottom );
         timerControl.setEditable( false );
@@ -36,9 +37,9 @@ namespace kick_ui
                 setRecordMode( RecordMode::recordModeRecord );
         };
 
-        recorderListner.onRecorderLengthChanged = [&]( double LengthInSeconds ) {
-            _recordLength = LengthInSeconds;
-        };
+        // _recordLength is the length of the recording BUFFER (set in startRecording). The engine also reports the valid length here on
+        // stop; writing that into _recordLength made the displayed / marker time collapse after a stop, so it is not taken over.
+        recorderListner.onRecorderLengthChanged = []( double ) {};
 
         recorderListner.onRecorderStarted = [&]() {
             //setRecordMode( RecordMode::recordModeRecording );
@@ -53,7 +54,8 @@ namespace kick_ui
         };
 
         recorderListner.onRecorderPreviewStopped = [&]() {
-
+            if( onPreviewStopped )
+                onPreviewStopped();
         };
 
         ae.setRecorderListener( recorderListner );
@@ -316,9 +318,10 @@ namespace kick_ui
         ae.setRecorderThresholdDB( threshDb );
     }
 
+    // Sample-accurate position: the engine publishes the write position every audio block (the 30 Hz UI timer is only for display).
     double SamplerRecorder::getCurrentRecordTime()
     {
-        return timerControl.getTime();
+        return juce::jlimit( 0.0, _recordLength, (double)ae.getRecorderProgress() * _recordLength );
     }
 
     void SamplerRecorder::setNumChannels( int channels )
@@ -344,8 +347,7 @@ namespace kick_ui
     void SamplerRecorder::startRecording()
     {
         _progress     = 0.0;
-        _recordLength = maxLengthTimerControl.getTime();
-        //TODO
+        _recordLength = sampler_logic::clampRecordSeconds( maxLengthTimerControl.getTime() );
         ae.setupRecorder( _recordLength, 1.f, 0, false, false );
         //ae.setupRecorder( 2, 1.f, 0, false, false );
         ae.startRecorder( recChans );
@@ -386,7 +388,8 @@ namespace kick_ui
         if( visible )
         {
             recordFile    = ae.getTempDir().getSiblingFile( "sampler.wav" );
-            _recordLength = maxLengthTimerControl.getTime();
+            if( mode == RecordMode::recordModeNone )
+                _recordLength = sampler_logic::clampRecordSeconds( maxLengthTimerControl.getTime() );
             startTimerHz( 30 );
             setRecordMode( mode );
         }

@@ -104,6 +104,11 @@ namespace mt
         if( _sampler ) _sampler->setMonitorOn( Monitor );
     }
 
+    void MTAudioRecorderManager::setMonitorGain( float Gain )
+    {
+        if( _sampler ) _sampler->setMonitorGain( Gain );
+    }
+
     void MTAudioRecorderManager::setRecorderLoop( bool Looping )
     {
         if( _sampler ) _sampler->setLooping( Looping );

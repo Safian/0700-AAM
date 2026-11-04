@@ -146,6 +146,7 @@ namespace ui
         bool visible = isVisible();
         for( auto it : getChildren() )
             it->setVisible( visible );
+        ieff.setVisible( bShowInserts && visible );
     }
 
     /// <summary>
