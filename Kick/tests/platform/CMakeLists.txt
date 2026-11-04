@@ -128,6 +128,14 @@ target_include_directories(kick-bus-inserts-tests PRIVATE
 add_test(NAME kick-bus-inserts COMMAND kick-bus-inserts-tests)
 set_tests_properties(kick-bus-inserts PROPERTIES TIMEOUT 30)
 
+# All 327 Airwindows effects: creation, parameters, processing, serialization round-trip (INS-22, INS-23).
+add_executable(kick-all-effects-tests AllEffectsTests.cpp)
+target_link_libraries(kick-all-effects-tests PRIVATE kick_audio_core Threads::Threads)
+target_include_directories(kick-all-effects-tests PRIVATE
+    ../../../AudIO/AudIO/Includes ../../../AudIO/AudIO/Daw ../../../AudIO/AudIO/Dsp ../../../AudIO/AudIO/Core ../../../AudIO/AudIO)
+add_test(NAME kick-all-effects COMMAND kick-all-effects-tests)
+set_tests_properties(kick-all-effects PROPERTIES TIMEOUT 60)
+
 add_executable(kick-key-transpose-tests KeyTransposeTests.cpp)
 add_test(NAME kick-key-transpose COMMAND kick-key-transpose-tests)
 set_tests_properties(kick-key-transpose PROPERTIES TIMEOUT 10)
