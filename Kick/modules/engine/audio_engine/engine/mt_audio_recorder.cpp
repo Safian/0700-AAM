@@ -85,7 +85,7 @@ namespace mt
 
         // Setup inserts on Sampler.
         auto samplerNode = VT.getOrCreateChildWithName( IDs::SAMPLER, nullptr );
-        auto samplerVT   = looperNode.getOrCreateChildWithName( IDs::SAMPLER, nullptr );
+        auto samplerVT   = samplerNode.getOrCreateChildWithName( IDs::SAMPLER, nullptr );
     }
 
     void MTAudioRecorderManager::setupRecorder( double timeInSeconds, float Gain, float Pan, bool Looping, bool Overdub )
@@ -152,6 +152,56 @@ namespace mt
     void MTAudioRecorderManager::setRecorderMode( int Mode )
     {
         if( _sampler ) _sampler->setRecordingMode( (SampleRecorder::Mode)Mode );
+    }
+
+    void MTAudioRecorderManager::setRecorderOneShot( bool OneShot )
+    {
+        if( _sampler ) _sampler->setOneShotRecord( OneShot );
+    }
+
+    bool MTAudioRecorderManager::isRecorderOneShot()
+    {
+        return _sampler ? _sampler->isOneShotRecord() : false;
+    }
+
+    void MTAudioRecorderManager::setRecorderBars( int Bars )
+    {
+        if( _sampler ) _sampler->setBars( Bars );
+    }
+
+    int MTAudioRecorderManager::getRecorderBars()
+    {
+        return _sampler ? _sampler->getBars() : 1;
+    }
+
+    void MTAudioRecorderManager::pushRecorderMarker( int Pad )
+    {
+        if( _sampler ) _sampler->pushMarker( Pad );
+    }
+
+    std::vector<Recorder::Marker> MTAudioRecorderManager::getRecorderMarkers()
+    {
+        return _sampler ? _sampler->getMarkers() : std::vector<Recorder::Marker>{};
+    }
+
+    void MTAudioRecorderManager::clearRecorderMarkers()
+    {
+        if( _sampler ) _sampler->clearMarkers();
+    }
+
+    double MTAudioRecorderManager::getRecorderTimeSeconds()
+    {
+        return _sampler ? _sampler->getRecordTimeSeconds() : 0.0;
+    }
+
+    std::vector<Recorder::WaveformPeak> MTAudioRecorderManager::getRecorderWaveformPeaks( int MaxPeaks )
+    {
+        return _sampler ? _sampler->getWaveformPeaks( MaxPeaks ) : std::vector<Recorder::WaveformPeak>{};
+    }
+
+    int MTAudioRecorderManager::getRecorderPeakCount()
+    {
+        return _sampler ? _sampler->getPeakCount() : 0;
     }
 
     void MTAudioRecorderManager::startRecorder( int Mode, bool ForwardDirection, bool FromBeginging )

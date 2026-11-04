@@ -82,4 +82,18 @@ namespace mt
     juce::String MTLooperInterface::getLooperError() const noexcept { return manager->getLooper()->lastError(); }
     double& MTLooperInterface::getLooperProgress() noexcept { return manager->getLooper()->getProgress(); }
 
+    void MTLooperInterface::setLooperOneShotRecord( bool OneShot ) noexcept { if (manager->getLooper()) manager->getLooper()->setOneShotRecord( OneShot ); }
+    bool MTLooperInterface::isLooperOneShotRecord() const noexcept { return manager->getLooper() ? manager->getLooper()->isOneShotRecord() : false; }
+
+    void MTLooperInterface::setLooperBars( int Bars ) noexcept { if (manager->getLooper()) manager->getLooper()->setBars( Bars ); }
+    int MTLooperInterface::getLooperBars() const noexcept { return manager->getLooper() ? manager->getLooper()->getBars() : 1; }
+
+    void MTLooperInterface::pushLooperMarker( int Pad ) noexcept { if (manager->getLooper()) manager->getLooper()->pushMarker( Pad ); }
+    std::vector<Recorder::Marker> MTLooperInterface::getLooperMarkers() noexcept { return manager->getLooper() ? manager->getLooper()->getMarkers() : std::vector<Recorder::Marker>{}; }
+    void MTLooperInterface::clearLooperMarkers() noexcept { if (manager->getLooper()) manager->getLooper()->clearMarkers(); }
+    double MTLooperInterface::getLooperTimeSeconds() const noexcept { return manager->getLooper() ? manager->getLooper()->getRecordTimeSeconds() : 0.0; }
+
+    std::vector<Recorder::WaveformPeak> MTLooperInterface::getLooperWaveformPeaks( int MaxPeaks ) noexcept { return manager->getLooper() ? manager->getLooper()->getWaveformPeaks( MaxPeaks ) : std::vector<Recorder::WaveformPeak>{}; }
+    int MTLooperInterface::getLooperPeakCount() const noexcept { return manager->getLooper() ? manager->getLooper()->getPeakCount() : 0; }
+
 }
