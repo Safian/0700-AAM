@@ -21,6 +21,7 @@
 
 #include "kick_ui/kick_ui.h"
 #include "kick_ui/kick_ui_grid.h"
+#include "hardware/source/kick_PlatformServices.h"
 #include "audio_engine/audio_engine.h"
 #include "kick_device_adapter.h"
 #include "kick_audio_engine_adapter.h"

@@ -60,6 +60,8 @@ namespace mt
         bool loadProject( juce::File& ProjectFile, bool createIfMissing = false );
         bool closeProject();
         bool saveProject();
+        // Runs the autosave path now, on the calling thread (used by the smoke tests; the timer does the same later).
+        bool autosaveNow();
         // Save As / Save a Copy (any thread, see KickXML::saveAs). The audio engine is not touched.
         SaveAsResult saveProjectAs( const juce::File& newDir, bool switchToNew, const CopyFolderFn& copyFolder, const std::atomic<bool>& cancel );
         const juce::String& getLastLoadError() const noexcept { return lastLoadError; }
