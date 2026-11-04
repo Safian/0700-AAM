@@ -85,100 +85,6 @@ namespace kick_ui
     sigslot::signal<>    signals::sigBrowserShowFavourites = {};
     sigslot::signal<int> signals::sigMainModeSelectTab     = {};
 
-    class TempScreen
-        : public IScreen
-        , public juce::Component
-    {
-    public:
-        TempScreen()
-            : IScreen( Screen::Temp )
-        {
-            setLookAndFeel( ui::KickLooknFeel::getLnf() );
-
-            header.showSettingsButton( true );
-            addAndMakeVisible( header );
-
-            for( auto row = 7; row >= 0; --row )
-            {
-                auto pB     = &pads[row];
-                auto pBText = "Pad-" + juce::String( row + 1 );
-                pB->setToggleButtonText( pBText, pBText );
-                pB->setValueFontHeight( 24.f );
-                addAndMakeVisible( pB );
-                for( auto col = 0; col < 16; ++col )
-                {
-                    auto sB = &steps[row][col];
-                    sB->setValueBackgroundColour( ui::Theme::backgroundColour( 3 ).withAlpha( 0.65f ) );
-                    addAndMakeVisible( sB );
-                }
-            }
-
-            padTexts[0] = "DANCE KICK";
-            padTexts[1] = "TECHNO SNARE";
-            padTexts[2] = "TECHNO HI HAT";
-            padTexts[3] = "DANCE CLAP";
-            padTexts[4] = "METAL SNARE";
-            padTexts[5] = "DRUM 0";
-            padTexts[6] = "DRUM BASE";
-            padTexts[7] = "LOW HAT";
-        }
-
-        void handleCommand( CPktMgr::HWMsg_t& ) override {}
-
-    private:
-        KickModeHeader                       header{ "Step Sequencer", "Icon_listEdit" };
-        std::array<juce::Rectangle<int>, 8>  stepBounds;
-        std::array<juce::String, 8>          padTexts;
-        std::array<ui::KickToggleButton, 8>  pads;
-        std::array<ui::KickToggleButton, 16> steps[8];
-
-        void paint( juce::Graphics& g ) override
-        {
-            auto       tColour = juce::Colours::grey.darker();
-            auto       tJust   = juce::Justification::centredLeft;
-            auto       tHeight = 28.f;
-            juce::Font tFont;
-
-            tFont.setSizeAndStyle( tHeight, juce::Font::italic | juce::Font::bold, 1.f, 0.4f );
-
-            g.setColour( tColour );
-            g.setFont( tFont );
-            for( auto row = 7; row >= 0; --row )
-            {
-                g.drawFittedText( padTexts[row].toUpperCase(), stepBounds[row], tJust, 1 );
-            }
-        }
-
-        void resized() override
-        {
-            auto b = getLocalBounds();
-            header.setBounds( b.removeFromTop( ui::layout::header.getHeight() ) );
-            b = b.reduced( 7, 10 );
-            //
-            auto height = b.getHeight() / 8;
-
-            auto padWidth  = 104;
-            auto padBounds = b.removeFromLeft( padWidth );
-
-            auto stepWidth = b.getWidth() / 16;
-
-            for( auto row = 7; row >= 0; --row )
-            {
-                auto pB         = padBounds.removeFromTop( height ).reduced( 0, 5 );
-                auto sB         = b.removeFromTop( height ).reduced( 0, 5 );
-                stepBounds[row] = sB.reduced( 25, 0 );
-
-                pads[row].setBounds( pB.reduced( 3, 0 ) );
-                for( auto col = 0; col < 16; ++col )
-                {
-                    steps[row][col].setBounds( sB.removeFromLeft( stepWidth ).reduced( 3, 0 ) );
-                }
-            }
-        }
-
-        void visibilityChanged() override {}
-    };
-
     KickHome& KickHome::Instance()
     {
         static juce::Component::SafePointer<KickHome> instance;
@@ -190,6 +96,7 @@ namespace kick_ui
         : statusBar_( &AppStatusbar::Instance() )
     {
         mt::getAudioInterface().addListener(this);
+        undoWatcher_ = std::make_unique<UndoWatcher>();
         //mt::FocusDebugger::enableFocusDebugger( true );
 
         // Setup default look and feel.
@@ -208,6 +115,7 @@ namespace kick_ui
             auto& res         = KSystemResources::Instance();
             res.getCacheStats = [convert] { return convert( mt::getAudioSoundCache().getStats() ); };
             res.purgeUnused   = [convert] { return convert( mt::getAudioSoundCache().purgeUnused() ); };
+            res.getAudioLoad  = []( double& load, int& xruns ) { return mt::getAudioInterface().getAudioLoad( load, xruns ); };
         }
 
         // Connect sceeen signals.
@@ -282,7 +190,6 @@ namespace kick_ui
         startupScreen_->setBounds( getLocalBounds() );
 
         // Load default startup screen.
-        //signals::sigScreenOpen( Screen::Temp );
         signals::sigScreenOpen( Screen::RecentProject );
 
         // Now, Lazily create and load rest of the screens
@@ -319,7 +226,6 @@ namespace kick_ui
                 screenAdder( Screen::ProcessEdit, std::make_unique<SampleProcess>() );
                 screenAdder( Screen::CVClib, std::make_unique<CVClib>() );
                 screenAdder( Screen::Inserts, std::make_unique<Inserts>() );
-                //screenAdder( Screen::Temp, std::make_unique<TempScreen>() );
 
                 lazyScreensReady_ = true;
                 if( startupScreen_ ) startupScreen_->toFront( false ); // the screens just added must not cover it
@@ -336,7 +242,7 @@ namespace kick_ui
 
     void KickHome::onProjectSaveFailed(const juce::String& reason)
     {
-        if (statusBar_) statusBar_->setBoxInfo("UNSAVED: " + reason);
+        if (statusBar_) statusBar_->setStanding("UNSAVED: " + reason);
         juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
             "Project not saved", reason + "\nYour changes remain open. The previous saved file has been preserved.");
     }
@@ -344,11 +250,16 @@ namespace kick_ui
     void KickHome::onProjectDirtyChanged(bool dirty)
     {
         if (statusBar_ && mt::getAudioInterface().getProjectSaveError().isEmpty())
-            statusBar_->setBoxInfo(dirty ? "Unsaved project changes" : "Project saved");
+        {
+            // Unsaved changes stand until the project is saved; the save confirmation is a message that fades.
+            statusBar_->setStanding(dirty ? "Unsaved project changes" : "");
+            if (!dirty) statusBar_->setBoxInfo("Project saved");
+        }
     }
 
     KickHome::~KickHome()
     {
+        undoWatcher_.reset();
         mt::getAudioInterface().removeListener(this);
         removeKeyListener( &contracts::getKeypressDetector() );
         contracts::DclSignals::hardwareInputTriggered.disconnect_all();
@@ -399,6 +310,8 @@ namespace kick_ui
         nav_.noteLeaving( currentScreen );
 
         // Bounds check...
+        if( screens_.end() == screens_.find( screen ) )
+            kick_log( "warn", "[WARN] [HOME] screen %d is not registered: showing the main view\n", (int)screen );
         currentScreen = ( screens_.end() != screens_.find( screen ) ) ? screen : Screen::HomeListView;
         // Load current screen...
         triggerAsyncUpdate();

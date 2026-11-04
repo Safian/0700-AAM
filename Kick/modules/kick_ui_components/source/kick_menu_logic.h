@@ -113,12 +113,10 @@ namespace ui::menu_logic
             case S::RecentProject:
             case S::HomeOptions:
             case S::HomePreferencesView:
-            case S::HomePreferences:
             case S::MenuFileBrowser:
             case S::SWUpdateView:
             case S::SWUpdateWindow:
-            case S::KickUpdate:
-            case S::Temp: return false;
+            case S::KickUpdate: return false;
             default: return true;
         }
     }

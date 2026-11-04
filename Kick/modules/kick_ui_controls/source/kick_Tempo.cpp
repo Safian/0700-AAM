@@ -206,6 +206,9 @@ namespace ui
     void KickTempoEditor::show( const juce::String& Title, std::function<void( int )> CallbackOnExit )
     {
         //slider.setFocus( true );
+        if( numTapsSource )
+            tapTempo.setNumTaps( numTapsSource() );
+        tapTempo.reset(); // a new opening starts a new series of taps
         inputTextLabel.setText( slider.getTextFromValue( slider.getValue() ) );
         mt::utils::showOptions( Title, this, CallbackOnExit, { 0, 0, tempoWidth, numpadHeight } );
     }

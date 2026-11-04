@@ -9,10 +9,10 @@
 // Stand-in for kick_ui::Screen: same enumerator names, the logic only needs those.
 enum class S
 {
-    Invalid = -9999, HomeOptions = 1000, HomeListView, HomeGridView, HomeSequencerView, HomeXYView, HomePreferencesView, HomePreferences,
+    Invalid = -9999, HomeOptions = 1000, HomeListView, HomeGridView, HomeSequencerView, HomeXYView, HomePreferencesView,
     MenuSampleEdit, MenuProgramEdit, MenuSampler, MenuLooper, MenuPadMute, MenuTrackMute, MenuPadMixer, MenuChannelMixer, MenuKnobEdit,
     MenuListEdit, MenuPadPerform, MenuMidiControl, MenuFileBrowser, MenuNextSequence, MenuSong, MenuColorEdit, MenuAssignSample,
-    RecentProject, SWUpdateView, SWUpdateWindow, KickUpdate, MenuPiano, Temp
+    RecentProject, SWUpdateView, SWUpdateWindow, KickUpdate, MenuPiano
 };
 
 static int g_fail = 0;
