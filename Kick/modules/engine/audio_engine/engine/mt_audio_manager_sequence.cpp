@@ -148,6 +148,34 @@ namespace mt
     //// Timing ...
     ////////////////////////////
 
+    int MTAudioSequenceManager::setTimeSignature( int Sequence, int Numerator, int Denominator )
+    {
+        auto s = getSequence( Sequence );
+        if( !s )
+            return -1;
+        if( !s->isUsingMasterBPM() )
+            return s->setOwnTimeSignature( Numerator, Denominator );
+
+        // Global: every sequence that follows the global tempo changes its bar grid with it.
+        if( !timesig::isValid( Numerator, Denominator ) )
+            return -1;
+        if( manager.getNumTempoSettings() != 1 )
+            return -2;
+
+        if( undoManager ) undoManager->beginNewTransaction( "Time Signature" );
+        std::vector<std::pair<MTSequence*, MTSequence::TimeGrid>> before;
+        forAllSequences( [&]( MTSequence* S ) {
+            if( S->isUsingMasterBPM() ) before.emplace_back( S, S->captureTimeGrid() );
+        } );
+        auto tempo = manager.getTempoState( 0 ); // raw tree writes: one undo transaction (see MTSequence::remapTimeGrid)
+        tempo.setProperty( IDs::num, Numerator, undoManager );
+        tempo.setProperty( IDs::den, Denominator, undoManager );
+        for( auto& it : before )
+            it.first->remapTimeGrid( it.second );
+        kick_log( "info", "[INFO] [SEQ] Global time signature set to %d/%d, %d sequence(s) re-mapped\n", Numerator, Denominator, (int)before.size() );
+        return 0;
+    }
+
     int MTAudioSequenceManager::setSequenceLength( const int Sequence, const int Bars )
     {
         if( auto s = getSequence( Sequence ) )
@@ -177,42 +205,112 @@ namespace mt
         if( getSequenceByName( Name ) || ( sequences.size() >= MAX_SEQUENCE ) )
             return -1;
 
+        if( undoManager ) undoManager->beginNewTransaction( "Create sequence" ); // one undo step per create / delete
         juce::ValueTree vt = createVTree( IDs::SEQUENCE, IDs::name, Name );
         vTree.appendChild( vt, undoManager );
 
         return createSequence( vt );
     }
 
-    int MTAudioSequenceManager::createSequence( juce::ValueTree& VT )
-    {
-        static unsigned int _seqNo = 0;
+    static unsigned int gSeqNo = 0;
 
+    std::unique_ptr<MTSequence> MTAudioSequenceManager::makeSequence( juce::ValueTree& VT )
+    {
         if( !VT.isValid() ) VT = juce::ValueTree( IDs::SEQUENCE );
 
         juce::String name = VT.getProperty( IDs::name );
         if( name.isEmpty() )
         {
-            name = "Sequence" + juce::String( _seqNo + 1 );
+            name = "Sequence" + juce::String( gSeqNo + 1 );
             VT.setProperty( IDs::name, name, nullptr );
         }
 
-        if( auto seqPtr = std::make_unique<MTSequence>( manager, VT, undoManager, globalPlayhead ) )
+        auto seqPtr = std::make_unique<MTSequence>( manager, VT, undoManager, globalPlayhead );
+        ++gSeqNo;
+        // Register callbacks...
+        seqPtr->onTempoTimeSignatureChangeFn = [&]( float BPM, int Bars, int Num, int Den ) {
+            if( seqTimeSignatureChanged )
+                seqTimeSignatureChanged( BPM, Bars, Num, Den );
+        };
+        return seqPtr;
+    }
+
+    void MTAudioSequenceManager::reconcileWithTree()
+    {
+        std::vector<juce::ValueTree> nodes;
+        for( auto it : vTree )
+            if( it.hasType( IDs::SEQUENCE ) )
+                nodes.push_back( it );
+
+        const auto prevSelected = pSelectedSequence;
+        const auto prevIndex    = selected.sequence;
+
+        const bool changed = treesync::reconcile(
+            sequences, nodes,
+            []( MTSequence& S, const juce::ValueTree& N ) { return S.getVT() == N; },
+            [&]( const juce::ValueTree& N ) -> std::unique_ptr<MTSequence> {
+                juce::ValueTree vt = N;
+                return makeSequence( vt );
+            },
+            [&]( MTSequence& S ) {
+                // Never destroy a sequence that is still playing.
+                if( manager.getPlayingSequence() == &S )
+                    manager.stop();
+                if( pSelectedSequence == &S )
+                    pSelectedSequence = nullptr;
+            } );
+
+        // The tracks of the sequences that stayed (new sequences built theirs from the tree).
+        bool tracksChanged = false;
+        for( auto& s : sequences )
+            tracksChanged = s->reconcileTracksWithTree() || tracksChanged;
+
+        if( !changed && !tracksChanged )
+            return;
+
+        if( changed )
         {
-            ++_seqNo;
+            // Selection: keep the selected sequence if it survived, else the nearest index.
+            int sel = -1;
+            for( int i = 0; i < (int)sequences.size(); ++i )
+                if( sequences[(size_t)i].get() == prevSelected ) sel = i;
+            if( sel < 0 && !sequences.empty() )
+                sel = juce::jlimit<int>( 0, (int)sequences.size() - 1, prevIndex );
+            pSelectedSequence = sel >= 0 ? sequences[(size_t)sel].get() : nullptr;
+            selected.sequence = sel;
+            sseq              = pSelectedSequence ? pSelectedSequence->getName() : "--";
+            updateSequenceList();
+        }
+
+        const int trackSel = pSelectedSequence ? pSelectedSequence->getSelectedTrack() : -1;
+        selected.track     = trackSel;
+        strack             = "--";
+        if( pSelectedSequence )
+            if( auto trk = pSelectedSequence->getTrack( trackSel ) )
+                strack = trk->getName();
+
+        if( changed && seqSelectionChanged )
+            seqSelectionChanged();
+        if( trackSelectionChanged )
+            trackSelectionChanged();
+        if( trackListChanged )
+            trackListChanged( selected.sequence );
+    }
+
+    int MTAudioSequenceManager::createSequence( juce::ValueTree& VT )
+    {
+        if( auto seqPtr = makeSequence( VT ) )
+        {
             auto pSeq = seqPtr.get();
             sequences.push_back( std::move( seqPtr ) );
-            // Register callbacks...
-            pSeq->onTempoTimeSignatureChangeFn = [&]( float BPM, int Bars, int Num, int Den ) {
-                if( seqTimeSignatureChanged )
-                    seqTimeSignatureChanged( BPM, Bars, Num, Den );
-            };
+            (void)pSeq;
 
             if( 1 == sequences.size() )
                 setSelectedSequence( 0 );
 
             // Update sequence lists...
             updateSequenceList();
-            return _seqNo;
+            return (int)gSeqNo;
         }
         return -1;
     }
@@ -221,6 +319,7 @@ namespace mt
     {
         if( juce::isPositiveAndBelow( Index, sequences.size() ) )
         {
+            if( undoManager ) undoManager->beginNewTransaction( "Delete sequence" );
             auto& ptr = sequences[(size_t)Index];
 
             // Stop audio playback, if current sequence is playing...
@@ -256,6 +355,7 @@ namespace mt
     {
         if( auto s = getSequence( Index ) )
         {
+            if( undoManager ) undoManager->beginNewTransaction( "Copy sequence" );
             auto vt = s->getState().createCopy();
             vt.removeProperty( IDs::id, nullptr );
             vt.setProperty( IDs::name, juce::String( s->getName() + "_copy" ), nullptr );
@@ -268,7 +368,10 @@ namespace mt
     int MTAudioSequenceManager::clearSequence( int Index )
     {
         if( auto s = getSequence( Index ) )
+        {
+            if( undoManager ) undoManager->beginNewTransaction( "Clear sequence" );
             s->deleteAllTracks();
+        }
         return 0;
     }
 

@@ -88,11 +88,20 @@ namespace mt
         inline int          getMidiChannel() const noexcept { return MTITrackData::midiChannel.get(); };
         inline int          getMidiOutChannel() const noexcept { return MTITrackData::midiOutChannel.get(); };
         inline int          getMuteGroup() const noexcept { return MTITrackData::muteGroup.get(); }
+        inline int          getMonitor() const noexcept { return trackmonitor::clamp( MTITrackData::monitor.get() ); }
+        void                setMonitor( int Mode ) { MTITrackData::monitor.setValue( trackmonitor::clamp( Mode ), undoManager ); }
+        // True if this track's Monitor setting lets the external input message through right now.
+        bool isInputMonitored( const juce::MidiMessage& Msg ) const noexcept;
         inline int          getLength() const noexcept { return MTITrackData::isSeqLength.get() ? seq.getLength() : (int)MTITrackData::length.get(); };
         inline int          getLevel() const noexcept { return MTITrackData::level.get(); }
         inline float        getPan() const noexcept { return MTITrackData::pan.get(); }
 
         bool isMidiInAllowed( const juce::String& Source, int Channel ) const noexcept;
+
+        // The track length in ticks follows the bar grid of the sequence: call after the time signature changed.
+        void refreshLength() { lengthChangeHandler(); }
+        // Re-resolves the program from the track's program id (after undo / redo created or removed programs).
+        void refreshProgram() { progChangeHandler(); }
 
         MTIProgram* getProgram() const;
         int         setProgram( MTIProgram* p );
@@ -113,7 +122,10 @@ namespace mt
         /*void addMidiNote( int NoteNumber, int Velocity );
         void stopMidiNote( int NoteNumber );*/
         void stopAllMidiNotes();
-        int  processIncomingMidiMessage( const juce::MidiMessage& Msg );
+        // Monitored = false: the message came from the external MIDI input and this track's Monitor setting does not
+        // let it through right now (see mt_track_monitor.h); it is still captured for RECALL / REC, only releases
+        // (note-off, all-notes-off, pedal up, bend centre) reach the program. Pads and touch always pass Monitored = true.
+        int  processIncomingMidiMessage( const juce::MidiMessage& Msg, bool Monitored = true );
         int  processIncomingMidiMessage( const MTMidiMessage& Msg );
         // RECALL: commit the last WindowMs of captured live notes into this track's note list. Returns the number of
         // notes committed (0 if nothing was captured). Non-realtime (message thread); the caller owns the undo transaction.
@@ -279,6 +291,7 @@ namespace mt
         std::atomic<bool> recCapturing{ false };
         std::atomic<int>  recLastTick{ 0 };
         seqrec::Capture   recCap;
+        sigslot::scoped_connection programDeletedConn;
         std::atomic<unsigned int> lengthInTicks{ 0 };
         std::atomic<double>       lengthFactor{ 0 };
         //unsigned int              count;

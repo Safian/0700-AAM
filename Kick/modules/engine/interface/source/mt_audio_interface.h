@@ -265,7 +265,12 @@ namespace mt
         int setSequenceLength( int Sequence, float Multiplier = 1.0f );
         int copyTrackBars( const SequenceCopyBars& copyBars );
         int modifySequenceLength( int Sequence, int ModifyBars, bool Insert = true, int AtBarPosition = -1 );
-        int setTimeSignature( int Sequence, int Numerator, int Denominator );
+        // Time signature of the sequence (its own, or the global one while it follows the global tempo). The bar grid
+        // changes, the events stay on their ticks, the sequence / loop / track lengths are re-mapped and rounded up to
+        // whole bars (nothing is cut off); the metronome follows. One undo step. Returns 0, -1 invalid (numerator 1..16,
+        // denominator 4/8/16/32), -2 the tempo map holds several time signatures (not editable).
+        int  setTimeSignature( int Sequence, int Numerator, int Denominator );
+        bool getTimeSignature( int Sequence, int& Numerator, int& Denominator );
         int setSequenceLoop( int Sequence, bool Loop );
         int setSequenceLoopStart( int Sequence, int StartBar );
         int setSequenceLoopEnd( int Sequence, int EndBar );

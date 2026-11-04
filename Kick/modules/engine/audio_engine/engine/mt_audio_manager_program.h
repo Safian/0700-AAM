@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "mt_tree_sync.h"
+
 namespace mt
 {
     class MTAudioProgramManager
@@ -57,6 +59,10 @@ namespace mt
 
         void forAllPrograms( std::function<void( MTIProgram* P )> func );
 
+        // Makes the programs match the PROGRAM nodes of the project tree (after an undo / redo, which changes the tree only):
+        // an undone create drops the object, a redone create / undone delete builds it again from its node.
+        void reconcileWithTree();
+
         inline const std::vector<std::unique_ptr<MTIProgram>>& getPrograms() const noexcept { return programs; }
         inline const std::vector<juce::String>&                getProgramList() const noexcept { return programList; };
 
@@ -72,6 +78,7 @@ namespace mt
     private:
         void        updateProgramList() noexcept;
         MTIProgram* createProgram( juce::ValueTree& vt, bool addToTree );
+        std::unique_ptr<MTIProgram> makeProgram( juce::ValueTree& vt );
 
     private:
         MTSelected&        selected;

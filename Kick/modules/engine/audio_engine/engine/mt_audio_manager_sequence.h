@@ -73,6 +73,11 @@ namespace mt
         int  clearSequence( int Index );
         void forAllSequences( std::function<void( MTSequence* S )> func );
 
+        // Makes the engine's sequences and their tracks match the project tree (the tree is the truth). Called after an
+        // undo / redo, which changes the tree only: an undone create removes the object, a redone create / undone delete
+        // builds it again from its tree node, selection and the listeners (lists, selection) follow.
+        void reconcileWithTree();
+
         inline MTSequence* getSequence() { return pSelectedSequence; };
         MTSequence*        getSequence( int index );
         MTSequence*        getSequenceByName( const juce::String& Name );
@@ -85,6 +90,9 @@ namespace mt
         juce::ValueTree& getSequenceState( const juce::String& Name );
         juce::ValueTree  getSequenceTempoState( int Sequence, int TempoIndex );
 
+        // Changes the time signature of Sequence (its own, or the global one if it follows the global tempo, which
+        // re-maps every sequence that follows it). One undo step. 0 ok, -1 invalid, -2 not editable (several time signatures).
+        int setTimeSignature( int Sequence, int Numerator, int Denominator );
         int setSequenceLength( const int Sequence, const int Bars );
         int setSequenceLength( const int Sequence, const float Multiplier );
 
@@ -119,6 +127,7 @@ namespace mt
     private:
         void updateSequenceList() noexcept;
         int  createSequence( juce::ValueTree& VT );
+        std::unique_ptr<MTSequence> makeSequence( juce::ValueTree& VT );
 
     private:
         MTSelected&     selected;
