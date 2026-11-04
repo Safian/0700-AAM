@@ -255,9 +255,8 @@ private:
                                                  m_logical_w, m_logical_h, ui_x, ui_y);
 
                         if (!slot->was_down) {
-                            printf("[AKAI-TOUCH] down slot=%d raw=(%d,%d) range=%dx%d -> fb=(%d,%d) of %dx%d\n",
+                            kick_log("touch", "[AKAI-TOUCH] down slot=%d raw=(%d,%d) range=%dx%d -> fb=(%d,%d) of %dx%d\n",
                                    s, slot->raw_x, slot->raw_y, m_range_x, m_range_y, ui_x, ui_y, m_logical_w, m_logical_h);
-                            fflush(stdout);
                             if (m_listener) {
                                 m_listener->on_touch_down(s, ui_x, ui_y);
                             }
@@ -448,13 +447,11 @@ private:
                     } else {
                         HardwareButton btn = get_akai_button(note);
                         if (btn != HW_BTN_NONE) {
-                            printf("[AKAI-BTN] note=%d vel=%d\n", note, vel);
-                            fflush(stdout);
+                            kick_log("btn", "[AKAI-BTN] note=%d vel=%d\n", note, vel);
                             if (vel > 0) m_listener->on_button_press(btn);
                             else m_listener->on_button_release(btn);
                         } else {
-                            printf("[AKAI-BTN] Unmapped Port 1 Note %d (0x%02X) vel=%d\n", note, note, vel);
-                            fflush(stdout);
+                            kick_log("btn", "[AKAI-BTN] Unmapped Port 1 Note %d (0x%02X) vel=%d\n", note, note, vel);
                         }
                     }
                 } else if (type == 0x80) {
@@ -466,8 +463,7 @@ private:
                     } else {
                         HardwareButton btn = get_akai_button(note);
                         if (btn != HW_BTN_NONE) {
-                            printf("[AKAI-BTN] note=%d vel=%d\n", note, d1);
-                            fflush(stdout);
+                            kick_log("btn", "[AKAI-BTN] note=%d vel=%d\n", note, d1);
                             m_listener->on_button_release(btn);
                         }
                     }
@@ -486,8 +482,7 @@ private:
                         const int dial_n = m_dial_cc_count.fetch_add(1) + 1;
                         if (dial_n <= 20 || dial_n % 50 == 0)
                         {
-                            printf("[AKAI-DIAL] cc100 val=%d -> steps=%d\n", cc_val, delta);
-                            fflush(stdout);
+                            kick_log("dial", "[AKAI-DIAL] cc100 val=%d -> steps=%d\n", cc_val, delta);
                         }
                         if (delta != 0) m_listener->on_jog_dial(delta);
                     } else if (cc_num == 33) {

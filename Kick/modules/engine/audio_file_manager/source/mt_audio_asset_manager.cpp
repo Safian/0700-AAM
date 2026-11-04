@@ -127,6 +127,9 @@ namespace mt
                 file = resolved.getFullPathName();
         }
 
+        const auto start_ms = kick_logger::get_uptime_ms();
+        kick_log( "info", "[INFO] [PROJ] Asset load begin: '%s' (type: %d)\n", file.toRawUTF8(), (int)Type );
+
         // Add to asset manager.
         addToAssetMgr( file, Type );
 
@@ -148,6 +151,8 @@ namespace mt
                 restoreSlice( sliceVT, file );
             }
         }
+        kick_log( "info", "[INFO] [PROJ] Asset load end: '%s' (took %llu ms)\n",
+                  file.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ) );
     }
 
     void MTAudioAssetManager::restoreSlice( juce::ValueTree sliceVT, const juce::String& File )
@@ -175,6 +180,8 @@ namespace mt
             juce::ScopedLock l( lock );
             if( ADD_ASSET == AddOrRemove && bValidAudio )
             {
+                const auto start_ms = kick_logger::get_uptime_ms();
+                kick_log( "info", "[INFO] [PROJ] Asset add begin: '%s' (type: %d)\n", File.toRawUTF8(), (int)Type );
                 if( !f.isValid() )
                 {
                     auto pathForTree = ( projDir != juce::File() && projDir.exists() && file.isAChildOf( projDir ) )
@@ -201,10 +208,14 @@ namespace mt
                     // Create slice object
                     createDefaultSlice( fileVT, File );
 
+                    kick_log( "info", "[INFO] [PROJ] Asset add end: '%s' (added, took %llu ms)\n",
+                              File.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ) );
                     return AssetAdded;
                 }
                 else
                 {
+                    kick_log( "info", "[INFO] [PROJ] Asset add end: '%s' (already exists, took %llu ms)\n",
+                              File.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ) );
                     return AssetAlreadyExists;
                 }
             }

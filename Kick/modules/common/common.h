@@ -46,6 +46,7 @@
     #include "config.h"
 
 // Module include files.
+    #include "source/kick_logger.h"
     #include "source/kick_atomics.h"
     #include "source/kick_common_utils.h"
     #include "source/kick_CachedValue.h"

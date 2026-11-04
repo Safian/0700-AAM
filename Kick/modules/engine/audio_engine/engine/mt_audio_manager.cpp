@@ -195,12 +195,24 @@ namespace mt
     ////////////////////////////
     bool MTAudioManager::loadProject( juce::File& ProjectFile )
     {
-        //DBG( "LP: Enter FM: " << engine.getFeeMemory() );
-        if (!closeProject()) return false;
-        //DBG( "LP: FM2: " << engine.getFeeMemory() );
+        const auto start_ms = kick_logger::get_uptime_ms();
+        const auto projName = ProjectFile.getFullPathName();
+        kick_log( "info", "[INFO] [PROJ] Project load begin: '%s'\n", projName.toRawUTF8() );
+
+        if (!closeProject())
+        {
+            kick_log( "info", "[INFO] [PROJ] Project load end: '%s' (failed to close previous, took %llu ms)\n",
+                      projName.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ) );
+            return false;
+        }
         undoManager.clearUndoHistory();
         vTree = projectManager::loadOrCreate( ProjectFile );
-        if (!vTree.isValid()) return false;
+        if (!vTree.isValid())
+        {
+            kick_log( "info", "[INFO] [PROJ] Project load end: '%s' (invalid project, took %llu ms)\n",
+                      projName.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ) );
+            return false;
+        }
 
 #if defined( USE_VALUE_TREE_DEBUGGER ) && ( USE_VALUE_TREE_DEBUGGER > 0 )
         debugger.setSource( vTree );
@@ -245,15 +257,27 @@ namespace mt
         // Start timer for metering and playhead...
         internalTimer.setCallbackFunction( [&]() { interTimerCallbackHandler(); } );
         internalTimer.startTimerHz( 25 );
+        kick_log( "info", "[INFO] [PROJ] Project load end: '%s' (success, took %llu ms, %zu programs)\n",
+                  projName.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ),
+                  getPrograms().size() );
         return true;
     }
 
     bool MTAudioManager::closeProject()
     {
         if (!projectLoaded) return true;
+        const auto start_ms = kick_logger::get_uptime_ms();
+        const auto projName = vTree.getProperty( IDs::name, "project" ).toString();
+        kick_log( "info", "[INFO] [PROJ] Project close begin: '%s'\n", projName.toRawUTF8() );
+
         // Persist while the programs still exist. On failure the active project,
         // playback and selection remain available for recovery and retry.
-        if (!projectManager::close()) return false;
+        if (!projectManager::close())
+        {
+            kick_log( "info", "[INFO] [PROJ] Project close end: '%s' (failed to persist, took %llu ms)\n",
+                      projName.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ) );
+            return false;
+        }
         // loadProject runs on a worker (LoadProjectAndAnimation::run). The 25 Hz timer callback (applyAutomatedPans) mutates
         // panBases on the message thread, so stop the timer and clear panBases there too. No lock is held here, and
         // projectManager::close() above already marshals to the message thread from this same worker, so this adds no new
@@ -302,6 +326,8 @@ namespace mt
         // Reset Selection.
         setSelectedSequenceAndTrack( -1, -1 );
         setSelectedProgram( -1 );
+        kick_log( "info", "[INFO] [PROJ] Project close end: '%s' (took %llu ms)\n",
+                  projName.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ) );
         return true;
     }
 
