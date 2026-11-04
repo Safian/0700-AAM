@@ -358,3 +358,8 @@ set_tests_properties(kick-humanize PROPERTIES TIMEOUT 10)
 add_executable(kick-numpad-taptempo-tests NumPadTapTempoTests.cpp)
 add_test(NAME kick-numpad-taptempo COMMAND kick-numpad-taptempo-tests)
 set_tests_properties(kick-numpad-taptempo PROPERTIES TIMEOUT 10)
+
+# Project name rules + template -> project decision (fake file system); JUCE-free header only.
+add_executable(kick-project-names-tests ProjectNamesTests.cpp)
+add_test(NAME kick-project-names COMMAND kick-project-names-tests)
+set_tests_properties(kick-project-names PROPERTIES TIMEOUT 10)
