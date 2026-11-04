@@ -3,7 +3,7 @@
 
 For every commit-hash reference in the document (backticked, 7-40 hex digits) it checks:
   1. the hash resolves to a commit (git cat-file -e),
-  2. the commit is inside <base>..<head> (default origin/main..HEAD), or inside
+  2. the commit is inside <base>..<head> (default origin/main..fork/safian/main), or inside
      <base>..<ref> for any --also ref (default: fork/feat/mobile-slideout-ui),
      except the base commit itself, which is allowed in the metrics block.
 
@@ -38,6 +38,8 @@ def git(*args, check=False):
     return r
 
 
+DEFAULT_HEAD = "fork/safian/main" if subprocess.run(["git", "rev-parse", "--verify", "--quiet", "fork/safian/main"],
+                                                  capture_output=True).returncode == 0 else "HEAD"
 DEFAULT_ALSO = ["fork/feat/mobile-slideout-ui", "fork/fix/project-relative-samples"]
 BACKTICK_HASH_RE = re.compile(r"`([0-9a-f]{7,40})`")
 TICKET_HEAD_RE = re.compile(r"^####\s+((?:UPSTREAM|FORK)(?:-[A-Z0-9]+)+):")
@@ -48,7 +50,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--doc", default="docs/UPSTREAM_TRIAGE.md")
     ap.add_argument("--base", default="origin/main")
-    ap.add_argument("--head", default="HEAD")
+    ap.add_argument("--head", default=DEFAULT_HEAD,
+                    help="tip ref the document describes (default: fork/safian/main if it exists, else HEAD)")
     ap.add_argument("--also", action="append", default=None,
                     help="extra ref whose <base>..<ref> commits may be referenced (default: %s)" % ", ".join(DEFAULT_ALSO))
     ap.add_argument("-q", action="store_true", help="only print problems and the summary")
