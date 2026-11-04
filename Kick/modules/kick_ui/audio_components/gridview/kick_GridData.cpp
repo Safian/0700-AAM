@@ -77,8 +77,8 @@ namespace kick_ui
         }
         else if( screenType == ListEdit )
         {
-            // "Auto advance on step record" has no step-record mode behind it (nothing reads it): not shown.
-            constexpr bool kAutoAdvanceAvailable = false;
+            // "Auto advance on step record": List Edit's step record (REC armed + pad) reads it.
+            constexpr bool kAutoAdvanceAvailable = true;
             mt::utils::makeVisible( hittingPadsMode, autoScroll );
             hittingPadsMode.setBoundsRelative( .1076f, .1458f, .784f, .2083f );
             if( kAutoAdvanceAvailable )

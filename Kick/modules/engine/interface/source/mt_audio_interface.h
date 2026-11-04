@@ -500,6 +500,12 @@ namespace mt
         int clearAutomation( const MTSelected& Selection );
         // Clears the lanes of every track of every sequence (one undo step).
         void clearAllAutomation();
+        // The automation lane breakpoints of the track in Selection as events, sorted by tick (Level lane, then Pan lane
+        // at equal ticks). setAutomationEvent: OldTick < 0 inserts, else moves the point at OldTick; 0 ok, -1 refused.
+        // The caller opens the undo transaction (ScopedUndoTransaction); delete likewise.
+        std::vector<MTAutomationEvent> getAutomationEvents( const MTSelected& Selection );
+        int                            setAutomationEvent( const MTSelected& Selection, int Param, int OldTick, int NewTick, int Value );
+        int                            deleteAutomationEvent( const MTSelected& Selection, int Param, int Tick );
         int randomNotes( const MTSelected& Selection, const track::randomEventsInfo& Info );
         int pitchQuantizeNotes( const MTSelected& Selection, const track::pitchQuantizeInfo& Info );
         int explode( const MTSelected& Selection );

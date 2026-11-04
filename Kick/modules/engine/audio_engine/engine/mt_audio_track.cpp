@@ -206,6 +206,67 @@ namespace mt
         return !laneLevel.empty() || !lanePan.empty();
     }
 
+    std::vector<automation::Point> MTTrack::getLanePoints( int Param ) const
+    {
+        const auto node = findLaneNode( Param );
+        if( !node.isValid() )
+            return {};
+        return automation::fromString( node[IDs::autoPoints].toString().toStdString() );
+    }
+
+    bool MTTrack::setLanePoint( int Param, int OldTick, int NewTick, int Value )
+    {
+        if( Param != automation::Level && Param != automation::Pan )
+            return false;
+        const int          tick   = NewTick < 0 ? 0 : NewTick;
+        const int          value  = Param == automation::Level ? juce::jlimit( 0, 127, Value ) : juce::jlimit( -automation::kPanScale, automation::kPanScale, Value );
+        const juce::String progId = MTITrackData::programId.get();
+        auto               node   = findLaneNode( Param );
+        automation::Lane   lane   = node.isValid() ? automation::fromString( node[IDs::autoPoints].toString().toStdString() ) : automation::Lane();
+        if( Param == automation::Pan )
+        {
+            if( progId.isEmpty() )
+                return false;
+            if( node.isValid() && !lane.empty() && node[IDs::autoProgram].toString() != progId )
+                return false; // the pan lane belongs to another program: it is not edited under this one
+        }
+        if( OldTick >= 0 )
+            automation::eraseRange( lane, OldTick, OldTick );
+        if( !automation::setPoint( lane, tick, value ) )
+            return false;
+
+        if( !node.isValid() )
+        {
+            if( Param == automation::Pan && !findLaneNode( automation::Level ).isValid() )
+            { // a Level node is always created first (readers that know only the Level lane take the first AUTOLANE child)
+                auto lv = juce::ValueTree( IDs::AUTOLANE );
+                lv.setProperty( IDs::autoParam, (int)automation::Level, nullptr );
+                lv.setProperty( IDs::autoPoints, "", nullptr );
+                vTree.addChild( lv, -1, undoManager );
+            }
+            node = juce::ValueTree( IDs::AUTOLANE );
+            node.setProperty( IDs::autoParam, Param, nullptr );
+            node.setProperty( IDs::autoPoints, "", nullptr );
+            vTree.addChild( node, -1, undoManager );
+        }
+        if( Param == automation::Pan )
+            node.setProperty( IDs::autoProgram, progId, undoManager );
+        node.setProperty( IDs::autoPoints, juce::String( automation::toString( lane ) ), undoManager ); // the listener reloads the lane
+        return true;
+    }
+
+    bool MTTrack::eraseLanePoint( int Param, int Tick )
+    {
+        auto node = findLaneNode( Param );
+        if( !node.isValid() )
+            return false;
+        auto lane = automation::fromString( node[IDs::autoPoints].toString().toStdString() );
+        if( automation::eraseRange( lane, Tick, Tick ) == 0 )
+            return false;
+        node.setProperty( IDs::autoPoints, juce::String( automation::toString( lane ) ), undoManager );
+        return true;
+    }
+
     // The AUTOLANE child of the track holding Param. A node without `autoParam` (saved before the PAN lane existed)
     // is the Level lane.
     juce::ValueTree MTTrack::findLaneNode( int Param ) const
