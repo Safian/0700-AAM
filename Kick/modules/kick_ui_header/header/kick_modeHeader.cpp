@@ -148,6 +148,12 @@ namespace kick_ui
         resized();
     }
 
+    void KickModeHeader::showResourcesButton( bool Show )
+    {
+        bShowResources = Show;
+        resized();
+    }
+
     void KickModeHeader::setIcon( const juce::String& Image )
     {
         icon.setImage( Image );
@@ -201,7 +207,8 @@ namespace kick_ui
 
     void KickModeHeader::setEnableNewProject( bool enable )
     {
-        newProject.setVisible( enable );
+        bNewProjectEnabled = enable;
+        applyChildVisibility();
     }
 
     void KickModeHeader::setAutoLoadToggleState( bool state, juce::NotificationType notification )
@@ -219,12 +226,31 @@ namespace kick_ui
         g.fillAll( ui::Theme::backgroundColour( 2 ) );
     }
 
+    void KickModeHeader::applyChildVisibility()
+    {
+        const bool v = isVisible();
+        icon.setVisible( v );
+        headerLabel.setVisible( v );
+        back.setVisible( v && bshowBackbutton );
+        resources.setVisible( v && bShowResources );
+        playStop.setVisible( v && bShowPlay );
+        metronome.setVisible( v && bShowMetronome );
+        automation.setVisible( v && bShowAutomation );
+        settings.setVisible( v && bShowSettings );
+        autoLoad.setVisible( v && bAutoLoad );
+        newProject.setVisible( v && bShowNewProject && bNewProjectEnabled );
+        if( comp )
+            comp->setVisible( v );
+        for( auto& it : buttons )
+            it.first->setVisible( v );
+    }
+
     void KickModeHeader::resized()
     {
+        applyChildVisibility();
         if( getLocalBounds().isEmpty() )
             return;
 
-        back.setVisible( bshowBackbutton );
         if( !bshowBackbutton )
         {
             icon.setBoundsRelative( 0.020f, 0.1842f, 0.040f, 0.6316f );
@@ -296,10 +322,8 @@ namespace kick_ui
     void KickModeHeader::visibilityChanged()
     {
         for( auto it : getChildren() )
-        {
-            it->setVisible( isVisible() );
             it->setWantsKeyboardFocus( false );
-        }
+        applyChildVisibility();
         if( isVisible() )
             syncAutomationButton(); // the hardware button may have changed the mode while this screen was away
     }
@@ -335,7 +359,14 @@ namespace kick_ui
         level.setTitleJustification( juce::Justification::centredTop );
         level.setValueJustification( juce::Justification::centredBottom );
 
-        mt::utils::addAndMakeVisible( this, onOffButton, level, mode, countIn, rate, style );
+        mt::utils::addAndMakeVisible( this, onOffButton, level, mode, countIn, rate, style, timeSig );
+        timeSig.setValueColour( ui::Theme::textColour( 2 ) );
+        timeSig.setValueFontHeight( 20 );
+        timeSig.setBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+        timeSig.onClick = [this]() {
+            // The click follows the time signature of the selected sequence (RATE: SEQ clicks every beat of it).
+            TimeSignatureDialog::show( mt::getAudioInterface().getSelectedSequence(), [this]() { syncFromSettings(); } );
+        };
         // The engine metronome reads enabled, gain, rate and source only: mode, count-in and style change nothing, so those
         // controls are hidden until the engine uses them (kShowUnusedControls).
         mode.setVisible( kShowUnusedControls );
@@ -379,6 +410,7 @@ namespace kick_ui
         rate.setSelected( (int)metronome.rate(), juce::dontSendNotification );
         mode.setSelected( (int)metronome.mode(), juce::dontSendNotification );
         style.setSelected( (int)metronome.style(), juce::dontSendNotification );
+        timeSig.setButtonText( "Time signature  " + TimeSignatureDialog::describe( mt::getAudioInterface().getSelectedSequence() ) );
     }
 
     void MetronomePopup::resized()
@@ -391,6 +423,7 @@ namespace kick_ui
         // Without the unused controls the rate takes the top right slot.
         rate.setBoundsRelative( 0.583f, kShowUnusedControls ? 0.417f : 0.125f, 0.332f, 0.165f );
         style.setBoundsRelative( 0.583f, 0.708f, 0.332f, 0.165f );
+        timeSig.setBoundsRelative( 0.583f, kShowUnusedControls ? 0.708f : 0.417f, 0.332f, 0.165f );
     }
 
     void MetronomePopup::close()

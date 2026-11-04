@@ -44,6 +44,8 @@ namespace kick_ui
         void showPlayButton( bool Show );
         void showNewProjectButton( bool Show );
         void showOptions( bool ShowMetronome, bool ShowAutomation );
+        // The System Resources icon (right end); screens where a system dialog has no place (a running update) hide it.
+        void showResourcesButton( bool Show );
         void setIcon( const juce::String& Image );
         void addComponent( juce::Component* Child );
         void addButton( juce::Component* Button, int Width = 44 );
@@ -70,6 +72,7 @@ namespace kick_ui
         bool                                          bShowNewProject{ false };
         bool                                          bShowAutomation{ true }, bShowMetronome{ true };
         bool                                          bshowBackbutton{ true };
+        bool                                          bShowResources{ true }, bNewProjectEnabled{ true };
         bool                                          bAutoLoad{ false };
         ui::KickImage                                 icon{ "Icon" };
         ui::KickLabel                                 headerLabel{ "" };
@@ -88,6 +91,9 @@ namespace kick_ui
         void resized() override;
         void visibilityChanged() override;
         void syncAutomationButton();
+        // Every child is shown only when the header is visible AND its flag is set (hidden ones really disappear, also when
+        // the flag changes while the screen is on).
+        void applyChildVisibility();
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( KickModeHeader )
     };
 
@@ -115,8 +121,10 @@ namespace kick_ui
         ui::KickToggleOptions onOffButton{ "ENABLE", { "Off", "On" } };
         ui::KickListBox       mode{ "MODE", { "RECORD", "PLAY", "RECORD + PLAY" } };
         ui::KickListBox       countIn{ "COUNTIN", { "Off" } };
-        ui::KickListBox       rate{ "RATE", { "1/16", "1/8", "1/4", "1/2" }, 2 };
+        ui::KickListBox       rate{ "RATE", { "1/16", "1/8", "1/4", "1/2", "SEQ" }, 2 }; // SEQ = every beat of the sequence (follows its time signature)
         ui::KickListBox       style{ "STYLE", { "STYLE-1", "STYLE-2", "STYLE-3", "STYLE-4", "STYLE-5", "STYLE-6", "STYLE-7" }, 0, 2 };
+
+        ui::KickImageButton   timeSig{ "Time signature", "" }; // opens the shared Time Signature dialog of the selected sequence
 
         static constexpr bool kShowUnusedControls = false; // mode / count-in / style have no effect in the engine yet
         void                  syncFromSettings();
