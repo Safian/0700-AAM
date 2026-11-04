@@ -189,6 +189,24 @@ public:
 
         kick_ui::signals::sigScreenClose( screen );
         juce::Timer::callAfterDelay( 1200, [this, names, dir, index, name] {
+            // KICK_SMOKE_QLINK="1:1,2:-1,3:1" injects Q-Link turns (knob 1..4 : signed ticks) through the same
+            // dispatch path as the MPC bridge (on_encoder_turn), after the screen opened and before the snapshot.
+            const auto qlinks = juce::SystemStats::getEnvironmentVariable( "KICK_SMOKE_QLINK", {} );
+            for( const auto& item : juce::StringArray::fromTokens( qlinks, ",", "" ) )
+            {
+                const auto knob  = item.upToFirstOccurrenceOf( ":", false, false ).getIntValue();
+                const auto delta = item.fromFirstOccurrenceOf( ":", false, false ).getIntValue();
+                if( knob < 1 || knob > 4 || delta == 0 )
+                    continue;
+                CPktMgr::HWMsg_t msg;
+                msg.pktType = CPktMgr::EN_PKT_TYPE_KNOBS;
+                msg.pktCmd  = contracts::DeviceControlContracts::KnobCmd::EN_KNOB_QLINK;
+                msg.data    = { contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1 + knob - 1,
+                                delta > 0 ? (int)contracts::DeviceControlContracts::KnobDirection::EN_KNOB_CLOCKWISE : (int)contracts::DeviceControlContracts::KnobDirection::EN_KNOB_ANTICLOCKWISE,
+                                std::abs( delta ) };
+                contracts::DclSignals::dispatchHardwareInput( msg );
+                kick_log( "info", "[SMOKE] qlink %d %d on %s\n", knob, delta, name.toRawUTF8() );
+            }
             if( auto* content = w != nullptr ? w->getContentComponent() : nullptr )
             {
                 auto                  image = content->createComponentSnapshot( content->getLocalBounds() );
