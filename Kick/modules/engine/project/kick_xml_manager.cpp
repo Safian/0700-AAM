@@ -285,8 +285,13 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
         const juce::ScopedLock guard(lock);
         if (!vt.isValid()) return failSave("No valid project document to save", reason);
         lastSaveError.clear();
-        dirty.store(false);
-        if (onDirtyChanged) onDirtyChanged(false);
+        // Nothing was written, so the edits are still unsaved: an autosave must NOT clear the flag, or the unsaved-changes question
+        // (project switch, quit, shut down) never appears for a demo and its edits are lost silently (measured: the flag dropped ~0.5 s
+        // after the edit). Close is the one place that lets the document go: it clears the flag (the question came before it).
+        if (reason == SaveReason::Close) {
+            dirty.store(false);
+            if (onDirtyChanged) onDirtyChanged(false);
+        }
         return true;
     }
 

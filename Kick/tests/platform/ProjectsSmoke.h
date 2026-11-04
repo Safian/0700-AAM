@@ -93,6 +93,11 @@ inline juce::String runKickProjectsSmoke() {
     if (!api.loadProject(demo)) return fail("cannot open the smoke demo: " + api.getProjectLoadError());
     if (!api.isProjectReadOnly()) return fail("a demo is not read-only");
     api.createProgram(mt::MTProgramType::Drum, "DemoEdit");
+    if (!api.isProjectDirty()) return fail("a demo edit did not make the project unsaved");
+    // The autosave of a read-only demo writes nothing, so it must not clear the unsaved flag (it used to, ~0.5 s after the edit: the
+    // unsaved-changes question then never appeared for a demo and its edits were lost silently).
+    juce::MessageManager::getInstance()->runDispatchLoopUntil( 2500 );
+    if (!api.isProjectDirty()) return fail("autosave cleared the unsaved flag of a read-only demo");
     if (api.saveProject()) return fail("a demo was saved in place");
     juce::File fromDemo = projects.getChildFile("SmokeFromDemo");
     fromDemo.deleteRecursively();
