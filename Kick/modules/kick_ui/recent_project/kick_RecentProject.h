@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kick_ui/dialogs/kick_StartupScreen.h" // StatusStrip (this header is reached early via the file browser header)
+#include "kick_project_names.h"
 
 namespace ui
 {
@@ -61,6 +62,7 @@ namespace ui
 
         inline bool isShowBorder() const noexcept { return bShowBorder; }
         inline int  getID() const noexcept { return index; }
+        inline juce::File getPath() const { return path; }
 
         void mouseDown( const juce::MouseEvent& e ) override;
         void mouseUp( const juce::MouseEvent& e ) override;
@@ -171,6 +173,7 @@ namespace ui
         std::unique_ptr<LongPressComp> longPressComp;
 
         std::vector<std::unique_ptr<RecentItems>> recentItems;
+        void                                      warn( const juce::String& message ); // warning dialog
         void                                      openVirtualKeyBoard( juce::File );
         void                                      copyProjIntoProjectDir( juce::String, juce::File );
         void                                      addDemos();
