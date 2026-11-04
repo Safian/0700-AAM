@@ -258,29 +258,27 @@ bool KickXML::failSave(const juce::String& message, SaveReason reason) {
     if (reason == SaveReason::Autosave) triggerAsyncUpdate();
     return false;
 }
+bool KickXML::isReadOnlyDocument() const {
+    if (xmlFile == juce::File{}) return false;
+    // Read-only projects (such as factory demos and templates shipped in the read-only application bundle)
+    // cannot and should not be saved over. Autosave and Close must succeed cleanly without writing or failing.
+#if defined( JUCE_IOS )
+    const auto bundleDir = juce::File::getSpecialLocation( juce::File::currentApplicationFile );
+    if (bundleDir.exists() && xmlFile.isAChildOf( bundleDir )) return true;
+#endif
+    if (!xmlFile.hasWriteAccess() || (xmlFile.getParentDirectory().exists() && !xmlFile.getParentDirectory().hasWriteAccess())) return true;
+    const auto demosDir = getAppDirs( MTDemos );
+    if (demosDir.exists() && xmlFile.isAChildOf( demosDir )) return true;
+    const auto tempDir = getAppDirs( MTTemp );
+    if (tempDir.exists() && xmlFile.isAChildOf( tempDir )) return true;
+    return false;
+}
 bool KickXML::saveOnMessageThread(SaveReason reason) {
     if (xmlFile == juce::File{}) return true;
     if (saving.exchange(true)) return failSave("Project save is already in progress", reason);
     struct Transaction { std::atomic<bool>& flag; ~Transaction() { flag.store(false); } } transaction{saving};
     timer.stopTimer(); cancelPendingUpdate(); autosaveDue.store(false);
-    // Read-only projects (such as factory demos and templates shipped in the read-only application bundle)
-    // cannot and should not be saved over. Autosave and Close must succeed cleanly without writing or failing.
-    bool isReadOnlyLocation = false;
-#if defined( JUCE_IOS )
-    const auto bundleDir = juce::File::getSpecialLocation( juce::File::currentApplicationFile );
-    if (bundleDir.exists() && xmlFile.isAChildOf( bundleDir ))
-        isReadOnlyLocation = true;
-#endif
-    if (!isReadOnlyLocation && (!xmlFile.hasWriteAccess() || (xmlFile.getParentDirectory().exists() && !xmlFile.getParentDirectory().hasWriteAccess())))
-        isReadOnlyLocation = true;
-
-    const auto demosDir = getAppDirs( MTDemos );
-    if (!isReadOnlyLocation && demosDir.exists() && xmlFile.isAChildOf( demosDir ))
-        isReadOnlyLocation = true;
-
-    const auto tempDir = getAppDirs( MTTemp );
-    if (!isReadOnlyLocation && tempDir.exists() && xmlFile.isAChildOf( tempDir ))
-        isReadOnlyLocation = true;
+    const bool isReadOnlyLocation = isReadOnlyDocument();
 
     // Nothing is written there, so Autosave/Close skip the live-state barrier entirely.
     if (isReadOnlyLocation && (reason == SaveReason::Autosave || reason == SaveReason::Close)) {
@@ -359,6 +357,12 @@ bool KickXML::save(SaveReason reason) {
 bool KickXML::close() {
     bool result = false;
     onPersistenceThread([&] {
+        if (discardOnClose.exchange(false)) { // "Don't save": the document goes away as it was last saved
+            dirty.store(false);
+            if (onDirtyChanged) onDirtyChanged(false);
+            detachWithoutSaving(); result = true;
+            return;
+        }
         if (!saveOnMessageThread(SaveReason::Close)) return;
         detachWithoutSaving(); result = true;
     });
@@ -368,5 +372,94 @@ void KickXML::detachWithoutSaving() {
     timer.stopTimer(); cancelPendingUpdate(); autosaveDue.store(false);
     const juce::ScopedLock guard(lock);
     xmlFile = juce::File{}; xmlFileDir = juce::File{}; directoryText.clear(); sessionCopies.clear();
+}
+} // namespace mt
+
+namespace {
+// Absolute sample paths that point inside the old project folder become relative (to the folder, which the copy keeps intact).
+void rebaseToRelative(juce::ValueTree& tree, const juce::File& oldDir) {
+    for (const char* prop : {"path", "source"}) {
+        if (!tree.hasProperty(prop)) continue;
+        const auto val = tree.getProperty(prop).toString();
+        if (isAudioFilePath(val) && juce::File::isAbsolutePath(val) && juce::File(val).isAChildOf(oldDir))
+            tree.setProperty(prop, juce::File(val).getRelativePathFrom(oldDir), nullptr);
+    }
+    for (int i = 0; i < tree.getNumChildren(); ++i) { auto child = tree.getChild(i); rebaseToRelative(child, oldDir); }
+}
+}
+
+namespace mt {
+KickXML::SaveAsResult KickXML::saveAs(const juce::File& newDir, bool switchToNew, const CopyFolderFn& copyFolder, const std::atomic<bool>& cancel) {
+    SaveAsResult res;
+    // 1. The live state, on the thread that owns it (CLAP snapshots), under the document lock.
+    juce::ValueTree snapshot; juce::File oldFile, oldDir; juce::String problem;
+    onPersistenceThread([&] {
+        if (xmlFile == juce::File{}) { problem = "No project is open"; return; }
+        if (prepareSave) {
+            const auto prepared = prepareSave();
+            if (prepared.failed()) { problem = prepared.getErrorMessage(); return; }
+        }
+        const juce::ScopedLock guard(lock);
+        if (!vt.isValid()) { problem = "No valid project document to save"; return; }
+        snapshot = vt.createCopy();
+        if (patchSnapshot) patchSnapshot(snapshot);
+        oldFile = xmlFile; oldDir = xmlFile.getParentDirectory();
+    });
+    if (problem.isNotEmpty()) { res.error = problem; return res; }
+
+    // 2. Checks: the target must be new, its parent writable, and not inside the folder that is copied.
+    const auto name = newDir.getFileName();
+    if (name.isEmpty()) { res.error = "The project name is empty"; return res; }
+    if (newDir.exists()) { res.error = "A project with the same name already exists"; return res; }
+    if (!newDir.getParentDirectory().isDirectory() || !newDir.getParentDirectory().hasWriteAccess()) { res.error = "The target folder cannot be written"; return res; }
+    if (newDir == oldDir || newDir.isAChildOf(oldDir)) { res.error = "A project cannot be saved inside itself"; return res; }
+
+    auto cleanup = [&](const juce::String& why, bool wasCancelled) {
+        newDir.deleteRecursively();
+        res.error = why; res.cancelled = wasCancelled; res.ok = false;
+        return res;
+    };
+
+    // 3. The folder (samples, exports ...) is copied, then the project file of the copy is replaced by the live state.
+    if (!copyFolder || !copyFolder(oldDir, newDir)) return cleanup(cancel.load() ? "Cancelled" : "The project folder could not be copied (is the drive full?)", cancel.load());
+    for (const auto& f : newDir.findChildFiles(juce::File::findFiles, false)) {
+        const auto n = f.getFileName();
+        if (n.endsWith(".bak") || n.contains("_corrupt_") || f.getFileName() == oldFile.getFileName()) f.deleteFile();
+    }
+    const auto newFile = newDir.getChildFile(name + extn);
+    rebaseToRelative(snapshot, oldDir);
+    CopiedMap copied; LiveRefSet liveRefs; juce::String copyError;
+    collectLiveRefs(snapshot, newDir, liveRefs);
+    relativizeSamplePaths(snapshot, newDir, copied, CopiedMap{}, liveRefs, copyError);
+    if (copyError.isNotEmpty()) return cleanup("Cannot copy sample " + copyError, false);
+    if (cancel.load()) return cleanup("Cancelled", true);
+
+    const auto xml = snapshot.toXmlString();
+    {
+        juce::TemporaryFile temporary(newFile);
+        bool written = false;
+        {
+            auto output = temporary.getFile().createOutputStream(0);
+            if (output && output->openedOk()) {
+                written = output->writeText(xml, false, false, nullptr);
+                output->flush();
+                written = written && output->getStatus().wasOk();
+            }
+        }
+        if (!written || !temporary.overwriteTargetFileWithTemporary()) return cleanup("Cannot write project: " + newFile.getFullPathName(), false);
+    }
+    newFile.copyFileTo(newFile.getSiblingFile(newFile.getFileName() + ".bak"));
+
+    // 4. The open document becomes the copy.
+    if (switchToNew) {
+        onPersistenceThread([&] {
+            const juce::ScopedLock guard(lock);
+            xmlFile = newFile; xmlFileDir = newDir; directoryText = newDir.getFullPathName(); sessionCopies.clear();
+            lastSaveError.clear(); dirty.store(false);
+            if (onDirtyChanged) onDirtyChanged(false);
+        });
+    }
+    res.ok = true; res.file = newFile;
+    return res;
 }
 } // namespace mt
