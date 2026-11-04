@@ -39,6 +39,7 @@ namespace mt
     struct signals
     {
         static sigslot::signal<>                                     midiInputsChanged;
+        static sigslot::signal<>                                     midiOutputsChanged;
         static sigslot::signal<int /*index*/, juce::String /*Bank*/> bankChanged;
         static sigslot::signal<TransportState /*State*/>             playStateChanged;
         static sigslot::signal<int /*PadNum*/, int /*Colour*/>       padColourChanged;

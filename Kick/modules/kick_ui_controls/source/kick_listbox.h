@@ -166,7 +166,7 @@ namespace ui
             title.setValueBackgroundColour( Title );
             value.setValueBackgroundColour( Value );
         }
-        void setListOptions( const std::vector<juce::String>& Options, int SelectedIndex = 0 );
+        void setListOptions( const std::vector<juce::String>& Options, int SelectedIndex = 0, juce::NotificationType notification = juce::sendNotificationAsync );
 
         void setDisplayFormat( BoxType Format );
         void setJustificationType( juce::Justification newJustification );

@@ -122,6 +122,11 @@ namespace mt
         virtual juce::String saveError() const { return "Program state could not be saved"; }
         virtual void updatePluginTransport(double, double, bool) {}
 
+        // Program-level note learn
+        virtual void startNoteLearn() {}
+        virtual void stopNoteLearn() {}
+        virtual bool isNoteLearning() const noexcept { return false; }
+
         std::array<int, 4> getSimultaneousNotePlay( int Note );
         std::array<int, 4> getSimultaneousNoteMute( int Note );
 

@@ -75,6 +75,36 @@ namespace kick_ui
         ui::KickListBox toPadsStart{ "TO PADS START", 4 };
     };
 
+    class MidiProgramSettings : public juce::Component
+    {
+    public:
+        MidiProgramSettings();
+
+        void setProgram( int progIndex );
+        void applySettings();
+
+    private:
+        void resized() override;
+        void visibilityChanged() override;
+
+        int currentProgIndex{ -1 };
+
+        ui::KickListBox      noteMin{ ui::KickListBox::withTitleBar, "NOTE MIN", ui::KickListBox::generateOptions( 0, 127, false ), 0, 4 };
+        ui::KickListBox      noteMax{ ui::KickListBox::withTitleBar, "NOTE MAX", ui::KickListBox::generateOptions( 0, 127, false ), 127, 4 };
+        ui::KickToggleButton learnBtn{ "Note Learn", "Learning...", "Note Learn" };
+
+        ui::KickListBox      velMin{ ui::KickListBox::withTitleBar, "VEL MIN", ui::KickListBox::generateOptions( 1, 127, false ), 0, 4 };
+        ui::KickListBox      velMax{ ui::KickListBox::withTitleBar, "VEL MAX", ui::KickListBox::generateOptions( 1, 127, false ), 126, 4 };
+        ui::KickListBox      transpose{ ui::KickListBox::withTitleBar, "TRANSPOSE", ui::KickListBox::generateOptions( -36, 36, false ), 36, 4 };
+
+        ui::KickToggleButton filterModWheel{ "Filter Mod Wheel", "Filter Mod Wheel", "Filter Mod Wheel" };
+        ui::KickToggleButton filterPitchBend{ "Filter Pitch Bend", "Filter Pitch Bend", "Filter Pitch Bend" };
+        ui::KickToggleButton filterAftertouch{ "Filter Aftertouch", "Filter Aftertouch", "Filter Aftertouch" };
+        ui::KickToggleButton filterProgChange{ "Filter Prog Change", "Filter Prog Change", "Filter Prog Change" };
+        ui::KickToggleButton filterSustain{ "Filter Sustain", "Filter Sustain", "Filter Sustain" };
+        ui::KickToggleButton filterAllCC{ "Filter All CC", "Filter All CC", "Filter All CC" };
+    };
+
     class AppProgramOptionsMenu : public ui::KickMenuComponent
     {
     public:
@@ -103,7 +133,8 @@ namespace kick_ui
         AppProgramOptionsMenu opts;
         ui::KickImageButton   close{ "Close", "Edit_Close" };
 
-        CopyPads copyPads;
+        CopyPads            copyPads;
+        MidiProgramSettings midiSettings;
 
         bool isDialogClosed{ true };
 
@@ -116,6 +147,7 @@ namespace kick_ui
         void copyPadDataToBank();
         void copyPadDataToRange();
         void openCopyPadsPopup( bool isWarning = false, juce::String WarningInfo = "" );
+        void openMidiSettingsPopup();
         void duplicateProgramToTrack();
         //==============================================================================
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( AppProgramOptions )

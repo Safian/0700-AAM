@@ -510,9 +510,9 @@ namespace ui
         list.setColumns( NumColumns );
     }
 
-    void KickListBox::setListOptions( const std::vector<juce::String>& Options, int SelectedIndex )
+    void KickListBox::setListOptions( const std::vector<juce::String>& Options, int SelectedIndex, juce::NotificationType notification )
     {
-        list.setContent( Options, SelectedIndex, juce::sendNotificationAsync );
+        list.setContent( Options, SelectedIndex, notification );
     }
 
     void KickListBox::setDisplayFormat( BoxType Format )
