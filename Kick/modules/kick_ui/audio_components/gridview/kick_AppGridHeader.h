@@ -48,6 +48,7 @@ namespace kick_ui
         ui::KickImageButton                  pencil{ "Pencil", "Pencil_Normal", "Pencil_Active" };
         ui::KickImageButton                  erase{ "Erase", "Erase_Normal", "Erase_Active" };
         ui::KickImageButton                  select{ "Select", "Select_Normal", "Select_Active" };
+        ui::KickImageButton                  copyTool{ "CopyTool", "Copy Button", "Copy Button_Active" };
         ui::KickImageButton                  copy{ "Copy", "Copy Button", "Copy Button_Active" };
         ui::KickImageButton                  cut{ "Cut", "Cut_Normal", "Cut_Active" };
         ui::KickImageButton                  paste{ "Paste", "Copy_Normal", "Copy_Activ" };
