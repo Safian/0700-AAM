@@ -2,6 +2,8 @@
 
 Állapot: terv (csak kutatás, kód nem változott). Mért adatok: az élő MPC Key 61-ről, 2026-11-04, csak olvasással.
 
+> **ÁLLAPOT-FRISSÍTÉS (2026-11-04, élő felmérés a `fork/safian/main`-en):** a fenti döntés (auto-telepítés a belsőre, verzió-eltérésre frissítés, atomi csere, `Kick.prev` mentés, `Kick.version` utolsóként) **már megvalósult** az `agy/pendrive` ágból beolvasztva: `bdd6e744` (`tkgl_bootstrap`, `make_pendrive_package.sh`, `uninstall_kick.sh`, `test_tkgl_bootstrap.sh`) és `6e222d80` (`docs/akai_mpc_hardware/PENDRIVE_INSTALL.md`). **Ezt nem fejlesztjük újra.** Hátralévő teendők: (1) a megvalósítás **független ellenőrzése** (agy-kimenet: a shell-tesztek futtatása, a szkript átolvasása, hardveres próba az MPC-n tiszta pendrive-val és pendrive nélkül), (2) a futásidejű függőségek valós `readelf -d` ellenőrzése (az útmutató ezt még nyitva hagyja), (3) release-csomagolás és CI (`dist/…zip` + SHA256), (4) a hook meglétének ellenőrzése másik, gyári MPC-n (lásd lent), (5) user-oldali kipróbálás.
+
 ## Kérdés
 Lehet-e olyan pendrive-ot adni a usereknek, amiről az MPC elindítja a Kicket (vagy felmásolja magára és úgy indítja), anélkül, hogy kézzel kellene scp-zniük?
 
