@@ -1717,7 +1717,7 @@ public:
         if (auto* bus = mt::getAudioInterface().getBusManager().getOutput(0))
         {
             bus->gain = CommonUtils::midiToGain(val127);
-            kick_log("info", "[INFO] [BRIDGE] Main volume %d/127 -> gain %.4f\n", val127, (double)bus->gain);
+            kick_log("info", "[INFO] [BRIDGE] Main volume %d/127 -> gain %.4f\n", val127, (double)bus->gain.get());
         }
     }
     void on_footswitch2(bool down) override
