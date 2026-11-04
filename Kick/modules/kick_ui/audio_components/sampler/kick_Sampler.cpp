@@ -8,11 +8,11 @@ namespace kick_ui
     Sampler::Sampler()
         : kick_ui::IScreen( kick_ui::Screen::MenuSampler )
     {
-        mt::utils::addChildComponents( this, header, options, recorder, clear, exportt, sample, slice, padTap, padHold, cancel, slicePlus, save, play, discard, edit );
-        mt::utils::makeHidden( cancel, slicePlus, save, play, discard, edit );
+        mt::utils::addChildComponents( this, header, options, recorder, clear, exportt, sample, slice, padTap, padHold, cancel, slicePlus, undoMarker, save, play, discard, edit, inputTrim, deviceStatusLabel );
+        mt::utils::makeHidden( cancel, slicePlus, undoMarker, save, play, discard, edit );
         mt::utils::setRadioGroupID( (int)kick_ui::RadioGroupId::SampleActions, sample, slice, padTap, padHold );
-        mt::utils::setValueFontHeight( 18, sample, slice, padTap, padHold, cancel, slicePlus, save, play, discard, edit );
-        mt::utils::setValueColour( ui::Theme::textColour( 1 ), sample, slice, padTap, padHold, cancel, slicePlus, save, play, discard, edit );
+        mt::utils::setValueFontHeight( 18, sample, slice, padTap, padHold, cancel, slicePlus, undoMarker, save, play, discard, edit );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), sample, slice, padTap, padHold, cancel, slicePlus, undoMarker, save, play, discard, edit );
 
         options.showPanSlider( false );
         options.showRecordButton( false );
@@ -44,6 +44,16 @@ namespace kick_ui
 
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
 
+        inputTrim.setRange( -36.0, 12.0, 0.5 );
+        inputTrim.setValue( 0.0, juce::dontSendNotification );
+        inputTrim.onValueChanged = [this]( double v ) {
+            ae.setRecorderGainDB( (float)v );
+        };
+
+        deviceStatusLabel.setValueJustification( juce::Justification::centred );
+        deviceStatusLabel.setValueFontHeight( 13 );
+        deviceStatusLabel.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+
         recorder.recordingStarted.connect( [this]( bool on ) {
             if( on )
                 clear.setEnabled( true );
@@ -73,6 +83,15 @@ namespace kick_ui
                 samplePoints.push_back( 0 );
 
             samplePoints.push_back( recorder.getCurrentRecordTime() );
+            syncMarkersToRecorder();
+        };
+
+        undoMarker.onClick = [&]() {
+            if( !samplePoints.empty() )
+            {
+                samplePoints.pop_back();
+                syncMarkersToRecorder();
+            }
         };
 
         save.onClick = [&]() {
@@ -144,24 +163,28 @@ namespace kick_ui
             startSamplePoints.clear();
             endSamplePoints.clear();
             samplePoints.clear();
+            recorder.setMarkers( {} );
             lastPressedPad = -1;
             mt::utils::makeVisible( sample, slice, padTap, padHold );
-            mt::utils::makeHidden( cancel, slicePlus, save, play, discard, edit );
+            mt::utils::makeHidden( cancel, slicePlus, undoMarker, save, play, discard, edit );
         }
         else if( mode == SamplerRecorder::RecordMode::recordModeRecord )
         {
             mt::utils::makeVisible( sample, slice, padTap, padHold, cancel );
-            mt::utils::makeHidden( slicePlus, save, play, discard, edit );
+            mt::utils::makeHidden( slicePlus, undoMarker, save, play, discard, edit );
         }
         else if( mode == SamplerRecorder::RecordMode::recordModeRecording )
         {
-            mt::utils::makeVisible( slicePlus );
+            if( slice.getToggleState() )
+                mt::utils::makeVisible( slicePlus, undoMarker );
+            else
+                mt::utils::makeHidden( slicePlus, undoMarker );
             mt::utils::makeHidden( sample, slice, padTap, padHold, cancel, save, play, discard, edit );
         }
         else if( mode == SamplerRecorder::RecordMode::recordModeStopped )
         {
             mt::utils::makeVisible( save, play, discard, edit );
-            mt::utils::makeHidden( sample, slice, padTap, padHold, cancel, slicePlus );
+            mt::utils::makeHidden( sample, slice, padTap, padHold, cancel, slicePlus, undoMarker );
         }
     }
 
@@ -345,16 +368,42 @@ namespace kick_ui
         cancel.setBoundsRelative( .651f, .919f, .1565f, 0.063f );
 
         slicePlus.setBoundsRelative( .0097f, .919f, .1565f, 0.063f );
+        undoMarker.setBoundsRelative( .1702f, .919f, .1565f, 0.063f );
 
         save.setBoundsRelative( .0097f, .919f, .1565f, 0.063f );
         discard.setBoundsRelative( .1702f, .919f, .1565f, 0.063f );
         play.setBoundsRelative( .3307f, .919f, .1565f, 0.063f );
         edit.setBoundsRelative( .491f, .919f, .1565f, 0.063f );
 
+        deviceStatusLabel.setBounds( 10, 52, 166, 30 );
+        inputTrim.setBounds( 186, 52, 166, 30 );
+
         options.setBoundsRelative( .0097f, .1508f, .3346f, .7522f );
         recorder.setBoundsRelative( .3542f, .1588f, .6379f, .72f );
         exportt.setBoundsRelative( .7318f, .0258f, .0489f, .0823f );
         clear.setBoundsRelative( .7847f, .0258f, .0489f, .0823f );
+    }
+
+    void Sampler::syncMarkersToRecorder()
+    {
+        std::vector<double> m( samplePoints.begin(), samplePoints.end() );
+        recorder.setMarkers( m );
+    }
+
+    void Sampler::updateInputDeviceStatus()
+    {
+        auto& devMgr = ae.getAudioDeviceManager();
+        auto* dev = devMgr.getCurrentAudioDevice();
+        const bool hasDev = ( dev != nullptr );
+        const bool isOpen = hasDev && dev->isOpen();
+        const int activeIns = hasDev ? dev->getActiveInputChannels().countNumberOfSetBits() : 0;
+        const double sr = hasDev ? dev->getCurrentSampleRate() : 0.0;
+        const auto status = sampler_logic::formatInputStatus( hasDev, isOpen, activeIns, sr );
+        deviceStatusLabel.setText( juce::String( status ), juce::dontSendNotification );
+        if( status == "NO INPUT" || status.rfind( "ERROR", 0 ) == 0 )
+            deviceStatusLabel.setTextColour( ui::Theme::textColour( 3 ) );
+        else
+            deviceStatusLabel.setTextColour( ui::Theme::textColour( 1 ) );
     }
 
     void Sampler::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
@@ -373,12 +422,16 @@ namespace kick_ui
                 if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
                 {
                     if( ae.isRecorderRunning() )
+                    {
                         samplePoints.push_back( recorder.getCurrentRecordTime() );
+                        syncMarkersToRecorder();
+                    }
                     else
                     {
                         recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeRecord );
                         if( samplePoints.size() == 0 )
                             samplePoints.push_back( 0 );
+                        syncMarkersToRecorder();
                     }
                 }
             }
@@ -511,6 +564,7 @@ namespace kick_ui
         auto visible = isVisible();
         if( visible )
         {
+            updateInputDeviceStatus();
             options.setGain( recorder.getRecordThresholdDB() );
             options.setMonitor( recorder.isMonitorOn() );
             options.setInputSelection( recorder.getRecordChannels(), juce::dontSendNotification );

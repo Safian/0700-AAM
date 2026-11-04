@@ -58,6 +58,8 @@ namespace kick_ui
 
         SamplerRecorder     recorder;
         ui::KickIOComponent options;
+        ui::KickSlider      inputTrim{ "Trim", juce::Slider::LinearBar, juce::Slider::TextBoxRight };
+        ui::KickLabel       deviceStatusLabel{ "NO INPUT" };
 
         //Sampler Actions
         ui::KickToggleButton sample{ TRANS( "Sample" ), "Sample", "Sample" };
@@ -66,6 +68,7 @@ namespace kick_ui
         ui::KickToggleButton padHold{ TRANS( "Pad Hold" ), "Pad Hold", "Pad Hold" };
         ui::KickButton       cancel{ "Cancel", "Cancel" };
         ui::KickButton       slicePlus{ TRANS( "Slice +" ), "Slice +" };
+        ui::KickButton       undoMarker{ TRANS( "Undo Slice" ), "Undo Slice" };
 
         ui::KickButton       save{ "Save", " Save" };
         ui::KickToggleButton play{ "Play", "Stop", "Play" };
@@ -89,6 +92,8 @@ namespace kick_ui
         void                discardRecordingWithConfirm();
         void                showSaveError( const juce::String& message );
         juce::File          getSamplesDir() const;
+        void                updateInputDeviceStatus();
+        void                syncMarkersToRecorder();
         std::vector<double> lastMarkerSeconds; // markers of the last Slice save, for the Edit hand-over
 
         void paint( juce::Graphics& g );
