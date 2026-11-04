@@ -40,6 +40,13 @@ namespace mt
 
         inline bool isTailingOff() const { return !juce::approximatelyEqual( tailOff, 0.0 ); }
         void setPadGains( float gl, float gr ) { padGainL.store( gl ); padGainR.store( gr ); }
+        void getMeter( float& rmsL, float& rmsR, float& peakL, float& peakR ) const
+        {
+            rmsL  = vRmsL.load( std::memory_order_relaxed );
+            rmsR  = vRmsR.load( std::memory_order_relaxed );
+            peakL = vPeakL.load( std::memory_order_relaxed );
+            peakR = vPeakR.load( std::memory_order_relaxed );
+        }
 
     private:
         inline void update()
@@ -78,6 +85,11 @@ namespace mt
 
         std::atomic<float> padGainL{ 1.0f };
         std::atomic<float> padGainR{ 1.0f };
+
+        std::atomic<float> vRmsL{ -100.f };
+        std::atomic<float> vRmsR{ -100.f };
+        std::atomic<float> vPeakL{ -100.f };
+        std::atomic<float> vPeakR{ -100.f };
 
         float lfoToAmp{ 0 };
         float lfoToPitch{ 0 };

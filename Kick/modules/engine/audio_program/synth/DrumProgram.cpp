@@ -129,4 +129,51 @@ namespace mt
         }
         ISynthObject::noteOff( Note );
     }
+
+    void DrumProgram::enablePadMetering( bool Enable )
+    {
+        master.padMeterEnabled.store( Enable );
+    }
+
+    const AudIO::MeterData& DrumProgram::readPadMeter( int Note ) const
+    {
+        padMeterData.resize( 2 );
+        float maxRmsL = -100.f, maxRmsR = -100.f;
+        float maxPeakL = -100.f, maxPeakR = -100.f;
+        bool found = false;
+
+        if( CommonUtils::isValidMidiNote( Note ) )
+        {
+            for( auto& v : voices )
+            {
+                if( v && v->isPlayingNote( Note ) )
+                {
+                    if( auto* dv = dynamic_cast<const DrumVoice*>( v.get() ) )
+                    {
+                        float rL, rR, pL, pR;
+                        dv->getMeter( rL, rR, pL, pR );
+                        maxRmsL  = std::max( maxRmsL, rL );
+                        maxRmsR  = std::max( maxRmsR, rR );
+                        maxPeakL = std::max( maxPeakL, pL );
+                        maxPeakR = std::max( maxPeakR, pR );
+                        found = true;
+                    }
+                }
+            }
+        }
+
+        if( found )
+        {
+            padMeterData[0].rms  = maxRmsL;
+            padMeterData[0].peak = maxPeakL;
+            padMeterData[1].rms  = maxRmsR;
+            padMeterData[1].peak = maxPeakR;
+        }
+        else
+        {
+            padMeterData[0].reset();
+            padMeterData[1].reset();
+        }
+        return padMeterData;
+    }
 };
