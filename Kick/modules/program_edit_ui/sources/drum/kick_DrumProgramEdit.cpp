@@ -21,6 +21,13 @@
 
 namespace kick_ui
 {
+    // The Envelopes and LFO pages write the program model, but the drum voice never reads them: DrumVoice::attachToAndReset is
+    // the only place that binds its LFO / envelope atomics to the model and nothing calls it (plus the model / atomics use
+    // different ids, and the pitch / filter / LFO sections are disabled by default with no switch in the UI). A page that
+    // saves values into the project and changes nothing in the sound misleads, so both are hidden until the voice is bound
+    // (needs an MPC listening test: see docs/plans/screens/program-edit.md PE-02). true brings the two buttons back.
+    static constexpr bool kDrumEnginePagesVisible = false;
+
     DrumProgramEdit::DrumProgramEdit()
         : ProgEditInterface( mt::MTProgramType::Drum )
     {
@@ -34,7 +41,9 @@ namespace kick_ui
         for( auto& it : comps )
             mt::utils::addChildComponents( this, it.get() );
 
-        mt::utils::addAndMakeVisible( this, mainButton, samplesButton, lfoButton, layerMixButton, envelopesButton );
+        mt::utils::addAndMakeVisible( this, mainButton, samplesButton, layerMixButton );
+        if( kDrumEnginePagesVisible )
+            mt::utils::addAndMakeVisible( this, lfoButton, envelopesButton );
         mt::utils::addListener( this, mainButton, samplesButton, lfoButton, layerMixButton, envelopesButton );
         mt::utils::setRadioGroupID( (int)RadioGroupId::DrumProgram, mainButton, samplesButton, lfoButton, layerMixButton, envelopesButton );
         mt::utils::setValueColour( ui::Theme::textColour( 1 ), mainButton, samplesButton, layerMixButton, envelopesButton, lfoButton );
@@ -72,8 +81,11 @@ namespace kick_ui
         mainButton.setBoundsRelative( .0099f, .022f, .1896f, .096f );
         samplesButton.setBoundsRelative( .2078f, .022f, .1896f, .096f );
         layerMixButton.setBoundsRelative( .4051f, .022f, .1896f, .096f );
-        envelopesButton.setBoundsRelative( .6028f, .022f, .1896f, .096f );
-        lfoButton.setBoundsRelative( .8004f, .022f, .1896f, .096f );
+        if( kDrumEnginePagesVisible )
+        {
+            envelopesButton.setBoundsRelative( .6028f, .022f, .1896f, .096f );
+            lfoButton.setBoundsRelative( .8004f, .022f, .1896f, .096f );
+        }
 
         for( auto& it : comps )
             it->setBoundsRelative( .0097f, .139f, .982f, .842f );
@@ -121,7 +133,8 @@ namespace kick_ui
             pDrum = pIProg ? dynamic_cast<mt::MTDrumProgram*>( pIProg ) : nullptr;
             refresh();
         }
-        comps[sIdx]->setVisible( visible );
+        for( size_t i = 0; i < comps.size(); ++i ) // only the chosen tab (the Main tab used to stay on top of any other tab)
+            comps[i]->setVisible( visible && (int)i == tIndex );
     }
 
     DrumHeader::DrumHeader()

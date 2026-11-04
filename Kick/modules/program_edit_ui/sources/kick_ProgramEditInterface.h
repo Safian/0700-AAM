@@ -22,6 +22,41 @@
 
 namespace kick_ui
 {
+    // One list for the Drum and the Keygroup editor, in the order of mt::SamplePlayType / mt::LayerPlayType (the Keygroup
+    // page had "Note On" / "Note Off" swapped: choosing "Note On" started the sound on release).
+    namespace progedit
+    {
+        // The sound of a sample for a waveform page. Cached: returned at once. Not cached: it is decoded on a background thread
+        // (the page used to freeze the UI on every pad change onto a big file), nullptr is returned for now and `again` runs on the
+        // message thread when the sound is loaded, as long as `owner` still exists.
+        inline mt::ASound::Ptr soundOrLoadAsync( const juce::String& source, juce::Component* owner, std::function<void()> again )
+        {
+            if( source.isEmpty() ) return nullptr;
+            if( auto p = mt::getAudioSoundCache().exists( source ) ) return p;
+            juce::Component::SafePointer<juce::Component> safe( owner );
+            juce::Thread::launch( [source, safe, again]() {
+                mt::getAudioSoundCache().getOrLoad( source );
+                juce::MessageManager::callAsync( [safe, again]() {
+                    if( safe != nullptr && again ) again();
+                } );
+            } );
+            return nullptr;
+        }
+
+        static_assert( (int)mt::SamplePlayType::ONE_SHOT == 0 && (int)mt::SamplePlayType::NOTE_OFF == 1 && (int)mt::SamplePlayType::NOTE_ON == 2, "samplePlayOptions() follows the enum order" );
+        static_assert( (int)mt::LayerPlayType::CYCLE == 0 && (int)mt::LayerPlayType::VELOCITY == 1 && (int)mt::LayerPlayType::RANDOM == 2, "layerPlayOptions() follows the enum order" );
+
+        inline const std::vector<juce::String>& samplePlayOptions()
+        {
+            static const std::vector<juce::String> v = { "One Shot", "Note Off", "Note On" };
+            return v;
+        }
+        inline const std::vector<juce::String>& layerPlayOptions()
+        {
+            static const std::vector<juce::String> v = { "Cycle", "Velocity", "Random" };
+            return v;
+        }
+    }
 
     class ProgEditInterface : public juce::Component
     {
@@ -37,6 +72,8 @@ namespace kick_ui
         {
             idx    = Index;
             pIProg = ae.getProgram( idx );
+            // The program's own property tree (the MIDI editor attaches its CC sliders to it); it stayed empty before.
+            state = pIProg ? pIProg->getState() : juce::ValueTree{};
 
             if( onProgramChanged )
                 onProgramChanged();

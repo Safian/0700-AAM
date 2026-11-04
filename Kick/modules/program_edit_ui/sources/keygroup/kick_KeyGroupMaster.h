@@ -21,8 +21,13 @@ namespace kick_ui
         ui::KickNumberT<int> muteGroup{ "Mute Group", MUTEGROUP::MIN, MUTEGROUP::MAX, MUTEGROUP::DEFAULT, true };
         ui::KickNumberT<int> kgPoly{ "KG POLY", POLYPHONY::MIN, POLYPHONY::MAX, POLYPHONY::DEFAULT, true };
 
-        ui::KickToggleOptions layerPlay{ "LAYER PLAY", { "Cycle", "Velocity", "Random" } };
-        ui::KickToggleOptions samplePlay{ "SAMPLE PLAY", { "One Shot", "Note On", "Note Off" } };
+        // Key zone of the selected key's sample (multi-sample keygroups: the key is played by the sample whose zone holds it; the root
+        // is the sample's own key, the pad it is assigned to).
+        ui::KickNumberT<int> zoneLow{ "ZONE LOW", 0, 127, 0 };
+        ui::KickNumberT<int> zoneHigh{ "ZONE HIGH", 0, 127, 127 };
+
+        ui::KickToggleOptions layerPlay{ "LAYER PLAY", progedit::layerPlayOptions() };
+        ui::KickToggleOptions samplePlay{ "SAMPLE PLAY", progedit::samplePlayOptions() };
 
         std::vector<int>&                       keys;
         mt::MTKeygroupProgram*&                 pKeygroup;

@@ -109,7 +109,7 @@ namespace kick_ui
         ui::KickNumberT<int> tailStart{ "TAIL START" };
         ui::KickButton       reverse{ " ", "<< Reverse" };
 
-        ui::KickNumberT<int> layerPan{ "LAYER PAN", 1, 120, 1 };
+        ui::KickNumberf      layerPan{ "LAYER PAN", PAN::MIN, PAN::MAX, PAN::DEFAULT }; // a float: the int version truncated the real value
         ui::KickNumberT<int> level{ "LEVEL", 1, 100, 1 };
 
         void visibilityChanged() override;

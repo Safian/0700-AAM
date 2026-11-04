@@ -22,6 +22,7 @@
 // module include files...
 
 #include "drum_voice.h"
+#include "layer_play_select.h"
 
 namespace mt
 {
@@ -81,43 +82,20 @@ namespace mt
             {
                 auto notePoly = pNote->polyPhony.get();
 
-                // Get layers that have valid source.
-                std::vector<int> validSourceIndex;
-                auto             sources = pNote->getSources();
-                for( auto i = 0; i < sources.size(); ++i )
-                {
+                // Layers that have a sound, then the layer by Layer Play (layer_play_select.h).
+                std::vector<layerplay::Candidate> candidates;
+                auto                              sources = pNote->getSources();
+                for( auto i = 0; i < (int)sources.size(); ++i )
                     if( sources[i].isNotEmpty() )
-                        validSourceIndex.push_back( i );
-                }
+                        candidates.push_back( { i, (int)pNote->layers[(size_t)i]->velStart.get(), (int)pNote->layers[(size_t)i]->velEnd.get() } );
 
-                // Choose a layer to play sound
-                auto layerToPlay = 0;
-                switch( pNote->layerPlay.get() )
-                {
-                    break;
-                    case LayerPlayType::RANDOM:
-                        layerToPlay = AudIO::utils::random<int>( 0, ( (int)validSourceIndex.size() - 1 ) );
-                        break;
-                    case LayerPlayType::CYCLE:
-                        if( noteLayerIdx.find( Note ) == noteLayerIdx.end() )
-                            noteLayerIdx[Note] = 0;
-                        else
-                            noteLayerIdx[Note] = juce::jlimit( 0, (int)( validSourceIndex.size() - 1 ), ++noteLayerIdx[Note] );
-
-                        layerToPlay = noteLayerIdx[Note];
-                        break;
-                    case LayerPlayType::VELOCITY:
-                    {
-                        for( const auto& it : validSourceIndex )
-                        {
-                            if( pNote->layers[it]->velStart.get() <= Velocity && Velocity < pNote->layers[it]->velEnd.get() )
-                            {
-                                layerToPlay = it;
-                                break;
-                            }
-                        }
-                    }
-                }; // switch
+                auto cycle = noteLayerIdx.try_emplace( Note, -1 ).first;
+                auto mode  = pNote->layerPlay.get() == LayerPlayType::RANDOM ? layerplay::Mode::Random :
+                             pNote->layerPlay.get() == LayerPlayType::CYCLE  ? layerplay::Mode::Cycle :
+                                                                                layerplay::Mode::Velocity;
+                auto layerToPlay = layerplay::select( mode, candidates, Velocity, cycle->second,
+                                                      mode == layerplay::Mode::Random ? (unsigned)AudIO::utils::random<int>( 0, 1 << 20 ) : 0u );
+                if( layerToPlay < 0 ) layerToPlay = 0;
 
                 if( auto soundSlice = pNote->layers[layerToPlay]->src )
                 {

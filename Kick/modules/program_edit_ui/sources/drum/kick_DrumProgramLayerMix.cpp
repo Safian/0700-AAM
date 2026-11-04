@@ -23,7 +23,7 @@ namespace kick_ui
 {
 
     DPLayerMix::DPLayerMix( std::vector<int>& Pads, mt::MTDrumProgram*& PDrum )
-        : pads( Pads ), pDrum( PDrum ), KickGrid( 4, 4 )
+        : pads( Pads ), pDrum( PDrum ), KickGrid( 4, 6 )
     {
         setRowTitles( { "LAYER 1", "LAYER 2", "LAYER 3", "LAYER 4" } );
 
@@ -52,6 +52,26 @@ namespace kick_ui
             fine[i].setDoubleClickReturnValue( true, 0, 0 );
             amp[i].setDoubleClickReturnValue( true, 127, 0 );
             pan[i].setDoubleClickReturnValue( true, 0, 0 );
+
+            velStart[i]->setColours( ui::Theme::textColour( 2 ), ui::Theme::textColour( 1 ) );
+            velEnd[i]->setColours( ui::Theme::textColour( 2 ), ui::Theme::textColour( 1 ) );
+            addComponent( *velStart[i], i, 4 );
+            addComponent( *velEnd[i], i, 5 );
+
+            velStart[i]->onValueChanged = [&, i]( int Value ) {
+                if( ! pDrum ) return;
+                if( Value <= velEnd[i]->getValue() )
+                    pDrum->setLayerVelocityStart( pads[0], i, Value );
+                else
+                    velStart[i]->setValue( velEnd[i]->getValue(), juce::dontSendNotification );
+            };
+            velEnd[i]->onValueChanged = [&, i]( int Value ) {
+                if( ! pDrum ) return;
+                if( Value >= velStart[i]->getValue() )
+                    pDrum->setLayerVelocityEnd( pads[0], i, Value );
+                else
+                    velEnd[i]->setValue( velStart[i]->getValue(), juce::dontSendNotification );
+            };
 
             addComponent( semi[i], i, 0 );
             addComponent( fine[i], i, 1 );
@@ -96,6 +116,8 @@ namespace kick_ui
                 fine[index].setValue( pDrum->getLayerFine( pads[0], index ), juce::dontSendNotification );
                 amp[index].setValue( CommonUtils::gainToMidi( pDrum->getLayerGain( pads[0], index ) ), juce::dontSendNotification );
                 pan[index].setValue( pDrum->getLayerPan( pads[0], index ), juce::dontSendNotification );
+                velStart[index]->setValue( pDrum->getLayerVelocityStart( pads[0], index ), juce::dontSendNotification );
+                velEnd[index]->setValue( pDrum->getLayerVelocityEnd( pads[0], index ), juce::dontSendNotification );
             }
         }
     }

@@ -22,6 +22,7 @@
 #pragma once
 
 #include "kick_padButton.h"
+#include "kick_touch_slot.h"
 
 namespace ui
 {
@@ -73,6 +74,12 @@ namespace ui
         std::function<void( int )>                 onKnobClicked;
         std::function<void( int )>                 onShiftPadPressed;
 
+        // Finger-level pad touch (opt-in; null = no cost). onPadTouchDown: pad id (bank offset included), the finger (bridge
+        // TouchSlot, or the JUCE source index on desktop / iOS) and where on the pad it landed (0 = top edge, 1 = bottom).
+        // onPadTouchUp: the same finger lifted (the pad that caught its mouse-down).
+        std::function<void( int padId, int finger, float yFrac )> onPadTouchDown;
+        std::function<void( int padId, int finger )>              onPadTouchUp;
+
         std::function<void( int, const juce::Colour&, float )> onColorChanged;
         std::function<void( int, const juce::String& )>        onHeaderChanged;
         std::function<void( int, const juce::String& )>        onGroupChanged;
@@ -85,7 +92,7 @@ namespace ui
         std::function<void( int, double )>                     onPanChanged;
 
         explicit KickPadButtonGroupComponent( KickPadButton::PadButtonType Type );
-        ~KickPadButtonGroupComponent() override { padHardwareConnection.disconnect(); }
+        ~KickPadButtonGroupComponent() override;
 
         KickListBox& getBankComponent();
 
@@ -144,6 +151,8 @@ namespace ui
 
         void setSelected( int Index, juce::NotificationType Notify );
         void setHighlight( int Index, juce::Colour highlightedColour = ui::Theme::selectionColour( 2 ) );
+        // Highlight of ONE pad without touching the others (several held pads / fingers at once). Only refreshes that pad.
+        void setPadHighlight( int Index, bool On, juce::Colour highlightedColour = ui::Theme::selectionColour( 2 ) );
         int  getHighlightedPad();
 
         void setMute( int Index, bool Mute, juce::NotificationType Notify );
@@ -194,6 +203,16 @@ namespace ui
         juce::Array<int> beathingPads;
 
         std::array<std::unique_ptr<KickPadButton>, _NUM_PADS_IN_COMPONENT> pads;
+
+        // Relays the mouse of one pad (and its nested children) to onPadTouchDown / onPadTouchUp.
+        struct PadTouchRelay : public juce::MouseListener
+        {
+            KickPadButtonGroupComponent* owner{ nullptr };
+            int                          index{ 0 };
+            void                         mouseDown( const juce::MouseEvent& e ) override;
+            void                         mouseUp( const juce::MouseEvent& e ) override;
+        };
+        std::array<PadTouchRelay, _NUM_PADS_IN_COMPONENT> touchRelay;
 
         KickPadDataArray       padData;
         KickListBox            bank{ KickListBox::BoxType::withoutTitleBarWithNavigationButtons, "Bank", mt::Kick::padBankNames, 0, 2 };

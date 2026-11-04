@@ -46,6 +46,7 @@ namespace kick_ui
         std::array<ui::KickRotary, 3> s;
         std::array<ui::KickRotary, 3> dep;
 
+        std::function<void( int, int )> showFor; // row, envelope type -> which controls show
         void visibilityChanged() override;
     };
 }

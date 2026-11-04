@@ -763,7 +763,7 @@ namespace mt
     int          MTIProgram::getLayerSlice( int Note, int Layer ) { return getLayer( Note, Layer )->slice.get(); }
     int          MTIProgram::getLayerOffset( int Note, int Layer ) { return getLayer( Note, Layer )->offset.get(); }
     int          MTIProgram::getLayerTailStart( int Note, int Layer ) { return getLayer( Note, Layer )->tailStart.get(); }
-    int          MTIProgram::getLayerTailLength( int Note, int Layer ) { return getLayer( Note, Layer )->tailStart.get(); }
+    int          MTIProgram::getLayerTailLength( int Note, int Layer ) { return getLayer( Note, Layer )->tailLength.get(); }
     int          MTIProgram::getLayerVelocityStart( int Note, int Layer ) { return getLayer( Note, Layer )->velStart.get(); }
     int          MTIProgram::getLayerVelocityEnd( int Note, int Layer ) { return getLayer( Note, Layer )->velEnd.get(); }
 

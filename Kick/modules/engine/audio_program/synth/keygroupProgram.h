@@ -37,5 +37,6 @@ namespace mt
     private:
         MTKeygroupProgram*                        pKeys{ nullptr };
         std::vector<std::unique_ptr<ISynthVoice>> voices;
+        std::map<int, int>                        noteLayerIdx; // Layer Play CYCLE state per key
     };
 };

@@ -127,7 +127,8 @@ namespace kick_ui
             pKeyGroup = pIProg ? dynamic_cast<mt::MTKeygroupProgram*>( pIProg ) : nullptr;
             refresh();
         }
-        comps[tIndex]->setVisible( visible );
+        for( size_t i = 0; i < comps.size(); ++i )
+            comps[i]->setVisible( visible && (int)i == tIndex );
     }
 
     KeyGroupSampleTab1::KeyGroupSampleTab1( std::vector<int>& Keys, mt::MTKeygroupProgram*& pKeyGroup )
@@ -231,7 +232,7 @@ namespace kick_ui
             auto source = pKeygroup->getLayerSource( keys[0], selectedLayer );
             auto min{ 0 };
             auto max{ 1 };
-            if( auto sPtr = mt::getAudioSoundCache().getOrLoad( source ) )
+            if( auto sPtr = progedit::soundOrLoadAsync( source, this, [this]() { refreshKeys(); } ) )
             {
                 max = sPtr->getNumSamplesPerChannel();
                 wav.setSource( sPtr->getData(), sPtr->getSampleRate() );
@@ -337,6 +338,11 @@ namespace kick_ui
                 pKeygroup->setLayerTailStart( keys[0], selectedLayer, MilliSec );
         };
 
+        slice.onValueChanged = [&]( juce::int64 Value ) {
+            if( pKeygroup )
+                pKeygroup->setLayerSlice( keys[0], selectedLayer, (int)Value );
+        };
+
         offSet.onValueChanged = [&]( juce::int64 Value ) {
             if( pKeygroup )
                 pKeygroup->setLayerOffset( keys[0], selectedLayer, Value );
@@ -376,7 +382,7 @@ namespace kick_ui
             auto source = pKeygroup->getLayerSource( keys[0], selectedLayer );
             auto min{ 0 };
             auto max{ 1 };
-            if( auto sPtr = mt::getAudioSoundCache().getOrLoad( source ) )
+            if( auto sPtr = progedit::soundOrLoadAsync( source, this, [this]() { refresh(); } ) )
             {
                 max = sPtr->getNumSamplesPerChannel();
                 wav.setSource( sPtr->getData(), sPtr->getSampleRate() );

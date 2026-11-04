@@ -827,6 +827,8 @@ namespace mt
                 else
                     list.insert( -1, juce::MidiMessage::noteOff( effCh, effNo ) );
             }
+            else if( Msg.isChannelPressure() ) // keyboard / pad aftertouch follows the track's output channel like the notes
+                list.insert( -1, juce::MidiMessage::channelPressureChange( getMidiOutChannel(), Msg.getChannelPressureValue() ) );
             else
                 list.insert( -1, Msg );
 

@@ -1,4 +1,6 @@
 #pragma once
+
+#include "kick_audio_split.h"
 static sigslot::signal<>     sampleNeedRepaint;
 static sigslot::signal<bool> stateNeedChage;
 

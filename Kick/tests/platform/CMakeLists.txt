@@ -289,6 +289,21 @@ add_executable(kick-piano-logic-tests PianoLogicTests.cpp)
 add_test(NAME kick-piano-logic COMMAND kick-piano-logic-tests)
 set_tests_properties(kick-piano-logic PROPERTIES TIMEOUT 10)
 
+# Pad Perform pure logic (S-F): pad layout (Chromatic / Notes / Start on Root), chord formulas, diatonic Progression, held-note table, 16 LEVELS, chord name; JUCE-free, header only.
+add_executable(kick-pad-mapper-tests PadMapperTests.cpp)
+add_test(NAME kick-pad-mapper COMMAND kick-pad-mapper-tests)
+set_tests_properties(kick-pad-mapper PROPERTIES TIMEOUT 10)
+
+# Layer Play selection (S-F): Cycle wraps, Random picks only layers with a sound, Velocity range closed (127 hit); JUCE-free, header only.
+add_executable(kick-layer-play-tests LayerPlayTests.cpp)
+add_test(NAME kick-layer-play COMMAND kick-layer-play-tests)
+set_tests_properties(kick-layer-play PROPERTIES TIMEOUT 10)
+
+# Audio editor SPLIT geometry (S-F); JUCE-free, header only.
+add_executable(kick-audio-split-tests AudioSplitTests.cpp)
+add_test(NAME kick-audio-split COMMAND kick-audio-split-tests)
+set_tests_properties(kick-audio-split PROPERTIES TIMEOUT 10)
+
 # Grid pure logic: pad-to-note bank mapping, button state machine, Q-Link zoom scaling; JUCE-free, header only.
 add_executable(kick-grid-logic-tests GridLogicTests.cpp)
 add_test(NAME kick-grid-logic COMMAND kick-grid-logic-tests)
