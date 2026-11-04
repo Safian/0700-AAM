@@ -19,6 +19,19 @@
 - Döntések: Akai-specifikus réteg tervezése; Serum-szintű funkciólista; backend hosting és kulcsgazda.
 - iOS: szimulátor/eszköz indulás és külső MIDI a mobil ágon (nem ellenőrzött).
 
+
+## Állapot (2026-11-04 03:50) és a képernyő-review backlog (docs/plans/screens/*.md, 22 dokumentum)
+**Kész, mergelve és pusholva (`468d65fd`):** W1-A Preferences-csomag, W1-B Grid, W1-C MIDI program, W1-D CLAP-FX host + `clap.gui`, W2-A indítás, W2-B főképernyő tabok, W2-C fájlböngésző-források (M0 helyi + M1 WebDAV; https az MPC-n nincs TLS-könyvtár miatt), Looper SIGFPE javítások (két nullával osztás), crash-jelentés.
+**Kész, helyben mergelve, még nem pusholva (integrált ARM-buildre vár):** W3-A érintő-zongora (`83d1f096`).
+**Fut (éjszaka):** W3-E `.kickplug`/PluginManifest telepítő (agy), Looper lejátszási fázis gyökérok-elemzés (agy; mérés: felvétel rendben, lejátszás ~1,3 s eltérés), S-B minta/sampler/assign képernyők (agy), S-A mixer/mute képernyők (sonnet), S-C szekvencer-szerkesztők (sonnet).
+**Következő egységek a képernyő-review backlogból (fájlkör szerint szétválasztva, a fentiek után):**
+| ID | Képernyők (docs/plans/screens/) | Végrehajtó |
+|---|---|---|
+| S-D | menu, projects, file-browser, system-resources, header-statusbar-popups, sw-update | sonnet |
+| S-E | looper (a fázis-javítás után), inserts, xy-fx, knob-edit-qlinks, midi-control | agy |
+| S-F | pad-perform, program-edit | sonnet (a W3-A után: a Keyboard/Pad Perform közös skála-forrás) |
+Mindegyik egység a dokumentum TODO-sorait csinálja, a hardvert/hangot kérő tételek az "ember kell" listába kerülnek.
+
 ---
 (Részletes egységek és sorrend alább.)
 
