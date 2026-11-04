@@ -248,6 +248,38 @@ namespace mt
         }
     }
 
+    void MTSequence::valueTreeChildAdded( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenAdded )
+    {
+        if( parentTree == vTree && childWhichHasBeenAdded.hasType( IDs::TRACK ) )
+        {
+            auto id = childWhichHasBeenAdded.getProperty( IDs::id ).toString();
+            for( auto& t : tracks )
+            {
+                if( t->getId() == id )
+                    return;
+            }
+            createTrack( childWhichHasBeenAdded );
+        }
+    }
+
+    void MTSequence::valueTreeChildRemoved( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenRemoved, int /*index*/ )
+    {
+        if( parentTree == vTree && childWhichHasBeenRemoved.hasType( IDs::TRACK ) )
+        {
+            auto id = childWhichHasBeenRemoved.getProperty( IDs::id ).toString();
+            const juce::ScopedLock sl( lock );
+            for( size_t i = 0; i < tracks.size(); ++i )
+            {
+                if( tracks[i]->getId() == id )
+                {
+                    tracks.erase( tracks.begin() + static_cast<std::ptrdiff_t>( i ) );
+                    updateTrackList();
+                    break;
+                }
+            }
+        }
+    }
+
     ///
     /// Track API's.
     ///
@@ -290,9 +322,9 @@ namespace mt
         if( juce::isPositiveAndBelow( Index, tracks.size() ) )
         {
             const juce::ScopedLock sl( lock );
-            auto&                  tVT = tracks[Index]->getVT();
-            vTree.removeChild( tVT, undoManager );
+            auto tVT = tracks[Index]->getVT();
             tracks.erase( tracks.begin() + Index );
+            vTree.removeChild( tVT, undoManager );
             updateTrackList();
             return 0;
         }

@@ -449,6 +449,18 @@ namespace mt
         bankMsb.referTo( state, IDs::BankMSB, UM, 0 );
         bankLsb.referTo( state, IDs::BankLSB, UM, 0 );
         midiCh.referTo( state, IDs::midiCh, UM, MIDI_CH::DEFAULT );
+
+        noteMin.referTo( state, IDs::noteMin, UM, 0 );
+        noteMax.referTo( state, IDs::noteMax, UM, 127 );
+        velMin.referTo( state, IDs::velMin, UM, 1 );
+        velMax.referTo( state, IDs::velMax, UM, 127 );
+
+        filterPitchBend.referTo( state, IDs::filterPitchBend, UM, false );
+        filterModWheel.referTo( state, IDs::filterModWheel, UM, false );
+        filterAftertouch.referTo( state, IDs::filterAftertouch, UM, false );
+        filterProgramChange.referTo( state, IDs::filterProgramChange, UM, false );
+        filterSustain.referTo( state, IDs::filterSustain, UM, false );
+        filterAllCC.referTo( state, IDs::filterAllCC, UM, false );
     }
     //MTAudioProgramData
     MTIAudioProgramData::MTIAudioProgramData( const juce::ValueTree& V, juce::UndoManager* UM )

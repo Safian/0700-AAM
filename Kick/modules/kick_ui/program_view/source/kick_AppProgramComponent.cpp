@@ -81,6 +81,8 @@ AppProgramDisplay::AppProgramDisplay( int Index )
         auto MTIMidi = dynamic_cast<mt::MTIMidiProgramData*>( MTIProg );
         if( MTIMidi )
         {
+            if( str.endsWith( " [Missing]" ) )
+                return;
             selMidiPort       = str;
             MTIMidi->midiPort = str;
         }
@@ -231,19 +233,38 @@ void AppProgramDisplay::handleAsyncUpdate()
 
 void AppProgramDisplay::updateMidiPorts()
 {
-    auto mProg  = dynamic_cast<mt::MTIMidiProgramData*>( MTIProg );
-    selMidiPort = mProg ? mProg->midiPort.get() : "";
-    auto ports  = ae.getMidiDeviceNames( false ); //Get Out Devices
-    if( ( ( std::find( ports.begin(), ports.end(), selMidiPort ) ) != ports.end() ) && ports.size() >= 1 )
+    auto mProg = dynamic_cast<mt::MTIMidiProgramData*>( MTIProg );
+    if( !mProg )
+        return;
+
+    selMidiPort = mProg->midiPort.get();
+    auto ports  = ae.getMidiDeviceNames( false ); // Get Out Devices
+
+    int selectedIndex = 0;
+    if( selMidiPort.isNotEmpty() && selMidiPort != "None" )
     {
-        auto it            = std::find( ports.begin(), ports.end(), selMidiPort );
-        auto selectedIndex = 0;
+        auto it = std::find( ports.begin(), ports.end(), selMidiPort );
         if( it != ports.end() )
-            selectedIndex = std::distance( ports.begin(), it );
-        midiPort.setListOptions( ports, selectedIndex );
+        {
+            selectedIndex = (int)std::distance( ports.begin(), it );
+        }
+        else
+        {
+            // Port was saved, but is currently missing/disconnected
+            juce::String missingLabel = selMidiPort + " [Missing]";
+            ports.push_back( missingLabel );
+            selectedIndex = (int)ports.size() - 1;
+        }
     }
-    else if( selMidiPort.isEmpty() && ports.size() )
-        midiPort.setListOptions( ports );
+    else
+    {
+        selectedIndex = 0;
+    }
+
+    if( midiPort.getListOptions() != ports || midiPort.getSelectedIndex() != selectedIndex )
+    {
+        midiPort.setListOptions( ports, selectedIndex, juce::dontSendNotification );
+    }
 }
 
 void AppProgramDisplay::mouseDown( const juce::MouseEvent& e )

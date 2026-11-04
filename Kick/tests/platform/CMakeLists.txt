@@ -130,6 +130,11 @@ add_executable(kick-midi-pan-tests MidiPanTests.cpp)
 add_test(NAME kick-midi-pan COMMAND kick-midi-pan-tests)
 set_tests_properties(kick-midi-pan PROPERTIES TIMEOUT 10)
 
+# MIDI Program logic: note/vel range, transpose, filters, learn, unique names, CC labels; JUCE-free, header only.
+add_executable(kick-midi-program-tests MidiProgramTests.cpp)
+add_test(NAME kick-midi-program COMMAND kick-midi-program-tests)
+set_tests_properties(kick-midi-program PROPERTIES TIMEOUT 10)
+
 # CV step (0..127) -> 12 bit DAC scaling; JUCE-free, header only.
 add_executable(kick-cv-scale-tests CvScaleTests.cpp)
 add_test(NAME kick-cv-scale COMMAND kick-cv-scale-tests)
