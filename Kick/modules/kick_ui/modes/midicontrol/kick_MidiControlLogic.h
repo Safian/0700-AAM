@@ -34,12 +34,13 @@ namespace kick_ui::midictl
     constexpr int kQLinks  = 4;
     constexpr int kPads    = 16;
 
-    // List index ranges of the Hardware tab list: buttons, Q-Links, pads, the two XY axes.
+    // List index ranges of the Hardware tab list: buttons, Q-Links, pads, the two XY axes, Touch Strip.
     constexpr int kFirstQLink = kButtons;
     constexpr int kFirstPad   = kButtons + kQLinks;
     constexpr int kXAxis      = kFirstPad + kPads;
     constexpr int kYAxis      = kXAxis + 1;
-    constexpr int kListSize   = kYAxis + 1;
+    constexpr int kTouchStrip = kYAxis + 1;
+    constexpr int kListSize   = kTouchStrip + 1;
 
     inline std::string qlinkName( int Index0 ) { return "Q-Link " + std::to_string( Index0 + 1 ); }
     inline std::string padName( int Index0 ) { return "Pad " + std::to_string( Index0 + 1 ); }
@@ -55,6 +56,7 @@ namespace kick_ui::midictl
             names.push_back( padName( i ) );
         names.emplace_back( "XYFXX-Axis" );
         names.emplace_back( "XYFXY-Axis" );
+        names.emplace_back( "Touch Strip" );
         return names;
     }
 
@@ -63,7 +65,8 @@ namespace kick_ui::midictl
         Button,
         QLink,
         Pad,
-        Xy
+        Xy,
+        Strip
     };
 
     // Which right-hand panel belongs to a list row (the XY rows used to be unreachable: `index == 37 || 38` after the pad range).
@@ -72,7 +75,8 @@ namespace kick_ui::midictl
         if( Index < kFirstQLink ) return ListPanel::Button;
         if( Index < kFirstPad ) return ListPanel::QLink;
         if( Index < kXAxis ) return ListPanel::Pad;
-        return ListPanel::Xy;
+        if( Index <= kYAxis ) return ListPanel::Xy;
+        return ListPanel::Strip;
     }
 
     // ---- Q-Link CC values

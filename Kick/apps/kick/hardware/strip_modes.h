@@ -1,16 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
-// Pure (JUCE / ALSA free) maths of the Akai MPC Key 61 touch strip modes (T12, Y4). Kick has only the slider
+// Pure (JUCE / ALSA free) maths of the Akai MPC Key 61 touch strip modes (T12, Y4, XY-11, PP-24). Kick has only the slider
 // packet (EN_SLIDER_TOUCH_INPUT 0..100), which stays the first mode (Kick-native default). After it the TOUCH STRIP
-// button cycles in the MPC v3.10 manual order (p. 101), leaving out the modes Kick has no counterpart for
-// (Q-Link, Touch FX, Notes, Crossfader, Note Strum; see docs/akai_mpc_hardware/KEY61_TOUCH_STRIP_MODES.md):
-// Pitch Bend, Pad Level, Mod Wheel, Track Level, Sustain, Expression, Off.
+// button cycles in the MPC v3.10 manual order (p. 101):
+// Pitch Bend, Pad Level, Mod Wheel, Track Level, Sustain, Touch FX (XY-11), Expression, Notes (PP-24), Off.
+// (Modes without engine counterparts in Kick: Q-Link, Crossfader, Note Strum; see docs/akai_mpc_hardware/KEY61_TOUCH_STRIP_MODES.md)
 namespace kick_hw {
 namespace strip {
 
-enum Mode { kSlider = 0, kPitchBend = 1, kPadLevel = 2, kModWheel = 3, kTrackLevel = 4, kSustain = 5,
-            kExpression = 6, kOff = 7, kNumModes = 8 };
+enum Mode {
+    kSlider      = 0,
+    kPitchBend   = 1,
+    kPadLevel    = 2,
+    kModWheel    = 3,
+    kTrackLevel  = 4,
+    kSustain     = 5,
+    kTouchFx     = 6,
+    kExpression  = 7,
+    kNotes       = 8,
+    kOff         = 9,
+    kNumModes    = 10
+};
 
 constexpr int kPitchCentre = 8192;  // 14-bit pitch wheel centre
 constexpr int kPitchMax    = 16383;
@@ -60,6 +71,24 @@ inline int trackLevelFromPosition(int val127) { return modWheelFromPosition(val1
 // below = pedal up; a finger release always lifts the pedal.
 constexpr int kSustainThreshold = 64;
 inline bool sustainDownFromPosition(int val127) { return val127 >= kSustainThreshold; }
+
+// Strip position 0..127 -> Touch FX Y-axis position (0.0f..1.0f) (XY-11).
+inline float touchFxFromPosition(int val127)
+{
+    if (val127 < 0) val127 = 0;
+    if (val127 > 127) val127 = 127;
+    return val127 / 127.0f;
+}
+
+// Strip position 0..127 -> note slot index 0..(numNotes - 1) on the current bank/scale (PP-24).
+inline int notesFromPosition(int val127, int numNotes = 16)
+{
+    if (numNotes <= 0) return 0;
+    if (val127 < 0) val127 = 0;
+    if (val127 > 127) val127 = 127;
+    int idx = (val127 * numNotes) / 128;
+    return idx >= numNotes ? numNotes - 1 : idx;
+}
 
 // Pad Level target: the note the Grid plays for `pad` (0..15) is the engine bank offset + pad. -1 for a bad pad.
 inline int padNote(int bankOffset, int pad) { return (pad < 0 || pad > 15) ? -1 : bankOffset + pad; }

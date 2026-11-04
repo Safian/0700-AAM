@@ -519,13 +519,45 @@ namespace kick_ui
         }
         else if( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) && ( contracts::DclContractsHelper::getButtonState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED ) )
         {
-            auto  buttonCode = contracts::DclContractsHelper::getButtonCode( f_HwMsg );
-            auto& aeSel      = ae.getSelected();
+            auto buttonCode = contracts::DclContractsHelper::getButtonCode( f_HwMsg );
             switch( buttonCode )
             {
-                case contracts::DeviceControlContracts::EN_PLAY: ae.setSequencePlay( aeSel.sequence, false, true ); return;
-                case contracts::DeviceControlContracts::EN_PLAYSTART: ae.setSequencePlay( aeSel.sequence, true, true ); return;
-                case contracts::DeviceControlContracts::EN_STOP: ae.setSequencePause(); return;
+                case contracts::DeviceControlContracts::EN_RECORD:
+                case contracts::DeviceControlContracts::EN_OVERDUB:
+                {
+                    if( ae.isRecorderRunning() || mode == SamplerRecorder::RecordMode::recordModeRecording || mode == SamplerRecorder::RecordMode::recordModeRecord )
+                    {
+                        recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeStopped );
+                    }
+                    else
+                    {
+                        recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeRecord );
+                    }
+                    return;
+                }
+                case contracts::DeviceControlContracts::EN_STOP:
+                {
+                    if( ae.isRecorderRunning() || mode == SamplerRecorder::RecordMode::recordModeRecording || mode == SamplerRecorder::RecordMode::recordModeRecord )
+                    {
+                        recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeStopped );
+                    }
+                    ae.stopRecorderPreview();
+                    play.setToggleState( false, juce::dontSendNotification );
+                    return;
+                }
+                case contracts::DeviceControlContracts::EN_PLAY:
+                case contracts::DeviceControlContracts::EN_PLAYSTART:
+                {
+                    if( !play.getToggleState() )
+                    {
+                        play.setToggleState( true, juce::sendNotification );
+                    }
+                    else
+                    {
+                        play.setToggleState( false, juce::sendNotification );
+                    }
+                    return;
+                }
             }
         }
     }

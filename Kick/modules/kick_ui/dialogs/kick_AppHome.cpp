@@ -82,8 +82,12 @@ namespace kick_ui
 
     sigslot::signal<Screen, void*> signals::onScreenData = {};
 
-    sigslot::signal<>    signals::sigBrowserShowFavourites = {};
-    sigslot::signal<int> signals::sigMainModeSelectTab     = {};
+    sigslot::signal<>          signals::sigBrowserShowFavourites = {};
+    sigslot::signal<int>       signals::sigMainModeSelectTab     = {};
+    sigslot::signal<int, bool> signals::sigQLinkTouch            = {};
+    sigslot::signal<float>     signals::sigTouchFxStripPos       = {};
+    sigslot::signal<bool>      signals::sigTouchFxStripGate      = {};
+    sigslot::signal<>          signals::sigTouchFxToggleSetup    = {};
 
     class TempScreen
         : public IScreen
