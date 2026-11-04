@@ -16,3 +16,4 @@ Repo-wide rules: `AGENTS.md` (root). Hardware and on-device debugging rules: `Ki
 
 ## Other
 - `images/` – screenshots used by the docs.
+- `FORK_PUSH_ADVICE.md` – tanácsok a fork-feltöltéshez és az upstream-munkához (mi van pusholva, mi nem; push-szabályok; a triázs állapota).
