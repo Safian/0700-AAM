@@ -71,6 +71,7 @@ PluginPanel::PluginPanel(std::shared_ptr<PluginSession> owner, bool automaticall
     panicButton.onClick = [this] { session->panic(); };
     for (int i = 0; i < 4; ++i) {
         auto& macro = macros[static_cast<size_t>(i)]; addAndMakeVisible(macro);
+        macro.addMouseListener(this, true);
         macro.setTextWhenNothingSelected("Knob " + juce::String(i + 1));
         macro.onChange = [this, i] {
             const auto selected = macros[static_cast<size_t>(i)].getSelectedId() - 2;
@@ -78,6 +79,7 @@ PluginPanel::PluginPanel(std::shared_ptr<PluginSession> owner, bool automaticall
             session->assignMacro(i, selected >= 0 && selected < static_cast<int>(parameters.size()) ? parameters[static_cast<size_t>(selected)].id : CLAP_INVALID_ID);
         };
     }
+    pluginList.addMouseListener(this, true);
     auto extraPaths = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("KICK/clap-paths.txt");
     juce::StringArray lines; lines.addLines(extraPaths.loadFileAsString());
     for (const auto& line : lines) {
@@ -146,6 +148,9 @@ void PluginPanel::rebuildParameters() {
         return juce::String(lhs.module + "/" + lhs.name).compareNatural(juce::String(rhs.module + "/" + rhs.name)) < 0;
     });
     for (int i = 0; i < 4; ++i) {
+        if (session->macro(i) == CLAP_INVALID_ID && i < static_cast<int>(order.size())) {
+            session->assignMacro(i, host.parameters()[order[static_cast<size_t>(i)]].id);
+        }
         auto& macro = macros[static_cast<size_t>(i)]; macro.clear(juce::dontSendNotification); macro.addItem("Knob " + juce::String(i+1) + ": unassigned", 1);
         int selected = 1;
         for (const auto index : order) {
@@ -178,6 +183,9 @@ void PluginPanel::timerCallback() {
             pluginList.addItem(catalog[i].name + " - " + catalog[i].vendor, static_cast<int>(i + 1));
             if (catalog[i].id == session->host().descriptor().id) pluginList.setSelectedId(static_cast<int>(i + 1), juce::dontSendNotification);
         }
+        if (pluginList.getSelectedId() == 0 && !catalog.empty()) {
+            pluginList.setSelectedId(1, juce::dontSendNotification);
+        }
         juce::String failures;
         for (const auto& f : scanJob->result.failures) failures += juce::String(f.path) + ": " + f.message + "\n";
         scanButton.setTooltip(failures);
@@ -199,6 +207,29 @@ void PluginPanel::timerCallback() {
                                      "  |  paused " + juce::String(stats.controlSilences) + "  |  dropped " + juce::String(stats.droppedEvents), juce::dontSendNotification);
 }
 void PluginPanel::paint(juce::Graphics& g) { g.fillAll(juce::Colour(0xff15191e)); }
+void PluginPanel::mouseDown(const juce::MouseEvent& e) {
+    if (e.eventComponent == &pluginList || pluginList.isParentOf(e.eventComponent)) {
+        const auto num = pluginList.getNumItems();
+        if (num > 0) {
+            const auto cur = pluginList.getSelectedId();
+            const auto next = (cur % num) + 1;
+            pluginList.setSelectedId(next, juce::dontSendNotification);
+        }
+        return;
+    }
+    for (int i = 0; i < 4; ++i) {
+        auto& macro = macros[static_cast<size_t>(i)];
+        if (e.eventComponent == &macro || macro.isParentOf(e.eventComponent)) {
+            const auto num = macro.getNumItems();
+            if (num > 0) {
+                const auto cur = macro.getSelectedId();
+                const auto next = (cur % num) + 1;
+                macro.setSelectedId(next, juce::sendNotificationSync);
+            }
+            return;
+        }
+    }
+}
 void PluginPanel::resized() {
     auto bounds = getLocalBounds().reduced(12);
     title.setBounds(bounds.removeFromTop(30));
