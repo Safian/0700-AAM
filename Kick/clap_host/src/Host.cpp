@@ -7,6 +7,7 @@
 #include <clap/ext/state.h>
 #include <clap/ext/latency.h>
 #include <clap/ext/tail.h>
+#include <clap/ext/gui.h>
 #include <clap/ext/thread-check.h>
 #include <clap/ext/timer-support.h>
 #include <clap/ext/posix-fd-support.h>
@@ -113,6 +114,9 @@ struct Host::Impl {
     const clap_plugin_params_t* params = nullptr;
     const clap_plugin_state_t* state = nullptr;
     const clap_plugin_latency_t* pluginLatency = nullptr;
+    const clap_plugin_tail_t* pluginTail = nullptr;
+    const clap_plugin_gui_t* pluginGui = nullptr;
+    bool guiCreated = false, guiVisible = false;
     const clap_plugin_timer_support_t* timerSupport = nullptr;
     const clap_plugin_posix_fd_support_t* fdSupport = nullptr;
     Descriptor info;
@@ -136,7 +140,7 @@ struct Host::Impl {
     std::atomic_flag gate = ATOMIC_FLAG_INIT;
     std::atomic<bool> loaded{false}, failed{false}, dirty{false};
     std::atomic<bool> restart{false}, callback{false}, wake{false}, flush{false}, panic{false};
-    std::atomic<uint32_t> rescan{0}, latencyFrames{0};
+    std::atomic<uint32_t> rescan{0}, latencyFrames{0}, tailFrames{0};
     std::atomic<uint64_t> blocks{0}, dropped{0}, errors{0};
     std::atomic<double> lastUs{0}, maxUs{0};
     std::atomic<uint64_t> deadlineMisses{0}, controlSilences{0}, idleBlocks{0};
@@ -170,7 +174,17 @@ struct Host::Impl {
     static void CLAP_ABI clearParams(const clap_host_t*, clap_id, clap_param_clear_flags) {}
     static void CLAP_ABI markDirty(const clap_host_t* h) { self(h).dirty.store(true); }
     static void CLAP_ABI latencyChanged(const clap_host_t* h) { self(h).restart.store(true); }
-    static void CLAP_ABI tailChanged(const clap_host_t*) {}
+    static void CLAP_ABI tailChanged(const clap_host_t* h) {
+        auto& s = self(h);
+        if (s.pluginTail && s.pluginTail->get) s.tailFrames.store(s.pluginTail->get(s.plugin));
+    }
+    static void CLAP_ABI guiResizeHintsChanged(const clap_host_t*) {}
+    static bool CLAP_ABI guiRequestResize(const clap_host_t*, uint32_t, uint32_t) { return true; }
+    static bool CLAP_ABI guiRequestShow(const clap_host_t*) { return true; }
+    static bool CLAP_ABI guiRequestHide(const clap_host_t*) { return true; }
+    static void CLAP_ABI guiClosed(const clap_host_t* h, bool was_destroyed) {
+        if (was_destroyed) { self(h).guiCreated = false; self(h).guiVisible = false; }
+    }
     static bool CLAP_ABI supportedAudioRescan(const clap_host_t*, uint32_t flags) {
         return (flags & ~(CLAP_AUDIO_PORTS_RESCAN_NAMES | CLAP_AUDIO_PORTS_RESCAN_FLAGS |
                          CLAP_AUDIO_PORTS_RESCAN_CHANNEL_COUNT | CLAP_AUDIO_PORTS_RESCAN_PORT_TYPE |
@@ -224,6 +238,7 @@ struct Host::Impl {
         static const clap_host_state_t state{markDirty};
         static const clap_host_latency_t latency{latencyChanged};
         static const clap_host_tail_t tail{tailChanged};
+        static const clap_host_gui_t gui{guiResizeHintsChanged, guiRequestResize, guiRequestShow, guiRequestHide, guiClosed};
         static const clap_host_audio_ports_t audio{supportedAudioRescan, audioRescan};
         static const clap_host_note_ports_t notes{dialects, noteRescan};
         static const clap_host_log_t logging{log};
@@ -235,6 +250,7 @@ struct Host::Impl {
         if (!std::strcmp(id, CLAP_EXT_STATE)) return &state;
         if (!std::strcmp(id, CLAP_EXT_LATENCY)) return &latency;
         if (!std::strcmp(id, CLAP_EXT_TAIL)) return &tail;
+        if (!std::strcmp(id, CLAP_EXT_GUI)) return &gui;
         if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS)) return &audio;
         if (!std::strcmp(id, CLAP_EXT_NOTE_PORTS)) return &notes;
         if (!std::strcmp(id, CLAP_EXT_LOG)) return &logging;
@@ -269,8 +285,17 @@ struct Host::Impl {
     }
     void close() {
         loaded.store(false);
-        if (plugin) { deactivate(); if (plugin->destroy) plugin->destroy(plugin); }
+        if (plugin) {
+            if (guiCreated && pluginGui && pluginGui->destroy) {
+                if (guiVisible && pluginGui->hide) pluginGui->hide(plugin);
+                pluginGui->destroy(plugin);
+            }
+            guiCreated = false; guiVisible = false;
+            deactivate(); if (plugin->destroy) plugin->destroy(plugin);
+        }
         plugin = nullptr; params = nullptr; state = nullptr; pluginLatency = nullptr;
+        pluginTail = nullptr; pluginGui = nullptr;
+        guiCreated = false; guiVisible = false;
         timerSupport = nullptr; fdSupport = nullptr;
         timers.clear(); fds.clear();
         paramInfo.clear(); paramValues.reset(); cookies.clear(); inputs.clear(); outputs.clear(); noteInputs.clear();
@@ -278,7 +303,7 @@ struct Host::Impl {
         library.reset();
         Event event; while (commands.pop(event)) {} while (emitted.pop(event)) {}
         failed.store(false); dirty.store(false); restart.store(false); callback.store(false);
-        wake.store(false); flush.store(false); panic.store(false); rescan.store(0); latencyFrames.store(0);
+        wake.store(false); flush.store(false); panic.store(false); rescan.store(0); latencyFrames.store(0); tailFrames.store(0);
         steadyTime = 0;
         transportObserved = hadTransport = false;
         carryCount = 0;
@@ -369,6 +394,7 @@ struct Host::Impl {
         active = true;
         transportObserved = false;
         latencyFrames.store(pluginLatency && pluginLatency->get ? pluginLatency->get(plugin) : 0);
+        tailFrames.store(pluginTail && pluginTail->get ? pluginTail->get(plugin) : 0);
         return true;
     }
     void fail(const std::string& why) { message = why; failed.store(true); }
@@ -513,6 +539,9 @@ bool Host::load(const Descriptor& descriptor, double sampleRate, uint32_t frames
             throw std::runtime_error("Incomplete CLAP parameter interface");
         s.state = static_cast<const clap_plugin_state_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_STATE));
         s.pluginLatency = static_cast<const clap_plugin_latency_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_LATENCY));
+        s.pluginTail = static_cast<const clap_plugin_tail_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_TAIL));
+        s.pluginGui = static_cast<const clap_plugin_gui_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_GUI));
+        s.guiCreated = false; s.guiVisible = false;
         s.timerSupport = static_cast<const clap_plugin_timer_support_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_TIMER_SUPPORT));
         s.fdSupport = static_cast<const clap_plugin_posix_fd_support_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_POSIX_FD_SUPPORT));
         if (!bytes.empty()) {
@@ -656,6 +685,84 @@ bool Host::parameterGesture(clap_id id, bool begin) noexcept {
 }
 bool Host::stateDirty() const noexcept { return impl->dirty.load(); }
 uint32_t Host::latency() const noexcept { return impl->latencyFrames.load(); }
+uint32_t Host::tail() const noexcept { return impl->tailFrames.load(); }
+
+bool Host::supportsGui() const noexcept { return impl->pluginGui != nullptr; }
+bool Host::isGuiApiSupported(const char* api, bool isFloating) const noexcept {
+    auto& s = *impl;
+    return s.plugin && s.pluginGui && s.pluginGui->is_api_supported && s.pluginGui->is_api_supported(s.plugin, api, isFloating);
+}
+bool Host::getPreferredGuiApi(const char** outApi, bool* outIsFloating) const noexcept {
+    auto& s = *impl;
+    return s.plugin && s.pluginGui && s.pluginGui->get_preferred_api && s.pluginGui->get_preferred_api(s.plugin, outApi, outIsFloating);
+}
+bool Host::createGui(const char* api, bool isFloating) {
+    auto& s = *impl;
+    if (!s.main() || !s.plugin || !s.pluginGui || !s.pluginGui->create) return false;
+    if (s.guiCreated) return true;
+    s.guiCreated = s.pluginGui->create(s.plugin, api, isFloating);
+    return s.guiCreated;
+}
+void Host::destroyGui() {
+    auto& s = *impl;
+    if (!s.main() || !s.plugin || !s.pluginGui || !s.guiCreated) return;
+    if (s.guiVisible && s.pluginGui->hide) s.pluginGui->hide(s.plugin);
+    if (s.pluginGui->destroy) s.pluginGui->destroy(s.plugin);
+    s.guiCreated = false; s.guiVisible = false;
+}
+bool Host::setGuiScale(double scale) {
+    auto& s = *impl;
+    if (!s.main() || !s.plugin || !s.pluginGui || !s.pluginGui->set_scale) return false;
+    return s.pluginGui->set_scale(s.plugin, scale);
+}
+bool Host::getGuiSize(uint32_t* width, uint32_t* height) const {
+    auto& s = *impl;
+    if (!s.plugin || !s.pluginGui || !s.pluginGui->get_size) return false;
+    return s.pluginGui->get_size(s.plugin, width, height);
+}
+bool Host::canResizeGui() const {
+    auto& s = *impl;
+    return s.plugin && s.pluginGui && s.pluginGui->can_resize && s.pluginGui->can_resize(s.plugin);
+}
+bool Host::adjustGuiSize(uint32_t* width, uint32_t* height) const {
+    auto& s = *impl;
+    if (!s.plugin || !s.pluginGui || !s.pluginGui->adjust_size) return false;
+    return s.pluginGui->adjust_size(s.plugin, width, height);
+}
+bool Host::setGuiSize(uint32_t width, uint32_t height) {
+    auto& s = *impl;
+    if (!s.main() || !s.plugin || !s.pluginGui || !s.pluginGui->set_size) return false;
+    return s.pluginGui->set_size(s.plugin, width, height);
+}
+bool Host::setGuiParent(const clap_window_t* window) {
+    auto& s = *impl;
+    if (!s.main() || !s.plugin || !s.pluginGui || !s.pluginGui->set_parent) return false;
+    return s.pluginGui->set_parent(s.plugin, window);
+}
+bool Host::setGuiTransient(const clap_window_t* window) {
+    auto& s = *impl;
+    if (!s.main() || !s.plugin || !s.pluginGui || !s.pluginGui->set_transient) return false;
+    return s.pluginGui->set_transient(s.plugin, window);
+}
+void Host::suggestGuiTitle(const char* title) {
+    auto& s = *impl;
+    if (s.plugin && s.pluginGui && s.pluginGui->suggest_title) s.pluginGui->suggest_title(s.plugin, title);
+}
+bool Host::showGui() {
+    auto& s = *impl;
+    if (!s.main() || !s.plugin || !s.pluginGui || !s.guiCreated || !s.pluginGui->show) return false;
+    s.guiVisible = s.pluginGui->show(s.plugin);
+    return s.guiVisible;
+}
+bool Host::hideGui() {
+    auto& s = *impl;
+    if (!s.main() || !s.plugin || !s.pluginGui || !s.pluginGui->hide) return false;
+    s.pluginGui->hide(s.plugin);
+    s.guiVisible = false;
+    return true;
+}
+bool Host::isGuiVisible() const noexcept { return impl->guiVisible; }
+bool Host::isGuiCreated() const noexcept { return impl->guiCreated; }
 Statistics Host::statistics() const noexcept { auto& s = *impl; return {s.blocks.load(), s.dropped.load(), s.errors.load(), s.lastUs.load(), s.maxUs.load(), s.deadlineMisses.load(), s.controlSilences.load(), s.idleBlocks.load()}; }
 bool Host::enqueue(const Event& e) noexcept {
     auto& s = *impl;
