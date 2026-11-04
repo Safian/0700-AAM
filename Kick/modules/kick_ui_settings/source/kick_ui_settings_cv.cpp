@@ -75,16 +75,19 @@ namespace kick_ui
             mt::CV::getCVInterface().setChannelNoteMap( 4, mt::ScaleAndNotes::getNoteNumber( str ) );
         };
         cv5.onSelectionChanged = [this]( int index, const juce::String& str ) {
-            settings.cv.setNoteStart( 5, index );
-            mt::CV::getCVInterface().setChannelNoteMap( 5, index );
+            juce::ignoreUnused( index );
+            settings.cv.setNoteStart( 5, mt::ScaleAndNotes::getNoteNumber( str ) );
+            mt::CV::getCVInterface().setChannelNoteMap( 5, mt::ScaleAndNotes::getNoteNumber( str ) );
         };
         cv6.onSelectionChanged = [this]( int index, const juce::String& str ) {
-            settings.cv.setNoteStart( 6, index );
-            mt::CV::getCVInterface().setChannelNoteMap( 6, index );
+            juce::ignoreUnused( index );
+            settings.cv.setNoteStart( 6, mt::ScaleAndNotes::getNoteNumber( str ) );
+            mt::CV::getCVInterface().setChannelNoteMap( 6, mt::ScaleAndNotes::getNoteNumber( str ) );
         };
         cv7.onSelectionChanged = [this]( int index, const juce::String& str ) {
-            settings.cv.setNoteStart( 7, index );
-            mt::CV::getCVInterface().setChannelNoteMap( 7, index );
+            juce::ignoreUnused( index );
+            settings.cv.setNoteStart( 7, mt::ScaleAndNotes::getNoteNumber( str ) );
+            mt::CV::getCVInterface().setChannelNoteMap( 7, mt::ScaleAndNotes::getNoteNumber( str ) );
         };
         calibrate.onClick = [&]() {
             signals::sigScreenOpen( Screen::CVClib );
@@ -94,35 +97,35 @@ namespace kick_ui
     void SettingsCV::refresh()
     {
         int note = settings.cv.getNoteStart( 0 );
-        cv0.setSelected( note, juce::sendNotification );
+        cv0.setSelected( note, juce::dontSendNotification );
         mt::CV::getCVInterface().setChannelNoteMap( 0, note );
 
         note = settings.cv.getNoteStart( 1 );
-        cv1.setSelected( note, juce::sendNotification );
+        cv1.setSelected( note, juce::dontSendNotification );
         mt::CV::getCVInterface().setChannelNoteMap( 1, note );
 
         note = settings.cv.getNoteStart( 2 );
-        cv2.setSelected( note, juce::sendNotification );
+        cv2.setSelected( note, juce::dontSendNotification );
         mt::CV::getCVInterface().setChannelNoteMap( 2, note );
 
         note = settings.cv.getNoteStart( 3 );
-        cv3.setSelected( note, juce::sendNotification );
+        cv3.setSelected( note, juce::dontSendNotification );
         mt::CV::getCVInterface().setChannelNoteMap( 3, note );
 
         note = settings.cv.getNoteStart( 4 );
-        cv4.setSelected( note, juce::sendNotification );
+        cv4.setSelected( note, juce::dontSendNotification );
         mt::CV::getCVInterface().setChannelNoteMap( 4, note );
 
         note = settings.cv.getNoteStart( 5 );
-        cv5.setSelected( note, juce::sendNotification );
+        cv5.setSelected( note, juce::dontSendNotification );
         mt::CV::getCVInterface().setChannelNoteMap( 5, note );
 
         note = settings.cv.getNoteStart( 6 );
-        cv6.setSelected( note, juce::sendNotification );
+        cv6.setSelected( note, juce::dontSendNotification );
         mt::CV::getCVInterface().setChannelNoteMap( 6, note );
 
         note = settings.cv.getNoteStart( 7 );
-        cv7.setSelected( note, juce::sendNotification );
+        cv7.setSelected( note, juce::dontSendNotification );
         mt::CV::getCVInterface().setChannelNoteMap( 7, note );
     }
 
@@ -252,7 +255,7 @@ namespace kick_ui
         double newValue  = component->getOffsetValue() - 1.0; // Decrease offset by 1.0
         settings.cvclib.setOffset( rowIndex, newValue );
 
-        mt::CV::getCVInterface().calibrateCV( rowIndex, newValue );
+        mt::CV::getCVInterface().calibrateCV( rowIndex + 1, static_cast<int>( newValue ) );
         component->setOffsetValue( newValue );
     }
 
@@ -264,7 +267,7 @@ namespace kick_ui
         component->setOffsetValue( newValue );
 
         settings.cvclib.setOffset( rowIndex, newValue );
-        mt::CV::getCVInterface().calibrateCV( rowIndex, newValue );
+        mt::CV::getCVInterface().calibrateCV( rowIndex + 1, static_cast<int>( newValue ) );
     }
 
     void CVClib::handleResetButtonClick( int rowIndex )
@@ -273,7 +276,8 @@ namespace kick_ui
         auto* component = rawComponents[rowIndex];
         component->setOffsetValue( 0 );
         settings.cvclib.setOffset( rowIndex, 0 );
-        mt::CV::getCVInterface().calibrateCV( rowIndex, 0 );
+        mt::CV::getCVInterface().calibrateCV( rowIndex + 1, 0 );
+        mt::CV::getCVInterface().resetCalibCV( rowIndex + 1 );
     }
 
     void CVClib::applyCalibrationValues()

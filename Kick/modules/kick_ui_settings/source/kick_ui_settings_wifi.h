@@ -22,6 +22,7 @@
 #pragma once
 
 // Module include files.
+
 namespace kick_ui
 {
     class SettingsWifi : public SettingsInterface
@@ -36,21 +37,21 @@ namespace kick_ui
 
     private:
         void handleEnabledClick();
-
         void initializeInterfaceState();
         void connectWifi( bool connect );
 
     private:
         mt::KickSettings&    settings{ mt::getSettings() };
-        ui::KickToggleButton enabled{ "Wifi", "ENABLED", "DISABLED" };
+        ui::KickToggleButton enabled{ "WiFi", "ENABLED", "DISABLED" };
+        ui::KickLabel        statusLabel{ "Status: Ready" };
 
         ui::KickLabel        password{ "", "" };
         ui::KickListBox      wifiList{ "availableWifi" };
-        ui::KickToggleButton scanWifi{ "scanWifi", "ScanWifi", "ScanWifi" };
-        ui::KickToggleButton connect{ "connect", "connect", "disconnected" };
+        ui::KickToggleButton scanWifi{ "SCAN WIFI", "SCAN", "SCAN" };
+        ui::KickToggleButton connect{ "CONNECT", "DISCONNECT", "CONNECT" };
 
-        ui::KickLabel wifIP{ "IpAddress", "" };
-        ui::KickLabel gateway{ "gatway", "" };
-        ui::KickLabel subnet{ "subnet", "" };
+        ui::KickLabel wifIP{ "IP ADDRESS", "" };
+        ui::KickLabel gateway{ "GATEWAY", "" };
+        ui::KickLabel subnet{ "SUBNET", "" };
     };
 }
