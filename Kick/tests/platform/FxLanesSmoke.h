@@ -81,6 +81,22 @@ inline juce::String runKickFxLanesSmoke() {
     ins->closeTouchFx();
     say("automated gesture / parameter playback calls ok, the stored value comes back");
 
+    // ---- bus inserts: pre-fader by default, post-fader selectable and persistent; a program has no such choice
+    if (ins->supportsPostFader()) return fail("a program chain claims a pre/post-fader choice");
+    const auto returns = api.getBusManager().getReturnBusNames();
+    if (returns.empty()) return fail("no return bus");
+    auto* bus = api.getBusManager().getBus(juce::String(returns.front()));
+    auto* busIns = bus ? bus->getInsertsInterface() : nullptr;
+    if (!busIns || !busIns->supportsPostFader()) return fail("a bus does not offer the pre/post-fader choice");
+    if (busIns->isPostFader()) return fail("bus inserts are not pre-fader by default");
+    busIns->setPostFader(true);
+    if (!api.saveProject() || !api.closeProject() || !api.loadProject(file)) return fail("save / reopen failed (bus)");
+    bus = api.getBusManager().getBus(juce::String(returns.front()));
+    busIns = bus ? bus->getInsertsInterface() : nullptr;
+    if (!busIns || !busIns->isPostFader()) return fail("post-fader did not survive save / reopen");
+    busIns->setPostFader(false);
+    say("bus inserts: pre-fader default, post-fader persists");
+
     if (!api.saveProject() || !api.closeProject()) return fail("cannot save/close");
     std::cout << "PASS: FX lanes (lanes, persistence, clear/undo, automated playback calls)\n";
     return {};

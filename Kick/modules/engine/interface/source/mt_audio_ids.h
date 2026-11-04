@@ -130,6 +130,7 @@ namespace mt
         DECLARE_ID( pan )
         DECLARE_ID( mute )
         DECLARE_ID( bypass )
+        DECLARE_ID( postFaderInserts ) // bus: the inserts run after the fader / pan (default: before)
         DECLARE_ID( solo )
         DECLARE_ID( muteGroup )
         DECLARE_ID( reverse )

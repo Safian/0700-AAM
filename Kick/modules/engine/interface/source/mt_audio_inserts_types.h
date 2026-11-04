@@ -77,7 +77,7 @@ namespace mt
     {
     public:
         MTIInsertsInterface();
-        ~MTIInsertsInterface();
+        virtual ~MTIInsertsInterface();
         void setup( juce::ValueTree& VT, juce::UndoManager* UM, AudIO::DawInserts* Impl );
 
         void                        getInserts( std::vector<juce::String>& InsertNames );
@@ -98,6 +98,11 @@ namespace mt
         int  swapInserts( unsigned int fromPosition, unsigned int toPosition );
         int  moveInsert( unsigned int fromPosition, unsigned int toPosition );
         ClapEffect* getClapEffect( unsigned int Position );
+
+        // Buses only: whether the inserts run after the bus fader / pan (default before them). The other chains have no such choice.
+        virtual bool supportsPostFader() const noexcept { return false; }
+        virtual bool isPostFader() const noexcept { return false; }
+        virtual void setPostFader( bool ) noexcept {}
 
         int          getNumInserts();
         // False for programs that have no insert chain (MIDI / CV): ADD would do nothing, the screen says so instead.

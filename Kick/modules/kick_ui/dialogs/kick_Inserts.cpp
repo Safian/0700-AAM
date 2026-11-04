@@ -2,6 +2,7 @@
 #include <engine/audio_engine/engine/mt_clap_effect.h>
 #include <engine/audio_engine/engine/mt_airwindopedia.h>
 #include <hardware/source/kick_Resorces.h>
+#include "kick_InsertStore.h"
 #include <engine/audio_engine/engine/mt_automation.h>
 
 namespace kick_ui
@@ -23,15 +24,28 @@ namespace kick_ui
     };
     static ChainClipboard g_chainClipboard;
 
-    struct SlotABState
+    // Favourites and one user preset per effect live in the preferences folder; A/B compare is per slot and per shown chain.
+    static insert_store::Store&                     store();
+    static std::array<insert_store::AbSlot, 4>      g_slotAB;
+    static juce::File                               storeFile() { return getAppDirs( MTPrefs ).getChildFile( "insert_presets.txt" ); }
+    static void                                     saveStore() { storeFile().replaceWithText( juce::String( store().serialize() ) ); }
+    static insert_store::Store&                     store()
     {
-        std::vector<float> stateA;
-        std::vector<float> stateB;
-        bool isB{ false };
-    };
-    static std::unordered_map<int, SlotABState> g_slotAB;
-    static std::unordered_map<juce::String, std::vector<float>> g_presets;
-    static std::set<juce::String> g_insertFavourites;
+        static insert_store::Store s = insert_store::Store::parse( storeFile().loadFileAsString().toStdString() );
+        return s;
+    }
+    static std::vector<float> currentValues( mt::MTIInsertsInterface* Chain, int Slot )
+    {
+        std::vector<float> v;
+        for( int p = 0, n = Chain->getNumParameters( Slot ); p < n; ++p )
+            v.push_back( Chain->getParameterValue( Slot, p ) );
+        return v;
+    }
+    static void applyValues( mt::MTIInsertsInterface* Chain, int Slot, const std::vector<float>& Values )
+    {
+        for( size_t p = 0; p < Values.size(); ++p )
+            Chain->setParameterValue( Slot, (int)p, Values[p] );
+    }
 
     class ClapGuiComponent : public juce::Component
     {
@@ -211,7 +225,7 @@ namespace kick_ui
     InsertsList::InsertsList( InsertsSelector& Selector, InsertsOptions& InsertsOptions )
         : selector( Selector ), options( InsertsOptions )
     {
-        mt::utils::addAndMakeVisible( this, allInserts, allDelete, allEnable, copyChain, pasteChain );
+        mt::utils::addAndMakeVisible( this, allInserts, allDelete, allEnable, copyChain, pasteChain, postFaderBtn );
 
         mt::utils::setValueFontHeight( 16, allInserts );
         mt::utils::setValueColour( ui::Theme::textColour( 2 ), allInserts );
@@ -219,6 +233,18 @@ namespace kick_ui
 
         allEnable.setToggleButtonText( "ENABLED", "BYPASSED" );
         mt::utils::setValueFontHeight( 13, copyChain, pasteChain, allDelete, allEnable );
+
+        // Buses only: the inserts run before (default) or after the bus fader / pan.
+        postFaderBtn.setToggleButtonText( "POST-FADER", "PRE-FADER" );
+        mt::utils::setValueFontHeight( 11, postFaderBtn );
+        postFaderBtn.setVisible( false );
+        postFaderBtn.onClick = [&]() {
+            if( pEffects && pEffects->supportsPostFader() )
+            {
+                pEffects->setPostFader( postFaderBtn.getToggleState() );
+                mt::utils::showNotification( postFaderBtn.getToggleState() ? "Inserts run after the fader" : "Inserts run before the fader" );
+            }
+        };
 
         copyChain.onClick = [&]() {
             if( !pEffects )
@@ -272,6 +298,12 @@ namespace kick_ui
             if( Screen::Inserts == Scr )
             {
                 pEffects = (mt::MTIInsertsInterface*)PData;
+                for( auto& ab : g_slotAB )
+                    ab.reset(); // A/B belongs to the chain that was shown
+                const bool bus = pEffects != nullptr && pEffects->supportsPostFader();
+                postFaderBtn.setVisible( bus );
+                if( bus )
+                    postFaderBtn.setToggleState( pEffects->isPostFader(), juce::dontSendNotification );
             }
         } );
 
@@ -522,6 +554,7 @@ namespace kick_ui
         auto allRow = b.removeFromTop( rowHeight );
         // Positioning of all insert controls
         allInserts.setBounds( topRow.removeFromRight( 2 * buttonWidth ) );
+        postFaderBtn.setBounds( topRow.removeFromLeft( 2 * buttonWidth ) );
         pasteChain.setBounds( allRow.removeFromRight( 54 ).reduced( 2, 8 ) );
         copyChain.setBounds( allRow.removeFromRight( 54 ).reduced( 2, 8 ) );
         allDelete.setBounds( allRow.removeFromRight( 64 ).reduced( 2, 8 ) );
@@ -553,20 +586,12 @@ namespace kick_ui
             auto sel = insertList.getSelected();
             if( sel.isNotEmpty() )
             {
-                if( g_insertFavourites.find( sel ) != g_insertFavourites.end() )
-                {
-                    g_insertFavourites.erase( sel );
-                    favToggle.setToggleState( false, juce::dontSendNotification );
-                }
-                else
-                {
-                    g_insertFavourites.insert( sel );
-                    favToggle.setToggleState( true, juce::dontSendNotification );
-                }
+                favToggle.setToggleState( store().toggleFavourite( sel.toStdString() ), juce::dontSendNotification );
+                saveStore();
                 if( insertCategories.getSelected() == "Favourites" )
                 {
                     allCategoryItems.clear();
-                    for( const auto& f : g_insertFavourites )
+                    for( const auto& f : store().favourites() )
                         allCategoryItems.push_back( f );
                     updateFilteredList();
                 }
@@ -589,11 +614,13 @@ namespace kick_ui
             updateFilteredList();
         };
 
-        insertCategories.onSelectionChanged = [&]( int, const juce::String& selectedOption ) {
+        insertCategories.onSelectionChanged = [&]( int Index, const juce::String& ) {
+            // The list shows readable names ("Tone Color"); the engine knows the registration keys ("Tone_Color").
+            const juce::String selectedOption = ( Index >= 0 && Index < (int)categoryKeys.size() ) ? categoryKeys[(size_t)Index] : juce::String();
             if( selectedOption == "Favourites" )
             {
                 allCategoryItems.clear();
-                for( const auto& f : g_insertFavourites )
+                for( const auto& f : store().favourites() )
                     allCategoryItems.push_back( f );
             }
             else
@@ -604,7 +631,7 @@ namespace kick_ui
         };
 
         insertList.onSelectionChanged = [&]( int, const juce::String& selectedOption ) {
-            favToggle.setToggleState( g_insertFavourites.find( selectedOption ) != g_insertFavourites.end(), juce::dontSendNotification );
+            favToggle.setToggleState( store().isFavourite( selectedOption.toStdString() ), juce::dontSendNotification );
             onClick( selectedOption );
             showDocFor( selectedOption );
         };
@@ -612,6 +639,9 @@ namespace kick_ui
         juce::MessageManager::callAsync( [&]() {
             auto category = mt::getAudioInterface().getInsertCategory();
             category.insert( category.begin() + 1, "Favourites" );
+            categoryKeys = category;
+            for( auto& c : category )
+                c = c.replaceCharacter( '_', ' ' );
             insertCategories.setContent( category, juce::sendNotification );
         } );
     }
@@ -734,66 +764,36 @@ namespace kick_ui
 
         abButton.setToggleButtonText( "B", "A" );
         abButton.onClick = [this]() {
-            if( !pInsert )
+            if( !pInsert || info.name.isEmpty() || pos < 0 || pos >= (int)g_slotAB.size() )
                 return;
-            auto& st = g_slotAB[pos];
-            if( !st.isB )
-            {
-                st.stateA.clear();
-                int num = pInsert->getNumParameters( pos );
-                for( int p = 0; p < num; ++p )
-                    st.stateA.push_back( pInsert->getParameterValue( pos, p ) );
-                st.isB = true;
-                if( !st.stateB.empty() )
-                {
-                    for( size_t p = 0; p < st.stateB.size(); ++p )
-                        pInsert->setParameterValue( pos, (int)p, st.stateB[p] );
-                }
-                mt::utils::showNotification( "A/B: State B" );
-            }
-            else
-            {
-                st.stateB.clear();
-                int num = pInsert->getNumParameters( pos );
-                for( int p = 0; p < num; ++p )
-                    st.stateB.push_back( pInsert->getParameterValue( pos, p ) );
-                st.isB = false;
-                if( !st.stateA.empty() )
-                {
-                    for( size_t p = 0; p < st.stateA.size(); ++p )
-                        pInsert->setParameterValue( pos, (int)p, st.stateA[p] );
-                }
-                mt::utils::showNotification( "A/B: State A" );
-            }
+            auto&       ab      = g_slotAB[(size_t)pos];
+            const auto* recall  = ab.toggle( info.name.toStdString(), currentValues( pInsert, pos ) );
+            if( recall != nullptr )
+                applyValues( pInsert, pos, *recall );
+            abButton.setToggleState( ab.onB, juce::dontSendNotification );
+            mt::utils::showNotification( ab.onB ? "A/B: State B" : "A/B: State A" );
             refresh();
         };
 
         presetSave.onClick = [this]() {
             if( !pInsert || info.name.isEmpty() )
                 return;
-            auto& vals = g_presets[info.name];
-            vals.clear();
-            int num = pInsert->getNumParameters( pos );
-            for( int p = 0; p < num; ++p )
-                vals.push_back( pInsert->getParameterValue( pos, p ) );
+            store().savePreset( info.name.toStdString(), currentValues( pInsert, pos ) );
+            saveStore();
             mt::utils::showNotification( "Preset Saved: " + info.name );
         };
 
         presetLoad.onClick = [this]() {
             if( !pInsert || info.name.isEmpty() )
                 return;
-            auto it = g_presets.find( info.name );
-            if( it != g_presets.end() && !it->second.empty() )
+            if( const auto* p = store().preset( info.name.toStdString() ) )
             {
-                for( size_t p = 0; p < it->second.size(); ++p )
-                    pInsert->setParameterValue( pos, (int)p, it->second[p] );
+                applyValues( pInsert, pos, *p );
                 refresh();
                 mt::utils::showNotification( "Preset Loaded: " + info.name );
             }
             else
-            {
                 mt::utils::showNotification( "No preset saved for " + info.name );
-            }
         };
 
         openGuiButton.onClick = [this] { openNativeGui(); };
