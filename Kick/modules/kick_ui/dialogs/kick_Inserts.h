@@ -40,6 +40,7 @@ namespace kick_ui
 
         void setupControls( mt::MTIInsertsInterface* pEffect, int Position );
         void refresh();
+        void linkRotated( int Index, int Ticks ); // Q-Link 1..4 turn the first four parameters of the shown insert
 
     private:
         void setupControls( int NumControls );
@@ -67,6 +68,7 @@ namespace kick_ui
     {
     public:
         explicit InsertsList( InsertsSelector& selector, InsertsOptions& options );
+        void stepSelection( int Delta ); // Data Dial: next / previous slot
         ~InsertsList() = default;
 
         std::function<void( int, const juce::String&, bool )> onInsertDelete  = []( int, const juce::String&, bool ) {};
@@ -84,8 +86,8 @@ namespace kick_ui
         InsertsSelector& selector;
         InsertsOptions&  options;
 
-        mt::MTIInsertsInterface*        pEffects;
-        std::vector<mt::MTInsertsInfo>* pInfo;
+        mt::MTIInsertsInterface*        pEffects{ nullptr };
+        std::vector<mt::MTInsertsInfo>* pInfo{ nullptr };
 
         static constexpr int                      numRows{ 4 };
         std::array<ui::KickButton, numRows>       inserts;
@@ -111,8 +113,9 @@ namespace kick_ui
         std::function<void( int, const juce::String&, bool )> onInsertChanged = []( int, const juce::String&, bool ) {};
         std::function<void( int, const juce::String&, bool )> onInsertDelete  = []( int, const juce::String&, bool ) {};
 
-        void handleCommand( CPktMgr::HWMsg_t& ) override{};
-        void knobCommand( int knob, int value ) override{};
+        bool requiresHandleCommand() override { return true; }
+        void handleCommand( CPktMgr::HWMsg_t& ) override;
+        void knobCommand( int knob, int value ) override;
 
     private:
         kick_ui::KickModeHeader header{ "Inserts", "Icon_Mixer " };

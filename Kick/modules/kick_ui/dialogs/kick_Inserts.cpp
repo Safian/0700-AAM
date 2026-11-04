@@ -143,6 +143,22 @@ namespace kick_ui
         list.onInsertDelete  = [&]( int i, const juce::String& name, bool value ) { onInsertDelete( i, name, value ); };
     };
 
+    // Q-Link 1..4 = the first four parameters of the shown insert, Data Dial = next / previous slot.
+    void Inserts::knobCommand( int knob, int value )
+    {
+        using Knob = contracts::DeviceControlContracts::KnobSequence;
+        if( knob == Knob::EN_KNOB_CENTER )
+            list.stepSelection( value > 0 ? 1 : -1 );
+        else if( knob >= Knob::EN_KNOB_1 && knob <= Knob::EN_KNOB_4 )
+            options.linkRotated( knob - Knob::EN_KNOB_1, value );
+    }
+
+    void Inserts::handleCommand( CPktMgr::HWMsg_t& hwMsg )
+    {
+        if( contracts::DclContractsHelper::isKnobMessage( hwMsg ) )
+            knobCommand( contracts::DclContractsHelper::getKnobCode( hwMsg ), contracts::DclContractsHelper::getKnobValue( hwMsg ) );
+    }
+
     void Inserts::resized()
     {
         auto b = getLocalBounds();
@@ -226,7 +242,7 @@ namespace kick_ui
                 {
                     options.setVisible( false );
                     selector.setVisible( true );
-                    add[i].setEnabled( true );
+                    add[i].setEnabled( pEffects && pEffects->isAvailable() ); // a MIDI / CV program has no insert chain
                 }
                 else if( pEffects )
                 {
@@ -238,14 +254,28 @@ namespace kick_ui
             };
 
             add[i].onClick = [&, i] {
-                if( add[i].getToggleState() )
+                const bool adding = add[i].getToggleState();
+                if( adding )
                 {
+                    // Only a real choice is added, and only where the program has an insert chain; a failed add says so
+                    // (it used to flip the button to DELETE and flip it back on the next refresh, without a word).
+                    const auto s = selector.getSelected();
+                    if( !pEffects || !pEffects->isAvailable() )
+                    {
+                        add[i].setToggleState( false, juce::dontSendNotification );
+                        ui::KickAlertWindow::showCancelAlert( ui::KickAlertWindow::KickAlertWindowType::Warning, "This program type has no insert effects.", "Inserts", []( int ) {} );
+                        return;
+                    }
+                    if( s.isEmpty() || pEffects->addInsert( s, i ) < 0 )
+                    {
+                        add[i].setToggleState( false, juce::dontSendNotification );
+                        refresh();
+                        if( s.isNotEmpty() )
+                            ui::KickAlertWindow::showCancelAlert( ui::KickAlertWindow::KickAlertWindowType::Warning, "The effect \"" + s + "\" could not be added.", "Inserts", []( int ) {} );
+                        return;
+                    }
                     selector.setVisible( false );
                     options.setVisible( true );
-                    // Add insert...
-                    auto s = selector.getSelected();
-                    if( pEffects )
-                        pEffects->addInsert( s, i );
                 }
                 else
                 {
@@ -259,7 +289,7 @@ namespace kick_ui
                 if( pEffects )
                 {
                     refresh();
-                    if( add[i].getToggleState() ) options.setupControls( pEffects, i );
+                    if( adding ) options.setupControls( pEffects, i );
                 }
             };
 
@@ -282,6 +312,7 @@ namespace kick_ui
             {
                 pEffects->setParameterValue( Position, Parameter, Value );
                 refresh();
+                options.refresh(); // the shown value text (e.g. "-6.0 dB") follows the parameter
             }
         };
 
@@ -294,17 +325,33 @@ namespace kick_ui
             }
         };
 
+        // Delete all: asks first (it deleted every insert at once, without a question).
         allDelete.onClick = [&]() {
-            if( false == allDelete.getToggleState() )
-                for( auto i = 0; i < numRows; ++i )
-                {
-                    if( add[i].isEnabled() && pEffects )
-                        pEffects->removeInsert( i );
-                }
-            refresh();
-            inserts[selected != -1 ? selected : 0].triggerClick();
+            allDelete.setToggleState( false, juce::dontSendNotification );
+            if( !pEffects )
+                return;
+            auto* p = new ui::FilePopup( "Delete all inserts of this chain?" );
+            mt::utils::showDialog(
+                "WARNING!", p, [this, p]( int R ) {
+                    if( R == UI::APPLY && pEffects )
+                    {
+                        for( auto i = 0; i < numRows; ++i )
+                            if( add[i].isEnabled() )
+                                pEffects->removeInsert( i );
+                        refresh();
+                        inserts[selected != -1 ? selected : 0].triggerClick();
+                    }
+                    delete p;
+                },
+                ui::layout::warningPopup );
         };
     };
+
+    void InsertsList::stepSelection( int Delta )
+    {
+        const int next = juce::jlimit( 0, numRows - 1, ( selected < 0 ? 0 : selected ) + Delta );
+        inserts[next].triggerClick();
+    }
 
     int InsertsList::getDefaultIndex()
     {
@@ -325,6 +372,9 @@ namespace kick_ui
         auto infoSz = pEffects ? pEffects->getInserts()->size() : 0;
 
         auto isMasterEnable = false;
+        auto anyEnabled     = false;
+        const bool available = pEffects && pEffects->isAvailable();
+        allInserts.setText( pEffects && !available ? "NO INSERTS FOR THIS PROGRAM TYPE" : "ALL INSERTS", juce::dontSendNotification );
         for( auto i = 0; i < numRows; ++i )
         {
             auto insertInfo = pEffects ? pEffects->getInsertsInfo( i ) : mt::MTInsertsInfo{};
@@ -348,7 +398,10 @@ namespace kick_ui
 
             if( isAdded )
                 isMasterEnable = true;
+            if( isAdded && isEnabled )
+                anyEnabled = true;
         }
+        allEnable.setToggleState( anyEnabled, juce::dontSendNotification ); // shows the real state (it used to keep its own)
         allEnable.setEnabled( isMasterEnable );
         allDelete.setEnabled( isMasterEnable );
         if( selected == -1 )
@@ -619,9 +672,24 @@ namespace kick_ui
             if( i < rotary.size() )
             {
                 rotary[i]->setTitle( info.params[i].name );
+                // The effect's own value text ("-6.00 dB", "250 Hz") instead of the bare 0..1 number.
+                const auto shown = info.params[i].displayValue.trim() + ( info.params[i].unit.isNotEmpty() ? " " + info.params[i].unit : juce::String() );
+                if( shown.trim().isNotEmpty() )
+                    rotary[i]->textFromValueFunction = [shown]( double ) { return shown; };
+                else
+                    rotary[i]->textFromValueFunction = nullptr;
                 rotary[i]->setValue( info.params[i].value, juce::dontSendNotification );
+                rotary[i]->updateText();
             }
         }
+    }
+
+    void InsertsOptions::linkRotated( int Index, int Ticks )
+    {
+        if( Index < 0 || Index >= static_cast<int>( info.params.size() ) || Index >= static_cast<int>( rotary.size() ) || !isVisible() )
+            return;
+        // One tick = 0.01 of the 0..1 range, faster for a fast turn.
+        rotary[static_cast<size_t>( Index )]->knobRotated( mt::mixlogic::qlinkDelta( kick_ui::knob_logic::acceleratedCount( Ticks ), 0.01 ) );
     }
 
     void InsertsOptions::openNativeGui()
