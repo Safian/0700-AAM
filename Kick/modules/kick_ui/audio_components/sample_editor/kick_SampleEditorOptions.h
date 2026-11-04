@@ -249,7 +249,7 @@ namespace mt
             ui::KickNumber64 xFadeNumber{ "X FADE" };
 
             ui::KickNumber64 thresholdNumber{ "THRESHOLD", 0, 100, 30 };
-            ui::KickNumber64 minSamplesNumber{ "MIN SAMPLES", 0, 1000, 100 };
+            ui::KickNumber64 minSamplesNumber{ "MIN ms", 0, 1000, 100 };
             ui::KickNumber64 regionsNumber{ "REGIONS", 1, 128, 1 };
             ui::KickNumber64 barsNumber{ "BARS", 1, 32, 1 };
             ui::KickListBox  timeDivList{ "TIME DIV" };

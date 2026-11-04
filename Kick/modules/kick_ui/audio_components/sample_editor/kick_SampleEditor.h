@@ -93,7 +93,8 @@ namespace kick_ui
         ~ProcessSlice() = default;
 
         int                   getSelectedProcess() { return selectedID; }
-        std::list<juce::var>& getParams() { return params; }
+        // Parameters are assembled from the CURRENT controls (name, curve, channel choice, value), not only on edit events.
+        std::list<juce::var>& getParams();
 
     private:
         const static inline std::vector<juce::String> processtype = {

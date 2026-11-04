@@ -1,6 +1,7 @@
 #include "mt_sample_editor_actions.h"
 #include <filesystem>
 #include <fstream>
+#include "mt_sample_dsp.h"
 
 namespace mt
 {
@@ -225,6 +226,8 @@ namespace mt
     {
         currentSample = 0;
         reader = formatManager.createReaderFor( sourceFile );
+        if( reader == nullptr )
+            return;
         startSample = region.getStart();
         endSample = region.getEnd();
         totalSmaples = reader->lengthInSamples;
@@ -240,31 +243,37 @@ namespace mt
 
     juce::String MTSampleEditorActionsInterface::checkForDuplicateAndConstructNewPath( const juce::String file )
     {
-        //conhstruct copy path
-        juce::String fileName = file;
-        if( !fileName.endsWith( ".wav" ) )
-            fileName += ".wav";
-
-        return sourceFile.getSiblingFile( fileName ).getNonexistentSibling().getFullPathName();
+        // Result name -> plain file name next to the source (no folders / illegal characters, always .wav, never an existing file).
+        const auto fileName = sample_dsp::resultFileName( file.toStdString(), sourceFile.getFileNameWithoutExtension().toStdString() + "_edit" );
+        return sourceFile.getSiblingFile( juce::String( fileName ) ).getNonexistentSibling().getFullPathName();
     }
 
     bool MTSampleEditorActionsInterface::extractFromSample( juce::int64 firstSample, juce::int64 lastSample, const juce::String& destFileName )
     {
+        if( reader == nullptr || lastSample <= firstSample )
+            return false;
         juce::String samplePath = checkForDuplicateAndConstructNewPath( destFileName );
         juce::File copyPath( samplePath );
 
-        // create writer
+        // create writer (the writer owns the stream; on failure the stream is deleted by createWriterFor)
         juce::WavAudioFormat format;
-        juce::FileOutputStream* outStream = new juce::FileOutputStream( copyPath );
-        juce::AudioFormatWriter* writerTmp = format.createWriterFor( outStream, reader->sampleRate, reader->numChannels, (int)reader->bitsPerSample, {}, 0 );
+        std::unique_ptr<juce::FileOutputStream> outStream( new juce::FileOutputStream( copyPath ) );
+        if( !outStream->openedOk() )
+            return false;
+        std::unique_ptr<juce::AudioFormatWriter> writerTmp( format.createWriterFor( outStream.get(), reader->sampleRate, reader->numChannels, (int)reader->bitsPerSample, {}, 0 ) );
         if( !writerTmp )
-            jassertfalse;
+            return false;
+        outStream.release();
 
-        writerTmp->writeFromAudioReader( *reader, firstSample, lastSample - firstSample );
-        writerTmp->flush();
-        delete writerTmp;
-
-        return false;
+        const bool ok = writerTmp->writeFromAudioReader( *reader, firstSample, lastSample - firstSample );
+        writerTmp.reset();
+        if( !ok )
+        {
+            copyPath.deleteFile();
+            return false;
+        }
+        createdFiles.push_back( copyPath );
+        return true;
     }
 
     void MTSampleEditorActionsInterface::executeprocessBetweenRegion()
@@ -336,17 +345,17 @@ namespace mt
     void MTSampleEditorActionsInterface::cleanupReaderWriter( juce::String& tempPath )
     {
         juce::File tempFile( tempPath );
-        delete writer;
+        delete writer; // flushes and closes the temp file
         writer = nullptr;
         delete reader;
         reader = nullptr;
 
-        if( !sourceFile.deleteFile() )
+        // Replace in one step (rename over the original): the original stays intact if the move fails, no delete-then-move window.
+        if( !tempFile.moveFileTo( sourceFile ) )
         {
-            jassertfalse;
+            actionFailed = true;
+            tempFile.deleteFile();
         }
-
-        tempFile.moveFileTo( sourceFile );
     }
 
     void MTSampleEditorActionsInterface::initialize( const MTSampleRegion& r, const std::list<juce::var>& p, juce::File& source )
@@ -358,34 +367,56 @@ namespace mt
 
     bool MTSampleEditorActionsInterface::execute()
     {
+        actionFailed = false;
+        createdFiles.clear();
+        juce::AudioSampleBuffer bufferTmp;
+        int                     copySampleSize = sampleEditorBufferSize;
+
+        if( type == noProcessing )
+        {
+            // Read-only actions (Extract / Copy / Stereo>Mono) never touch the source: no temp file, reader released afterwards.
+            reader = formatManager.createReaderFor( sourceFile );
+            if( reader == nullptr )
+                return false;
+            startSample  = region.getStart();
+            endSample    = region.getEnd();
+            totalSmaples = reader->lengthInSamples;
+            currentSample = 0;
+            while( performAction( bufferTmp, copySampleSize ) ) {}
+            delete reader;
+            reader = nullptr;
+            return !actionFailed;
+        }
+
+        // Rewriting changes the file in place as WAV: any other container would be corrupted, so only WAV is edited. (The interface
+        // refuses these before an undo step is created; this is the second line of defence.)
+        if( !sample_dsp::isEditableExtension( sourceFile.getFileExtension().toStdString() ) )
+        {
+            kick_log( "SampleEditor", "only WAV samples can be edited, not %s", sourceFile.getFileName().toRawUTF8() );
+            actionFailed = true;
+            return true;
+        }
+
         juce::String tempPath;
         initializeReaderWriter( tempPath );
         if( reader == nullptr || writer == nullptr )
         {
-            if( reader )
-                delete reader;
-            if( writer )
-                delete writer;
-
+            delete reader;
+            delete writer;
+            reader = nullptr;
+            writer = nullptr;
+            if( tempPath.isNotEmpty() )
+                juce::File( tempPath ).deleteFile();
             return false;
         }
 
-        juce::AudioSampleBuffer bufferTmp;
-        int copySampleSize = sampleEditorBufferSize;
-        if( type == noProcessing )
-        {
-            while( performAction( bufferTmp, copySampleSize ) ) {}
-            return true;
-        }
         if( type == processBetweenRegion )
-        {
             executeprocessBetweenRegion();
-        } else
-        {
+        else
             executeprocessOutofRegion();
-        }
 
         cleanupReaderWriter( tempPath );
+        // Always true here: the undo machinery wraps this call and must keep its bookkeeping consistent; the interface reads failed().
         return true;
     }
 
@@ -426,7 +457,7 @@ namespace mt
         readerTmp->readMaxLevels( startSample, endSample - startSample, lmin, lmax, rmin, rmax );
 
         auto maxLevel = juce::jmax( -lmin, lmax, -rmin, rmax );
-        gainFactor = CommonUtils::dbToGain( float( 0.0 ) ) / maxLevel;
+        gainFactor    = sample_dsp::normaliseGain( maxLevel, CommonUtils::dbToGain( float( 0.0 ) ) ); // silence: gain 1, no division by 0
 
         delete readerTmp;
     }
@@ -457,20 +488,9 @@ namespace mt
         buffer.setSize( (int)reader->numChannels, numSamples );
         reader->read( &buffer, 0, numSamples, currentSample, true, true );
 
-        int inputCurveType = *params.begin();
-        //AudioFadeCurve::Type curveType = AudioFadeCurve::linear;
-        //if (inputCurveType == 0)
-        //    curveType = AudioFadeCurve::linear;
-        //else if (inputCurveType == 1)
-        //    curveType = AudioFadeCurve::convex;
-        //else if (inputCurveType == 2)
-        //    curveType = AudioFadeCurve::concave;
-
-        //AudioFadeCurve::applyCrossfadeSection(buffer,
-        //    0, numSamples,
-        //    curveType,
-        //    0.0,
-        //    1.0);
+        const int curve = params.empty() ? 0 : (int)*params.begin();
+        for( int ch = 0; ch < buffer.getNumChannels(); ++ch )
+            sample_dsp::applyFade( buffer.getWritePointer( ch ), numSamples, curve, true );
 
         return true;
     }
@@ -487,20 +507,9 @@ namespace mt
         buffer.setSize( (int)reader->numChannels, numSamples );
         reader->read( &buffer, 0, numSamples, currentSample, true, true );
 
-        int curveTypeInput = *params.begin();
-        //AudioFadeCurve::Type curveType = AudioFadeCurve::linear;
-        //if( curveTypeInput == 0 )
-        //    curveType = AudioFadeCurve::linear;
-        //else if( curveTypeInput == 1 )
-        //    curveType = AudioFadeCurve::convex;
-        //else if( curveTypeInput == 2 )
-        //    curveType = AudioFadeCurve::concave;
-
-        //AudioFadeCurve::applyCrossfadeSection( buffer,
-        //    0, numSamples,
-        //    curveType,
-        //    1.0,
-        //    0.0 );
+        const int curve = params.empty() ? 0 : (int)*params.begin();
+        for( int ch = 0; ch < buffer.getNumChannels(); ++ch )
+            sample_dsp::applyFade( buffer.getWritePointer( ch ), numSamples, curve, false );
 
         return true;
     }
@@ -633,7 +642,8 @@ namespace mt
 
     bool MTSampleEditorExtractAction::performAction( juce::AudioSampleBuffer& /*buffer*/, int& /*numSamples*/ )
     {
-        extractFromSample( startSample, endSample, params.begin()->toString() );
+        if( params.empty() || !extractFromSample( startSample, endSample, params.begin()->toString() ) )
+            actionFailed = true;
         return false;
     }
 
@@ -729,9 +739,17 @@ namespace mt
 
     bool MTSampleEditorCopyAction::performAction( juce::AudioSampleBuffer& /*buffer*/, int& /*numSamples*/ )
     {
+        if( params.empty() )
+        {
+            actionFailed = true;
+            return false;
+        }
         juce::String samplePath = checkForDuplicateAndConstructNewPath( params.begin()->toString() );
         juce::File copyPath( samplePath );
-        sourceFile.copyFileTo( copyPath );
+        if( sourceFile.copyFileTo( copyPath ) )
+            createdFiles.push_back( copyPath );
+        else
+            actionFailed = true;
         return false;
     }
 
@@ -748,15 +766,30 @@ namespace mt
 
     bool MTSampleEditorStereoToMonoAction::performAction( juce::AudioSampleBuffer& /*buffer*/, int& /*numSamples*/ )
     {
+        // params: [0] channel choice (0 Left, 1 Right, 2 Sum), [1] result name
+        if( params.size() < 2 )
+        {
+            actionFailed = true;
+            return false;
+        }
         juce::String samplePath = checkForDuplicateAndConstructNewPath( params.back().toString() );
         juce::File monoFile( samplePath );
 
         // create writer
         juce::WavAudioFormat format;
-        juce::FileOutputStream* outStream = new juce::FileOutputStream( monoFile );
-        std::unique_ptr<juce::AudioFormatWriter> writerTmp( format.createWriterFor( outStream, reader->sampleRate, 1, (int)reader->bitsPerSample, {}, 0 ) );
+        std::unique_ptr<juce::FileOutputStream> outStream( new juce::FileOutputStream( monoFile ) );
+        if( !outStream->openedOk() )
+        {
+            actionFailed = true;
+            return false;
+        }
+        std::unique_ptr<juce::AudioFormatWriter> writerTmp( format.createWriterFor( outStream.get(), reader->sampleRate, 1, (int)reader->bitsPerSample, {}, 0 ) );
         if( !writerTmp )
-            jassertfalse;
+        {
+            actionFailed = true;
+            return false;
+        }
+        outStream.release();
 
         currentSample = 0;
         int copyType = params.front();
@@ -780,14 +813,18 @@ namespace mt
                 juce::AudioSampleBuffer buff2( 1, copySize );
                 reader->read( &buff1, 0, copySize, currentSample, true, false );
                 reader->read( &buff2, 0, copySize, currentSample, false, true );
-                buff1.addFrom( 0, 0, buff2, 0, 0, copySize );
+                auto* l = buff1.getWritePointer( 0 );
+                auto* r = buff2.getReadPointer( 0 );
+                for( int i = 0; i < copySize; ++i )
+                    l[i] = sample_dsp::monoSum( l[i], r[i] ); // average, not +6 dB
 
                 writerTmp->writeFromAudioSampleBuffer( buff1, 0, copySize );
             }
 
             currentSample += copySize;
         }
-        writerTmp->flush();
+        writerTmp.reset();
+        createdFiles.push_back( monoFile );
 
         return false;
     }

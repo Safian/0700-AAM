@@ -404,7 +404,7 @@ namespace mt
             const juce::String&              getSamplePath() { return currentSamplePath; }
             juce::int64                      convertTimeToSamples( double time );
             double                           convertSamplesToTime( juce::int64 sample );
-            void                             performAction( unsigned int actionId, const std::list<juce::var>& params );
+            bool                             performAction( unsigned int actionId, const std::list<juce::var>& params );
             juce::int64                      getNextZeroSnapPos( juce::int64 pos, bool forward );
             void                             splitByBpm( std::vector<juce::var>& params );
             void                             splitByThresh( std::vector<juce::var>& params );
@@ -530,7 +530,7 @@ namespace mt
             CuePreview    cuePreview = CuePreview::cuePreviewOff;
             AutoScroll    autoScroll = AutoScroll::autoScrollOff;
             SlicePreview  slicePreview;
-            SeTool        selectedTool;
+            SeTool        selectedTool{ SeTool::seToolEdit }; // Manual cut mode; the other tools have no selector
         };
     }
 }
