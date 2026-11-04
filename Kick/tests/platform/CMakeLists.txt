@@ -191,6 +191,15 @@ add_executable(kick-logging-tests LoggingTests.cpp)
 add_test(NAME kick-logging COMMAND kick-logging-tests)
 set_tests_properties(kick-logging PROPERTIES TIMEOUT 10)
 
+# File-browser sources (M0/M1): WebDAV helpers (PROPFIND parser, URLs, Range/resume, cache invalidation), cache/LRU, secret files, config, local source, download queue; JUCE-free, header only.
+add_executable(kick-webdav-helper-tests WebDavHelperTests.cpp)
+add_test(NAME kick-webdav-helper COMMAND kick-webdav-helper-tests "${CMAKE_CURRENT_SOURCE_DIR}/data")
+set_tests_properties(kick-webdav-helper PROPERTIES TIMEOUT 30)
+add_executable(kick-source-cache-tests SourceCacheTests.cpp)
+target_link_libraries(kick-source-cache-tests PRIVATE Threads::Threads)
+add_test(NAME kick-source-cache COMMAND kick-source-cache-tests)
+set_tests_properties(kick-source-cache PROPERTIES TIMEOUT 60)
+
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()
