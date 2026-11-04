@@ -49,19 +49,6 @@ public:
             getParameterDisplay( i, displayValue );
             _parameters[i].displayValue = displayValue;
             _parameters[i].value        = getParameter( i );
-            std::string disp( displayValue );
-            if( disp == "On" || disp == "Off" || disp == "true" || disp == "false" )
-            {
-                _parameters[i].isStepped = true;
-                _parameters[i].step      = 1.0f;
-            }
-            else if( _parameters[i].name.find( "Mode" ) != std::string::npos ||
-                     _parameters[i].name.find( "Type" ) != std::string::npos ||
-                     _parameters[i].name.find( "Switch" ) != std::string::npos )
-            {
-                _parameters[i].isStepped = true;
-                _parameters[i].step      = 0.1f;
-            }
         }
         return _parameters;
     }

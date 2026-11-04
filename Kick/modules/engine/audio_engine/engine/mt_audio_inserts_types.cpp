@@ -20,6 +20,7 @@
  */
 
 #include "mt_clap_effect.h"
+#include <AudIO/airwindows/airwindows_steps.h>
 
 namespace mt
 {
@@ -154,9 +155,14 @@ namespace mt
 
         Info.params.clear();
         const auto& insParams = synth->getEffectParameters( Position );
+        int         index     = 0;
         for( const auto& it : insParams )
         {
-            Info.params.emplace_back( MTInsertsParamInfo{ juce::String( it.name ), juce::String( it.unit ), juce::String( it.displayValue ), it.value, it.isStepped, it.step } );
+            // Airwindows switches come from the generated table (AllEffectsTests measures it); CLAP parameters carry their own flag.
+            const int steps = AudIO::airwindows_steps::stepsOf( Info.name.toRawUTF8(), index++ );
+            const bool stepped = steps >= 2 || it.isStepped;
+            const float step   = steps >= 2 ? 1.0f / static_cast<float>( steps - 1 ) : it.step;
+            Info.params.emplace_back( MTInsertsParamInfo{ juce::String( it.name ), juce::String( it.unit ), juce::String( it.displayValue ), it.value, stepped, step } );
         }
 
         auto* obj = synth->getEffectObject( Position );

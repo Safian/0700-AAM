@@ -95,6 +95,15 @@ inline juce::String runKickFxLanesSmoke() {
     if (std::abs(ins->getParameterValue(2, 0) - 0.65f) > 1e-3f) return fail("insert parameter did not survive save / reopen");
     say("insert chain (names incl. NC-17, bypass, parameter) survives save / reopen");
 
+    // ---- INS-10: a switch parameter moves in steps, a knob does not
+    if (ins->addInsert("Biquad", 3) != 0) return fail("addInsert Biquad failed");
+    const auto bq = ins->getInsertsInfo(3);
+    if (bq.params.empty() || !bq.params[0].isStepped || std::abs(bq.params[0].step - 1.f / 3.f) > 1e-4f) return fail("Biquad's type switch is not a 4 position step parameter");
+    const auto rv = ins->getInsertsInfo(0);
+    if (rv.params.empty() || rv.params[0].isStepped) return fail("a continuous Reverb knob is stepped");
+    ins->removeInsert(3);
+    say("switch parameters are stepped, knobs are not");
+
     // ---- bus inserts: pre-fader by default, post-fader selectable and persistent; a program has no such choice
     if (ins->supportsPostFader()) return fail("a program chain claims a pre/post-fader choice");
     const auto returns = api.getBusManager().getReturnBusNames();

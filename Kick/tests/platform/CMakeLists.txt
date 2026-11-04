@@ -133,6 +133,7 @@ add_executable(kick-all-effects-tests AllEffectsTests.cpp)
 target_link_libraries(kick-all-effects-tests PRIVATE kick_audio_core Threads::Threads)
 target_include_directories(kick-all-effects-tests PRIVATE
     ../../../AudIO/AudIO/Includes ../../../AudIO/AudIO/Daw ../../../AudIO/AudIO/Dsp ../../../AudIO/AudIO/Core ../../../AudIO/AudIO)
+target_compile_definitions(kick-all-effects-tests PRIVATE KICK_STEP_TABLE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../../AudIO/AudIO/airwindows/airwindows_steps.h")
 add_test(NAME kick-all-effects COMMAND kick-all-effects-tests)
 set_tests_properties(kick-all-effects PROPERTIES TIMEOUT 60)
 
