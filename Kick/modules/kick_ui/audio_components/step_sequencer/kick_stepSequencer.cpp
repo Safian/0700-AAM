@@ -744,8 +744,9 @@ namespace kick_ui
         //header
         header.onBackButtonPressed = [this]( bool ) { closeScreen( Screen::HomeListView ); };
         // The manual's gear window: the default step Velocity (0 = Auto, each view's own default) and pad-velocity entry.
-        header.showSettingsButton( true );
-        header.onSettingsClick = [this]() {
+        // The button sits in the bottom bar (the header's right end is covered by TOTAL BARS / BPM / the view switch).
+        stepControl.settingsBtn.onClick = [this]() {
+            stepControl.settingsBtn.setToggleState( false, juce::dontSendNotification );
             settings.load( data.entryVelocity, data.entryPadVelocity );
             mt::utils::showDialog( "STEP SEQUENCER SETTINGS", &settings, [this]( int ) {
                 data.entryVelocity    = settings.getVelocity();
