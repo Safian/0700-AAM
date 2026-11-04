@@ -82,8 +82,8 @@ namespace mt
         auto tempos = tree.getOrCreateChildWithName( IDs::TEMPOS, nullptr );
         auto tempo = tempos.getOrCreateChildWithName( IDs::TEMPO, nullptr );
         tempo.setProperty( IDs::bpm, static_cast<float>( prefs.tempo() ), nullptr );
-        tempo.setProperty( IDs::num, prefs.numerator().getIntValue(), nullptr );
-        tempo.setProperty( IDs::den, prefs.denominator().getIntValue(), nullptr );
+        tempo.setProperty( IDs::num, prefs.numerator().getIntValue() > 0 ? prefs.numerator().getIntValue() : 4, nullptr ); // unset default reads 0
+        tempo.setProperty( IDs::den, prefs.denominator().getIntValue() > 0 ? prefs.denominator().getIntValue() : 4, nullptr );
         tempo.setProperty( IDs::length, prefs.bars(), nullptr );
 
         return tree;

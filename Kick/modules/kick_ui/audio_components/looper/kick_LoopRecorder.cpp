@@ -258,6 +258,8 @@ namespace kick_ui
 
         // total beat markings
         noOfBeatMarkings = settings.projects.numerator().getIntValue();
+        // An unset project default reads as 0: barInc below would be 0 (integer division by zero, and an endless loop).
+        if( noOfBeatMarkings <= 0 ) noOfBeatMarkings = 4;
 
         // total tick markings
         int noOfTickMarkings = 0;
@@ -266,6 +268,7 @@ namespace kick_ui
             noOfTickMarkings = static_cast<int>( std::floor( beatWidth / maxTickDisplayLen ) - 1 );
 
         auto denominator = settings.projects.denominator().getIntValue();
+        if( denominator <= 0 ) denominator = 4;
 
         if( noOfBeatMarkings > 0 )
             totalDigits += 1;
