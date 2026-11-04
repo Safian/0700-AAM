@@ -1241,6 +1241,12 @@ namespace kick_ui
         drumGrid.refresh();
     }
 
+    void StepSequencer::showGridView( bool Grid )
+    {
+        viewModeButton.setToggleState( Grid, juce::dontSendNotification );
+        applyViewMode();
+    }
+
     void StepSequencer::applyViewMode()
     {
         const auto grid = viewModeButton.getToggleState();

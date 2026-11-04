@@ -157,6 +157,9 @@ namespace kick_ui
 
         void handleCommand( CPktMgr::HWMsg_t& ) override;
 
+        // CLASSIC (false) or GRID (true) view.
+        void showGridView( bool Grid );
+
         int getTrackNo( void ) const { return track; };
         int getSeqNo( void ) const noexcept { return seq; };
 
