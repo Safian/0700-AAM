@@ -6,6 +6,9 @@ namespace ui
     // worker thread with the loading animation; further requests wait in a queue (kick_load::LoadQueue) and a request for a
     // path that is already running or queued is dropped. RecentProject::isProjectLoading is true from the first request until the
     // queue is drained. Results go to kick_startup::state() (step "Project"), failures also to a dialog and kick_log.
+    // LoadSource says where a request came from: only User / Auto loads enter the Recent list (done here, on the message thread,
+    // after a successful load: no global flag). Before the open project is left, the unsaved-changes question is asked
+    // (project_actions::leaveProject). A missing project is an error, never created, unless createNew (New project).
     class LoadProjectAndAnimation
         : private juce::Thread
         , private mt::utils::LoadAnimation
@@ -19,7 +22,7 @@ namespace ui
             return *instance;
         }
 
-        void startLoading( juce::File project );
+        void startLoading( juce::File project, LoadSource source = LoadSource::User, bool createNew = false );
 
         // Device default project (the MPC bridge sets Demo 01) used by the start-up decision when nothing else applies.
         static void setDefaultProject( const juce::File& project ) { defaultProject() = project; }
@@ -37,13 +40,22 @@ namespace ui
             return f;
         }
 
+        struct Meta
+        {
+            LoadSource source{ LoadSource::User };
+            bool       createNew{ false };
+        };
         juce::File            proj;
+        Meta                  current;
+        std::map<std::string, Meta> meta; // by path, for the queued / running requests
+        bool                  gateOpen{ false }; // the unsaved-changes question is on screen
         kick_load::LoadQueue  queue; // message thread only
         unsigned              generation{ 0 };
         bool                  startupRequested{ false };
 
+        void enqueue( const juce::File& project, LoadSource source, bool createNew );
         void begin( const juce::File& project );
-        void finished( bool loaded, const juce::File& project );
+        void finished( bool loaded, const juce::File& project, const juce::String& error, LoadSource source );
         void run() override;
     };
 }

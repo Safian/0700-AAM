@@ -29,7 +29,7 @@ struct Fake
     std::string run()
     {
         log.clear();
-        leaveProject( env(), [this] { log += "proceed"; } );
+        leaveProject( env(), [this] { log += "proceed"; }, [this] { log += "cancelled"; } );
         return log;
     }
 };
@@ -52,13 +52,13 @@ int main()
 
     f.st = { true, true, false, false };
     f.answer = Choice::Cancel;
-    CHECK( f.run() == "ask," ); // nothing happens, the project stays open
+    CHECK( f.run() == "ask,cancelled" ); // nothing happens, the project stays open
     f.answer = Choice::DontSave;
     CHECK( f.run() == "ask,discard,proceed" );
     f.answer = Choice::Save;
     CHECK( f.run() == "ask,save,proceed" );
     f.saveOk = false;
-    CHECK( f.run() == "ask,save," ); // a failed save keeps the project open
+    CHECK( f.run() == "ask,save,cancelled" ); // a failed save keeps the project open
     f.saveOk = true;
 
     // demo / template: Save means Save As
@@ -66,7 +66,7 @@ int main()
     f.answer = Choice::Save;
     CHECK( f.run() == "ask,saveAs,proceed" );
     f.saveAsOk = false;
-    CHECK( f.run() == "ask,saveAs," );
+    CHECK( f.run() == "ask,saveAs,cancelled" );
     f.answer = Choice::DontSave;
     CHECK( f.run() == "ask,discard,proceed" );
 

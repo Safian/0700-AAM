@@ -7,6 +7,7 @@
 #include "MixersSmoke.h"
 #include "SequencerSmoke.h"
 #include "ProgramEditSmoke.h"
+#include "ProjectsSmoke.h"
 
 // Runs on the application's message thread against its real manager and graph.
 // The Python supervisor supplies an isolated data root and trusted test fixture.
@@ -36,6 +37,8 @@ inline juce::String runKickAppSmoke() {
     if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SEQUENCERS", {}).isNotEmpty()) return runKickSequencersSmoke();
     // KICK_SMOKE_PROGRAMEDIT=1: Program Edit screen against the real engine (ProgramEditSmoke.h).
     if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_PROGRAMEDIT", {}).isNotEmpty()) return runKickProgramEditSmoke();
+    // KICK_SMOKE_PROJECTS=1: project operations (missing project, unsaved flag, Save As / copy, Don't save, demo) (ProjectsSmoke.h).
+    if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_PROJECTS", {}).isNotEmpty()) return runKickProjectsSmoke();
     const auto path = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_CLAP_PATH", {});
     if (path.isEmpty()) return {};
     const auto catalog = kick::clap::inspect(path.toStdString());
@@ -44,7 +47,7 @@ inline juce::String runKickAppSmoke() {
     auto& api = mt::getAudioInterface();
     auto file = juce::File(juce::SystemStats::getEnvironmentVariable("KICK_DATA_ROOT", {})).getChildFile("smoke/Project.kickPrj");
     if (!file.getParentDirectory().createDirectory()) return "Cannot create smoke project directory";
-    if (!api.loadProject(file)) return "Cannot create project";
+    if (!api.loadProject(file, true)) return "Cannot create project";
     const auto baseline = api.getNumPrograms();
     const auto index = api.createProgram(mt::MTProgramType::Plugin, "SmokeCLAP");
     auto* program = dynamic_cast<mt::MTClapProgram*>(api.getProgram(index));

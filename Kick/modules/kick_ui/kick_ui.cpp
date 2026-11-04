@@ -85,6 +85,7 @@
 //recentproject
 #include "recent_project/kick_RecentProject.cpp"
 #include "recent_project/kick_RecentProject_Utils.cpp"
+#include "recent_project/kick_ProjectActions.cpp"
 
 //smapler
 #include "audio_components/sampler/kick_SaveSampleDialog.cpp"

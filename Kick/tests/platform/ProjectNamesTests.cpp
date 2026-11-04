@@ -86,6 +86,17 @@ int main()
     for( auto r : { CreateResult::BadName, CreateResult::AlreadyExists, CreateResult::NoTemplateFile, CreateResult::CopyFailed } )
         CHECK( describe( r )[0] != 0 );
 
+    // start-up project name
+    {
+        auto none = []( const std::string& ) { return false; };
+        CHECK( launchProjectName( "", "2026-11-04 15.30", none ) == "Project 2026-11-04 15.30" );
+        CHECK( launchProjectName( "Beat", "2026-11-04 15.30", none ) == "Beat 2026-11-04 15.30" );
+        CHECK( launchProjectName( "a:b/c", "x", none ) == "a-b-c x" );
+        CHECK( checkName( launchProjectName( std::string( 200, 'x' ), "2026-11-04 15.30", none ) ) == NameProblem::Ok );
+        auto taken = []( const std::string& n ) { return n == "Beat s" || n == "Beat s 2"; };
+        CHECK( launchProjectName( "Beat", "s", taken ) == "Beat s 3" );
+    }
+
     if( g_fail == 0 ) std::printf( "ProjectNamesTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;
 }
