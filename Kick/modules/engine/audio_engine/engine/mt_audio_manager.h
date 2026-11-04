@@ -158,6 +158,11 @@ namespace mt
         // Leaving Read: puts back the pan the programs had before playback overwrote it.
         void restoreAutomatedPans();
         void restoreAutomatedPan( const juce::String& ProgramId ); // one program (lane cleared / reloaded empty)
+        // Read mode, message thread: the FX lanes (Touch FX gesture, insert parameters) of the playing tracks, applied through
+        // the program's insert interface; nothing is written into the value tree. Leaving Read puts the stored state back.
+        void applyAutomatedFx();
+        void restoreAutomatedFx();
+        std::map<juce::String, unsigned> fxDriven; // program id -> bit n: insert slot n was driven, bit 8: Touch FX (message thread)
         std::map<juce::String, double> panBases; // program id -> stored pan before Read touched it (message thread)
 
     private:

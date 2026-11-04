@@ -104,6 +104,14 @@ namespace AudIO
             gate_.store( S.gate, std::memory_order_release );
         }
 
+        // Automation playback: only the gesture (position and gate) changes, the preset and the envelope stay as set().
+        void setGesture( float X, float Y, bool Gate ) noexcept
+        {
+            x_.store( X, std::memory_order_relaxed );
+            y_.store( Y, std::memory_order_relaxed );
+            gate_.store( Gate, std::memory_order_release );
+        }
+
         // Switches the effect off (gate closed, nothing audible after the release).
         void close() noexcept { gate_.store( false, std::memory_order_release ); }
 

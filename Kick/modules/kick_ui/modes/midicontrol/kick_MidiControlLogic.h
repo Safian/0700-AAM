@@ -140,6 +140,53 @@ namespace kick_ui::midictl
         void reset() noexcept { last = -1; }
     };
 
+    // The two axes of the XY screens (MIDI Control > XY tab and XY FX with the "MIDI CC" location) as controller messages: one engine,
+    // so both send the same CC numbers, channels and ranges, each axis only when its value changed, nothing for a muted axis.
+    struct XyAxisConfig
+    {
+        int  channel{ 1 };
+        int  cc{ 24 };
+        int  low{ 0 };
+        int  high{ 127 };
+        bool muted{ false };
+    };
+    struct XyCc
+    {
+        int channel{ 1 };
+        int cc{ 0 };
+        int value{ 0 };
+    };
+    class XyCcEngine
+    {
+    public:
+        // Writes the messages to send for the position (0..1 each) into Out[0..1] and returns how many.
+        int process( float X, float Y, const XyAxisConfig& Cx, const XyAxisConfig& Cy, XyCc* Out ) noexcept
+        {
+            int n = 0;
+            n += axis( X, Cx, filterX_, Out + n );
+            n += axis( Y, Cy, filterY_, Out + n );
+            return n;
+        }
+        void reset() noexcept
+        {
+            filterX_.reset();
+            filterY_.reset();
+        }
+
+    private:
+        static int axis( float V, const XyAxisConfig& C, AxisFilter& F, XyCc* Out ) noexcept
+        {
+            if( C.muted )
+                return 0;
+            const int mapped = scaleAxis( V, C.low, C.high );
+            if( !F.changed( mapped ) )
+                return 0;
+            *Out = { std::clamp( C.channel, 1, 16 ), std::clamp( C.cc, 0, 127 ), mapped };
+            return 1;
+        }
+        AxisFilter filterX_, filterY_;
+    };
+
     // ---- MIDI Learn
     struct LearnRow
     {

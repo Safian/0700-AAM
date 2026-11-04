@@ -135,7 +135,7 @@ namespace kick_ui
         xyFx.setEnabled( false );
 
         hdrComp.setValueBackgroundColor( ui::Theme::backgroundColour( 3 ) );
-        header.showOptions( true, false ); // XY-13: wired automation options
+        header.showOptions( true, true ); // XY-13: the Automation icon sets the mode that records / plays the gesture lanes
         header.onBackButtonPressed = [this]( bool ) { closeScreen( Screen::HomeListView ); };
         output.setJustificationType( juce::Justification::centredLeft );
         output.setTitleColour( ui::Theme::textColour( 1 ) );
@@ -281,29 +281,37 @@ namespace kick_ui
         if( target == nullptr )
             return;
 
-        // XY-13: Gesture automation writing
         auto& ae = mt::getAudioInterface();
-        if( gate.open() && ae.getAutomationMode() == mt::automation::Write && ae.isSequencePlaying() )
-        {
-            const auto sel = ae.getSelected();
-            const int tick = ae.getSequenceSeekTick( sel.sequence );
-            ae.setAutomationEvent( sel, mt::automation::TouchX, -1, tick, mt::automation::normToValue( xyFx.getXCoordinate() ) );
-            ae.setAutomationEvent( sel, mt::automation::TouchY, -1, tick, mt::automation::normToValue( xyFx.getYCoordinate() ) );
-        }
 
-        // XY-14: Common XY engine for MIDI CC mode
+        // XY-14: the "MIDI CC" location sends the position through the MIDI Control XY engine (its CCs, ranges, output port).
         if( target->isMidiCc )
         {
-            if( gate.open() )
+            if( auto* mc = dynamic_cast<MidiControl*>( KickHome::Instance().findScreen( Screen::MenuMidiControl ) ) )
             {
-                int ccX = juce::jlimit( 0, 127, static_cast<int>( xyFx.getXCoordinate() * 127.f ) );
-                int ccY = juce::jlimit( 0, 127, static_cast<int>( xyFx.getYCoordinate() * 127.f ) );
-                ae.sendMidiMessage( {}, juce::MidiMessage::controllerEvent( 1, 16, ccX ) );
-                ae.sendMidiMessage( {}, juce::MidiMessage::controllerEvent( 1, 17, ccY ) );
+                if( gate.open() )
+                    mc->sendXy( xyFx.getXCoordinate(), xyFx.getYCoordinate() );
+                else
+                    mc->resetXy(); // the next touch sends its first position again
             }
             applied    = *target;
             hasApplied = true;
             return;
+        }
+
+        // XY-13: Write mode records the gesture (position while the gate is open, the gate itself) as FX lanes of the selected track.
+        if( target->isTrack )
+        {
+            const auto sel = ae.getSelected();
+            if( gate.open() )
+            {
+                if( !gateRecorded )
+                    ae.recordAutomationValue( sel, mt::automation::TouchGate, mt::automation::kNormScale );
+                ae.recordAutomationValue( sel, mt::automation::TouchX, mt::automation::normToValue( xyFx.getXCoordinate() ) );
+                ae.recordAutomationValue( sel, mt::automation::TouchY, mt::automation::normToValue( xyFx.getYCoordinate() ) );
+            }
+            else if( gateRecorded )
+                ae.recordAutomationValue( sel, mt::automation::TouchGate, 0 );
+            gateRecorded = gate.open();
         }
 
         // A destination change (or the selected track changing) moves the effect: the old one is closed first.
@@ -339,6 +347,9 @@ namespace kick_ui
     void XyFxView::closeEffect()
     {
         gate.closeAll();
+        if( gateRecorded )
+            mt::getAudioInterface().recordAutomationValue( mt::getAudioInterface().getSelected(), mt::automation::TouchGate, 0 );
+        gateRecorded = false;
         if( hasApplied )
             if( auto* engine = interfaceFor( applied ) )
                 engine->closeTouchFx();

@@ -71,6 +71,8 @@ namespace ui
         bool             isLatch{ false };
         float            xCoordinate{ 0 }, yCoordinate{ 0 }, xCoord{ 0 }, yCoord{ 0 };
         bool             xIsBeat{ false };
+        bool             cellLabels{ false };
+        kick_ui::xyfx::Axis xAxis{ kick_ui::xyfx::Axis::Cutoff }, yAxis{ kick_ui::xyfx::Axis::Resonance };
         juce::String     xLeft{ "" }, xRight{ "" }, yTop{ "" }, yBottom{ "" };
     };
 }

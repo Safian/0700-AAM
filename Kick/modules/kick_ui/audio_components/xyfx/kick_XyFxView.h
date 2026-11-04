@@ -111,6 +111,7 @@ namespace kick_ui
         Target              applied;          // the destination the engine currently holds the effect on
         bool                hasApplied{ false };
         bool                restoring{ false };
+        bool                gateRecorded{ false }; // the gate state last written to the automation lane
 
         void resized() override;
         void visibilityChanged() override;

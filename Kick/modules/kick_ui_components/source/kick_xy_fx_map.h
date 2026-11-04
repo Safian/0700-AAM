@@ -129,6 +129,28 @@ namespace kick_ui::xyfx
         return {};
     }
 
+    // Short label of one grid cell along an axis (the value at the cell's centre): XY-15. Index 0..7, from the low end.
+    inline std::string cellLabel( Axis A, int Index )
+    {
+        const int    i = std::clamp( Index, 0, kCells - 1 );
+        const double c = ( i + 0.5 ) / kCells;
+        char         buf[24];
+        switch( A )
+        {
+            case Axis::BeatDivision: return divisionName( i );
+            case Axis::Cutoff:
+            {
+                const double hz = 20.0 * std::pow( 1000.0, c );
+                if( hz >= 1000.0 ) std::snprintf( buf, sizeof buf, "%.1fk", hz / 1000.0 );
+                else std::snprintf( buf, sizeof buf, "%.0f", hz );
+                return buf;
+            }
+            case Axis::Resonance: std::snprintf( buf, sizeof buf, "Q%.1f", 0.5 + 11.5 * c * c ); return buf;
+            case Axis::Depth: std::snprintf( buf, sizeof buf, "%.0f%%", 100.0 * c ); return buf;
+        }
+        return {};
+    }
+
     // Axis end labels of the grid (left / right or bottom / top).
     inline std::string axisLow( Axis A ) { return A == Axis::BeatDivision ? "2 Bar" : A == Axis::Cutoff ? "20 Hz" : A == Axis::Depth ? "0 %" : "Q 0.5"; }
     inline std::string axisHigh( Axis A ) { return A == Axis::BeatDivision ? "1/64" : A == Axis::Cutoff ? "20 kHz" : A == Axis::Depth ? "100 %" : "Q 12"; }

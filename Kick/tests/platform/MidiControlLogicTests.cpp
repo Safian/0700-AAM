@@ -167,6 +167,38 @@ int main()
     auto res3 = engine.processIncoming( "cc", 3, 7, 127 ); // unmapped channel
     CHECK( !res3.matched );
 
+    // ---- XY engine shared by MIDI Control > XY and XY FX "MIDI CC" (XY-14)
+    {
+        XyCcEngine  xy;
+        XyAxisConfig cx, cy;
+        cx.channel = 2; cx.cc = 24; cx.low = 10; cx.high = 110;
+        cy.channel = 3; cy.cc = 25; cy.low = 0;  cy.high = 127; cy.muted = false;
+        XyCc out[2];
+        CHECK_EQ( xy.process( 0.5f, 1.0f, cx, cy, out ), 2 );
+        CHECK_EQ( out[0].channel, 2 );
+        CHECK_EQ( out[0].cc, 24 );
+        CHECK_EQ( out[0].value, 60 );
+        CHECK_EQ( out[1].channel, 3 );
+        CHECK_EQ( out[1].cc, 25 );
+        CHECK_EQ( out[1].value, 127 );
+        CHECK_EQ( xy.process( 0.5f, 1.0f, cx, cy, out ), 0 ); // nothing changed: nothing sent
+        CHECK_EQ( xy.process( 0.5f, 0.0f, cx, cy, out ), 1 ); // only Y moved
+        CHECK_EQ( out[0].cc, 25 );
+        CHECK_EQ( out[0].value, 0 );
+        cx.muted = true;
+        CHECK_EQ( xy.process( 1.0f, 0.0f, cx, cy, out ), 0 ); // X muted, Y unchanged
+        xy.reset();
+        CHECK_EQ( xy.process( 1.0f, 0.0f, cx, cy, out ), 1 ); // reset: the next touch sends its first position again
+        cy.muted = true;
+        xy.reset();
+        CHECK_EQ( xy.process( 1.0f, 1.0f, cx, cy, out ), 0 ); // both muted
+        cx.muted = false; cx.channel = 99; cx.cc = -5;
+        xy.reset();
+        CHECK_EQ( xy.process( 0.0f, 0.0f, cx, cy, out ), 1 ); // out-of-range configuration is clamped, never a bad message
+        CHECK_EQ( out[0].channel, 16 );
+        CHECK_EQ( out[0].cc, 0 );
+    }
+
     if( g_fail == 0 )
         std::printf( "MidiControlLogicTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;
