@@ -1,6 +1,7 @@
 #include "mt_sample_editor_actions.h"
 #include "mt_sample_player.h"
 #include "mt_sample_dsp.h"
+#include <audio_file_manager/audio_file_manager.h>
 
 namespace mt
 {
@@ -13,10 +14,9 @@ namespace mt
         {
             formatManager.registerBasicFormats();
             //transportSource.addChangeListener( this );
+            undoManager.setMaxNumberOfStoredUnits( 50 * 1024 * 1024, 20 );
             undoManager.addChangeListener( this );
             MTSampleEditUndoAction::setUndoActions( &undoActions );
-            //move to AppHome and set global undo size limits
-            //undoManager.setMaxNumberOfStoredUnits(75000, 1);
         }
 
         ~MTSampleEditorData()
@@ -216,7 +216,8 @@ namespace mt
                     actionObject = new MTSampleEditorCopyAction;
                     break;
                 case seActionBitReduce:
-                    return false;
+                    actionObject = new MTSampleEditorBitReduceAction;
+                    break;
                 case seActionStereoToMono:
                     actionObject = new MTSampleEditorStereoToMonoAction;
                     break;
@@ -236,23 +237,30 @@ namespace mt
             bool performed = true;
             if( actionObject->canUndo() )
             {
-                getAudioInterface().getUndoManager().beginNewTransaction();
+                undoManager.beginNewTransaction();
                 auto action = new MTSampleEditUndoAction( actionObject );
                 undoActions.push_back( action );
-                performed = getAudioInterface().getUndoManager().perform( action );
+                performed = undoManager.perform( action );
                 if( performed && actionObject->failed() )
                 {
                     kick_log( "SampleEditor", "edit failed, the sample is unchanged" );
                     return false;
                 }
+                if( performed )
+                    ::mt::getAudioSoundCache().remove( sourceFile.getFullPathName() );
             }
             else
             {
                 performed = actionObject->execute();
                 // Extract / Copy / Stereo>Mono results become samples of the project pool (and thus show up in the editor list).
                 if( performed )
+                {
                     for( const auto& created : actionObject->getCreatedFiles() )
+                    {
+                        ::mt::getAudioSoundCache().remove( created.getFullPathName() );
                         getAudioInterface().addAsset( created.getFullPathName(), AssetTypes::Samples );
+                    }
+                }
                 delete actionObject;
             }
 
@@ -377,7 +385,7 @@ namespace mt
                 // clear undo state and history
                 MTSampleEditUndoAction::setClearHistory( true );
                 undoActions.clear();
-                getAudioInterface().getUndoManager().clearUndoHistory();
+                undoManager.clearUndoHistory();
                 MTSampleEditUndoAction::setClearHistory( false );
                 sourceModifiedTime = source.getLastModificationTime();
             }
@@ -412,7 +420,7 @@ namespace mt
         double                                 bpm      = 0.0;
         std::vector<MTSamplePlayerListener*>   listeners;
         std::vector<MTSampleModifiedListener*> smpModifiedlisteners;
-        juce::UndoManager&                     undoManager{ getAudioInterface().getUndoManager() };
+        juce::UndoManager                      undoManager;
         juce::Time                             sourceModifiedTime;
         std::list<MTSampleEditUndoAction*>     undoActions;
 
@@ -435,90 +443,46 @@ namespace mt
 
     double MTSampleEditorInterface::detectBpm()
     {
-        if( !pimpl->reader )
+        if( !pimpl->reader || pimpl->reader->sampleRate <= 0 || pimpl->reader->lengthInSamples <= 0 )
             return 0.0;
 
-            //return 0.0;
-            //BeatDetect detect;
-            //detect.setSensitivity( 0.5 );
-            //detect.setSampleRate( pimpl->reader->sampleRate );
-#if 1
-            //auto blockLength = detect.getBlockSize();
-            //auto blockSize = choc::buffer::Size::create( pimpl->reader->numChannels, blockLength );
-            //tracktion_engine::SampleCount pos = 0;
+        const double lengthInTime = (double)pimpl->reader->lengthInSamples / pimpl->reader->sampleRate;
+        const int blockSize = 1024;
+        const double frameRateHz = pimpl->reader->sampleRate / (double)blockSize;
+        const int numChannels = (int)pimpl->reader->numChannels;
+        const bool useRight = numChannels > 1;
 
-            //juce::int64 end = pimpl->reader->lengthInSamples;
-            //choc::buffer::ChannelArrayBuffer<float> buffer( blockSize );
+        juce::AudioSampleBuffer buf( numChannels, blockSize );
+        juce::int64 numLeft = pimpl->reader->lengthInSamples;
+        juce::int64 pos = 0;
+        std::vector<float> flux;
+        float prevEnergy = 0.0f;
 
-            //while( pos + blockLength < end ){
-            //    if( !pimpl->reader->read( buffer.getView().data.channels, (int)pimpl->reader->numChannels, pos, (int)blockLength ) )
-            //        break;
-
-            //    detect.audioProcess( buffer );
-            //    pos += blockLength;
-            //}
-#else
-        int blockSize = detect.getBlockSize();
-
-        juce::int64              numLeft      = pimpl->reader->lengthInSamples;
-        juce::int64              startSample  = 0;
-        const bool               useRightChan = pimpl->reader->numChannels > 1;
-        juce::AudioBuffer<float> buffer( pimpl->reader->numChannels, blockSize );
         while( numLeft > 0 )
         {
             const int numThisTime = (int)juce::jmin( numLeft, (juce::int64)blockSize );
-            pimpl->reader->read( &buffer, 0, numThisTime, startSample, true, useRightChan );
-            detect.audioProcess( buffer.getArrayOfReadPointers(), pimpl->reader->numChannels );
+            pimpl->reader->read( &buf, 0, numThisTime, pos, true, useRight );
 
-            startSample += numThisTime;
+            float energy = 0.0f;
+            for( int ch = 0; ch < numChannels; ++ch )
+            {
+                const float* p = buf.getReadPointer( ch );
+                for( int i = 0; i < numThisTime; ++i )
+                    energy += p[i] * p[i];
+            }
+            energy = std::sqrt( energy / (float)( numThisTime * numChannels ) );
+
+            float diff = energy - prevEnergy;
+            flux.push_back( diff > 0.0f ? diff : 0.0f );
+            prevEnergy = energy;
+
+            pos += numThisTime;
             numLeft -= numThisTime;
         }
 
-        // calculate beats
-        pimpl->numBeats = detect.getNumBeats();
-#endif
-        //pimpl->numBeats = detect.getBeats().size();
-        if( pimpl->numBeats == 0 )
-            pimpl->numBeats = 65;
-
-        //calculate bpm
-        double lengthInTime = pimpl->reader->lengthInSamples / pimpl->reader->sampleRate;
-        pimpl->bpm          = pimpl->numBeats * 60 / lengthInTime;
+        pimpl->bpm = sample_dsp::estimateBpmFromFlux( flux.data(), (int)flux.size(), frameRateHz );
+        pimpl->numBeats = std::max( 1.0, std::round( lengthInTime * pimpl->bpm / 60.0 ) );
         return pimpl->bpm;
-
-        /*juce::File source = pimpl->sourceFile;
-
-        if (pimpl->reader == nullptr)
-            return 0;
-
-        auto numChannels = (int)pimpl->reader->numChannels;
-        auto numSamples = pimpl->reader->lengthInSamples;
-        auto sampleRate = pimpl->reader->sampleRate;
-
-        if (numSamples <= 0)
-            return 0;
-
-        TE::TempoDetect detector(numChannels, sampleRate);
-        const int blockSize = 2000;
-        const bool useRightChan = numChannels > 1;
-
-        // can't use an AudioScratchBuffer yet
-        AudioBuffer<float> buffer(numChannels, blockSize);
-
-        int64 numLeft = numSamples;
-        int64 startSample = 0;
-
-        while (numLeft > 0)
-        {
-            const int numThisTime = (int)jmin(numLeft, (int64)blockSize);
-            pimpl->reader->read(&buffer, 0, numThisTime, startSample, true, useRightChan);
-            detector.processSection(buffer, numThisTime);
-
-            startSample += numThisTime;
-            numLeft -= numThisTime;
-        }
-
-        return detector.finishAndDetect();*/
     }
 
     double MTSampleEditorInterface::getNumberOfBeats()
@@ -557,12 +521,12 @@ namespace mt
 
     void MTSampleEditorInterface::undo()
     {
-        getAudioInterface().getUndoManager().undo();
+        pimpl->undoManager.undo();
     }
 
     void MTSampleEditorInterface::redo()
     {
-        getAudioInterface().getUndoManager().redo();
+        pimpl->undoManager.redo();
     }
 
     void MTSampleEditorInterface::addListener( MTSamplePlayerListener* listener )

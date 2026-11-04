@@ -19,23 +19,57 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include <kick_ui/modes/filebrowser/kick_fileUtils.h>
+#include <kick_ui_components/source/kick_WarningComponent.h>
 #include "kick_assign_sample_logic.h"
 
 namespace kick_ui
 {
     AssignSampleContent::AssignSampleContent()
-        : ae( mt::getAudioInterface() ), pads( std::make_unique<ui::KickPadButtonGroupComponent>( ui::KickPadButton::PadButtonType::assignSample ) )
+        : pads( std::make_unique<ui::KickPadButtonGroupComponent>( ui::KickPadButton::PadButtonType::assignSample ) ), ae( mt::getAudioInterface() )
     {
         fileList.setFocus( true );
+        fileList.setButtonHeight( 48 ); // AS-14: touch ergonomic row height
         setLookAndFeel( ui::KickLooknFeel::getLnf() );
 
-        mt::utils::addChildComponents( this, pads.get(), fileList, sampleLabel, layerSelector );
+        mt::utils::addChildComponents( this, pads.get(), fileList, sampleLabel, layerSelector,
+                                       assignButton, clearPadButton, auditionToggle, auditionGain, deleteSampleButton );
 
         layerSelector.setOptions( { "Layer 1", "Layer 2", "Layer 3", "Layer 4" } );
         layerSelector.setSelected( 0, juce::dontSendNotification );
         layerSelector.onSelectionChanged = [this]( int index, const juce::String& ) {
             currentLayer = juce::jlimit( 0, mt::MAX_LAYERS - 1, index );
             refresh();
+            updateLabelText();
+        };
+
+        assignButton.onClick = [this] {
+            const int highlighted = pads->getHighlightedPad();
+            if( highlighted >= 0 )
+                assignSampleIntoPad( highlighted );
+        };
+
+        clearPadButton.onClick = [this] {
+            const int highlighted = pads->getHighlightedPad();
+            if( highlighted >= 0 )
+                confirmClearEntirePad( highlighted );
+        };
+
+        auditionToggle.setToggleState( true, juce::dontSendNotification );
+        auditionToggle.onClick = [this] {
+            if( !auditionToggle.getToggleState() )
+                ae.stopPreview();
+            else
+                scheduleAudition( fileList.getSelectedIndex() );
+        };
+
+        auditionGain.setRange( 0.0, 1.0, 0.01 );
+        auditionGain.setValue( mt::getSettings().preview.gain, juce::dontSendNotification );
+        auditionGain.onValueChanged = []( double v ) {
+            mt::getSettings().preview.gain = (float)v;
+        };
+
+        deleteSampleButton.onClick = [this] {
+            confirmDeleteSample();
         };
 
         fileList.setBackgroundColour( ui::Theme::backgroundColour( 1 ) );
@@ -52,6 +86,7 @@ namespace kick_ui
             pads->setHighlight( Index, ui::Theme::padButtonColour( 3 ) );
             ui::fileUtils::setHighlightLED( Index - pads->getBankOffset() );
             refreshLEDs();
+            updateLabelText();
         };
 
         pads->OnDoubleClicked = [&]( int Index ) {
@@ -69,7 +104,13 @@ namespace kick_ui
             ui::fileUtils::setHighlightLED( hwPadIndex );
         };
 
-        fileList.onSelectionChanged = [this]( int Index, juce::String ) { scheduleAudition( Index ); };
+        fileList.onSelectionChanged = [this]( int Index, juce::String ) {
+            updateLabelText();
+            if( auditionToggle.getToggleState() )
+                scheduleAudition( Index );
+            else
+                ae.stopPreview();
+        };
     }
 
     // Selection -> asset path straight from the pool index (no directory walk, no wildcard interpretation); only the selection that
@@ -153,10 +194,137 @@ namespace kick_ui
 
     void AssignSampleContent::resized()
     {
-        sampleLabel.setBounds( 10, 10, 342, 50 );
-        fileList.setBounds( 10, 60, 342, 335 );
-        layerSelector.setBounds( 10, 400, 342, 45 );
+        sampleLabel.setBounds( 10, 10, 342, 35 );
+        fileList.setBounds( 10, 50, 342, 255 );
+        auditionToggle.setBounds( 10, 312, 75, 36 );
+        auditionGain.setBounds( 90, 312, 95, 36 );
+        deleteSampleButton.setBounds( 190, 312, 162, 36 );
+        layerSelector.setBounds( 10, 354, 342, 40 );
+        assignButton.setBounds( 10, 400, 166, 40 );
+        clearPadButton.setBounds( 186, 400, 166, 40 );
         pads->setBounds( 362, 10, 652, 440 );
+    }
+
+    void AssignSampleContent::confirmClearEntirePad( int padIndex )
+    {
+        if( padIndex < 0 )
+            return;
+        juce::String padName = "Pad " + juce::String( padIndex + 1 );
+        auto* p = new ui::FilePopup( "Clear entire " + padName + " (all layers and settings)?" );
+        mt::utils::showDialog(
+            "CONFIRM CLEAR", p, [this, p, padIndex]( int R ) {
+                if( R == UI::APPLY )
+                {
+                    ae.removeSampleFromProgram( ae.getSelectedProgram(), padIndex );
+                    refresh();
+                    pads->setHighlight( padIndex, ui::Theme::padButtonColour( 3 ) );
+                    refreshLEDs();
+                    updateLabelText();
+                }
+                delete p;
+            },
+            ui::layout::warningPopup );
+    }
+
+    void AssignSampleContent::confirmDeleteSample()
+    {
+        const auto sel = fileList.getSelectedIndex();
+        const auto poolIndex = assign_logic::poolIndexFromListIndex( sel, (int)files.size() - 1 );
+        if( poolIndex < 0 )
+            return;
+        const juce::String samplePath = ae.getAsset( mt::AssetTypes::Samples, poolIndex );
+        const juce::String sampleName = juce::File( samplePath ).getFileName();
+
+        // Check if sample is used by any layer of any pad in the current program
+        std::vector<std::string> sources;
+        for( auto* s : samples )
+        {
+            if( s == nullptr )
+                continue;
+            for( const auto& src : s->getSources() )
+                if( src.isNotEmpty() )
+                    sources.push_back( src.toStdString() );
+        }
+        const bool used = assign_logic::isSampleUsed( samplePath.toStdString(), sources );
+        const juce::String prompt = used ? ( "WARNING: '" + sampleName + "' is used by pads in this program! Delete from pool anyway?" )
+                                         : ( "Delete '" + sampleName + "' from project pool?" );
+
+        auto* p = new ui::FilePopup( prompt );
+        mt::utils::showDialog(
+            "DELETE SAMPLE", p, [this, p, samplePath]( int R ) {
+                if( R == UI::APPLY )
+                {
+                    ae.stopPreview();
+                    ae.removeAsset( samplePath, mt::AssetTypes::Samples );
+                    files = ae.getAssetNames( mt::AssetTypes::Samples );
+                    files.insert( files.begin(), "Clear Assignment" );
+                    fileList.setContent( files, 0 );
+                    refresh();
+                    refreshLEDs();
+                    updateLabelText();
+                }
+                delete p;
+            },
+            ui::layout::warningPopup );
+    }
+
+    void AssignSampleContent::updateLabelText()
+    {
+        juce::String text = "Samples";
+        const int pad = pads->getHighlightedPad();
+        if( pad >= 0 )
+        {
+            int letterAscii = 'A' + ( pad / 16 );
+            int padNum = ( pad % 16 ) + 1;
+            text = juce::String::formatted( "Pad %c%02d [L%d]", letterAscii, padNum, currentLayer + 1 );
+        }
+        const int sel = fileList.getSelectedIndex();
+        if( sel == 0 )
+            text += " | Action: Clear Assignment";
+        else if( sel > 0 && sel < (int)files.size() )
+            text += " | " + files[(size_t)sel];
+        sampleLabel.setText( text, juce::dontSendNotification );
+    }
+
+    void AssignSampleContent::mouseDown( const juce::MouseEvent& )
+    {
+    }
+
+    void AssignSampleContent::mouseDrag( const juce::MouseEvent& e )
+    {
+        if( fileList.getBounds().contains( e.getMouseDownPosition() ) )
+        {
+            const auto pt = e.getPosition();
+            if( pads->getBounds().contains( pt ) )
+            {
+                const int pad = assign_logic::padIndexFromGridPoint( pt.getX(), pt.getY(),
+                                                                     pads->getX(), pads->getY(),
+                                                                     pads->getWidth(), pads->getHeight(),
+                                                                     pads->getBankOffset() );
+                if( pad >= 0 )
+                    pads->setHighlight( pad, ui::Theme::padButtonColour( 2 ) );
+            }
+        }
+    }
+
+    void AssignSampleContent::mouseUp( const juce::MouseEvent& e )
+    {
+        if( fileList.getBounds().contains( e.getMouseDownPosition() ) )
+        {
+            const auto pt = e.getPosition();
+            if( pads->getBounds().contains( pt ) )
+            {
+                const int pad = assign_logic::padIndexFromGridPoint( pt.getX(), pt.getY(),
+                                                                     pads->getX(), pads->getY(),
+                                                                     pads->getWidth(), pads->getHeight(),
+                                                                     pads->getBankOffset() );
+                if( pad >= 0 )
+                {
+                    pads->setHighlight( pad, ui::Theme::padButtonColour( 3 ) );
+                    assignSampleIntoPad( pad );
+                }
+            }
+        }
     }
 
     void AssignSampleContent::visibilityChanged()
@@ -173,6 +341,7 @@ namespace kick_ui
             refresh();
             refreshLEDs();
             ui::fileUtils::lastPressedPad = -1;
+            updateLabelText();
         }
         else
             ae.stopPreview();
@@ -198,14 +367,25 @@ namespace kick_ui
             if( sample )
             {
                 auto text = juce::File( sample->layers[(size_t)currentLayer]->source.get() ).getFileNameWithoutExtension();
-                if( !text.isEmpty() )
+                const bool l0 = sample->layers.size() > 0 && sample->layers[0]->source.get().isNotEmpty();
+                const bool l1 = sample->layers.size() > 1 && sample->layers[1]->source.get().isNotEmpty();
+                const bool l2 = sample->layers.size() > 2 && sample->layers[2]->source.get().isNotEmpty();
+                const bool l3 = sample->layers.size() > 3 && sample->layers[3]->source.get().isNotEmpty();
+                const juce::String layerInd = assign_logic::formatLayerIndicator( l0, l1, l2, l3 );
+
+                // Keygroup: label the zone minNote..maxNote; Drum / Clip: the key note only.
+                const auto range = assign_logic::zoneNotes( sample->minNote.get(), sample->maxNote.get(), sample->keyNote.get() );
+                for( auto i = range.first; i <= range.last; i++ )
                 {
-                    // Keygroup: label the zone minNote..maxNote; Drum / Clip: the key note only.
-                    const auto range = assign_logic::zoneNotes( sample->minNote.get(), sample->maxNote.get(), sample->keyNote.get() );
-                    for( auto i = range.first; i <= range.last; i++ )
+                    if( !text.isEmpty() )
                     {
                         pads->setRow1Text( i, text, juce::dontSendNotification );
                         pads->setBorderColor( i, ui::Theme::backgroundColour( 6 ), 1, juce::dontSendNotification );
+                    }
+                    if( !layerInd.isEmpty() )
+                    {
+                        pads->setRow2Text( i, layerInd, juce::dontSendNotification );
+                        pads->setRow2Colour( ui::Theme::textColour( 2 ) );
                     }
                 }
             }
@@ -289,13 +469,19 @@ namespace kick_ui
             {
                 if( buttonState == contracts::DeviceControlContracts::BTN_PRESSED )
                 {
-                    // ERASE clears the highlighted pad's current layer (undoable); without a highlighted pad it does nothing.
-                    if( ledIndex >= 0 && assign_logic::hwPadIndex( padIndex, pads->getBankOffset(), _NUM_PADS_IN_COMPONENT ) >= 0 )
+                    const bool isShift = contracts::DclContractsHelper::isShiftPressed();
+                    if( isShift && padIndex >= 0 )
                     {
+                        confirmClearEntirePad( padIndex );
+                    }
+                    else if( ledIndex >= 0 && assign_logic::hwPadIndex( padIndex, pads->getBankOffset(), _NUM_PADS_IN_COMPONENT ) >= 0 )
+                    {
+                        // ERASE clears the highlighted pad's current layer (undoable); without a highlighted pad it does nothing.
                         ae.clearSampleLayerInProgram( ae.getSelectedProgram(), padIndex, currentLayer );
                         refresh();
                         pads->setHighlight( padIndex, ui::Theme::padButtonColour( 3 ) );
                         refreshLEDs();
+                        updateLabelText();
                     }
 
                     contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::setLEDONMessage( contracts::DeviceControlContracts::EN_ERASE ) );
@@ -700,7 +886,7 @@ namespace kick_ui
     {
         setLookAndFeel( ui::KickLooknFeel::getLnf() );
 
-        mt::utils::addChildComponents( this, header, drum, bankLabel, leftNav, rightNav, fileBrowser );
+        mt::utils::addChildComponents( this, header, trackSelector, drum, bankLabel, leftNav, rightNav, fileBrowser );
         mt::utils::makeHidden( drum );
 
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
@@ -753,6 +939,7 @@ namespace kick_ui
 
         // Childrens...
         drum.setBounds( b );
+        trackSelector.setBoundsRelative( .38f, .034f, .18f, .09f );
         fileBrowser.setBoundsRelative( .6892f, .04f, .0429f, .08f );
 
         bankLabel.setBoundsRelative( .74f, .038f, .19f, .085f );

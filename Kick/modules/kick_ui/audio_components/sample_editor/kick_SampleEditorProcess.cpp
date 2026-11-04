@@ -324,14 +324,16 @@ namespace mt
                     min   = -18.0;
                     max   = 18.0;
                 }
-                else if( actionId == 13 )
+                else if( actionId == 12 )
                 {
                     title = "Bit Reduce";
                     min   = 1;
                     max   = 16;
                 }
                 ui::KickRotary* rotary = new ui::KickRotary( title );
-                rotary->setRange( min, max );
+                rotary->setRange( min, max, 1.0 );
+                if( actionId == 12 )
+                    rotary->setValue( 8, juce::dontSendNotification );
                 actionComponent.reset( rotary );
             }
             else if( actionId == 9 )

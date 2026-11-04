@@ -21,6 +21,7 @@
 
 #pragma once
 #include "kick_assign_sample_logic.h"
+#include <kick_ui_selectors/source/kick_headerBarComponents.h>
 #define NOT_USED 0
 namespace kick_ui
 {
@@ -41,11 +42,13 @@ namespace kick_ui
         std::unique_ptr<ui::KickPadButtonGroupComponent> pads;
         std::vector<mt::MTISample*>                      samples;
         void                                             assignSampleIntoPad( int Index );
+        void                                             confirmClearEntirePad( int padIndex );
+        void                                             confirmDeleteSample();
         void                                             refreshLEDs();
 
     private:
         mt::MTAudioInterface&     ae;
-        ui::KickList              fileList{ "Samples", {}, 0, 2 };
+        ui::KickList              fileList{ "Samples", {}, 0, 1 };
         std::vector<juce::String> files;
         ui::KickLabel             sampleLabel{ "Samples" };
         void                      audition( juce::File f );
@@ -55,10 +58,20 @@ namespace kick_ui
         int                       currentLayer{ 0 };
         assign_logic::AuditionDebounce auditionDebounce;
         ui::KickToggleOptions     layerSelector{ "Layer" };
+        ui::KickButton            assignButton{ "Assign" };
+        ui::KickButton            clearPadButton{ "Clear Pad" };
+        ui::KickToggleButton      auditionToggle{ "Audition", "Audition", "Audition" };
+        ui::KickSlider            auditionGain{ "Gain", juce::Slider::LinearBar, juce::Slider::TextBoxRight };
+        ui::KickButton            deleteSampleButton{ "Delete Sample" };
+
+        void                      updateLabelText();
         void                      resized() override;
         void                      paint( juce::Graphics& ) override;
         void                      visibilityChanged() override;
         void                      refresh();
+        void                      mouseDown( const juce::MouseEvent& e ) override;
+        void                      mouseDrag( const juce::MouseEvent& e ) override;
+        void                      mouseUp( const juce::MouseEvent& e ) override;
     };
 #if NOT_USED
     //Nowhere it is using as of now
@@ -166,6 +179,7 @@ namespace kick_ui
 
     private:
         kick_ui::KickModeHeader header{ "Sample Assign", "sEdit_Icon" };
+        HeaderBarTrackSelector  trackSelector;
         AssignSampleContent     drum;
 
         ui::KickImageButton fileBrowser{ "File Browser", "Browser_Recent" };

@@ -205,13 +205,25 @@ namespace mt
 
     void MTSampleEditUndoAction::cleanup()
     {
-        undoFile.deleteFile();
+        if( undoFile.exists() )
+            undoFile.deleteFile();
+        auto parent = undoFile.getParentDirectory();
+        if( parent.isDirectory() )
+        {
+            auto list = parent.findChildFiles( juce::File::findFiles, false, "*undo_sampleeditor*.wav" );
+            for( auto& f : list )
+                f.deleteFile();
+            auto tempFiles = parent.findChildFiles( juce::File::findFiles, false, "*_temp.wav" );
+            for( auto& f : tempFiles )
+                f.deleteFile();
+        }
     }
 
-    void MTSampleEditUndoAction::setClearHistory( bool /*setClear*/ )
+    void MTSampleEditUndoAction::setClearHistory( bool setClear )
     {
+        clearHistory = setClear;
         if( clearHistory )
-            undoFile.deleteFile();
+            cleanup();
     }
 
     //////////////////////////////////////////////
@@ -457,7 +469,8 @@ namespace mt
         readerTmp->readMaxLevels( startSample, endSample - startSample, lmin, lmax, rmin, rmax );
 
         auto maxLevel = juce::jmax( -lmin, lmax, -rmin, rmax );
-        gainFactor    = sample_dsp::normaliseGain( maxLevel, CommonUtils::dbToGain( float( 0.0 ) ) ); // silence: gain 1, no division by 0
+        float targetDb = params.empty() ? 0.0f : (float)*params.begin();
+        gainFactor    = sample_dsp::normaliseGain( maxLevel, CommonUtils::dbToGain( targetDb ) ); // silence: gain 1, no division by 0
 
         delete readerTmp;
     }
@@ -712,7 +725,24 @@ namespace mt
         region = r;
         params = p;
         sourceFile = source;
-        gain = CommonUtils::dbToGain( *p.begin() );
+        const float gainDb = p.empty() ? 0.0f : (float)*p.begin();
+        gain = CommonUtils::dbToGain( gainDb );
+
+        // SE-15: Clip warning
+        juce::AudioFormatReader* readerTmp = formatManager.createReaderFor( sourceFile );
+        if( readerTmp )
+        {
+            startSample = region.getStart();
+            endSample = region.getEnd();
+            float lmin = 0, lmax = 0, rmin = 0, rmax = 0;
+            readerTmp->readMaxLevels( startSample, endSample - startSample, lmin, lmax, rmin, rmax );
+            float maxLevel = juce::jmax( -lmin, lmax, -rmin, rmax );
+            if( sample_dsp::willGainClip( maxLevel, gainDb ) )
+            {
+                kick_log( "SampleEditor", "Gain change will clip peak (gain: %.1f dB, peak: %.2f)", gainDb, maxLevel );
+            }
+            delete readerTmp;
+        }
     }
 
     bool MTSampleEditorGainChangeAction::performAction( juce::AudioSampleBuffer& buffer, int& numSamples )
@@ -827,5 +857,28 @@ namespace mt
         createdFiles.push_back( monoFile );
 
         return false;
+    }
+
+    ///////////////////////////////////////////
+    /// ///////// MTSampleEditorBitReduceAction
+    //////////////////////////////////////////
+    void MTSampleEditorBitReduceAction::initialize( const MTSampleRegion& r, const std::list<juce::var>& p, juce::File& source )
+    {
+        MTSampleEditorActionsInterface::initialize( r, p, source );
+        bits = p.empty() ? 8 : (int)*p.begin();
+        if( bits < 1 ) bits = 1;
+        if( bits > 16 ) bits = 16;
+    }
+
+    bool MTSampleEditorBitReduceAction::performAction( juce::AudioSampleBuffer& buffer, int& numSamples )
+    {
+        if( currentSample >= endSample )
+            return false;
+
+        numSamples = read( buffer, startSample, endSample, reader, currentSample );
+        for( int ch = 0; ch < buffer.getNumChannels(); ++ch )
+            sample_dsp::applyBitReduce( buffer.getWritePointer( ch ), numSamples, bits );
+
+        return true;
     }
 }

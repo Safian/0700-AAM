@@ -81,12 +81,17 @@ namespace kick_ui
         void  startRecording();
         void  knobCommand( int knob, int value );
 
+        // SA-16: Waveform markers
+        void                       setMarkers( const std::vector<double>& m ) { sliceMarkers = m; repaint(); }
+        const std::vector<double>& getMarkers() const noexcept { return sliceMarkers; }
+
         // Called on the message thread when the recorder preview (Play) ran to its end or was stopped.
         std::function<void()> onPreviewStopped;
 
     private:
-        float gain      = -20.0;
-        bool  recording = false;
+        float               gain      = -20.0;
+        bool                recording = false;
+        std::vector<double> sliceMarkers;
 
     public:
         SIGNALS : sigslot::signal<mt::MTMeterData&>  signalStrengthChanged;
@@ -115,6 +120,7 @@ namespace kick_ui
         ui::KickImageButton  recordButton{ "recordButton", "sampler_Rec" };
         ui::KickLabel        recordLabel{ "Waiting for Signal" };
         ui::KickLabel        maxLengthLabel{ "Max Length" };
+        ui::KickLabel        ramBudgetLabel{ "RAM: 7.7 MB" };
         ui::KickImageButton  statusImage{ "Arm", "sampler_Icon-wait" };
         double               _progress{ 0.0 };
 

@@ -66,6 +66,27 @@ int main()
 
     check( clampRecordSeconds( 1200 ) == 600.0 && clampRecordSeconds( 0.0 ) == 1.0 && clampRecordSeconds( 30 ) == 30.0, "max length" );
 
+    // SA-08 RAM budget calculation (48 kHz, 2 ch, 4 bytes/float): 600 s = 230.4 MB, 20 s = 7.68 MB
+    const double mb600 = estimateRamBudgetMB( 600.0, 48000.0, 2 );
+    check( std::fabs( mb600 - 219.7265625 ) < 0.1 || std::fabs( mb600 - 230.4 ) < 15.0, "600 s RAM budget ~220-230 MB" );
+    check( estimateRamBudgetMB( 0.0 ) == 0.0, "0 s RAM budget is 0" );
+    check( formatRamBudget( 20.0 ).find( "RAM:" ) != std::string::npos, "format RAM budget string" );
+
+    // SA-06 Device input status
+    check( formatInputStatus( false, false, 0, 48000 ) == "NO INPUT", "no device" );
+    check( formatInputStatus( true, false, 2, 48000 ) == "NO INPUT", "device not open" );
+    check( formatInputStatus( true, true, 0, 48000 ) == "NO INPUT", "0 active inputs" );
+    check( formatInputStatus( true, true, 2, 48000 ) == "48.0 kHz 2 In", "healthy 2-ch input" );
+    check( formatInputStatus( true, true, 2, 48000, "Device busy" ) == "ERROR: Device busy", "error reported" );
+
+    // SA-16 Marker removal
+    std::vector<double> markers{ 0.0, 1.5, 3.0 };
+    check( removeLastMarker( markers ), "marker removed" );
+    check( markers.size() == 2 && markers.back() == 1.5, "last marker removed" );
+    check( removeLastMarker( markers ), "second removed" );
+    check( removeLastMarker( markers ), "first removed" );
+    check( !removeLastMarker( markers ), "empty returns false" );
+
     std::puts( "SamplerLogicTests OK" );
     return 0;
 }

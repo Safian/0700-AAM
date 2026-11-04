@@ -110,4 +110,42 @@ namespace kick_ui::sampler_logic
             return 1.0;
         return seconds > kMaxRecordSeconds ? kMaxRecordSeconds : seconds;
     }
+
+    // SA-08: Memory budget in megabytes (MB) for recording buffer (duration * sampleRate * channels * 4 bytes).
+    inline double estimateRamBudgetMB( double seconds, double sampleRate = 48000.0, int channels = 2 )
+    {
+        if( !( seconds > 0.0 ) || !( sampleRate > 0.0 ) || channels <= 0 )
+            return 0.0;
+        const double bytes = seconds * sampleRate * (double)channels * (double)sizeof( float );
+        return bytes / ( 1024.0 * 1024.0 );
+    }
+
+    inline std::string formatRamBudget( double seconds, double sampleRate = 48000.0, int channels = 2 )
+    {
+        const double mb = estimateRamBudgetMB( seconds, sampleRate, channels );
+        char buf[32];
+        std::snprintf( buf, sizeof( buf ), "RAM: %.1f MB", mb );
+        return std::string( buf );
+    }
+
+    // SA-06: Device input status string ("NO INPUT", "ERROR: ...", or e.g. "48.0 kHz 2 In").
+    inline std::string formatInputStatus( bool hasDevice, bool isOpen, int activeInputs, double sampleRate, const std::string& error = "" )
+    {
+        if( !error.empty() )
+            return "ERROR: " + error;
+        if( !hasDevice || !isOpen || activeInputs <= 0 )
+            return "NO INPUT";
+        char buf[64];
+        std::snprintf( buf, sizeof( buf ), "%.1f kHz %d In", sampleRate / 1000.0, activeInputs );
+        return std::string( buf );
+    }
+
+    // SA-16: Remove the last marker recorded in Slice mode. Returns true if a marker was removed.
+    inline bool removeLastMarker( std::vector<double>& markers )
+    {
+        if( markers.empty() )
+            return false;
+        markers.pop_back();
+        return true;
+    }
 }

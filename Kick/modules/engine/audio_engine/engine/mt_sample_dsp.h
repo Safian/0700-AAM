@@ -49,6 +49,91 @@ namespace mt::sample_dsp
     // Stereo -> mono "Sum": average of both channels (a plain sum would add 6 dB and clip).
     inline float monoSum( float left, float right ) { return 0.5f * ( left + right ); }
 
+    // SE-06: Bit reduce DSP quantizer. Quantizes linear float sample [-1.0, 1.0] to `bits` resolution (1 to 16 bits).
+    inline float bitReduce( float sample, int bits )
+    {
+        if( bits >= 24 || bits < 1 )
+            return sample;
+        const float levels = (float)( 1 << ( bits - 1 ) );
+        if( !( levels > 0.0f ) )
+            return sample;
+        float q = std::round( sample * levels ) / levels;
+        if( q > 1.0f ) q = 1.0f;
+        if( q < -1.0f ) q = -1.0f;
+        return q;
+    }
+
+    inline void applyBitReduce( float* data, int n, int bits )
+    {
+        if( data == nullptr || n <= 0 || bits >= 24 || bits < 1 )
+            return;
+        for( int i = 0; i < n; ++i )
+            data[i] = bitReduce( data[i], bits );
+    }
+
+    // SE-15: dB to linear and clipping check.
+    inline float dBToLinear( float db )
+    {
+        return std::pow( 10.0f, db / 20.0f );
+    }
+
+    inline float linearToDB( float lin )
+    {
+        if( !( lin > 1.0e-9f ) || !std::isfinite( lin ) )
+            return -144.0f;
+        return 20.0f * std::log10( lin );
+    }
+
+    inline bool willGainClip( float peakLinear, float gainDb )
+    {
+        if( !( peakLinear > 0.0f ) || !std::isfinite( peakLinear ) )
+            return false;
+        const float scaled = peakLinear * dBToLinear( gainDb );
+        return scaled > 1.0001f;
+    }
+
+    // SE-09: Energy envelope autocorrelation BPM estimation.
+    // Given an array of RMS/energy flux blocks computed at frameRateHz (e.g. sampleRate / blockSize),
+    // finds the most periodic tempo between minBpm (default 60) and maxBpm (default 180).
+    inline double estimateBpmFromFlux( const float* flux, int numFrames, double frameRateHz, double minBpm = 60.0, double maxBpm = 180.0 )
+    {
+        if( flux == nullptr || numFrames < 16 || !( frameRateHz > 0.0 ) )
+            return 120.0;
+
+        const int minLag = (int)std::floor( ( 60.0 / maxBpm ) * frameRateHz );
+        const int maxLag = (int)std::ceil( ( 60.0 / minBpm ) * frameRateHz );
+        if( minLag < 1 || maxLag >= numFrames )
+            return 120.0;
+
+        int bestLag = minLag;
+        float bestCorr = -1.0f;
+
+        for( int lag = minLag; lag <= maxLag; ++lag )
+        {
+            float sum = 0.0f;
+            int count = 0;
+            for( int i = 0; i + lag < numFrames; ++i )
+            {
+                sum += flux[i] * flux[i + lag];
+                ++count;
+            }
+            if( count > 0 )
+            {
+                sum /= (float)count;
+                if( sum > bestCorr )
+                {
+                    bestCorr = sum;
+                    bestLag = lag;
+                }
+            }
+        }
+
+        if( bestCorr <= 1.0e-6f || bestLag <= 0 )
+            return 120.0;
+
+        return ( 60.0 * frameRateHz ) / (double)bestLag;
+    }
+
     // The editor rewrites files as WAV; any other container would be corrupted in place, so only WAV is edited.
     inline bool isEditableExtension( const std::string& extensionWithDot )
     {

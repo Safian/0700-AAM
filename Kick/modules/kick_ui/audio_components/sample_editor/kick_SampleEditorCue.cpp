@@ -49,6 +49,8 @@ namespace mt
             return resizeRect;
         }
 
+        static constexpr float kTouchSlop = 20.0f;
+
         bool SeCuePositioner::mouseMove( const juce::MouseEvent& event )
         {
             mouseFocus = false;
@@ -58,11 +60,11 @@ namespace mt
             auto  resizeR  = getCuePositioningRect();
             float posInPix = seData.getPosInPixels( cuePos );
 
-            if( event.position.getX() < ( posInPix + 5 ) && event.position.getX() > ( posInPix - 5 ) )
+            if( event.position.getX() <= ( posInPix + kTouchSlop ) && event.position.getX() >= ( posInPix - kTouchSlop ) )
             {
                 mouseFocus = true;
             }
-            else if( resizeR.contains( event.position ) )
+            else if( resizeR.expanded( kTouchSlop ).contains( event.position ) )
             {
                 mouseFocus = true;
             }
@@ -196,11 +198,11 @@ namespace mt
             auto  resizeR  = getCuePositioningRect();
             float posInPix = seData.getPosInPixels( loopPos );
 
-            if( event.position.getX() < ( posInPix + 5 ) && event.position.getX() > ( posInPix - 5 ) )
+            if( event.position.getX() <= ( posInPix + kTouchSlop ) && event.position.getX() >= ( posInPix - kTouchSlop ) )
             {
                 mouseFocus = true;
             }
-            else if( resizeR.contains( event.position ) )
+            else if( resizeR.expanded( kTouchSlop ).contains( event.position ) )
             {
                 mouseFocus = true;
             }
