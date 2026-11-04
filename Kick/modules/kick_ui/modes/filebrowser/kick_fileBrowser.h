@@ -1,6 +1,7 @@
 #pragma once
 #include <unordered_set>
 #include "kick_ui/recent_project/kick_RecentProject.h"
+#include "kick_fsGuard.h"
 constexpr int   numButtonWidth = 44;
 constexpr float cornerSizeX    = 6.0f;
 constexpr float cornerSizeY    = 6.0f;
@@ -158,7 +159,6 @@ namespace ui
         bool         isEjectBtn;
     };
 
-    class FolderSizeCalculator;
     class FileRightEntry;
     class FileBrowser : public KickControlBase<juce::Component>
         , juce::Timer
@@ -190,7 +190,6 @@ namespace ui
         void searchImplementation();
         void visibilityChanged() override;
 
-        void startFolderSizeCalculation( const juce::File& folder, std::function<void( juce::int64 )> callback );
         void cancelFolderSizeCalculations();
         void queueFolderSizeCalculation( const juce::File& folder, int64_t mtimeMs, FileRightEntry* comp );
         bool isGenerationCancelled( uint64_t gen ) const noexcept;
@@ -210,7 +209,6 @@ namespace ui
     private:
         kick_ui::AppStatusbar&         statusBar{ kick_ui::AppStatusbar::Instance() };
         bool                           onFirstLaunch{ false };
-        const juce::Array<juce::File>  fileList;
         const juce::Array<juce::File>& dirList;
         juce::Array<juce::File>        tempList;
         juce::Array<juce::File>        selectedFile{ "" };
@@ -286,11 +284,11 @@ namespace ui
         void setupProvider();
         void selectBtnOnClick();
         void addData( const juce::String& buttonText, const juce::String& buttonTextActive, float width, float height, const juce::String& itemName, bool isEject );
-        bool checkIsCurrProj();
+        bool checkIsCurrProj(); // true (and a warning) when a selected item is protected: open project, drive / library root, system folder
+        bool isProtectedPath( const juce::File& f ) const;
+        void warn( const juce::String& message );
         void hideAuditionComponent();
         void showAuditionComponent();
-        void addMultipleAssets( juce::Array<juce::File> assetFile );
-        void createProject( juce::String value );
         void loadSample( const juce::Array<juce::File>& assetFiles, bool IsMultiple, std::function<void()> onFinished = {} );
         void mouseDown( const juce::MouseEvent& e ) override;
         void timerCallback() override;
@@ -315,27 +313,6 @@ namespace ui
         KickImageButton folder{ "Folder" };
         int             width, height;
         int             x = 98, y;
-    };
-
-    class FolderSizeCalculator : public juce::Thread
-    {
-    public:
-        FolderSizeCalculator( const juce::File& folder, std::function<void( juce::int64 )> callback )
-            : juce::Thread( "FolderSizeCalculator" ), folderToCalculate( folder ), resultCallback( std::move( callback ) )
-        {
-            startThread();
-        }
-        ~FolderSizeCalculator() override
-        {
-            stopThread( 2000 );
-        }
-        void run() override;
-        void calculateFolderSize();
-
-    private:
-        juce::File                         folderToCalculate;
-        std::function<void( juce::int64 )> resultCallback;
-        juce::int64                        totalSize = 0;
     };
 
     class FileLeftEntry : public juce::Component

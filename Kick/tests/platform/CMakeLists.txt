@@ -363,3 +363,15 @@ set_tests_properties(kick-numpad-taptempo PROPERTIES TIMEOUT 10)
 add_executable(kick-project-names-tests ProjectNamesTests.cpp)
 add_test(NAME kick-project-names COMMAND kick-project-names-tests)
 set_tests_properties(kick-project-names PROPERTIES TIMEOUT 10)
+
+# File browser safety rules (protected paths, folder into itself, collision-free names); JUCE-free header only.
+add_executable(kick-fsguard-tests FsGuardTests.cpp)
+add_test(NAME kick-fsguard COMMAND kick-fsguard-tests)
+set_tests_properties(kick-fsguard PROPERTIES TIMEOUT 10)
+
+# File browser folder-size cache and generation tracker; JUCE-free header only.
+add_executable(kick-folder-size-tests FolderSizeTests.cpp)
+find_package(Threads REQUIRED)
+target_link_libraries(kick-folder-size-tests PRIVATE Threads::Threads)
+add_test(NAME kick-folder-size COMMAND kick-folder-size-tests)
+set_tests_properties(kick-folder-size PROPERTIES TIMEOUT 30)
