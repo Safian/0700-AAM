@@ -149,6 +149,12 @@ namespace mt
 
         void exitDialog( juce::Component* Comp, int exitCode );
 
+        // Hardware access to the open dialogs (message thread): is one open, does the top one have Apply / Cancel buttons, and
+        // close it (Apply = UI::APPLY, else UI::CANCEL). False when none is open or a popup sits on top of it.
+        bool isDialogOpen();
+        bool topDialogHasApply();
+        bool closeTopDialogFromHardware( bool apply );
+
         ///
         /// Graphic Utilities...
         ///

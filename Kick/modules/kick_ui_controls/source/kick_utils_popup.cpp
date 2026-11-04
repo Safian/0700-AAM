@@ -23,6 +23,13 @@
 
 namespace mt
 {
+    class dialogDisplayer;
+    /// The dialogs that are open now, the last one is the topmost (message thread only). The hardware path closes the top one.
+    inline std::vector<dialogDisplayer*>& openDialogRegistry()
+    {
+        static std::vector<dialogDisplayer*> dialogs;
+        return dialogs;
+    }
 
     class fsPopup : public juce::Component
     {
@@ -162,10 +169,6 @@ namespace mt
             setContent( Content, bounds );
         }
 
-        ~dialogDisplayer()
-        {
-            DBG( "Dialog Destroyed..." );
-        }
 
         void setTitle( const juce::String& Title )
         {
@@ -208,8 +211,19 @@ namespace mt
             resized();
         };
 
+        ~dialogDisplayer() override
+        {
+            DBG( "Dialog Destroyed..." );
+            auto& r = openDialogRegistry();
+            r.erase( std::remove( r.begin(), r.end(), this ), r.end() );
+        }
+
+        bool hasApplyButton() const { return showYesNoButtons; }
+
         void reset() override
         {
+            auto& r = openDialogRegistry();
+            r.erase( std::remove( r.begin(), r.end(), this ), r.end() );
             removeKeyListener( &contracts::getKeypressDetector() );
             setFocus( false );
             fsPopup::reset();
@@ -217,6 +231,9 @@ namespace mt
 
         void show( std::function<void( int R )> Callback ) override
         {
+            auto& r = openDialogRegistry();
+            if( std::find( r.begin(), r.end(), this ) == r.end() )
+                r.push_back( this );
             addKeyListener( &contracts::getKeypressDetector() );
             setFocus( true );
 

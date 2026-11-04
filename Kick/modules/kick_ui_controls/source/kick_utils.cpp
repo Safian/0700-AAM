@@ -49,6 +49,28 @@ namespace mt
             _dialogBox->show( std::forward<std::function<void( int R )>>( Callback ) );
         }
 
+        bool isDialogOpen() { return !openDialogRegistry().empty(); }
+
+        bool topDialogHasApply()
+        {
+            auto& r = openDialogRegistry();
+            return !r.empty() && r.back()->hasApplyButton();
+        }
+
+        bool closeTopDialogFromHardware( bool apply )
+        {
+            auto& r = openDialogRegistry();
+            if( r.empty() )
+                return false;
+            auto* d = r.back();
+            // Only when the dialog itself is the foremost modal component: a list popup opened from it sits on top and a lower
+            // modal must not end under it.
+            if( !d->isCurrentlyModal( true ) )
+                return false;
+            d->exitModalState( apply ? UI::APPLY : UI::CANCEL );
+            return true;
+        }
+
         void exitDialog( juce::Component* Comp, int exitCode )
         {
             if( Comp )
