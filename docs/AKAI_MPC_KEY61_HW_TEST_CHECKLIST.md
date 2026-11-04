@@ -88,3 +88,32 @@ dmesg | grep -i -E "i2c|dac|gpio|acvm|i2s"
 ## Ha valami elromlik – visszavonás
 A motor-érintő munkák külön commitként vannak, egyenként visszavonhatók (`git revert <commit>`; a mellettük levő merge-commit nem kell):
 `904aaf52` + `3e981bf3` + `daf8bd22` (bar seek, a namespace-javítása és a tick-seek/event-seek, **együtt**), `ecfeb260` (pitch bend/sustain), `9fd98db4` (RECALL), `03db3663` (arpeggiator), `d1cd2421` (timing correct), `990fdf44` (automation), `490256b6` (touch strip módok; a T5 kapcsoló és a probe ártalmatlan). Visszavonás előtt futtasd újra a natív buildet (`ninja -C build-linux Kick`).
+
+## Sequencer screens (Step Sequencer, List Edit, Next Sequence, Song, Color Edit) - added after the S-C code round
+
+Inject with `/data/kick_cmd` (`btn`, `pad N V`, `jog N`, `rawmidi PORT hex...`, `snapshot /data/x.ppm`); read `/data/kick.log`. Q-Link 1 = `rawmidi <port> B0 10 01` (RPT L143).
+
+Step Sequencer
+1. Shift+GRID / STEP SEQ opens it; 16 pads = 16 steps of the page, display updates at once; Full/Half Level changes the stored velocity.
+2. Q-Link 1-4 in Velocity view on an active step: step keeps its Probability / Ratchet (List Edit: Prob column unchanged), plays; on page 2 (16T / 32T) the 4 Q-Links change the steps of page 2.
+3. Bank buttons A/B page through 16T (24 steps = 2 pages), 32T, 64T.
+4. Dial and +/- nudge; a fast dial turn moves several steps; after a display touch check that the dial still reaches the screen.
+5. Mirror / Flip / Pulse / Inverse: Probability / Ratchet of the steps survive Mirror; Pulse switches steps off (notes deleted); no velocity 0 notes.
+6. UNDO after a touch drag, Clear Pad, Clear Bar, Nudge: ONE press reverts the gesture; REDO. Display refreshes after UNDO and during recording.
+7. Open the screen with Grid TIME DIV = 1/32T, then back: the Grid quantization is unchanged.
+8. Playing: play position marker and page following in CLASSIC; CPU / frame time with the screen open and on another screen (hidden screen must cost nothing).
+9. Audio / Clip track selected: notice shown, controls off.
+10. GRID: finger accuracy on the 19 px rows, SELECT toggle without the physical Shift.
+11. Pad LEDs in the Step Sequencer: expected NOT lit (bridge drops the step LED commands), report what is lit.
+
+List Edit
+12. TC button, ENTER = Apply, STOP = Apply, Shift+STOP / MAIN = Cancel, same with a TYPE / EVENTS popup open; after one Apply press UNDO once: the whole pass is reverted. EVENTS offers All / Selected only.
+13. Data Dial / +/- walk the rows; Q-Link 1-4 edit the selected row (also on an empty track: nothing happens, no crash); Cursor L/R behaviour (acts on release).
+14. Delete with nothing selected deletes nothing; Insert BAR 1 / BEAT 1 / TICK 0 lands on 01:01:00; tap on Time / Pad opens the editors.
+15. Open time and memory with 100 / 500 / 1000 notes (the pad cell is lighter now; row virtualisation is still open and depends on this measurement).
+16. Record pads with the list open: the list grows without reopening.
+
+Next Sequence / Song / Color Edit
+17. Next Sequence: PLAY, queue a pad, STOP (touch header or hardware), change bank; repeat with STOP on another screen and coming back: no crash (`/data/kick.crash` must stay absent). PLAY vs PLAY START; header Play/Stop button.
+18. Song: create (empty / duplicate / "create new song" names are refused), Insert 3 steps, PLAY from step 2, wait for the end (UI unlocks, transport stops), Clear / Delete + UNDO, rename and delete a song, delete a sequence used by a step (step turns red, PLAY refuses).
+19. Color Edit: press a hardware pad: it plays and takes the colour, the hardware pad LED follows; Data Dial steps the colours; +/- change the bank; Make Default gives the program type's defaults in all banks; the Pad Off / Pad On / Empty controls still have NO hardware effect on the MPC (bridge does not implement the colour mode).
