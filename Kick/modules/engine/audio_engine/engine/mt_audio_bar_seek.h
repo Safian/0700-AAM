@@ -57,5 +57,11 @@ namespace mt
 
         // Position inside a track / sequence of the given length in ticks (0 for an empty one).
         constexpr uint32_t wrapToLength( uint32_t posTicks, uint32_t lengthInTicks ) noexcept { return lengthInTicks ? posTicks % lengthInTicks : 0u; }
+
+        // Where play() ("from the start") begins: the first bar of the playable range, beat 0, tick 0. Beat and tick must NOT
+        // be inherited from the previous run (MTSequence::stop() leaves the playhead where it stopped): with only the bar
+        // reset, a PLAY after STOP began (stopBeat, stopTick) into the first bar, e.g. 1.3 s late at 120 BPM.
+        struct PlayStart { int bar, beat, tick; };
+        constexpr PlayStart playStart( bool looping, int loopStart1Based ) noexcept { return { looping && loopStart1Based > 1 ? loopStart1Based - 1 : 0, 0, 0 }; }
     } // namespace bar_seek
 } // namespace mt

@@ -943,7 +943,12 @@ namespace mt
         isPaused = false;
 
         // Setup starting tick.
-        sequencePlayhead.bnb.bar = isLooping.get() ? juce::jmax<int>( 0, loopStart.get() - 1 ) : 0;
+        // Beat and tick restart too: stop() leaves the playhead where it stopped, and seek(bnb) below used to start the new run
+        // that many beats/ticks into the bar (Looper SYNC: the sequence ran ~1.3 s ahead of the loop after STOP, PLAY).
+        const auto start         = bar_seek::playStart( isLooping.get(), (int)loopStart.get() );
+        sequencePlayhead.bnb.bar  = start.bar;
+        sequencePlayhead.bnb.beat = start.beat;
+        sequencePlayhead.bnb.tick = start.tick;
 
         // Initialize
         initializeTickDataFromTempoSettings( getSequenceTempoSettings( sequencePlayhead.bnb.bar ) );
