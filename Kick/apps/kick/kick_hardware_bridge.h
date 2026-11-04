@@ -13,6 +13,8 @@
 #include "hardware/pad_level.h"
 #include "hardware/system_probe.h"
 #include "hardware/touch_space.h"
+#include "hardware/qlink_bank.h"
+#include "hardware/transport_router.h"
 #include "contracts/dcl/dcl_signals.h"
 #include "contracts/dcl/dcl_contracts.h"
 #include "contracts/dcl/dcl_contracts_helper.h"
@@ -78,6 +80,9 @@ private:
     std::atomic<bool> m_strip_pitch_sent { false };  // a pitch value was sent and not yet sprung back to centre
     std::atomic<int>  m_strip_last_pad { -1 };       // Pad Level mode target: pad index 0..15 of the last pad hit (the note is
                                                      // computed on the message thread from the ENGINE bank, see postStripPadLevel)
+    std::atomic<int>  m_strip_last_note { -1 };      // Notes mode: last sounding pitch
+    std::atomic<int>  m_qlink_bank { 0 };            // Q-Link bank 0..3 (SS-22, LE-24, QL-11)
+    std::atomic<uint8_t> m_pad_colour_mode { 0 };    // DCL EN_PAD_COLOR_MODE
     // Newest strip value waiting for the message thread (-1 = none queued): the level modes edit the engine through
     // the same calls as the UI (message thread), and only one callAsync is pending at a time.
     std::atomic<int>  m_strip_pad_level_pending { -1 };
@@ -159,19 +164,26 @@ private:
             m_pad_curve.store(static_cast<uint8_t>(msg.data[3]));
             return;
         }
-        if (msg.pktType != CPktMgr::EN_PKT_TYPE_PAD ||
-            msg.pktCmd != contracts::DeviceControlContracts::EN_PAD_SET_COLOUR_STATE) return;
-        if (msg.data.size() < 32) return; // [16 x colour id][16 x state]
-        uint16_t changed = 0;
-        for (int i = 0; i < 16; ++i) {
-            const auto id = static_cast<uint8_t>(msg.data[i]);
-            const auto st = static_cast<uint8_t>(msg.data[16 + i]);
-            if (m_pad_colour_id[i].exchange(id) != id) changed |= uint16_t(1u << i);
-            if (m_pad_state[i].exchange(st) != st) changed |= uint16_t(1u << i);
+        if (msg.pktType == CPktMgr::EN_PKT_TYPE_PAD) {
+            kick_hw::PadStateArray padArr;
+            for (int i = 0; i < 16; ++i) {
+                padArr.colours[i] = m_pad_colour_id[i].load();
+                padArr.states[i]  = m_pad_state[i].load();
+            }
+            padArr.colorMode = (int)m_pad_colour_mode.load();
+
+            const uint16_t changed = kick_hw::applyPadPacket((int)msg.pktCmd, msg.data.data(), msg.data.size(), padArr);
+            if (changed != 0 || padArr.colorMode >= 0) {
+                for (int i = 0; i < 16; ++i) {
+                    m_pad_colour_id[i].store(padArr.colours[i]);
+                    m_pad_state[i].store(padArr.states[i]);
+                }
+                if (padArr.colorMode >= 0) m_pad_colour_mode.store((uint8_t)padArr.colorMode);
+                m_pad_dirty.fetch_or(changed);
+                if (!m_have_project_colours.exchange(true)) m_pad_dirty.fetch_or(0xFFFF);
+                return;
+            }
         }
-        m_pad_dirty.fetch_or(changed);
-        // First packet: write all pads once, even if they equal the zero-initialised arrays.
-        if (!m_have_project_colours.exchange(true)) m_pad_dirty.fetch_or(0xFFFF);
     }
 
     // Idle colour of a pad: project colour once a packet has been received (known id), else the bank colour.
@@ -249,13 +261,19 @@ private:
         if (m_hw && m_hw->control_surface()) m_hw->control_surface()->set_led_level(led, level);
     }
 
-    // Who gets hardware REC / OVERDUB: the Looper keeps them while its screen is shown or it is recording (it is the only
-    // EN_RECORD / EN_OVERDUB consumer of the original Kick); on every other screen they drive the SEQUENCE recording
-    // (arm the sequence, PLAY starts the take). Decided by the screen, as the original Kick routes buttons per screen.
+    // SA-04: Button routing decision (Sampler / Looper / Sequence)
+    static kick_hw::transport::Target currentTransportTarget()
+    {
+        auto& ae = mt::getAudioInterface();
+        return kick_hw::transport::resolveTarget(
+            static_cast<int>(kick_ui::KickHome::Instance().getCurrentScreen()),
+            ae.isLooperRecording(),
+            ae.isRecorderRunning()
+        );
+    }
     static bool recOverdubGoesToLooper()
     {
-        return mt::getAudioInterface().isLooperRecording()
-            || kick_ui::KickHome::Instance().getCurrentScreen() == kick_ui::Screen::MenuLooper;
+        return currentTransportTarget() == kick_hw::transport::Target::Looper;
     }
 
     // REC / OVERDUB LEDs follow the looper state while the looper records, else the SEQUENCE recording state (armed = steady
@@ -269,8 +287,13 @@ private:
         if (!ae.isProjectLoaded()) return;
         const long long ms = (long long)juce::Time::getMillisecondCounter();
         int rec = 0, od = 0;
-        kick_hw::recOverdubLedLevels(ae.isLooperRecording(), ae.isLooperOverdubbing(), ae.isSequenceRecArmed(),
-                                     ae.isSequenceRecording(), ae.isSequenceOverdub(), kick_hw::blinkPhase(ms), rec, od);
+        if (ae.isRecorderRunning()) {
+            rec = kick_hw::blinkPhase(ms) ? kick_hw::kLedFullA : kick_hw::kLedOff;
+            od = kick_hw::kLedOff;
+        } else {
+            kick_hw::recOverdubLedLevels(ae.isLooperRecording(), ae.isLooperOverdubbing(), ae.isSequenceRecArmed(),
+                                         ae.isSequenceRecording(), ae.isSequenceOverdub(), kick_hw::blinkPhase(ms), rec, od);
+        }
         setLed(HW_LED_REC, rec);
         setLed(HW_LED_OVERDUB, od);
     }
@@ -935,7 +958,17 @@ public:
     void on_button_press(HardwareButton btn) override
     {
         // H5: strip mode is cycled on the reader thread (same thread as on_touch_strip_touch/fine), not via callAsync.
-        if (btn == HW_BTN_TOUCH_STRIP) { cycleStripMode(); return; }
+        if (btn == HW_BTN_TOUCH_STRIP) {
+            if (isShiftDown()) {
+                juce::MessageManager::callAsync([this, alive = m_alive]() {
+                    if (!alive->load()) return;
+                    kick_ui::signals::sigTouchFxToggleSetup();
+                });
+                return;
+            }
+            cycleStripMode();
+            return;
+        }
         juce::MessageManager::callAsync([this, alive = m_alive, btn]() { if (!alive->load()) return; handleButtonPress(btn); });
     }
     void on_button_release(HardwareButton btn) override
@@ -1062,19 +1095,25 @@ public:
                     // Already on the message thread (G1): the call edits the ValueTree / UndoManager (F3).
                     const mt::MTSelected sel = ae.getSelected();
                     ae.recallLiveMidi(sel);
-                } else if (recOverdubGoesToLooper()) {
-                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD);
                 } else {
-                    // Sequence recording: REC arms the selected sequence, PLAY starts the take (engine-only, no DCL packet).
-                    ae.sequenceRecPressed();
-                    updateRecOverdubLeds();
+                    const auto target = currentTransportTarget();
+                    if (target == kick_hw::transport::Target::Looper || target == kick_hw::transport::Target::Sampler) {
+                        sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD);
+                    } else {
+                        // Sequence recording: REC arms the selected sequence, PLAY starts the take (engine-only, no DCL packet).
+                        ae.sequenceRecPressed();
+                        updateRecOverdubLeds();
+                    }
                 }
                 break;
             }
             case HW_BTN_OVERDUB:
             {
-                if (recOverdubGoesToLooper()) {
+                const auto target = currentTransportTarget();
+                if (target == kick_hw::transport::Target::Looper) {
                     sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_OVERDUB);
+                } else if (target == kick_hw::transport::Target::Sampler) {
+                    sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_RECORD);
                 } else {
                     ae.sequenceOverdubPressed();
                     updateRecOverdubLeds();
@@ -1194,12 +1233,22 @@ public:
             }
             case HW_BTN_TOUCH_STRIP:
             {
-                cycleStripMode(); // kick_cmd path; the hardware path calls it from on_button_press (reader thread)
+                if (isShiftDown()) {
+                    kick_ui::signals::sigTouchFxToggleSetup();
+                } else {
+                    cycleStripMode(); // kick_cmd path; the hardware path calls it from on_button_press (reader thread)
+                }
                 break;
             }
             case HW_BTN_TOUCH_FX:
             {
-                kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeXYView);
+                if (isShiftDown()) {
+                    kick_ui::signals::sigTouchFxToggleSetup();
+                } else {
+                    m_strip_mode.store(kick_hw::strip::kTouchFx);
+                    setLed(HW_LED_TOUCH_STRIP, kick_hw::strip::modeLedLevel(kick_hw::strip::kTouchFx));
+                    kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeXYView);
+                }
                 break;
             }
             case HW_BTN_NOTE_REPEAT:
@@ -1286,6 +1335,8 @@ public:
                 if (isShiftDown()) {
                     kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuKnobEdit);
                 } else {
+                    const int next = kick_hw::qlink::nextBank(m_qlink_bank.load());
+                    m_qlink_bank.store(next);
                     sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_LINK, contracts::DeviceControlContracts::BTN_PRESSED);
                 }
                 break;
@@ -1620,22 +1671,30 @@ public:
     {
         if (encoder_idx >= 0 && encoder_idx < 4)
         {
+            const int knobCode = contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1
+                               + kick_hw::qlink::knobOffset(encoder_idx, m_qlink_bank.load());
             CPktMgr::HWMsg_t msg;
             msg.pktType = CPktMgr::EN_PKT_TYPE_KNOBS;
             msg.pktCmd = contracts::DeviceControlContracts::KnobCmd::EN_KNOB_QLINK;
-            msg.data = { contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1 + encoder_idx,
+            msg.data = { knobCode,
                          delta > 0 ? (int)contracts::DeviceControlContracts::KnobDirection::EN_KNOB_CLOCKWISE : (int)contracts::DeviceControlContracts::KnobDirection::EN_KNOB_ANTICLOCKWISE,
                          abs(delta) };
             contracts::DclSignals::dispatchHardwareInput(msg);
         }
     }
 
-    // T11 (investigated, deliberately empty): Kick has no knob-touch DCL message. A zero-count Q-Link packet is
-    // NOT harmless: it passes isValidHardwareInput and reaches linkRotated(ID, 0) of the Q-Link pages, where
-    // PadMixer/ProgramMixer do `mute.setToggleState(value > 0); solo.setToggleState(value <= 0)` (flips the
-    // mute/solo toggle state), and number controls call knobRotated(0) -> setValue(val_ + 0). Nothing highlights
-    // the assigned parameter. So the touch is not forwarded.
-    void on_encoder_touch(int /*encoder_idx*/, bool /*touched*/) override {}
+    // QL-11: Q-Link touch (Note 84-87 on Key 61). No zero-delta DCL packet is sent (avoiding mute/solo flip bug),
+    // but sigQLinkTouch is dispatched for UI highlighting/OSD.
+    void on_encoder_touch(int encoder_idx, bool touched) override
+    {
+        if (encoder_idx >= 0 && encoder_idx < 4)
+        {
+            const int knobIdx = kick_hw::qlink::knobOffset(encoder_idx, m_qlink_bank.load());
+            juce::MessageManager::callAsync([knobIdx, touched]() {
+                kick_ui::signals::sigQLinkTouch(knobIdx, touched);
+            });
+        }
+    }
 
     // T12: pitch wheel back to the centre (strip finger left / mode left).
     // Pitch bend: the track that received the first off-centre value gets the spring-back too (F5).
@@ -1768,8 +1827,24 @@ public:
     }
     void on_touch_strip_touch(bool down) override
     {
-        if (down) return;
         const int mode = m_strip_mode.load();
+        if (mode == kick_hw::strip::kTouchFx) {
+            juce::MessageManager::callAsync([down]() {
+                kick_ui::signals::sigTouchFxStripGate(down);
+            });
+            return;
+        }
+        if (mode == kick_hw::strip::kNotes) {
+            if (!down) {
+                const int note = m_strip_last_note.exchange(-1);
+                if (note >= 0 && note <= 127) {
+                    auto& ae = mt::getAudioInterface();
+                    ae.addLiveMidiMsg(ae.getSelected(), juce::MidiMessage::noteOff(1, note));
+                }
+            }
+            return;
+        }
+        if (down) return;
         if (mode == kick_hw::strip::kPitchBend) stripPitchSpringBack();
         stripSustainSet(false); // release always lifts the strip pedal, whatever the mode is now (a mode change may have raced)
         // Pad / track level, mod wheel, expression: the value stays (DUMMY, the manual has no release behaviour).
@@ -1794,6 +1869,30 @@ public:
                 return;
             case kick_hw::strip::kPadLevel:   postStripPadLevel(kick_hw::strip::padLevelFromPosition(val)); return;
             case kick_hw::strip::kTrackLevel: postStripTrackLevel(kick_hw::strip::trackLevelFromPosition(val)); return;
+            case kick_hw::strip::kTouchFx: {
+                const float pos = kick_hw::strip::touchFxFromPosition(val);
+                juce::MessageManager::callAsync([pos]() {
+                    kick_ui::signals::sigTouchFxStripPos(pos);
+                    kick_ui::signals::sigTouchFxStripGate(true);
+                });
+                return;
+            }
+            case kick_hw::strip::kNotes: {
+                auto& ae = mt::getAudioInterface();
+                const int slot = kick_hw::strip::notesFromPosition(val, 16);
+                const int newNote = ae.getBankOffset() + slot;
+                const int oldNote = m_strip_last_note.exchange(newNote);
+                if (newNote != oldNote) {
+                    const auto sel = ae.getSelected();
+                    if (oldNote >= 0 && oldNote <= 127) {
+                        ae.addLiveMidiMsg(sel, juce::MidiMessage::noteOff(1, oldNote));
+                    }
+                    if (newNote >= 0 && newNote <= 127) {
+                        ae.addLiveMidiMsg(sel, juce::MidiMessage::noteOn(1, newNote, static_cast<uint8_t>(100)));
+                    }
+                }
+                return;
+            }
             case kick_hw::strip::kOff:        return; // sends nothing
             default: break; // kSlider: the Kick slider packet below
         }
@@ -1922,16 +2021,23 @@ public:
         // Kick reports pad pressure as the 4th field of EN_PAD_STATE (see DclContractsHelper::getPadAftertouch).
         // That packet also starts the sound in several screens, so (like the Kick hardware, which only reports
         // it after EN_PAD_SET_AFTER_TOUCH) send it only when enabled and while the pad is held.
-        if (!kSendPadAftertouchPackets) return;
         if (pad_num >= 0 && pad_num < 16 && m_pad_aftertouch_enabled.load() &&
             (m_pad_held.load() & (1u << pad_num)) != 0)
         {
-            CPktMgr::HWMsg_t msg;
-            msg.pktType = CPktMgr::EN_PKT_TYPE_PAD;
-            msg.pktCmd = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
-            msg.data = { pad_num, contracts::DeviceControlContracts::BTN_PRESSED, (int)m_pad_last_vel[pad_num].load(),
-                         juce::jlimit(0, 127, val) };
-            contracts::DclSignals::dispatchHardwareInput(msg);
+            if (kSendPadAftertouchPackets) {
+                CPktMgr::HWMsg_t msg;
+                msg.pktType = CPktMgr::EN_PKT_TYPE_PAD;
+                msg.pktCmd = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
+                msg.data = { pad_num, contracts::DeviceControlContracts::BTN_PRESSED, (int)m_pad_last_vel[pad_num].load(),
+                             juce::jlimit(0, 127, val) };
+                contracts::DclSignals::dispatchHardwareInput(msg);
+            }
+            // PP-22: Polyphonic aftertouch directly to engine for the held pad's sounding note
+            auto& ae = mt::getAudioInterface();
+            const int note = pad_num + ae.getBankOffset();
+            if (note >= 0 && note <= 127) {
+                ae.addLiveMidiMsg(ae.getSelected(), juce::MidiMessage::aftertouchChange(1, note, juce::jlimit(0, 127, val)));
+            }
         }
     }
 
