@@ -17,6 +17,10 @@ target_compile_definitions(kick-serial-tests PRIVATE JUCE_USE_CURL=0)
 add_test(NAME kick-serial COMMAND kick-serial-tests)
 set_tests_properties(kick-serial PROPERTIES TIMEOUT 10)
 
+add_executable(kick-mixer-logic-tests MixerLogicTests.cpp)
+add_test(NAME kick-mixer-logic COMMAND kick-mixer-logic-tests)
+set_tests_properties(kick-mixer-logic PROPERTIES TIMEOUT 10)
+
 add_executable(kick-midi-parser-tests MidiParserTests.cpp)
 add_test(NAME kick-midi-parser COMMAND kick-midi-parser-tests)
 set_tests_properties(kick-midi-parser PROPERTIES TIMEOUT 10)
