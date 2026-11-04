@@ -1,7 +1,8 @@
 #include "mt_sample_player.h"
 
-#define broadcastMessageLengthInMs 3
-#define cuePreviewLengthInMs       30
+// Real milliseconds. The former "3" / "30" were divided by 60 instead of 1000, i.e. they meant 50 ms / 500 ms: behaviour unchanged.
+#define broadcastMessageLengthInMs 50
+#define cuePreviewLengthInMs       500
 
 namespace mt
 {
@@ -95,7 +96,7 @@ namespace mt
             }
             else if( playMode == MTSamplePlayMode::samplePlayModeCue )
             {
-                int previewOffSet = static_cast<int>( ( reader->sampleRate * cuePreviewLengthInMs ) / 60 );
+                int previewOffSet = static_cast<int>( ( reader->sampleRate * cuePreviewLengthInMs ) / 1000 );
                 pos               = region.getStart();
                 length            = pos + previewOffSet;
                 pos               = pos - previewOffSet;
@@ -141,7 +142,7 @@ namespace mt
         {
             samplesPerBlock = samplesPerBlockExpected;
             reader.reset( formatManager.createReaderFor( sourceFile ) );
-            broadcastElapsedSamples = static_cast<int>( ( reader->sampleRate * broadcastMessageLengthInMs ) / 60 );
+            broadcastElapsedSamples = static_cast<int>( ( reader->sampleRate * broadcastMessageLengthInMs ) / 1000 );
         }
     }
 

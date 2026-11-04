@@ -207,6 +207,7 @@ namespace ui
         void setupBreathingTimer();
         void resized() override;
         void visibilityChanged() override;
+        // Hardware pad handler: connected once while visible, removed exactly on hide / destruction (no stacked handlers).
         void timerCallback() override;
         void paint( juce::Graphics& g );
 

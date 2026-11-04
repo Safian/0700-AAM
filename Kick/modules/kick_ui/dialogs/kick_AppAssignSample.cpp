@@ -19,6 +19,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include <kick_ui/modes/filebrowser/kick_fileUtils.h>
+#include "kick_assign_sample_logic.h"
 
 namespace kick_ui
 {
@@ -28,7 +29,14 @@ namespace kick_ui
         fileList.setFocus( true );
         setLookAndFeel( ui::KickLooknFeel::getLnf() );
 
-        mt::utils::addChildComponents( this, pads.get(), fileList, sampleLabel );
+        mt::utils::addChildComponents( this, pads.get(), fileList, sampleLabel, layerSelector );
+
+        layerSelector.setOptions( { "Layer 1", "Layer 2", "Layer 3", "Layer 4" } );
+        layerSelector.setSelected( 0, juce::dontSendNotification );
+        layerSelector.onSelectionChanged = [this]( int index, const juce::String& ) {
+            currentLayer = juce::jlimit( 0, mt::MAX_LAYERS - 1, index );
+            refresh();
+        };
 
         fileList.setBackgroundColour( ui::Theme::backgroundColour( 1 ) );
         fileList.setSpacing( 4, 4, 10 );
@@ -43,11 +51,10 @@ namespace kick_ui
         pads->OnButtonClicked = [&]( int Index ) { //software padbutton pressed
             pads->setHighlight( Index, ui::Theme::padButtonColour( 3 ) );
             ui::fileUtils::setHighlightLED( Index - pads->getBankOffset() );
+            refreshLEDs();
         };
 
         pads->OnDoubleClicked = [&]( int Index ) {
-            DBG( "ON DOUBLE CLICKED" );
-            auto index = fileList.getSelectedIndex();
             ui::fileUtils::setHighlightLED( Index - pads->getBankOffset() );
             assignSampleIntoPad( Index );
         };
@@ -62,69 +69,80 @@ namespace kick_ui
             ui::fileUtils::setHighlightLED( hwPadIndex );
         };
 
-        fileList.onSelectionChanged = [&]( int Index, juce::String Name ) {
-            auto file = findFileInDirectory( getAppDirs( MTSamples ), Name );
-            if( file.existsAsFile() )
-                audition( file );
-            else if( juce::File( ae.getProjectDir().getSiblingFile( Name ).getFullPathName() ).existsAsFile() )
-                audition( juce::File( ae.getProjectDir().getSiblingFile( Name ).getFullPathName() ) );
-            else
-                ae.stopPreview();
-        };
+        fileList.onSelectionChanged = [this]( int Index, juce::String ) { scheduleAudition( Index ); };
     }
 
-    juce::File AssignSampleContent::findFileInDirectory( const juce::File& directory, const juce::String& fileName )
+    // Selection -> asset path straight from the pool index (no directory walk, no wildcard interpretation); only the selection that
+    // is still current after a short delay is auditioned, so a fast Data Dial spin does not open a file per step.
+    void AssignSampleContent::scheduleAudition( int listIndex )
     {
-        juce::DirectoryIterator iter( directory, true, fileName );
+        const auto ticket = auditionDebounce.request();
+        juce::Component::SafePointer<AssignSampleContent> safe( this );
+        juce::Timer::callAfterDelay( kAuditionDelayMs, [safe, ticket, listIndex] {
+            if( safe != nullptr && safe->auditionDebounce.isCurrent( ticket ) )
+                safe->auditionListIndex( listIndex );
+        } );
+    }
 
-        while( iter.next() )
+    void AssignSampleContent::auditionListIndex( int listIndex )
+    {
+        const auto poolIndex = assign_logic::poolIndexFromListIndex( listIndex, (int)files.size() - 1 );
+        if( poolIndex < 0 )
         {
-            juce::File fileFound = iter.getFile();
-            if( fileFound.existsAsFile() )
-                return fileFound; // Return the file if found
+            ae.stopPreview();
+            return;
         }
-
-        return juce::File(); // Return an empty file if not found
+        const juce::File file( ae.getAsset( mt::AssetTypes::Samples, poolIndex ) );
+        if( file.existsAsFile() )
+            audition( file );
+        else
+        {
+            kick_log( "AssignSample", "sample not found for audition: %s", file.getFullPathName().toRawUTF8() );
+            ae.stopPreview();
+        }
     }
 
     void AssignSampleContent::assignSampleIntoPad( int padIndex )
     {
-        mt::MTProgramType programType = ae.getSelectedProgramData()->type;
-
-        if( programType == mt::MTProgramType::Drum || programType == mt::MTProgramType::Clip || programType == mt::MTProgramType::Keygroup )
+        const auto* programData = ae.getSelectedProgramData();
+        if( programData == nullptr )
         {
-            auto hwIndex = padIndex - pads->getBankOffset();
-            if( juce::isPositiveAndBelow( hwIndex, _NUM_PADS_IN_COMPONENT ) )
-            {
-                auto sampleIndex = fileList.getSelectedIndex();
-                if( sampleIndex == 0 )
-                {
-                    ae.removeSampleFromProgram( ae.getSelectedProgram(), padIndex );
-                    contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                 setPadDataMessage( hwIndex, contracts::DeviceControlContracts::PadButtonState::StateSampleNotAssigned,
-                                                                                    contracts::DeviceControlContracts::padColourlightGreen1 ) );
-                }
-                else
-                {
-                    auto sample = mt::getAudioInterface().getAsset( mt::AssetTypes::Samples, sampleIndex - 1 );
-                    ae.addSampleToProgram( ae.getSelectedProgram(), padIndex, sample, 0 );
-                    if( ae.getSelectedProgramData()->type == mt::MTProgramType::Keygroup )
-                    {
-                        contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                     setAllPadDataColourInfoMessage( contracts::DeviceControlContracts::PadButtonState::StateSampleAssigned,
-                                                                                                     contracts::DeviceControlContracts::padColourDarkYellow ) );
-                    }
-                    contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                 setPadDataMessage( hwIndex, contracts::DeviceControlContracts::PadButtonState::StateSampleAssigned,
-                                                                                    contracts::DeviceControlContracts::padColourlightGreen1 ) );
-                }
-                juce::MessageManager::callAsync( [this, padIndex] {
-                    refresh();
-                    pads->setHighlight( padIndex, ui::Theme::padButtonColour( 3 ) );
-                } );
-            }
+            kick_log( "AssignSample", "no selected program" );
+            return;
         }
-    };
+        const mt::MTProgramType programType = programData->type;
+        if( !assign_logic::programTypeAcceptsSamples( programType == mt::MTProgramType::Drum, programType == mt::MTProgramType::Clip, programType == mt::MTProgramType::Keygroup ) )
+        {
+            kick_log( "AssignSample", "program type has no pad samples" );
+            return;
+        }
+
+        const auto hwIndex = assign_logic::hwPadIndex( padIndex, pads->getBankOffset(), _NUM_PADS_IN_COMPONENT );
+        if( hwIndex < 0 ) // no pad highlighted / pad outside the visible bank: nothing to assign
+            return;
+
+        const auto sampleIndex = fileList.getSelectedIndex();
+        if( sampleIndex == 0 )
+        {
+            // "Clear Assignment": clears this layer only (undoable); the pad's levels, envelope, LFO and the other layers stay.
+            ae.clearSampleLayerInProgram( ae.getSelectedProgram(), padIndex, currentLayer );
+        }
+        else
+        {
+            const auto poolIndex = assign_logic::poolIndexFromListIndex( sampleIndex, (int)files.size() - 1 );
+            if( poolIndex < 0 )
+                return;
+            const auto sample = ae.getAsset( mt::AssetTypes::Samples, poolIndex );
+            ae.addSampleToProgram( ae.getSelectedProgram(), padIndex, sample, 0, currentLayer );
+        }
+        juce::MessageManager::callAsync( [safe = juce::Component::SafePointer<AssignSampleContent>( this ), padIndex] {
+            if( safe == nullptr )
+                return;
+            safe->refresh();
+            safe->pads->setHighlight( padIndex, ui::Theme::padButtonColour( 3 ) );
+            safe->refreshLEDs(); // after the highlight is set: the hardware LEDs follow assign / clear without a bank change
+        } );
+    }
 
     void AssignSampleContent::paint( juce::Graphics& g )
     {
@@ -136,7 +154,8 @@ namespace kick_ui
     void AssignSampleContent::resized()
     {
         sampleLabel.setBounds( 10, 10, 342, 50 );
-        fileList.setBounds( 10, 60, 342, 385 );
+        fileList.setBounds( 10, 60, 342, 335 );
+        layerSelector.setBounds( 10, 400, 342, 45 );
         pads->setBounds( 362, 10, 652, 440 );
     }
 
@@ -178,21 +197,15 @@ namespace kick_ui
         {
             if( sample )
             {
-                auto text = juce::File( sample->layers[0]->source.get() ).getFileNameWithoutExtension();
+                auto text = juce::File( sample->layers[(size_t)currentLayer]->source.get() ).getFileNameWithoutExtension();
                 if( !text.isEmpty() )
                 {
-                    if( sample->minNote.get() != sample->maxNote.get() ) //For KeyGroup Program
+                    // Keygroup: label the zone minNote..maxNote; Drum / Clip: the key note only.
+                    const auto range = assign_logic::zoneNotes( sample->minNote.get(), sample->maxNote.get(), sample->keyNote.get() );
+                    for( auto i = range.first; i <= range.last; i++ )
                     {
-                        for( auto i = 0; i <= sample->maxNote.get(); i++ )
-                        {
-                            pads->setRow1Text( i, text, juce::dontSendNotification );
-                            pads->setBorderColor( i, ui::Theme::backgroundColour( 6 ), 1, juce::dontSendNotification );
-                        }
-                    }
-                    else //For  Drum and Cip Programs
-                    {
-                        pads->setRow1Text( sample->keyNote.get(), text, juce::dontSendNotification );
-                        pads->setBorderColor( sample->keyNote.get(), ui::Theme::backgroundColour( 6 ), 1, juce::dontSendNotification );
+                        pads->setRow1Text( i, text, juce::dontSendNotification );
+                        pads->setBorderColor( i, ui::Theme::backgroundColour( 6 ), 1, juce::dontSendNotification );
                     }
                 }
             }
@@ -201,72 +214,44 @@ namespace kick_ui
 
     void AssignSampleContent::refreshLEDs()
     {
+        using DCC = contracts::DeviceControlContracts;
         std::vector<contracts::PadData> padDataList;
-        auto                            bankOffset = pads->getBankOffset();
+        const auto                      bankOffset = pads->getBankOffset();
 
         ae.getProgramSamples( ae.getSelectedProgram(), samples );
-        auto programData = ae.getSelectedProgramData();
-        if( programData )
+        if( ae.getSelectedProgramData() )
         {
-            mt::MTProgramType programType = programData->type.get();
-            if( programType == mt::MTProgramType::Keygroup )
+            // Zone-aware for every program type: a Keygroup pad is lit only when a sample zone covers its note.
+            std::vector<assign_logic::ZoneInfo> zones;
+            for( auto* it : samples )
             {
-                if( samples.size() )
-                {
-                    for( auto& it : samples )
-                    {
-                        if( it->getSource().length() )
-                        {
-                            for( auto i = 0; i < 16; i++ )
-                                padDataList.push_back( { i, contracts::DeviceControlContracts::PadButtonState::StateSampleAssigned, contracts::DeviceControlContracts::padColourDarkYellow } );
-                        }
-                        else //for Safety
-                        {
-                            for( auto i = 0; i < 16; i++ )
-                                padDataList.push_back( { i, contracts::DeviceControlContracts::PadButtonState::StateSampleNotAssigned, contracts::DeviceControlContracts::PadColourTrans } );
-                        }
-                    }
-                }
+                if( it == nullptr )
+                    continue;
+                bool any = false;
+                for( const auto& src : it->getSources() )
+                    any = any || src.isNotEmpty();
+                zones.push_back( { it->minNote.get(), it->maxNote.get(), it->keyNote.get(), any } );
+            }
+            for( int hw = 0; hw < NUM_PADS_IN_BANK; hw++ )
+            {
+                if( assign_logic::padAssigned( zones, bankOffset, hw ) )
+                    padDataList.push_back( { hw, DCC::PadButtonState::StateSampleAssigned, DCC::padColourDarkYellow } );
                 else
-                {
-                    for( auto i = 0; i < 16; i++ )
-                        padDataList.push_back( { i, contracts::DeviceControlContracts::PadButtonState::StateSampleNotAssigned, contracts::DeviceControlContracts::PadColourTrans } );
-                }
-            }
-
-            else //For Drum and Clip Programs
-            {
-                for( auto colourIndex = bankOffset; colourIndex < bankOffset + NUM_PADS_IN_BANK; colourIndex++ )
-                {
-                    bool pushedToColourData = false;
-                    for( auto& it : samples )
-                    {
-                        auto index = it->keyNote.get() - bankOffset;
-                        if( juce::isPositiveAndBelow( index, 16 ) && it->getSource().length() && colourIndex == it->keyNote.get() )
-                        {
-                            pushedToColourData = true;
-                            padDataList.push_back( { colourIndex - bankOffset, contracts::DeviceControlContracts::PadButtonState::StateSampleAssigned, contracts::DeviceControlContracts::padColourDarkYellow } );
-                            break;
-                        }
-                    }
-                    if( !pushedToColourData )
-                        padDataList.push_back( { colourIndex - bankOffset, contracts::DeviceControlContracts::PadButtonState::StateSampleNotAssigned, contracts::DeviceControlContracts::PadColourTrans } );
-                }
+                    padDataList.push_back( { hw, DCC::PadButtonState::StateSampleNotAssigned, DCC::PadColourTrans } );
             }
         }
-        contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                     setPadColourAndStateInfoMessage( padDataList ) );
-        auto highlightedPad = pads->getHighlightedPad();
-        if( highlightedPad != -1 ) //checking there is a highlight pad or not
+        // The highlighted pad is part of the same full-bank colour message (the bridge only processes that message type on the
+        // MPC; single-pad commands are dropped there), so the highlight survives assign / clear without a bank change.
+        const auto highlightedPad = pads->getHighlightedPad();
+        const auto highlightHw    = assign_logic::hwPadIndex( highlightedPad, bankOffset, _NUM_PADS_IN_COMPONENT );
+        if( highlightHw >= 0 )
         {
-            auto padIndex = highlightedPad - pads->getBankOffset();
-            if( juce::isPositiveAndBelow( padIndex, _NUM_PADS_IN_COMPONENT ) ) //checking highlighted pad is in current Bank
-            {
-                contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                             setPadDataMessage( padIndex, contracts::DeviceControlContracts::PadButtonState::StateOn, contracts::DeviceControlContracts::padColourlightGreen1 ) );
-                ui::fileUtils::lastPressedPad = padIndex;
-            }
+            for( auto& pd : padDataList )
+                if( pd.colourIndex == highlightHw )
+                    pd = { highlightHw, DCC::PadButtonState::StateOn, DCC::padColourlightGreen1 };
+            ui::fileUtils::lastPressedPad = highlightHw;
         }
+        contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::setPadColourAndStateInfoMessage( padDataList ) );
     }
     //Not used
     void AssignSampleContent::sendAssignedSamplesAtStartup( void )
@@ -304,17 +289,20 @@ namespace kick_ui
             {
                 if( buttonState == contracts::DeviceControlContracts::BTN_PRESSED )
                 {
-                    mt::getAudioInterface().removeSampleFromProgram( mt::getAudioInterface().getSelectedProgram(), padIndex );
-
-                    contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                 setPadDataMessage( ledIndex,
-                                                                                    contracts::DeviceControlContracts::PadButtonState::StateSampleNotAssigned,
-                                                                                    contracts::DeviceControlContracts::padColourlightGreen1 ) );
+                    // ERASE clears the highlighted pad's current layer (undoable); without a highlighted pad it does nothing.
+                    if( ledIndex >= 0 && assign_logic::hwPadIndex( padIndex, pads->getBankOffset(), _NUM_PADS_IN_COMPONENT ) >= 0 )
+                    {
+                        ae.clearSampleLayerInProgram( ae.getSelectedProgram(), padIndex, currentLayer );
+                        refresh();
+                        pads->setHighlight( padIndex, ui::Theme::padButtonColour( 3 ) );
+                        refreshLEDs();
+                    }
 
                     contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::setLEDONMessage( contracts::DeviceControlContracts::EN_ERASE ) );
 
                     refresh();
-                    pads->setHighlight( padIndex, ui::Theme::padButtonColour( 3 ) ); //highlight UI pad
+                    if( padIndex >= 0 )
+                        pads->setHighlight( padIndex, ui::Theme::padButtonColour( 3 ) ); //highlight UI pad
                 }
                 else if( buttonState == contracts::DeviceControlContracts::BTN_RELEASED )
                 {
@@ -367,8 +355,8 @@ namespace kick_ui
                 }
             }
         }
-        else // Need to check when it's should call
-            ui::getComponentInFocus()->handleCommand( f_HwMsg );
+        else if( auto* focused = ui::getComponentInFocus() ) // no focused control (e.g. strip message): ignore
+            focused->handleCommand( f_HwMsg );
     }
 #if NOT_USED
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -728,9 +716,8 @@ namespace kick_ui
         leftNav.onClick = [&]() {
             auto index = drum.pads->getBankIndex();
             if( index == 0 )
-                drum.pads->setBank( 0 );
-            else
-                drum.pads->setBank( index - 1 );
+                return; // already at bank A
+            drum.pads->setBank( index - 1 );
             bankLabel.setText( drum.pads->getBank(), juce::dontSendNotification );
             mt::getAudioInterface().setBank( drum.pads->getBank() );
         };
@@ -738,9 +725,8 @@ namespace kick_ui
         rightNav.onClick = [&] {
             auto index = drum.pads->getBankIndex();
             if( index == 7 )
-                drum.pads->setBank( 7 );
-            else
-                drum.pads->setBank( index + 1 );
+                return; // already at bank H
+            drum.pads->setBank( index + 1 );
             bankLabel.setText( drum.pads->getBank(), juce::dontSendNotification );
             mt::getAudioInterface().setBank( drum.pads->getBank() );
         };

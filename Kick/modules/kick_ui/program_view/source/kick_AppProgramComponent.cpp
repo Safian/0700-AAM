@@ -293,7 +293,8 @@ void AppProgramDisplay::refreshDisplay()
             break;
         case mt::MTProgramType::Audio:
             edit.setImages( "editAudio", "editAudio_active" );
-            mt::utils::makeVisible( route, assign, edit, sampler );
+            // Sample Assign has no pad samples for Audio programs (assignSampleIntoPad ignores them): no dead button.
+            mt::utils::makeVisible( route, edit, sampler );
             break;
         case mt::MTProgramType::Clip:
             edit.setImages( "editClip", "editClip_active" );

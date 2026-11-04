@@ -113,6 +113,9 @@ namespace mt{
         MTSampleEditorActionsInterface::ProcessType getProcessType(){ return type; }
         void setProcessType( MTSampleEditorActionsInterface::ProcessType newType ){ type = newType; }
         juce::int64 getTotalSamples(){ return totalSmaples; }
+        // Files this action created next to the source (Extract / Copy / Stereo>Mono); the interface registers them as assets.
+        const std::vector<juce::File>& getCreatedFiles() const { return createdFiles; }
+        bool failed() const { return actionFailed; }
 
     protected:
         int read( juce::AudioSampleBuffer& buffer, juce::int64 startSample, juce::int64 endSample, juce::AudioFormatReader* r, juce::int64 current );
@@ -139,6 +142,8 @@ namespace mt{
         int regionProcessing = -1;
         juce::int64 totalSmaples = -1;
         ProcessType type = processBetweenRegion;
+        std::vector<juce::File> createdFiles;
+        bool actionFailed = false;
     };
 
     ///////////////////////////////////////////

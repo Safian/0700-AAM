@@ -799,6 +799,8 @@ namespace mt
         {
             utils::addAndMakeVisible( this, modeType, slicePlus, split, combine, legato, playCue, repeat, startNumber, endNumber, cueNumber, xFadeNumber, thresholdNumber, minSamplesNumber, regionsNumber, barsNumber, timeDivList, sliceList, clrAll );
             utils::makeHidden( thresholdNumber, minSamplesNumber, regionsNumber, barsNumber, timeDivList );
+            // Repeat and X FADE have no engine function behind them: hidden, not shown dead.
+            utils::makeHidden( repeat, xFadeNumber );
 
             modeType.setListOptions( { "Manual", "Threshold", "Regions", "Quantize" } );
 
@@ -1127,6 +1129,9 @@ namespace mt
         {
             utils::addAndMakeVisible( this, detectBpm, toSeq, matchBpm, sampleBPM, /*bpm,*/ semi, fine, sliceList );
 
+            // Detect BPM / To Seq / Match BPM / Semi / Fine have no function behind them (the detector is a placeholder, no slice
+            // pitch parameters in the engine): hidden, not shown dead.
+            utils::makeHidden( detectBpm, toSeq, matchBpm, sampleBPM, semi, fine );
             sampleBPM.setEnabled( false );
             sampleBPM.setRange( 0, 1 );
             //bpm.setRange( 0, 1 );
