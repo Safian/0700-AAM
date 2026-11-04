@@ -43,6 +43,7 @@ namespace kick_ui
 
         const mt::track::humanizeInfo& getData()
         {
+            info.onlySelected        = onlySelectedCheckBox.getToggleState();
             info.isTimeEnabled       = timeCheckBox.getToggleState();
             info.time                = pulses.getValue();
             info.eagerness           = eagerness.getValue();
@@ -54,6 +55,7 @@ namespace kick_ui
         };
 
     private:
+        ui::KickCheckBoxButton onlySelectedCheckBox{ "Only selected notes", "Only selected notes" };
         ui::KickCheckBoxButton timeCheckBox{ "Humanize Time", "Humanize Time" };
         ui::KickSlider         pulses{ "AMOUNT(PULSES)", juce::Slider::LinearBar, juce::Slider::TextBoxAbove };
         ui::KickLabel          beatLabel{ "Exactly a 16th note" };
@@ -66,6 +68,7 @@ namespace kick_ui
 
         mt::track::humanizeInfo info;
 
+        void updateLabels();
         void paint( juce::Graphics& g ) override;
         void resized() override;
 

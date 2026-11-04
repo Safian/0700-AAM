@@ -51,7 +51,7 @@ namespace kick_ui
     APPTrackOptionHumanize::APPTrackOptionHumanize()
     {
         setName( "HUMANIZE" );
-        mt::utils::addAndMakeVisible( this, timeCheckBox, pulses, beatLabel, eagerness, noteLabel, lengthCheckBox, strength, velocityCheckBox, velocity );
+        mt::utils::addAndMakeVisible( this, onlySelectedCheckBox, timeCheckBox, pulses, beatLabel, eagerness, noteLabel, lengthCheckBox, strength, velocityCheckBox, velocity );
         mt::utils::setValueJustification( juce::Justification::centred, beatLabel, noteLabel );
         mt::utils::setValueBackgroundColour( ui::Theme::backgroundColour( 3 ), beatLabel, noteLabel );
         pulses.setNumDecimalPlacesToDisplay( 0 );
@@ -74,6 +74,8 @@ namespace kick_ui
         timeCheckBox.onClick = [&]() {
             mt::utils::setEnabled( timeCheckBox.getToggleState(), pulses, eagerness );
         };
+        pulses.onValueChange    = [this]() { updateLabels(); };
+        eagerness.onValueChange = [this]() { updateLabels(); };
 
         lengthCheckBox.onClick = [&]() {
             strength.setEnabled( lengthCheckBox.getToggleState() );
@@ -84,6 +86,16 @@ namespace kick_ui
         };
 
         timeCheckBox.triggerClick();
+        updateLabels();
+    }
+
+    void APPTrackOptionHumanize::updateLabels()
+    {
+        // 96 ticks = a quarter note, so a 16th note = 24 ticks.
+        const double ticks = pulses.getValue();
+        beatLabel.setText( juce::String( juce::roundToInt( ticks ) ) + " ticks = " + juce::String( ticks / 24.0, 2 ) + " x 16th note", juce::dontSendNotification );
+        const int e = juce::roundToInt( eagerness.getValue() );
+        noteLabel.setText( e == 0 ? "Early and late" : ( e > 0 ? "Late: " + juce::String( e * 2 ) + "% of the amount" : "Early: " + juce::String( -e * 2 ) + "% of the amount" ), juce::dontSendNotification );
     }
 
     void APPTrackOptionHumanize::paint( juce::Graphics& g )
@@ -93,7 +105,8 @@ namespace kick_ui
 
     void APPTrackOptionHumanize::resized()
     {
-        timeCheckBox.setBoundsRelative( 0.0f, 0.02f, 0.9f, 0.07f );
+        onlySelectedCheckBox.setBoundsRelative( 0.5f, 0.02f, 0.5f, 0.07f );
+        timeCheckBox.setBoundsRelative( 0.0f, 0.02f, 0.5f, 0.07f );
         pulses.setBoundsRelative( 0.1f, 0.10f, 0.38f, 0.18f );
         eagerness.setBoundsRelative( 0.52f, 0.10f, 0.38f, 0.18f );
         beatLabel.setBoundsRelative( 0.1f, 0.29f, 0.38f, 0.06f );

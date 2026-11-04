@@ -55,7 +55,7 @@ private:
     // Peer-path touch source (message thread only): probed on the first delivery, see deliverPeerTouch().
     bool m_touch_src_probed = false;
     bool m_touch_src_ok     = true;
-    std::chrono::steady_clock::time_point m_last_tap_time;
+    ui::TapTempo m_tap_tempo{ 2, 2000.0, 200.0 }; // two taps 200..2000 ms apart set the tempo (30..300 BPM)
     // Akai MPC convention (T20): the Data Dial edits the tempo only while TAP TEMPO is physically held. The former
     // sticky "tempo edit" mode (set by TAP TEMPO, cleared by ENTER/STOP) hijacked +/- and the dial and is removed.
     // The original Kick UI has no consumer of EN_TAP_TEMPO (only MIDI-control mapping / hardware drawer), so the
@@ -790,7 +790,6 @@ public:
     KickHardwareBridge()
         : m_framebuffer_img(juce::Image::ARGB, 1280, 800, false)
     {
-        m_last_tap_time = std::chrono::steady_clock::now();
         for (int i = 0; i < 128; ++i) m_key_pitch_map[i] = -1;
     }
 
@@ -1076,15 +1075,13 @@ public:
                 } else {
                     sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO);
                     m_tap_tempo_held = true;
-                    auto now = std::chrono::steady_clock::now();
-                    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_tap_time).count();
-                    m_last_tap_time = now;
-                    if (diff >= 200 && diff <= 2000) {
-                        int tap_bpm = (int)(60000.0 / diff + 0.5);
-                        if (tap_bpm >= 30 && tap_bpm <= 300) {
-                            ae.setSequenceBPM(ae.getSelectedSequence(), tap_bpm);
-                            ae.setMasterBPM(tap_bpm);
-                        }
+                    // Same estimator as the Tempo editor (ui::TapTempo); two taps give the tempo on the button.
+                    const double nowMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                    const double tap_bpm = m_tap_tempo.tap(nowMs);
+                    if (tap_bpm > 0.0) {
+                        const int bpm = (int)(tap_bpm + 0.5);
+                        ae.setSequenceBPM(ae.getSelectedSequence(), bpm);
+                        ae.setMasterBPM(bpm);
                     }
                 }
                 break;

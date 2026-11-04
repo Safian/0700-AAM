@@ -1619,6 +1619,9 @@ namespace mt
         bool         sortRequired{ false };
         juce::Random r;
 
+        // One undo step for the whole operation.
+        if( um ) um->beginNewTransaction( "Humanize" );
+
         if( Info.onlySelected )
         {
             for( auto Note : selected )
@@ -1637,30 +1640,27 @@ namespace mt
 
     int MTNoteList::humanizeNotes( const track::humanizeInfo& Info, juce::ValueTree& Note, juce::Random& r, bool& sortRequired )
     {
-        auto deltaDiff = [&r]( int Value, bool negative = false ) -> double {
-            double delta = ( ( 100 - ( Value * r.nextFloat() ) ) / 100 );
-            if( negative )
-                delta *= ( 0 < r.nextInt() ? 1 : -1 );
-            return delta;
-        };
+        if( !Note.hasType( IDs::NOTE ) )
+            return -1;
 
         MTNote n( Note, um );
         if( Info.isTimeEnabled && Info.time )
         {
-            auto newStart = (int)( n.start * ( deltaDiff( Info.time, true ) / 16 ) ); // Max 16th note.
-            updateNote( n, newStart );
-            sortRequired = true;
+            // +-Info.time ticks around the original start, biased by eagerness, kept inside the sequence.
+            const int maxStart = juce::jmax( 0, (int)seq.getLengthInTicks() - 1 );
+            const int newStart = humanize::humanizedStart( n.start.get(), Info.time, Info.eagerness, maxStart, r.nextDouble() );
+            if( newStart != n.start.get() )
+            {
+                updateNote( n, newStart );
+                sortRequired = true;
+            }
         }
 
         if( Info.isNoteLengthEnabled && Info.noteLength )
-        {
-            n.length = (int)( n.length * deltaDiff( Info.noteLength ) );
-        }
+            n.length = humanize::shrunkValue( n.length.get(), Info.noteLength, r.nextDouble(), INT_MAX );
 
         if( Info.isVelocityEnabled && Info.velocity )
-        {
-            n.velocity = (int)( n.velocity.get() * deltaDiff( Info.velocity ) );
-        }
+            n.velocity = humanize::shrunkValue( n.velocity.get(), Info.velocity, r.nextDouble(), humanize::kMaxVelocity );
         return 0;
     }
 
