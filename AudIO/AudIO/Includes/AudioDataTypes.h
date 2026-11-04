@@ -30,6 +30,7 @@ namespace AudIO
         kParamDownMixToLeft,
         kParamDownMixToRight,
         kParamStereo,
+        kParamPostFader,
         kParamMax
     };
 
@@ -58,7 +59,9 @@ namespace AudIO
         std::string name;
         std::string unit;
         std::string displayValue;
-        float       value;
+        float       value{ 0.f };
+        bool        isStepped{ false };
+        float       step{ 0.001f };
     };
 
     template<typename T = float>

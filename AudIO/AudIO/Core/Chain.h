@@ -34,6 +34,9 @@ namespace AudIO
         std::pair<float, float> getLevelAndPan() const;
         void                    setLevelAndPan( float Gain, float Pan );
 
+        void setPostFader( bool PostFader ) { m_postFader.store( PostFader ); }
+        bool isPostFader() const { return m_postFader.load(); }
+
         void enableInputMetering( bool Status ) override { inMeterEnabled.store( Status ); }
         void enableOutputMetering( bool Status ) override { outMeterEnabled.store( Status ); }
 
@@ -65,6 +68,7 @@ namespace AudIO
 
         std::atomic<bool> m_downmixStereoToMono{ false };
         std::atomic<bool> m_downmixToLeft{ true };
+        std::atomic<bool> m_postFader{ false };
 
         std::list<insertMeta>                                 _inserts;
         std::unordered_map<uint32_t, std::unique_ptr<Object>> _objects;

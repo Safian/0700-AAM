@@ -20,6 +20,7 @@
  */
 
 #include "mt_clap_effect.h"
+#include <AudIO/airwindows/airwindows_steps.h>
 
 namespace mt
 {
@@ -154,9 +155,14 @@ namespace mt
 
         Info.params.clear();
         const auto& insParams = synth->getEffectParameters( Position );
+        int         index     = 0;
         for( const auto& it : insParams )
         {
-            Info.params.emplace_back( MTInsertsParamInfo{ juce::String( it.name ), juce::String( it.unit ), juce::String( it.displayValue ), it.value } );
+            // Airwindows switches come from the generated table (AllEffectsTests measures it); CLAP parameters carry their own flag.
+            const int steps = AudIO::airwindows_steps::stepsOf( Info.name.toRawUTF8(), index++ );
+            const bool stepped = steps >= 2 || it.isStepped;
+            const float step   = steps >= 2 ? 1.0f / static_cast<float>( steps - 1 ) : it.step;
+            Info.params.emplace_back( MTInsertsParamInfo{ juce::String( it.name ), juce::String( it.unit ), juce::String( it.displayValue ), it.value, stepped, step } );
         }
 
         auto* obj = synth->getEffectObject( Position );
@@ -280,6 +286,30 @@ namespace mt
     {
         if( pImpl && pImpl->synth )
             pImpl->synth->touchFx().close();
+    }
+
+    void MTIInsertsInterface::setTouchFxGesture( float X, float Y, bool Gate ) noexcept
+    {
+        if( pImpl && pImpl->synth )
+            pImpl->synth->touchFx().setGesture( juce::jlimit( 0.f, 1.f, X ), juce::jlimit( 0.f, 1.f, Y ), Gate );
+    }
+
+    void MTIInsertsInterface::setParameterAutomated( unsigned int Position, int Parameter, float Value ) noexcept
+    {
+        if( pImpl && pImpl->synth && Parameter >= 0 && static_cast<int>( Position ) < pImpl->synth->getNumEffects() )
+            pImpl->synth->setEffectParameter( Position, static_cast<unsigned int>( Parameter ), juce::jlimit( 0.f, 1.f, Value ) );
+    }
+
+    void MTIInsertsInterface::restoreInsertFromState( unsigned int Position )
+    {
+        if( !pImpl || !pImpl->synth || static_cast<int>( Position ) >= pImpl->synth->getNumEffects() || Position >= static_cast<unsigned int>( state.getNumChildren() ) )
+            return;
+        const auto child = state.getChild( static_cast<int>( Position ) );
+        if( child.getProperty( "isClap", false ) )
+            return;
+        const auto saved = JuceVarToVector<float>( child.getProperty( IDs::state ) );
+        if( !saved.empty() )
+            pImpl->synth->deserializeEffect( Position, saved );
     }
 
     bool              MTIInsertsInterface::isAvailable() const noexcept { return pImpl && pImpl->synth != nullptr; }

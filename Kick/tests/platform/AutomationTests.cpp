@@ -113,13 +113,36 @@ int main()
     CHECK_EQ( (int)PadLevel, 3 );
     CHECK_EQ( (int)PadPan, 4 );
     CHECK_EQ( (int)PadMute, 5 );
-    CHECK_EQ( (int)Count, 6 );
     CHECK_EQ( muteToValue( false ), 0 );
     CHECK_EQ( muteToValue( true ), 1 );
     CHECK_EQ( valueToMute( 0 ), false );
     CHECK_EQ( valueToMute( 1 ), true );
     CHECK_EQ( valueToMute( 5 ), true );
     CHECK_EQ( valueToMute( -1 ), false );
+    CHECK_EQ( (int)TouchX, 6 ); // XY FX gesture + insert lanes: persisted ids, never reorder
+    CHECK_EQ( (int)TouchY, 7 );
+    CHECK_EQ( (int)InsertParam0, 8 );
+    CHECK_EQ( (int)InsertParam3, 11 );
+    CHECK_EQ( (int)TouchGate, 12 );
+    CHECK_EQ( (int)Count, 13 );
+    CHECK_EQ( kNumFxLanes, 7 );
+    CHECK_EQ( fxLaneIndex( TouchX ), 0 );
+    CHECK_EQ( fxLaneIndex( TouchGate ), 6 );
+    CHECK_EQ( fxLaneIndex( Pan ), -1 );
+    CHECK_EQ( fxLaneIndex( Count ), -1 );
+    CHECK_EQ( isInsertLane( InsertParam2 ), true );
+    CHECK_EQ( isInsertLane( TouchGate ), false );
+    CHECK_EQ( insertLaneSlot( InsertParam3 ), 3 );
+    CHECK_EQ( insertLaneParam( 1 ), (int)InsertParam1 );
+    CHECK_EQ( insertLaneParam( 4 ), -1 );
+    CHECK_EQ( gateOpen( 1000 ), true );
+    CHECK_EQ( gateOpen( 0 ), false );
+    CHECK_EQ( normToValue( 0.5 ), 500 );
+    CHECK_EQ( normToValue( -3.0 ), 0 );
+    CHECK_EQ( normToValue( 9.0 ), 1000 );
+    CHECK_EQ( normToValue( 0.0 / 0.0 ), 0 );
+    for( int v = 0; v <= 1000; ++v )
+        CHECK_EQ( normToValue( valueToNorm( v ) ), v );
     CHECK_EQ( panToValue( 0.0 ), 0 );
     CHECK_EQ( panToValue( -1.0 ), -1000 );
     CHECK_EQ( panToValue( 1.0 ), 1000 );
@@ -143,7 +166,9 @@ int main()
     CHECK_EQ( paramFromStored( true, 3 ), (int)PadLevel );
     CHECK_EQ( paramFromStored( true, 4 ), (int)PadPan );
     CHECK_EQ( paramFromStored( true, 5 ), (int)PadMute );
-    CHECK_EQ( paramFromStored( true, 6 ), -1 );  // unknown (future) param: not ours
+    CHECK_EQ( paramFromStored( true, 6 ), (int)TouchX );
+    CHECK_EQ( paramFromStored( true, 12 ), (int)TouchGate );
+    CHECK_EQ( paramFromStored( true, 13 ), -1 );  // unknown (future) param: not ours
     CHECK_EQ( paramFromStored( true, -1 ), -1 );
 
     // negative pan values survive the text form; interpolation through the centre

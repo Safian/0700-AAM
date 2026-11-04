@@ -28,14 +28,33 @@ namespace mt::automation
     // The numeric ids are persisted (autoParam): never reorder.
     enum Param : int
     {
-        Level    = 0, // MTTrack level 0..127 (velocity scaler)
-        Pan      = 1, // program pan, fixed point: -kPanScale..kPanScale (= PAN::MIN..PAN::MAX = -1..1)
-        Mute     = 2, // track mute: 0 = unmuted, 1 = muted
-        PadLevel = 3, // pad level 0..127
-        PadPan   = 4, // pad pan, fixed point: -kPanScale..kPanScale
-        PadMute  = 5, // pad mute: 0 = unmuted, 1 = muted
+        Level        = 0,  // MTTrack level 0..127 (velocity scaler)
+        Pan          = 1,  // program pan, fixed point: -kPanScale..kPanScale (= PAN::MIN..PAN::MAX = -1..1)
+        Mute         = 2,  // track mute: 0 = unmuted, 1 = muted
+        PadLevel     = 3,  // pad level 0..127
+        PadPan       = 4,  // pad pan, fixed point: -kPanScale..kPanScale
+        PadMute      = 5,  // pad mute: 0 = unmuted, 1 = muted
+        TouchX       = 6,  // XY FX Touch X 0..1000
+        TouchY       = 7,  // XY FX Touch Y 0..1000
+        InsertParam0 = 8,  // Insert slot 0: one parameter of the effect (the lane node stores which: `autoTarget`) 0..1000
+        InsertParam1 = 9,  // Insert slot 1, like InsertParam0
+        InsertParam2 = 10, // Insert slot 2, like InsertParam0
+        InsertParam3 = 11, // Insert slot 3, like InsertParam0
+        TouchGate    = 12, // XY FX finger down / Latch: 0 or 1000 (a Touch lane set without a gate lane keeps the gate open)
         Count
     };
+
+    // The lanes besides Level / Pan ("FX lanes": Touch FX gesture + insert parameters). They are plain 0..1000 values on the
+    // track, played back by MTAudioManager::applyAutomatedFx on the message thread.
+    constexpr int kFirstFxLane = TouchX;
+    constexpr int kNumFxLanes  = Count - kFirstFxLane;
+    constexpr int kNumInsertLanes = 4;
+    inline bool isFxLane( int P ) noexcept { return P >= kFirstFxLane && P < Count; }
+    inline int  fxLaneIndex( int P ) noexcept { return isFxLane( P ) ? P - kFirstFxLane : -1; }
+    inline bool isInsertLane( int P ) noexcept { return P >= InsertParam0 && P < InsertParam0 + kNumInsertLanes; }
+    inline int  insertLaneParam( int Slot ) noexcept { return ( Slot >= 0 && Slot < kNumInsertLanes ) ? InsertParam0 + Slot : -1; }
+    inline int  insertLaneSlot( int P ) noexcept { return isInsertLane( P ) ? P - InsertParam0 : -1; }
+    inline bool gateOpen( int GateValue ) noexcept { return GateValue >= 500; }
 
     constexpr int kPanScale = 1000; // lane value = round( pan * kPanScale ); 1 unit = 0.001, finer than PAN::STEP (0.01)
     constexpr int kNoValue  = INT32_MIN; // "nothing" for atomics that carry a lane value
@@ -55,6 +74,21 @@ namespace mt::automation
     {
         const int c = Value < -kPanScale ? -kPanScale : ( Value > kPanScale ? kPanScale : Value );
         return (double)c / kPanScale;
+    }
+
+    constexpr int kNormScale = 1000;
+    inline int32_t normToValue( double Norm )
+    {
+        if( !( Norm == Norm ) )
+            return 0;
+        const double v = Norm * kNormScale;
+        const double c = v < 0.0 ? 0.0 : ( v > kNormScale ? kNormScale : v );
+        return (int32_t)( c + 0.5 );
+    }
+    inline double valueToNorm( int32_t Value )
+    {
+        const int c = Value < 0 ? 0 : ( Value > kNormScale ? kNormScale : Value );
+        return (double)c / kNormScale;
     }
 
     // Persistence: a lane node stores its Param as `autoParam`. A node WITHOUT autoParam (projects saved before the

@@ -70,6 +70,7 @@ namespace mt
         DECLARE_ID( AUTOLANE )   // per-track automation lane node: autoParam + autoPoints
         DECLARE_ID( autoParam )
         DECLARE_ID( autoPoints ) // "tick:value,tick:value", see mt_automation.h
+        DECLARE_ID( autoTarget ) // FX lanes: the insert parameter index an insert lane drives
         DECLARE_ID( autoProgram ) // PAN lane only: id of the program the lane was recorded for
         DECLARE_ID( RANDOM )
         DECLARE_ID( LFO )
@@ -130,6 +131,7 @@ namespace mt
         DECLARE_ID( pan )
         DECLARE_ID( mute )
         DECLARE_ID( bypass )
+        DECLARE_ID( postFaderInserts ) // bus: the inserts run after the fader / pan (default: before)
         DECLARE_ID( solo )
         DECLARE_ID( muteGroup )
         DECLARE_ID( reverse )
@@ -296,6 +298,7 @@ namespace mt
         DECLARE_ID( midiInputControlState )
         DECLARE_ID( midiOutputTrackState )
         DECLARE_ID( midiOutputControlState )
+        DECLARE_ID( MidiControlModeOutputPort )
 
         DECLARE_ID( PREFCV )
         DECLARE_ID( CV0 )
@@ -320,6 +323,11 @@ namespace mt
 
         DECLARE_ID( MIDICONTROL )
         DECLARE_ID( KNOBCONTROL )
+        DECLARE_ID( defaultQLinkMode )
+        DECLARE_ID( qlinkPlayheadIncrement )
+        DECLARE_ID( swingControlAppliesTcOnRelease )
+        DECLARE_ID( showQLinkStatusWhenTouched )
+        DECLARE_ID( automationLaneFollowsQLinks )
 
         DECLARE_ID( probability )
         DECLARE_ID( ratchet )

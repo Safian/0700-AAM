@@ -138,12 +138,12 @@ Hibák:
 - [x] **INS-09** (P2, S) `removeAllEffects` bypass-állapot — `D:88-93`.
 
 Hiányzó funkciók:
-- [ ] **INS-10** (P1, M) Paraméter-UI: `displayValue`, `unit`, stepped paraméterek — `U:320-331`, `E:92`.
+- [x] **INS-10** (P1, M) Paraméter-UI: `displayValue`, `unit`, stepped paraméterek — `U:320-331`, `E:92`.
 - [x] **INS-11** (P1, M) Q-Link (első 4 paraméter) és Data Dial/± bekötés a Key 61-hez — `UH` `handleCommand`/`knobCommand`.
-- [ ] **INS-12** (P1, M) `EffectCatalog`: olvasható kategória/név, leírás az `Airwindopedia.txt`-ből, kedvencek — `AudIO_airwindows.*`, `05-fx.md` 3/5.
+- [x] **INS-12** (P1, M) `EffectCatalog`: olvasható kategória/név, leírás az `Airwindopedia.txt`-ből, kedvencek — `AudIO_airwindows.*`, `05-fx.md` 3/5.
 - [x] **INS-13** (P1, M) Keresés a böngészőben (billentyűzet-popup) — `U:260-291`.
-- [ ] **INS-14** (P2, L) Insert-paraméter automation (új `Param` azonosítók), fejléc Automation-ikon sorsa — `mt_automation.h`, `kick_modeHeader.cpp:54-55`.
-- [ ] **INS-15** (P2, M) Effekt-presetek, A/B, lánc-másolás.
+- [x] **INS-14** (P2, L) Insert-paraméter automation (új `Param` azonosítók), fejléc Automation-ikon sorsa — `mt_automation.h`, `kick_modeHeader.cpp:54-55`.
+- [x] **INS-15** (P2, M) Effekt-presetek, A/B, lánc-másolás.
 - [ ] **INS-16** (P2, M) Pad Mixer Inserts-gomb (WP-D D-064).
 - [x] **INS-17** (P2, L) CLAP-effektek a böngészőben (05-fx) — függ: INS-01, INS-03.
 
@@ -151,13 +151,13 @@ Javaslatok:
 - [x] **INS-18** (P1, S) Forgatás-esemény optimalizálása: csak az érintett slot szerializálása, diff-frissítés — `E:291-299`, `U:138-144`.
 - [ ] **INS-19** (P2, M) Insert-szintű CPU-mérő és figyelmeztetés ARMv7-n.
 - [x] **INS-20** (P2, S) Blokkméret és csatornaszám kezelése az `AudioEffectX::process`-ben a tényleges bufferhez igazítva — `AX:166-169`, `D:215`.
-- [ ] **INS-21** (P2, S) A 329 vs 327 számolás javítása a `05-fx.md`-ben (GlitchShifter, TripleSpread).
+- [x] **INS-21** (P2, S) A 329 vs 327 számolás javítása a `05-fx.md`-ben (GlitchShifter, TripleSpread).
 
 Tesztek:
-- [ ] **INS-22** (P1, M) Host-teszt: minden effekt gyártás, paraméter round-trip, feldolgozás (6. pont) — `Kick/tests/platform`.
-- [ ] **INS-23** (P1, M) Host-teszt: szerializálás round-trip és bus-insert hallhatóság — függ: INS-01, INS-03.
+- [x] **INS-22** (P1, M) Host-teszt: minden effekt gyártás, paraméter round-trip, feldolgozás (6. pont) — `Kick/tests/platform`.
+- [x] **INS-23** (P1, M) Host-teszt: szerializálás round-trip és bus-insert hallhatóság — függ: INS-01, INS-03.
 - [x] **INS-24** (P2, M) TSAN/ASAN szálteszt a slot-cserére — függ: INS-02.
-- [ ] **INS-25** (P1, S) MPC-ellenőrzőlista (6. pont) a `HW_TEST_CHECKLIST`-be.
+- [x] **INS-25** (P1, S) MPC-ellenőrzőlista (6. pont) a `HW_TEST_CHECKLIST`-be.
 
 ## 8. Állapot (S-E kör, 2026-11-04)
 
@@ -166,3 +166,11 @@ Kész (host-teszt: `DawInsertsTests` ASan alatt, `BusInsertsTests` végpontig a 
 Részben: **INS-10** (érték-szöveg és mértékegység kész; léptetett paraméterek nincsenek), **INS-14** (a fejléc Automation-ikon elrejtve; insert-paraméter lane NYITOTT: új `Param` azonosítók), **INS-22/23** (nincs „mind a 327 effekt" teszt és ValueTree-körút teszt).
 
 Nyitott: **INS-12** (EffectCatalog / Airwindopedia leírások: a W1-D keresése él, a leírás-tár nem), **INS-15** (effekt-presetek, A/B, lánc-másolás), **INS-16** (Pad Mixer Inserts-gomb: a mixer-képernyők másik worker fájljai), **INS-19** (CPU-mérő ARMv7-n: ember), **INS-21** (05-fx.md számolás), **INS-25** (MPC-lista: checklist 38-39.).
+
+## 9. Állapot (R-11 befejező kör, 2026-11-04)
+
+Kész (host-teszt: `AllEffectsTests`, `InsertStoreTests`, `BusInsertsTests`, `DawInsertsTests`, ASan+UBSan; motor-smoke: `KICK_SMOKE_FXLANES=1`, `FxLanesSmoke.h`): **INS-10** (a kapcsoló-paraméterek a *generált* `AudIO/AudIO/airwindows/airwindows_steps.h` táblából jönnek: az `AllEffectsTests` mind a 327 effekt minden paraméterén végigmegy, és kapcsolónak veszi, aminek a kijelzett szövege az egész tartományon legfeljebb 12 különböző érték, 43 ilyen paraméter van; a teszt elbukik, ha a bejegyzett tábla elavult; az `audioeffectx.h` név-találgatása törölve), **INS-12** (kedvencek a `insert_presets.txt`-ben a beállítás-mappában, olvasható kategória-nevek, leírás az `Airwindopedia`-ból: W1-D), **INS-14** (négy insert-lane + a Touch FX lane-ek: az Inserts képernyő forgatói Write módban a kijelölt track lane-jére írnak, ha a lánc annak a programja; Read módban az `MTAudioManager::applyAutomatedFx` játssza vissza a program insert-felületén át, a value tree-t nem érintve; Read elhagyásakor a tárolt értékek visszajönnek; a fejléc Automation-ikon be van kötve; egy lane egy paramétert hajt, a lane-csomópont `autoTarget`-je tárolja, másik paraméter felvétele új lane-t kezd), **INS-15** (felhasználói preset effektenként, tartósan; A/B slotonként és a mutatott láncra érvényesen; lánc-másolás/beillesztés), **INS-19** részben (host-oldali költség-tábla `kick_InsertCost.h`; a `Pockey` 0,68 valós idő a hoszton: "VERY HEAVY EFFECT" jelzés, a 8 további nehéz effekt "HEAVY EFFECT"; az ARMv7-mérés ember), **INS-21** (327 a `05-fx.md`-ben), **INS-22** (paraméter-söprés élő jel alatt, minden véglet véges, költség-mérés effektenként), **INS-23** (az insert-lánc a value tree-n át: nevek, köztük NC-17, bypass, paraméter, üres slot; a busz pre/post-fader beállítása is), **INS-25** (a lista a `HW_TEST_CHECKLIST`-ben). A S-E által jelzett **post-fader** opció: a busz Inserts képernyőjén PRE-FADER / POST-FADER kapcsoló, alapértelmezés pre-fader, a bus fa `postFaderInserts` tulajdonságában tárolt (tartós).
+
+Nyitott: **INS-16** (Pad Mixer sor Inserts-gombja: a Pad Mixer másik worker fájlja, és a motorban nincs pad-szintű insert-lánc; a gomb a pad programjának láncát nyitná, `kick_program_mix.cpp:166` mintájára; owner-döntés, hogy pad-szintű lánc kell-e, vagy elég a program-szintű gomb).
+
+Ismert korlát: ha a felhasználó Read-lejátszás közben forgat egy insert-gombot, a Write-mód híján is az automatizált pillanatnyi érték kerül a value tree-be (a UI a motor értékeit szerializálja); a tárolt alap ilyenkor elveszik.

@@ -133,6 +133,9 @@ namespace kick_ui
         void handleCommand( CPktMgr::HWMsg_t& ) override;
         int  screenIndex( int screenName );
         int  screenIndexInPad( int screenName );
+        // XY FX "MIDI CC" location: the position goes out as the XY tab's two controllers (same channels, CCs, ranges, output port).
+        bool sendXy( float x, float y ) { return xyMidiTab.sendExternal( x, y ); }
+        void resetXy() { xyMidiTab.resetExternal(); }
 
         ui::KickToggleButton enableMapping{ "Enable Mapping", "Learn", "Enable Mapping" };
 

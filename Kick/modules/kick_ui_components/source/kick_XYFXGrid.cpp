@@ -35,6 +35,17 @@ namespace ui
 
                 const juce::Rectangle<float> cellRect = getCellRect( (int)row, (int)column );
                 g.fillRect( cellRect );
+
+                // Cell labels (XY-15): the X axis value along the bottom row, the Y axis value down the left column.
+                if( cellLabels )
+                {
+                    g.setColour( ui::Theme::textColour( 3 ).withAlpha( 0.65f ) );
+                    g.setFont( 10.0f );
+                    if( row == totalHorizontalCells - 1 )
+                        g.drawText( kick_ui::xyfx::cellLabel( xAxis, (int)column ), cellRect.reduced( 2 ), juce::Justification::centredBottom );
+                    if( column == 0 )
+                        g.drawText( kick_ui::xyfx::cellLabel( yAxis, totalVerticalCells - 1 - (int)row ), cellRect.reduced( 2 ), juce::Justification::topLeft );
+                }
             }
         }
         // The latched cell is the last one touched (currentIndex is -1 after the finger left: it drew column -1).
@@ -179,6 +190,7 @@ namespace ui
     {
         xLabel.setText( data[0], juce::dontSendNotification );
         yLabel.setText( data[1], juce::dontSendNotification );
+        cellLabels = false; // generic axes (MIDI Control XY): no effect values to name
         xIsBeat = ( data[0] == kick_ui::xyfx::axisName( kick_ui::xyfx::Axis::BeatDivision ) );
         if( xIsBeat )
         {
@@ -203,6 +215,9 @@ namespace ui
         xLabel.setText( axisName( X ), juce::dontSendNotification );
         yLabel.setText( axisName( Y ), juce::dontSendNotification );
         xIsBeat = ( X == Axis::BeatDivision );
+        xAxis   = X;
+        cellLabels = true;
+        yAxis   = Y;
         xLeft   = axisLow( X );
         xRight  = axisHigh( X );
         yBottom = axisLow( Y );

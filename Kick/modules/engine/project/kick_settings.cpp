@@ -54,6 +54,7 @@ namespace mt
             metronome.setup( getState().getOrCreateChildWithName( IDs::METRONOME, nullptr ), nullptr );
             wifi.setup( getState().getOrCreateChildWithName( IDs::WIFI, nullptr ), nullptr );
             padColours.setup( getState().getOrCreateChildWithName( IDs::PADCOLOURDEFAULTS, nullptr ), nullptr );
+            knobControl.setup( getState().getOrCreateChildWithName( IDs::KNOBCONTROL, nullptr ), nullptr );
         };
 
         auto settingsFile = getAppDirs( MTPrefs ).getChildFile( __settingsFileName );
@@ -91,6 +92,7 @@ namespace mt
         cvclib.makeDefaults();
         metronome.makeDefaults();
         padColours.makeDefaults();
+        knobControl.makeDefaults();
 
         // Ensure autoSave stays true on defaults
         projects.isAutoSave = true;
@@ -306,8 +308,24 @@ namespace mt
 
         ipPortName.attachTo( vTree, IDs::MidiInputName, Undo, "" );
         opPortName.attachTo( vTree, IDs::MidiOutputName, Undo, "" );
+        midiControlModeOutputPort.attachTo( vTree, IDs::MidiControlModeOutputPort, Undo, "" );
     }
     bool KickMidiControl::isValid() { return vTree.hasType( IDs::PREFMIDICONTROL ) || vTree.hasType( IDs::MIDICONTROL ); }
+
+    /// ///////////////////////////////////
+    ///    KNOB Control (QL-13)
+    /// ///////////////////////////////////
+    void KickKnobControl::setup( juce::ValueTree VT, juce::UndoManager* Undo )
+    {
+        setupBase( VT, Undo );
+
+        defaultQLinkMode.attachTo( vTree, IDs::defaultQLinkMode, Undo, 1 ); // 1 = Screen mode default
+        qlinkPlayheadIncrement.attachTo( vTree, IDs::qlinkPlayheadIncrement, Undo, 1 ); // 1 bar
+        swingControlAppliesTcOnRelease.attachTo( vTree, IDs::swingControlAppliesTcOnRelease, Undo, false );
+        showQLinkStatusWhenTouched.attachTo( vTree, IDs::showQLinkStatusWhenTouched, Undo, true );
+        automationLaneFollowsQLinks.attachTo( vTree, IDs::automationLaneFollowsQLinks, Undo, false );
+    }
+    bool KickKnobControl::isValid() { return vTree.hasType( IDs::KNOBCONTROL ); }
 
     /// ///////////////////////////////////
     ///    Ethernet .

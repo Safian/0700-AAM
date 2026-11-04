@@ -39,9 +39,24 @@ namespace kick_ui
         Content();
         ~Content();
 
+        void updateQLinkDisplay( const juce::String& ScreenKey ); // kick_ui::Screen enumerator name
+
     private:
         void resized() override;
         void paint( juce::Graphics& g ) override;
+
+        struct QLinkCard : public juce::Component
+        {
+            void paint( juce::Graphics& g ) override;
+            juce::String roleTitle;
+            juce::String paramName;
+            juce::String description;
+        };
+
+        ui::KickLabel titleLabel{ "SCREEN Q-LINK MODE" };
+        ui::KickLabel subLabel{ "Q-Links 1-4 on the screen under the menu:" };
+        std::array<QLinkCard, 4> cards;
+        juce::String currentContext;
     };
 
     class BottomContent : public juce::Component

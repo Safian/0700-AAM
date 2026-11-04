@@ -1914,7 +1914,7 @@ namespace mt
 
     void MTAudioInterface::clearAllAutomation() { manager->clearAutomation( 2 ); }
 
-    std::vector<MTAutomationEvent> MTAudioInterface::getAutomationEvents( const MTSelected& Selection )
+    std::vector<MTAutomationEvent> MTAudioInterface::getAutomationEvents( const MTSelected& Selection, bool IncludeFxLanes )
     {
         std::vector<MTAutomationEvent> out;
         auto                           t = manager->getTrack( Selection );
@@ -1923,6 +1923,10 @@ namespace mt
         for( int param : { kAutomationLevel, kAutomationPan } )
             for( auto& p : t->getLanePoints( param ) )
                 out.push_back( { param, (int)p.tick, (int)p.value } );
+        if( IncludeFxLanes )
+            for( int param = automation::kFirstFxLane; param < automation::Count; ++param )
+                for( auto& p : t->getLanePoints( param ) )
+                    out.push_back( { param, (int)p.tick, (int)p.value } );
         std::stable_sort( out.begin(), out.end(), []( const MTAutomationEvent& a, const MTAutomationEvent& b ) { return a.tick < b.tick; } );
         return out;
     }
@@ -1931,6 +1935,12 @@ namespace mt
     {
         auto t = manager->getTrack( Selection );
         return t && t->setLanePoint( Param, OldTick, NewTick, Value ) ? 0 : -1;
+    }
+
+    void MTAudioInterface::recordAutomationValue( const MTSelected& Selection, int Param, int Value, int Target )
+    {
+        if( auto t = manager->getTrack( Selection ) )
+            t->recordFxValue( Param, Value, Target );
     }
 
     int MTAudioInterface::deleteAutomationEvent( const MTSelected& Selection, int Param, int Tick )

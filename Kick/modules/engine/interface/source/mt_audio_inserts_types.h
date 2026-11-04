@@ -33,6 +33,8 @@ namespace mt
         juce::String unit{ "" };
         juce::String displayValue{ "" };
         float        value{ 0.f };
+        bool         isStepped{ false };
+        float        step{ 0.001f };
     };
 
     using InsertsParams = std::vector<MTInsertsParamInfo>;
@@ -75,7 +77,7 @@ namespace mt
     {
     public:
         MTIInsertsInterface();
-        ~MTIInsertsInterface();
+        virtual ~MTIInsertsInterface();
         void setup( juce::ValueTree& VT, juce::UndoManager* UM, AudIO::DawInserts* Impl );
 
         void                        getInserts( std::vector<juce::String>& InsertNames );
@@ -97,11 +99,21 @@ namespace mt
         int  moveInsert( unsigned int fromPosition, unsigned int toPosition );
         ClapEffect* getClapEffect( unsigned int Position );
 
+        // Buses only: whether the inserts run after the bus fader / pan (default before them). The other chains have no such choice.
+        virtual bool supportsPostFader() const noexcept { return false; }
+        virtual bool isPostFader() const noexcept { return false; }
+        virtual void setPostFader( bool ) noexcept {}
+
         int          getNumInserts();
         // False for programs that have no insert chain (MIDI / CV): ADD would do nothing, the screen says so instead.
         bool         isAvailable() const noexcept;
         void         setTouchFx( const MTTouchFxSettings& Settings ) noexcept; // lock-free, any thread
         void         closeTouchFx() noexcept;
+        // Automation playback (any thread, no allocation, the value tree is not touched): the Touch FX gesture, and one effect parameter.
+        void         setTouchFxGesture( float X, float Y, bool Gate ) noexcept;
+        void         setParameterAutomated( unsigned int InsertPosition, int Parameter, float Value ) noexcept;
+        // Message thread: puts the slot's stored (value tree) parameters back after automation played over them.
+        void         restoreInsertFromState( unsigned int InsertPosition );
         int          getNumParameters( unsigned int Position );
         juce::String getInsertName( unsigned int InsertPosition );
         juce::String getParameterName( unsigned int InsertPosition, int Parameter );

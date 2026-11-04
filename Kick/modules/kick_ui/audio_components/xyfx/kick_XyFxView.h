@@ -81,6 +81,7 @@ namespace kick_ui
             juce::String label;
             bool         isTrack{ true };
             juce::String bus;
+            bool         isMidiCc{ false };
         };
 
         mt::MTIInsertsInterface* interfaceFor( const Target& T );
@@ -97,6 +98,7 @@ namespace kick_ui
         ui::KickToggleButton latch{ "Latch", "Latch", "Latch" };
         ui::KickToggleButton setup{ "Setup", "Setup", "Setup" };
         ui::KickToggleButton on_off{ "Off", "On", "Off" };
+        ui::KickLabel        qlinkModeBadge{ "Q-LINK" };
         ui::KickListBox      output{ ui::KickListBox::withTitleBar, "XY Location", {} };
         ui::XYFXGrid         xyFx;
 
@@ -109,6 +111,7 @@ namespace kick_ui
         Target              applied;          // the destination the engine currently holds the effect on
         bool                hasApplied{ false };
         bool                restoring{ false };
+        bool                gateRecorded{ false }; // the gate state last written to the automation lane
 
         void resized() override;
         void visibilityChanged() override;
