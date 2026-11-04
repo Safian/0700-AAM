@@ -2,6 +2,37 @@
 
 Állapot: terv/review. Alap: **statikus kódolvasás** (build, futtatás, hardver nélkül) a `kick-plans` worktree-ben (2026-11-04). A „KÉSZ” azt jelenti: van bekötött handler az engine-ig, nem azt, hogy hardveren igazolt. Ahol a kód és a régi dokumentumok ellentmondanak, a kód az igazság. „NEM ELLENŐRIZHETŐ KÓDBÓL” = futtatás/hardver kell hozzá.
 
+## Állapot (R-8, 2026-11-04 — a S-C és az R-8 kör után; ez a szakasz a mérvadó, az alábbi táblák a review idejét mutatják)
+
+| Tétel | Állapot |
+|---|---|
+| LE-01..06, 08..12, 20, 27, 31, 33, 34, 40, 41 | KÉSZ az S-C körben (`8a5a18d6`, `da20b90c`, `39846b60`) |
+| **LE-07** sor-virtualizálás | KÉSZ: a `KickTableView` opt-in virtuális sorait a List Edit táblára kötöttük (`enableVirtualRows`); csak a látható ablak (± 6 sor) kap komponenst. Mac smoke: 3057 eseménnyel `rows=3057 built=13` (`KICK_SMOKE_SEQUENCERS_BIG=1`, `KICK_SMOKE_LISTEDIT_ROWS`). A Pad cella már S-C-ben könnyű. MPC-s megnyitási idő: ember kell (HW lista R8-4) |
+| **LE-21** nem-jegyzet események | RÉSZBEN, azzal ami a modellben van: a sáv **Level és Pan automáció-sávjának töréspontjai** (`AUTOLANE`, eddig csak felvétel/lejátszás) eseményként a listában: nézet-szűrő (View: All / Notes / Track Automation), Time (érintés = BBT ablak), paraméter, érték (Level 0..127, Pan -100..100), Delete, Insert (TYPE = Track Automation, PARAM, VALUE), Q-Link 3 = érték, csoportos Vel +/-, Nudge, undo. Motor: `MTAudioInterface::getAutomationEvents / setAutomationEvent / deleteAutomationEvent` (`MTTrack::setLanePoint` stb., a ValueTree + UndoManager útján, a lejátszás a meglévő figyelőn át követi). Smoke: insert / move / delete mind egy undo-lépés. **Nincs modell** (ezért nincs UI): aftertouch, pitch bend, CC, program change, channel pressure, mute-események, MPCe, tempó-események (Tempo fül), mixer / pad-mixer / insert-effekt automáció, jegyzet-modifier (Mod Type / Value). Ezek a motor hosszabb munkája, nem a List Edit-é |
+| **LE-22** többes kijelölés | KÉSZ: Select kapcsoló (érintés) vagy a fizikai Shift tartása sorérintéskor; a kijelölés a motor kijelölt jegyzetei (Timing Correct „Selected”, Grid); csoportos Delete, Vel -/+ (±5, jegyzet: velocity, töréspont: érték), Nudge < / > (egy TC osztás, a szekvencián belül marad); egy undo-lépés műveletenként; a kijelölés a sorok újrarendezése után is megmarad (azonosító szerint). Host-teszt: `ListEditLogicTests` (toggleRow, nudgeStart, selectionAfterGroupDelete) |
+| **LE-32** Go to playhead | KÉSZ: Playhead gomb (a lejátszófej sorára görget, az auto-scroll szünet megszűnik); a lejátszófej sorát piros nyíl jelzi a sor bal szélén (a kézikönyv piros nyila); azonos időpontú sorok ideje szürke (kézikönyv) |
+| **LE-11** maradék | KÉSZ kód-oldalon: a beágyazott popup (TYPE / EVENTS / időosztás) nyitva a hardveres ENTER / STOP / Shift+STOP / MAIN **a popupot zárja** (a TC ablak marad nyitva, a következő nyomás zárja azt), `ListEditTimingCorrect::closeFromHardware`. A „Range” opció S-C-ben megszűnt. A Cancel és a popup-zárás mérése: ember kell (HW lista R8-5) |
+| Step record (kézikönyv: REC + pad) | KÉSZ: a sorozat REC-je élesítve, megállított transzporttal a pad egy jegyzetet szúr be a lejátszófej pozíciójára, egy TC osztás hosszan, a pad velocity-jével; az Auto Advance (Settings, újra látható) a pozíciót a jegyzet hosszával előre viszi (`seekToTick`). Host-teszt: `stepRecord*` |
+| LE-26 Akai-hiánylista | lásd alább („Akai-összevetés, WP-E List Edit”) |
+| LE-23 FILTER / Snap | a FILTER most a kézikönyv View menüje (3 nézet, a gomb felirata VIEW); a Snap gomb továbbra is rejtett (nincs funkció) |
+| LE-24 / LE-25 / LE-42 / LE-43 | LE-24: híd (R-3); LE-25: owner-döntés; LE-42 / 43: ember kell (HW lista), LE-43 smoke: `KICK_SMOKE_SEQUENCERS_BIG=1 KICK_SMOKE_SCREENS=MenuListEdit` |
+
+### Akai-összevetés, WP-E List Edit (MPC Standalone OS User Guide v3.10, 182–187. o.) — LE-26
+| Kézikönyv | Kick |
+|---|---|
+| Time Counter | a státuszsáv BBT-je |
+| TC ikon + Shift+TC = globális TC | KÉSZ (híd: Shift+TC) |
+| View menü (All / Notes / Aftertouch / MIDI Automation / Track Automation / Pitch Bend / Control Change / Program Change / Ch Pressure / Mute / MPCe) | All / Notes / Track Automation KÉSZ; a többi eseménytípusnak nincs modellje |
+| Tempo fül (tempóesemények) | NINCS (a tempó-sávnak nincs eseménymodellje) |
+| Modifier ikon (Note Modifier Settings: Absolute / Relative) | NINCS (a jegyzetnek nincs modifier-modellje) — NEM-KICK, később |
+| Gear: Hitting Pad Selects All Events / Auto-Advance on Step Record / Mod Type Selection / Auto-Scroll (Follow / Page / Off) | Hitting pad, Auto Advance (most van fogyasztója), Auto-Scroll KÉSZ; Mod Type Selection NINCS (nincs Mod Type) |
+| Oszlopok: #, Time (azonos idő szürke), típus-ikon, Pad/Note, Length, CH, Velocity, Mod Type, Value, Prob, Rat | KÉSZ, kivéve: CH (a jegyzetnek nincs csatornája, a sávé van), Mod Type / Value (nincs modifier), típus-ikon (a Pad/Param oszlop szövege jelzi a típust) |
+| Piros nyíl = lejátszófej | KÉSZ |
+| Kijelölés: érintés, Shift = több | KÉSZ (érintés + Select kapcsoló + Shift) |
+| Beszúrás: REC + pad; Insert ablak (BBT, Type: Note / Pad Automation / Mixer Automation / MIDI Automation, Pad / Parameter) | REC + pad KÉSZ; Insert: Notes és Track Automation (Level / Pan) KÉSZ; a többi típus: nincs modell |
+| Szerkesztés: érték érintés + Data Dial / +/-; dupla érintés = numerikus billentyűzet; Shift+dial = TC szerinti hossz; Shift+dial a Pad/Note-on = pad-bank; Nudge gomb; Play (jegyzet lejátszása); Delete | Érték + Data Dial (a megérintett cellára a vezérlő sajátja; sorléptetés a dial alapja), Delete, Nudge (csoportos), **Play gomb** (a kijelölt jegyzet egyszer megszólal), **Shift+dial = a kijelölt események TC-osztásnyi eltolása**, **Shift+Q-Link 1 = pad-bank (±16), Shift+Q-Link 2 = hossz TC-osztásban** KÉSZ. **Nincs**: Mute/Solo On/Off kapcsoló (nincs Mute-esemény); a dupla érintés numerikus billentyűzete a KickNumber saját viselkedése (eszközön ellenőrizendő, HW lista R8-4). A hardveres kiosztás (Shift+Q-Link) a mi választásunk: a kézikönyv a cellát érintés után, Shift+dial-lal szerkeszti, a Kick dialja a sorokat lépteti |
+
+
 Rövidítések (a repó gyökeréhez képest): `LE/` = `Kick/modules/kick_ui/modes/` (`kick_ListEdit.cpp/.h`); `B:` = `Kick/apps/kick/kick_hardware_bridge.h`; `Home:` = `Kick/modules/kick_ui/dialogs/kick_AppHome.cpp`; `Eng/` = `Kick/modules/engine/audio_engine/engine/`; `Ctl/` = `Kick/modules/kick_ui_controls/source/`; `RPT` = `docs/AKAI_MPC_KEY61_HW_TEST_REPORT.md`; `DVK` = `docs/akai_mpc_hardware/KEY61_DOC_VS_KICK.md`; `KIR` = `docs/plans/research/known-issues-and-roadmap.md`; `CHK` = `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md`.
 
 ## 1. Áttekintés

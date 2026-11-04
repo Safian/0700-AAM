@@ -2,6 +2,49 @@
 
 Állapot: terv/review. Alap: **statikus kódolvasás** (build, futtatás, hardver nélkül) a `kick-plans` worktree-ben (2026-11-04). A „KÉSZ” itt azt jelenti: van bekötött handler az engine-ig, **nem** azt, hogy hardveren igazolt. Ahol a kód és a régi dokumentumok ellentmondanak, a kód az igazság. „NEM ELLENŐRIZHETŐ KÓDBÓL” = futtatás/hardver kell hozzá.
 
+## Állapot (R-8, 2026-11-04 — a S-C és az R-8 kör után; ez a szakasz a mérvadó, az alábbi táblák a review idejét mutatják)
+
+S-C (`d7076177`, `39846b60`): SS-01..06, 08..16, 18 (xN jelzés, pontos törlés), 21, 23, 33, 40, 43; a GRID SELECT kapcsoló (SS-31 egy része). R-8 (ez a kör):
+
+| Tétel | Állapot |
+|---|---|
+| **SS-17** nem 4/4 | Host-teszt KÉSZ: `StepModelTests` 8 ütemmutató (2/4, 3/4, 5/4, 6/8, 7/8, 12/8, 7/4, 9/8) x 5 lépésméret (1/4..1/64), vegyes ütemhosszak, triplettek: lépésszám = ütemhossz / lépés (sosem az enum értéke), oldalszám, utolsó lépés, lejátszási pozíció. Motor-smoke: a nem 4/4 ütemmutatók elfogadva és megmaradnak. **Lelet:** ha a lépés nem osztja az ütemet (7/8 negyedekkel: 3 lépés = 288 / 336 tick), az ütem vége (48 tick) lépésként nem érhető el, ott a finomabb osztás kell (`uncoveredTicks`); a lejátszófej ott nem mutat lépést. Ember kell: egy valódi 3/4 és 7/8 projekt a készüléken (HW lista R8-1) |
+| **SS-18** maradék | A beállítások ablak (fejléc fogaskerék) **Velocity** mezője: 0 = Auto (CLASSIC 127, GRID 100, mint eddig), 1..127 = minden bekapcsolt lépés alap-velocity-je mindkét nézetben (kézikönyv: „default step velocity”). **Owner-döntés:** az egységes alapérték (127 vagy 100 vagy más) — egy konstans: `step_model::kClassicDefaultVelocity` / `kGridDefaultVelocity`. Sormagasság: ember kell (lásd SS-31) |
+| **SS-20** Akai-összevetés | alább (kézikönyv 177–181. o.) |
+| **SS-24** Akai-paritás | A kézikönyv Step Sequencer fejezetében **nincs** lépéshossz / gate, másolás-beillesztés, véletlen-generálás: nincs mit megvalósítani. A fejezet tételeiből megvalósítva: Shift+pad = pad kijelölése, Q-Link 0-ra = lépés törlése, alap-Velocity, UNDO a státuszsávban. **Nincs megvalósítva:** Step Automation (a Level / Pan sáv lépésenkénti szerkesztése a lépés-nézetben: a StepComponent / StepPresets jegyzet-alapú és paraméter-enumos, a sáv-alapú lépés-adat külön L méretű egység; a sáv töréspontjai a List Edit-ben már szerkeszthetők), Track Length / SEQ mező (a sáv hossza a Main > Track fülön állítható), Seq/Gbl BPM-kapcsoló (nincs globális-tempó motor-oldal a lépés-nézethez), Clear Page (a Clear Bar az egész ütemre hat; 16T / 32T-nél a lap és az ütem eltér) |
+| **SS-30** Q-Link kiosztás | JAVASLAT (UX-döntés, owner): a kézikönyv Screen módja szerint **a Q-Link gomb a lépésnek felel meg** (egy gomb = egy lépés). A Key 61-en 4 gomb van, ezért a **Q-Link gomb oszlopváltása** (SS-22, a híd, R-3) 4 gombos csoportokon át éri el a 16 lépést: a Step Sequencer már oldal-relatívan kezeli a `EN_KNOB_1..16`-ot, tehát ha a híd 16 gombot küld, nincs további UI-munka. Amíg ez nincs: Q-Link 1-4 = az oldal 1-4. lépése. Alternatíva (ha az oszlopváltás nem kell): Q-Link 1 = a kurzor-lépés velocity-je, 2 = probability, 3 = ratchet, 4 = eltolás, a kurzort a Data Dial lépteti — egy lépés mind a három értéke egyszerre elérhető, de eltér a kézikönyvtől. Ajánlás: a kézikönyv szerinti oszlopváltás (hidas munka), mert a Pad / Q-Link megfelelés ugyanaz, mint az MPC-n |
+| **SS-31** maradék | A „Select” eszköz Shift nélkül KÉSZ (S-C). Ember kell: az ujj-pontosság mérése a 19 px sormagasságon; ha kevés, 8 sor / oldal (bank-fele váltó) és ≥ 36 px sor (HW lista R8-2). A mérésig a sormagasság nem változik |
+| **SS-32** Undo a státuszsávban | KÉSZ: Clear Pad, Clear Bar, a TOTAL BARS rövidítése után a státuszsáv üzenete mellett UNDO gomb (8 mp, vagy a következő üzenetig); a Menü / Fejléc / Projects nincs érintve (`AppStatusbar::offerUndo`) |
+| **SS-34** pad-sebesség | KÉSZ: a beállítások ablak „Pad velocity” kapcsolója (a pad saját velocity-je a lépésé); a felhasználói szint (Half Level) ezt eddig is tette |
+| SS-07, SS-22 | a híd (R-3) |
+
+### Akai-összevetés, WP-E Step Sequencer (MPC Standalone OS User Guide v3.10, 177–181. o.) — SS-20
+| Kézikönyv | Kick |
+|---|---|
+| Csak MIDI sávokon (audióra nem) | KÉSZ (S-C SS-23: audió / clip sávon letiltva + üzenet) |
+| Belépés: Menu, Step Seq gomb (Key 61: Shift+Grid) | KÉSZ (híd) |
+| Track mező, Track Length mező + SEQ kapcsoló (független sávhossz) | Track mező KÉSZ; a Track Length / SEQ **nincs** a lépés-nézetben (a Main > Track fülön van) |
+| BPM mező; Seq/Gbl kapcsoló (Shift+Tap) | BPM mező KÉSZ; Seq/Gbl **nincs** |
+| Időszámláló | a státuszsáv BBT-je |
+| Gear: Velocity (alap-velocity) | KÉSZ (R-8) |
+| Gear: Step Size (a TC értékét is állítja) | a TIME DIV választó (a kvantálást állítja) KÉSZ |
+| Gear: Auto-Scroll Off / Page | a lap-követés a CLASSIC nézetben KÉSZ (S-C), kapcsoló nincs |
+| Gear: Automation Unlocked / Locked to Step Length | NINCS (Step Automation nincs) |
+| TC ikon (Timing Correct ablak) | a TC gomb a List Edit-en át (KIR) |
+| Bar -/+, Pad -/+ gombok, a szám a bal felső sarokban | KÉSZ |
+| Shift + Track -/+ = sáv választása | a TRACK lista |
+| Shift + Clear = a szekvencia összes lépése; Shift + Clear Page = az oldal lépései | Clear Pad (a pad összes lépése) és Clear Bar (az ütemé) KÉSZ UNDO-val; Clear Page **nincs** (eltérő részletesség) |
+| Lépés be / ki: Pad -/+ vagy Shift+pad vagy Pad Select (nyomva tartva / rögzítve) | KÉSZ (R-8: Shift+pad is) |
+| Bar -/+ | KÉSZ |
+| Lépések: a pad a lépés, a pad a velocity színével világít | a pad-LED-ek a MPC-n nem világítanak (híd, SS-07 / R-3) |
+| Nagyobb osztásnál több pad-bank: a < > nyilak a lépésszámok mellett vagy a bank gombok | bank gombok KÉSZ (S-C: felfelé kerekített oldalszám); a < > nyilak: PAGE választó |
+| Velocity: érintés a lépés-oszlopon, csúszka (összes lépés), Q-Link a lépéshez; **0 = törli a lépést** | érintés, csúszka, Q-Link KÉSZ; a 0-ra állítás törlése KÉSZ (R-8) |
+| Nudge < > (a minta eltolása egy lépéssel, körbefordul; független sávhossznál a saját sávon belül) | KÉSZ (körbefordulás a szekvencián; a sáv saját hosszán belüli nem vizsgált) |
+| Flip Steps (az üres lépés 127-tel be, a hangos ki) | KÉSZ (S-C) |
+| Presets (6 gomb: rámpa, 1/0 minta, háromszög, tükör, invert) | KÉSZ (S-C) |
+| Step Automation (Parameter mező: Add New; rajzolás, Q-Link, Shift+Clear, nudge, csúszka, presets; sötét sáv = az utolsó aktív lépés értéke) | NINCS |
+
+
 Rövidítések a hivatkozásokban (mind a repó gyökeréhez képest): `SSq/` = `Kick/modules/kick_ui/audio_components/step_sequencer/`; `B:` = `Kick/apps/kick/kick_hardware_bridge.h`; `Home:` = `Kick/modules/kick_ui/dialogs/kick_AppHome.cpp`; `Eng/` = `Kick/modules/engine/audio_engine/engine/`; `Ctl/` = `Kick/modules/kick_ui_controls/source/`; `RPT` = `docs/AKAI_MPC_KEY61_HW_TEST_REPORT.md`; `DVK` = `docs/akai_mpc_hardware/KEY61_DOC_VS_KICK.md`; `KIR` = `docs/plans/research/known-issues-and-roadmap.md`.
 
 ## 1. Áttekintés
