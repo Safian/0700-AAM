@@ -60,7 +60,25 @@ namespace ui
 
         // Keyboard / dial highlight of one tile, and graying out a tile that cannot be used now.
         void setHighlight( int Index );
+        int  getHighlight() const { return navSelect; }
         void setItemEnabled( int Index, bool Enabled );
+        // Presses a tile as a touch would; false when the tile does not exist or is disabled.
+        bool clickItem( int Index );
+
+        // Removes every tile (the Menu rebuilds its page).
+        void clearOptions();
+        // Layout: at least this many rows (so a short last page keeps the tile size) and a strip kept free at the bottom.
+        void setMinRows( int Rows );
+        void setBottomReserved( int Pixels );
+
+        // Hooks of a screen that wants more than one page of tiles. Return true when the event was handled.
+        std::function<bool( int delta, bool shift )> onDialStep;
+        std::function<bool( bool shift )>            onDialClick;
+        // The highlighted tile changed (dial or setHighlight); index within the tiles.
+        std::function<void( int index )> onHighlightChanged;
+
+    protected:
+        void resized() override;
 
     private:
         struct MenuGroup
@@ -69,13 +87,12 @@ namespace ui
             juce::OwnedArray<KickImageButton> items;
         };
 
-        int                         noOfColumns{ 4 }, navSelect{ 0 }, navGroup{ 0 };
+        int                         noOfColumns{ 4 }, navSelect{ 0 }, navGroup{ 0 }, minRows{ 0 }, bottomReserved{ 0 };
         juce::OwnedArray<MenuGroup> model;
         juce::Rectangle<int>        headerSize;
 
         void refreshHighlight();
         void AddOptionInternal( const std::vector<MenuItem>& Items, const juce::String& Group = "" );
-        void resized() override;
 
         void knobRotated( double ) override;
         void knobClicked() override;

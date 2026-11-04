@@ -4,6 +4,7 @@
 #include "../../modules/kick_ui_components/source/kick_menu_logic.h"
 #include <cstdio>
 #include <set>
+#include <string>
 
 // Stand-in for kick_ui::Screen: same enumerator names, the logic only needs those.
 enum class S
@@ -60,6 +61,64 @@ int main()
     CHECK( tileScreen<S>( 17 ) == S::Invalid );
     CHECK( tileScreen<S>( -1 ) == S::Invalid );
     CHECK( screenTile( S::HomeGridView ) == -1 );
+
+    // Registry: every item has a unique button name and a label; tiles have a screen and an icon, commands a name and no screen.
+    {
+        std::set<std::string> names, labels;
+        for( int i = 0; i < kMenuItemCount; ++i )
+        {
+            const auto& d = tileDef<S>( i );
+            CHECK( d.name && d.name[0] );
+            CHECK( d.label && d.label[0] );
+            CHECK( d.icon != nullptr );
+            CHECK( names.insert( d.name ).second );
+            CHECK( labels.insert( d.label ).second );
+            if( i < kTileCount )
+                CHECK( d.screen != S::Invalid && d.icon[0] );
+            else
+                CHECK( d.screen == S::Invalid && !d.icon[0] );
+        }
+        CHECK( std::string( tileDef<S>( kCommandSave ).name ) == "Save" );
+        CHECK( std::string( tileDef<S>( kCommandResources ).name ) == "Resources" );
+        CHECK( std::string( tileDef<S>( kCommandKickUpdate ).name ) == "Kick Update" );
+        CHECK( tileDef<S>( -1 ).screen == S::Invalid && tileDef<S>( kMenuItemCount ).screen == S::Invalid );
+        CHECK( itemNeedsProject<S>( kCommandSave ) );
+        CHECK( !itemNeedsProject<S>( kCommandResources ) && !itemNeedsProject<S>( kCommandKickUpdate ) );
+        CHECK( !itemNeedsProject<S>( 0 ) && itemNeedsProject<S>( 1 ) && itemNeedsProject<S>( 16 ) );
+    }
+
+    // MenuLayout: pages, move, swap, reset, lenient (de)serialisation.
+    {
+        MenuLayout l;
+        CHECK( l.itemCount() == kMenuItemCount && l.pageCount() == 2 && l.pageItems( 0 ) == 16 && l.pageItems( 1 ) == 4 && l.pageItems( 2 ) == 0 );
+        CHECK( l.isDefault() && l.itemAt( 0 ) == 0 && l.itemAt( 19 ) == 19 && l.itemAt( 20 ) == -1 && l.itemAt( -1 ) == -1 );
+        CHECK( MenuLayout::pageOfPosition( 15 ) == 0 && MenuLayout::pageOfPosition( 16 ) == 1 && MenuLayout::slotOfPosition( 17 ) == 1 );
+        CHECK( MenuLayout( 16 ).pageCount() == 1 && MenuLayout( 17 ).pageCount() == 2 && MenuLayout( 0 ).pageCount() == 1 );
+
+        CHECK( l.move( 0, 3 ) && l.itemAt( 3 ) == 0 && l.itemAt( 0 ) == 1 && l.itemAt( 2 ) == 3 && l.positionOf( 0 ) == 3 );
+        CHECK( !l.isDefault() );
+        CHECK( l.move( 3, 3 ) && !l.move( -1, 2 ) && !l.move( 2, 20 ) );
+        CHECK( l.swapPositions( 0, 19 ) && l.itemAt( 0 ) == 19 && l.itemAt( 19 ) == 1 && !l.swapPositions( 0, 20 ) );
+        {   // still a permutation
+            std::set<int> seen;
+            for( int i = 0; i < l.itemCount(); ++i ) seen.insert( l.itemAt( i ) );
+            CHECK( (int)seen.size() == kMenuItemCount );
+        }
+        const std::string saved = l.serialize();
+        MenuLayout        r;
+        CHECK( r.deserialize( saved ) && r.serialize() == saved );
+        l.reset();
+        CHECK( l.isDefault() && l.serialize() == "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19" );
+
+        // Damaged text never loses an item: repeats, out-of-range ids and junk are dropped, missing ones appended in order.
+        MenuLayout d;
+        CHECK( d.deserialize( "5,5,x,99,-1,2,,3" ) );
+        CHECK( d.serialize() == "5,2,3,0,1,4,6,7,8,9,10,11,12,13,14,15,16,17,18,19" );
+        CHECK( !d.deserialize( "" ) && d.isDefault() );
+        CHECK( !d.deserialize( "junk,;;" ) && d.isDefault() );
+        // An older file with fewer items gets the newer ones at the end.
+        CHECK( d.deserialize( "1,0" ) && d.itemAt( 0 ) == 1 && d.itemAt( 1 ) == 0 && d.itemAt( 2 ) == 2 && d.itemAt( 19 ) == 19 );
+    }
 
     // Project gate.
     CHECK( screenNeedsProject( S::MenuSampler ) );
