@@ -62,6 +62,7 @@ namespace kick_ui
         //
         SystemResources,
         Inserts,
+        MenuPiano, // touch piano (Keyboard)
         Temp
     };
 

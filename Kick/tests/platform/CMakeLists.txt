@@ -233,6 +233,11 @@ add_executable(kick-platform-command-tests PlatformCommandTests.cpp)
 add_test(NAME kick-platform-command COMMAND kick-platform-command-tests)
 set_tests_properties(kick-platform-command PROPERTIES TIMEOUT 10)
 
+# Touch piano pure logic (W3-A): multi-finger state machine, glissando note-offs, velocity modes, bend mapping, sustain held notes; JUCE-free, header only.
+add_executable(kick-piano-logic-tests PianoLogicTests.cpp)
+add_test(NAME kick-piano-logic COMMAND kick-piano-logic-tests)
+set_tests_properties(kick-piano-logic PROPERTIES TIMEOUT 10)
+
 # Grid pure logic: pad-to-note bank mapping, button state machine, Q-Link zoom scaling; JUCE-free, header only.
 add_executable(kick-grid-logic-tests GridLogicTests.cpp)
 add_test(NAME kick-grid-logic COMMAND kick-grid-logic-tests)

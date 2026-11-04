@@ -78,6 +78,7 @@
 #include "modes/midicontrol/kick_MidiControlTabs.cpp"
 #include "modes/midicontrol/kick_MidiControl.cpp"
 #include "modes/padperform/kick_PadPerform.cpp"
+#include "modes/pianoview/kick_PianoView.cpp"
 #include "modes/filebrowser/kick_fileUtils.cpp"
 #include "modes/filebrowser/kick_fileBrowser.cpp"
 
