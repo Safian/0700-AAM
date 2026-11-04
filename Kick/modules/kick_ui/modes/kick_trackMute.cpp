@@ -21,6 +21,10 @@
 
 namespace kick_ui
 {
+    // Instant / Time Division and the Settings window had no engine side (nothing read them): not shown until
+    // the mute can wait for the next grid point (docs/plans/screens/pad-mute-track-mute.md MU-12).
+    static constexpr bool kTrackMuteTimeDivisionAvailable = false;
+
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////    KickTrackMute
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +38,7 @@ namespace kick_ui
         trackMute.toFront( true );
         trackGroup.toFront( true );
 
-        header.showSettingsButton( true );
+        header.showSettingsButton( kTrackMuteTimeDivisionAvailable );
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
         hdrComp.sequence.setDisplayFormat( ui::KickListBox::withoutTitleBar );
 
@@ -200,7 +204,9 @@ namespace kick_ui
                 }
                 else
                 {
-                    ae.setTrackMute( seq, Id, !pads->getMute( Id ) );
+                    // Engine state, not the picture, decides the new state.
+                    auto* pTrack = ae.getTrackData( seq, Id );
+                    ae.setTrackMute( seq, Id, !( pTrack && pTrack->mute.get() ) );
                 }
             }
             else
@@ -367,6 +373,8 @@ namespace kick_ui
     {
         for( auto it : getChildren() )
             it->setVisible( isVisible() );
+        instantAndTD.setVisible( isVisible() && kTrackMuteTimeDivisionAvailable );
+        timeDivList.setVisible( isVisible() && kTrackMuteTimeDivisionAvailable );
         if( isVisible() )
         {
             auto seq = ae.getSelectedSequence();
@@ -381,6 +389,10 @@ namespace kick_ui
                     break;
                 }
             }
+            // Fill the pads now; tracksMax used to stay 0 (and every pad hit was dropped) until the
+            // asynchronous sequence selector callback came in.
+            refreshData();
+            refreshAllLEDs();
         }
         resized();
     }
@@ -400,14 +412,32 @@ namespace kick_ui
 
     void KickTrackMuteTab::assignKnobToPad( int knobId, int value )
     {
-        if( knobId < 1 || knobId > tracksMax ) return;
+        // Q-Link 1..4 = the first four tracks of the shown bank. One tick = one group step; 0 is None.
+        if( knobId < contracts::DeviceControlContracts::EN_KNOB_1 || knobId > contracts::DeviceControlContracts::EN_KNOB_4 )
+            return;
 
-        int trackId               = knobId - 1;
-        int currentGroupNumberStr = pads->getGroupNumber( trackId );
-        int currentGroupNumber    = currentGroupNumberStr + value;
-        currentGroupNumber        = juce::jlimit( 1, 16, currentGroupNumber );
-        ae.seqAddTrackToGroup( ae.getSelectedSequence(), trackId, currentGroupNumber );
-        pads->setGroupText( trackId, juce::String( currentGroupNumber ), juce::dontSendNotification );
+        const auto bank    = pads->getBankOffset() / 16;
+        const auto trackId = mt::mixlogic::bankPadIndex( bank, knobId - contracts::DeviceControlContracts::EN_KNOB_1 );
+        if( trackId >= tracksMax )
+            return;
+
+        const auto seq    = ae.getSelectedSequence();
+        auto*      pTrack = ae.getTrackData( seq, trackId );
+        if( pTrack == nullptr )
+            return;
+
+        const auto current = juce::jmax( 0, (int)pTrack->muteGroup.get() );
+        const auto target  = mt::mixlogic::stepMuteGroup( current, value, 16 );
+        if( target == current )
+            return;
+
+        if( target == 0 )
+            ae.seqRemoveTrackFromGroup( seq, trackId );
+        else
+            ae.seqAddTrackToGroup( seq, trackId, target );
+
+        refreshData();
+        refreshAllLEDs();
     }
 
     void KickTrackMuteTab::resized()
