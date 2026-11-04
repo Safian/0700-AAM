@@ -378,6 +378,7 @@ namespace mt
         void setTrackLevel( int Sequence, int Track, int Level );
         void setTrackTranspose( int Sequence, int Track, int Transpose );
         void setTrackMute( int Sequence, int Track, bool Mute );
+        void setTrackMuteTimeDivision( int Sequence, int Track, bool Mute, int divisionTicks );
         bool getTrackMute( int Sequence, int Track );
         int  setTrackSolo( int Sequence, int Track, bool Solo );
         bool getTrackSolo( int Sequence, int Track );

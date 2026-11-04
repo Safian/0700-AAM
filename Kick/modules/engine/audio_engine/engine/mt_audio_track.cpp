@@ -113,6 +113,35 @@ namespace mt
         }
     }
 
+    void MTTrack::scheduleMute( bool Muted, int64_t TargetTick )
+    {
+        if( TargetTick < 0 || !isPlaying.load() )
+        {
+            pendingMuteTick.store( -1, std::memory_order_relaxed );
+            setMute( Muted );
+        }
+        else
+        {
+            pendingMuteState.store( Muted, std::memory_order_relaxed );
+            pendingMuteTick.store( TargetTick, std::memory_order_relaxed );
+        }
+    }
+
+    void MTTrack::cancelScheduledMute()
+    {
+        pendingMuteTick.store( -1, std::memory_order_relaxed );
+    }
+
+    bool MTTrack::hasScheduledMute() const
+    {
+        return pendingMuteTick.load( std::memory_order_relaxed ) >= 0;
+    }
+
+    int64_t MTTrack::getScheduledMuteTick() const
+    {
+        return pendingMuteTick.load( std::memory_order_relaxed );
+    }
+
     void MTTrack::setTranspose( int Transpose ) { MTITrackData::transpose = Transpose; }
     void MTTrack::setMidiPort( const juce::String& MidiPort ) { MTITrackData::midiPort.setValue( MidiPort, undoManager ); }
     void MTTrack::setMidiChannel( int MidiChannel ) { MTITrackData::midiChannel = MidiChannel; }
@@ -596,6 +625,12 @@ namespace mt
     void MTTrack::pause()
     {
         isPlaying = false;
+        if( pendingMuteTick.load( std::memory_order_relaxed ) >= 0 )
+        {
+            const bool newMute = pendingMuteState.load( std::memory_order_relaxed );
+            pendingMuteTick.store( -1, std::memory_order_relaxed );
+            setMute( newMute );
+        }
         if (auto* p = program.load()) p->updatePluginTransport(seq.getBPM(), double(tickPos) / defaultPPQN, false);
         arpPanic();
         stopAllMidiNotes();
@@ -603,6 +638,12 @@ namespace mt
 
     void MTTrack::stop()
     {
+        if( pendingMuteTick.load( std::memory_order_relaxed ) >= 0 )
+        {
+            const bool newMute = pendingMuteState.load( std::memory_order_relaxed );
+            pendingMuteTick.store( -1, std::memory_order_relaxed );
+            setMute( newMute );
+        }
         if (auto* p = program.load()) p->updatePluginTransport(seq.getBPM(), 0, false);
         arpPanic();
         stopAllMidiNotes();
@@ -768,6 +809,15 @@ namespace mt
         auto trackMidiOutChannel = getMidiOutChannel();
 
         const juce::ScopedLock sl( lock );
+
+        // Time Division mute: apply scheduled mute when tickCtr reaches target grid point (MU-12)
+        const int64_t sTick = pendingMuteTick.load( std::memory_order_relaxed );
+        if( sTick >= 0 && (int64_t)tickCtr >= sTick )
+        {
+            const bool newMute = pendingMuteState.load( std::memory_order_relaxed );
+            pendingMuteTick.store( -1, std::memory_order_relaxed );
+            setMute( newMute );
+        }
 
         // Check if any pending queued note off's are to be sent...
         for( auto p = queuedNotes.begin(); p != queuedNotes.end(); )

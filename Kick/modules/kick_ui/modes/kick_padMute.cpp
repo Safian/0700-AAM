@@ -21,8 +21,8 @@
 
 namespace kick_ui
 {
-    // See kick_trackMute.cpp: no engine side for Instant / Time Division and the Settings window yet.
-    static constexpr bool kPadMuteTimeDivisionAvailable = false;
+    // See kick_trackMute.cpp: Instant / Time Division and the Settings window are enabled (MU-12).
+    static constexpr bool kPadMuteTimeDivisionAvailable = true;
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////PadMuteHeaderComponent

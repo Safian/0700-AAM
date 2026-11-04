@@ -1304,6 +1304,23 @@ namespace mt
             t->setMute( Mute );
     }
 
+    void MTAudioInterface::setTrackMuteTimeDivision( int Sequence, int Track, bool Mute, int divisionTicks )
+    {
+        if( auto t = manager->getTrack( Sequence, Track ) )
+        {
+            if( divisionTicks > 0 && isSequencePlaying() )
+            {
+                int64_t curTick = t->getTickCtr();
+                int64_t targetTick = ::mt::timedivmute::nextGridPoint( curTick, divisionTicks );
+                t->scheduleMute( Mute, targetTick );
+            }
+            else
+            {
+                t->setMute( Mute );
+            }
+        }
+    }
+
     bool MTAudioInterface::getTrackMute( int Sequence, int Track )
     {
         if( auto t = manager->getTrack( Sequence, Track ) )
