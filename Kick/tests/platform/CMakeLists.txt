@@ -517,3 +517,19 @@ add_executable(kick-transport-router-tests TransportRouterTests.cpp)
 add_test(NAME kick-transport-router COMMAND kick-transport-router-tests)
 set_tests_properties(kick-transport-router PROPERTIES TIMEOUT 10)
 
+
+# Shutdown / restart sequence of the device (recording / unsaved questions, transport stop, close, sync, poweroff; mocks only); JUCE-free header only.
+add_executable(kick-power-logic-tests PowerLogicTests.cpp)
+add_test(NAME kick-power-logic COMMAND kick-power-logic-tests)
+set_tests_properties(kick-power-logic PROPERTIES TIMEOUT 10)
+
+# Power button discovery (/proc/bus/input/devices fixtures), input_event decoding and the watcher thread on pipes; JUCE-free header only.
+add_executable(kick-power-key-tests PowerKeyTests.cpp)
+find_package(Threads REQUIRED)
+target_link_libraries(kick-power-key-tests PRIVATE Threads::Threads)
+add_test(NAME kick-power-key COMMAND kick-power-key-tests)
+set_tests_properties(kick-power-key PROPERTIES TIMEOUT 20)
+
+# Bootstrap script (pendrive install / update / rollback / power key inhibitor), offline with mock binaries.
+add_test(NAME kick-tkgl-bootstrap COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/../../../docs/akai_mpc_hardware/tools/test_tkgl_bootstrap.sh")
+set_tests_properties(kick-tkgl-bootstrap PROPERTIES TIMEOUT 300 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
