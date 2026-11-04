@@ -213,7 +213,8 @@ namespace mt
         int                       setProgramColourMode( int Program, PadColorMode Mode );
         int                       setProgramEmptyPadColorMode( int Program, EmptyPadColorMode Mode );
         int                       setProgramPadColour( int Program, int Colour, int Pad );
-        int                       resetProgramPadColours( int Program ); // default colours of the program type
+        int                       resetProgramPadColours( int Program ); // default colours of the program type (the user's Make Default, else factory)
+        int                       makeProgramPadColoursDefault( int Program ); // Make Default: the program's colours + modes become the type's defaults
         std::vector<juce::String> getProgramNames( MTProgramCategory ct = MTProgramCategory::Unused );
         int                       renameProgram( int Program, const juce::String& NewName );
         int                       getProgramIndexByName( const juce::String& ProgramName );

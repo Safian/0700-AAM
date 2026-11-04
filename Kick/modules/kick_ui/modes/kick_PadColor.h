@@ -96,6 +96,7 @@ namespace kick_ui
 
         std::unique_ptr<ui::KickPadButtonGroupComponent> pads;
         ui::KickToggleButton                             defaultBtn{ "Make Default", "Make Default", "Make Default" };
+        ui::KickToggleButton                             resetBtn{ "Reset", "Reset", "Reset" };
 
     private:
         void resized() override;

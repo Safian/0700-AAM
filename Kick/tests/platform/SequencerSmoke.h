@@ -181,6 +181,28 @@ inline juce::String runKickSequencersSmoke() {
     if (pd->padColour[20].get() != def20 || pd->padColour[127].get() != mt::defaultDrumColours[127]) return fail("one undo did not revert colouring all pads");
     say("pad colour defaults ok");
 
+    // ---- Make Default (manual): the program's colours become the defaults of its type; new programs and Reset use them
+    {
+        auto& store = mt::getSettings().padColours;
+        const auto saved = store.get("drum"); // the stored value is restored at the end (the settings belong to the user)
+        api.setProgramPadColour(prog, 7, 20);
+        api.setProgramPadColour(prog, 9, 21);
+        if (api.makeProgramPadColoursDefault(prog) != 0) return fail("Make Default failed");
+        const int prog2 = api.createProgram(mt::MTProgramType::Drum, "SeqDrum2");
+        auto* pd2 = api.getProgramData(prog2);
+        if (!pd2 || pd2->padColour[20].get() != 7 || pd2->padColour[21].get() != 9) { store.set("drum", saved); return fail("a new drum program does not start with the stored default colours"); }
+        const int other = api.createProgram(mt::MTProgramType::Keygroup, "SeqKeys");
+        auto* pk = api.getProgramData(other);
+        if (!pk || pk->padColour[20].get() == 7) { store.set("drum", saved); return fail("the drum default leaked into a keygroup program"); }
+        api.setProgramPadColour(prog, 3, -1);
+        api.resetProgramPadColours(prog);
+        if (pd->padColour[20].get() != 7 || pd->padColour[21].get() != 9 || pd->padColour[0].get() != def0) { store.set("drum", saved); return fail("Reset did not return to the stored default"); }
+        store.set("drum", saved);
+        api.resetProgramPadColours(prog);
+        if (pd->padColour[20].get() != def20) return fail("Reset did not return to the factory colours without a stored default");
+        say("Make Default stores the type defaults, new programs and Reset use them");
+    }
+
     api.setSelectedSequence(seq);
     api.setSelectedTrack(trk);
     for (int i = 0; i < 8; ++i) api.addOrModifyNote(0, i * 96, 96, 40 + i * 12, 100, 1); // seeded content for the screenshots
