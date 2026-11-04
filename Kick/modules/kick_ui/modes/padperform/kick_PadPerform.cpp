@@ -277,6 +277,21 @@ namespace kick_ui
     {
         const bool chordsShown = padmap::normaliseMode( selectedType ) == padmap::Chords || padmap::normaliseMode( selectedType ) == padmap::Progression;
         const bool arpActive   = arpBtn.getToggleState();
+        // With the arpeggiator on, the four Q-Links of the Key 61 are the arpeggiator's (Mode, Rate, Octaves, Gate); Scale / Root /
+        // Octave are then set on the screen. Without it: Scale, Root, Octave, Chord / Mode.
+        if( arpActive )
+        {
+            const int step = value > 0 ? 1 : -1;
+            switch( knob )
+            {
+                case contracts::DeviceControlContracts::EN_KNOB_1: arpMode.knobRotated( value ); break;
+                case contracts::DeviceControlContracts::EN_KNOB_2: arpRate.knobRotated( value ); break;
+                case contracts::DeviceControlContracts::EN_KNOB_3: arpOctaves.setValue( juce::jlimit( 1, 4, arpOctaves.getValue() + step ) ); break;
+                case contracts::DeviceControlContracts::EN_KNOB_4: arpGate.setValue( juce::jlimit( 5, 100, arpGate.getValue() + 5 * step ) ); break;
+                default: break;
+            }
+            return;
+        }
         switch( knob )
         {
             case contracts::DeviceControlContracts::EN_KNOB_1: scale.knobRotated( value ); break;
@@ -286,21 +301,9 @@ namespace kick_ui
                 if( chordsShown ) chord.knobRotated( value );
                 else stepMode( value > 0 ? 1 : -1 );
                 break;
-            case contracts::DeviceControlContracts::EN_KNOB_5:
-                if( arpActive ) arpMode.knobRotated( value );
-                else chord.knobRotated( value );
-                break;
-            case contracts::DeviceControlContracts::EN_KNOB_6:
-                if( arpActive ) arpRate.knobRotated( value );
-                else startOn.knobRotated( value );
-                break;
-            case contracts::DeviceControlContracts::EN_KNOB_7:
-                if( arpActive ) arpOctaves.setValue( juce::jlimit( 1, 4, arpOctaves.getValue() + ( value > 0 ? 1 : -1 ) ) );
-                else stepMode( value > 0 ? 1 : -1 );
-                break;
-            case contracts::DeviceControlContracts::EN_KNOB_8:
-                if( arpActive ) arpGate.setValue( juce::jlimit( 5, 100, arpGate.getValue() + value ) );
-                break;
+            case contracts::DeviceControlContracts::EN_KNOB_5: chord.knobRotated( value ); break;
+            case contracts::DeviceControlContracts::EN_KNOB_6: startOn.knobRotated( value ); break;
+            case contracts::DeviceControlContracts::EN_KNOB_7: stepMode( value > 0 ? 1 : -1 ); break;
             default: break;
         }
     }
@@ -419,17 +422,20 @@ namespace kick_ui
         const bool arpActive   = ae.isArpEnabled( ae.getSelected() );
         arpBtn.setToggleState( arpActive, juce::dontSendNotification );
         latchBtn.setToggleState( ae.isArpLatch( ae.getSelected() ), juce::dontSendNotification );
-        arpMode.setSelected( ae.getArpMode( ae.getSelected() ), juce::dontSendNotification );
-        arpRate.setSelected( ae.getArpRate( ae.getSelected() ), juce::dontSendNotification );
-        arpOctaves.setValue( ae.getArpOctaves( ae.getSelected() ), juce::dontSendNotification );
+        // -1 = no track selected: keep the controls as they are.
+        if( const int m = ae.getArpMode( ae.getSelected() ); m >= 0 ) arpMode.setSelected( m, juce::dontSendNotification );
+        if( const int r = ae.getArpRate( ae.getSelected() ); r >= 0 ) arpRate.setSelected( r, juce::dontSendNotification );
+        if( const int o = ae.getArpOctaves( ae.getSelected() ); o >= 1 ) arpOctaves.setValue( o, juce::dontSendNotification );
+        if( const int g = ae.getArpGate( ae.getSelected() ); g >= 5 ) arpGate.setValue( g, juce::dontSendNotification );
 
         chord.setVisible( chordsShown && ! arpActive && isVisible() );
-        startOn.setVisible( ! ( arpActive && ! chordsShown ) && isVisible() );
-        arpMode.setVisible( arpActive && ! chordsShown && isVisible() );
-        arpRate.setVisible( arpActive && ! chordsShown && isVisible() );
-        arpOctaves.setVisible( arpActive && ! chordsShown && isVisible() );
-        arpGate.setVisible( arpActive && ! chordsShown && isVisible() );
+        startOn.setVisible( ! arpActive && isVisible() );
+        arpMode.setVisible( arpActive && isVisible() );
+        arpRate.setVisible( arpActive && isVisible() );
+        arpOctaves.setVisible( arpActive && isVisible() );
+        arpGate.setVisible( arpActive && isVisible() );
 
+        padmap::StripNotes::instance().publish( layout_, ae.getBankOffset() ); // PP-24: the touch strip's Notes mode follows this layout
         pads->refreshAllPads();
         pads->clearAllPadData();
         pushToUI();
@@ -503,7 +509,9 @@ namespace kick_ui
         {
             padmap::Mark mark = layout_[(size_t)( first + i )].mark;
             if( level16_ ) mark = ( levelParamTune_ && i == 8 ) ? padmap::Mark::Root : padmap::Mark::Active;
-            colours.push_back( hwColour( mark ) );
+            // PP-40: a pad held through Pad Perform lights white on the hardware for as long as it is held.
+            const bool held = held_.isHeld( first + i );
+            colours.push_back( held ? (int)contracts::DeviceControlContracts::PadColourIds::PadColourNeutralWhite : hwColour( mark ) );
         }
         if( colours == lastHwColours_ ) return;
         lastHwColours_ = colours;
@@ -610,9 +618,11 @@ namespace kick_ui
         keySlot_[key]   = slot;
         for( int n : notes )
             sendNote( target, true, n, vel );
+        if( key == slot ) padmap::SoundingPads::instance().set( slot % 16, notes ); // hardware pad: its aftertouch goes to these notes
 
         pads->setPadHighlight( slot, true );
         updateHeldDisplay();
+        pushToHW();
     }
 
     // The note-off ends exactly the notes the press started, on the track it started on, whatever bank / scale / root /
@@ -630,6 +640,7 @@ namespace kick_ui
         if( sl != keySlot_.end() )
         {
             const int slot = sl->second;
+            if( key == slot ) padmap::SoundingPads::instance().clear( slot % 16 );
             keySlot_.erase( sl );
             bool stillHeld = false;
             for( auto& kv : keySlot_ )
@@ -637,6 +648,7 @@ namespace kick_ui
             if( ! stillHeld ) pads->setPadHighlight( slot, false );
         }
         updateHeldDisplay();
+        pushToHW();
     }
 
     void PadPerformContent::releaseAllNotes()
@@ -646,6 +658,7 @@ namespace kick_ui
         for( int k : keys ) padUp( k );
         for( int n : held_.releaseAll() )
             sendNote( ae.getSelected(), false, n, 0 );
+        padmap::SoundingPads::instance().clearAll();
         keyTarget_.clear();
         for( auto& kv : keySlot_ ) pads->setPadHighlight( kv.second, false );
         keySlot_.clear();

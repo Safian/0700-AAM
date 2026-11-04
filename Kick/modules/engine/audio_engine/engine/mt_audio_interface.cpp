@@ -2062,6 +2062,11 @@ namespace mt
         auto t = manager->getTrack( Selection );
         return t ? t->getArpRate() : -1;
     }
+    int MTAudioInterface::getArpGate( const MTSelected& Selection )
+    {
+        auto t = manager->getTrack( Selection );
+        return t ? t->getArpGate() : -1;
+    }
     int MTAudioInterface::getArpOctaves( const MTSelected& Selection )
     {
         auto t = manager->getTrack( Selection );

@@ -6,6 +6,9 @@
 #include "../../modules/kick_ui/modes/padperform/kick_pad_mapper.h"
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <regex>
+#include <sstream>
 
 using namespace kick_ui::padmap;
 
@@ -171,21 +174,32 @@ static void testChordName()
     check( chordName( { 60, 64 }, false ).empty() && chordName( { 60, 61, 62 }, false ).empty(), "no name for two notes / clusters" );
 }
 
+// Every step list of scaleFormulaMap in kick_scales.h (read from the source: the header needs JUCE) must add up to an octave. The
+// three that did not (AncientChinese 9, Indian1 10, Persian 11) lacked their closing step: the steps given are kept and the
+// remainder to 12 is the last step (2,2,2,1,2 + 3; 1,2,2,3,2 + 2; 1,3,1,2,1,3 + 1).
 static void testScalesSumTo12()
 {
-    // The three previously broken scales (sum was 9, 11, 10 instead of 12)
-    const std::vector<int> ancient = { 2, 2, 2, 1, 2, 3 }; // AncientChinese: 2+2+2+1+2+3 = 12
-    const std::vector<int> persian = { 1, 3, 1, 2, 1, 3, 1 }; // Persian: 1+3+1+2+1+3+1 = 12
-    const std::vector<int> indian1 = { 1, 2, 2, 3, 2, 2 }; // Indian1: 1+2+2+3+2+2 = 12
-
-    auto checkSum12 = []( const std::vector<int>& s, const char* name ) {
+    const std::string here = __FILE__;
+    const auto        cut  = here.find_last_of( "/\\" );
+    const std::string path = ( cut == std::string::npos ? std::string( "." ) : here.substr( 0, cut ) ) + "/../../modules/kick_ui_common/source/kick_scales.h";
+    std::ifstream     in( path );
+    check( in.good(), "kick_scales.h can be read" );
+    const std::regex  row( R"(\{\s*scale_(\w+)\s*,\s*\{([0-9,\s]+)\}\s*\})" );
+    std::string       line;
+    int               seen = 0;
+    while( std::getline( in, line ) )
+    {
+        std::smatch m;
+        if( ! std::regex_search( line, m, row ) ) continue;
         int sum = 0;
-        for( int step : s ) sum += step;
-        check( sum == 12, name );
-    };
-    checkSum12( ancient, "AncientChinese must sum to 12" );
-    checkSum12( persian, "Persian must sum to 12" );
-    checkSum12( indian1, "Indian1 must sum to 12" );
+        std::istringstream steps( m[2].str() );
+        std::string        tok;
+        while( std::getline( steps, tok, ',' ) ) sum += std::atoi( tok.c_str() );
+        if( sum != 12 ) std::fprintf( stderr, "scale %s adds up to %d\n", m[1].str().c_str(), sum );
+        check( sum == 12, "every scale in scaleFormulaMap adds up to 12 semitones" );
+        ++seen;
+    }
+    check( seen >= 40, "the scale table was found (at least 40 scales)" );
 }
 
 static void testScaleDegree()
@@ -219,6 +233,41 @@ static void testNotesForAndStrip()
     check( noteForStrip( 8, l, 0 ) == 38, "strip at slot 1 plays pad 1 note" );
 }
 
+static void testSoundingPads()
+{
+    auto& t = SoundingPads::instance();
+    int   out[SoundingPads::kMaxPerPad];
+    t.clearAll();
+    check( t.soundingFor( 3, out ) == 0, "no pad is sounding after clearAll" );
+    t.set( 3, { 48, 52, 55 } );
+    check( t.soundingFor( 3, out ) == 3 && out[0] == 48 && out[1] == 52 && out[2] == 55, "pad 3 reports the chord it started" );
+    check( t.soundingFor( 4, out ) == 0, "another pad is unaffected" );
+    t.set( 3, { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 } );
+    check( t.soundingFor( 3, out ) == SoundingPads::kMaxPerPad, "more notes than the table holds are cut, not overrun" );
+    t.clear( 3 );
+    check( t.soundingFor( 3, out ) == 0, "release clears the pad" );
+    check( t.soundingFor( -1, out ) == 0 && t.soundingFor( 16, out ) == 0, "out-of-range pads report nothing" );
+}
+
+static void testStripNotesTable()
+{
+    auto& t = StripNotes::instance();
+    t.invalidate();
+    check( t.noteForSlot( 3, 99 ) == 99, "nothing published: the fallback (raw pad note) is used" );
+    Params p = base( Notes ); // C major
+    p.octaveIdx = 3;
+    auto l = layout( p );
+    t.publish( l, 0 );
+    // C D E F G A B C from C1 (36)
+    const int expect[8] = { 36, 38, 40, 41, 43, 45, 47, 48 };
+    for( int i = 0; i < 8; ++i ) check( t.noteForSlot( i, -5 ) == expect[i], "the strip slot plays the scale note of the same pad" );
+    check( t.noteForSlot( -1, 7 ) == 7 && t.noteForSlot( 16, 7 ) == 7, "out-of-range slots fall back" );
+    t.publish( l, 16 ); // bank B
+    check( t.noteForSlot( 0, -5 ) == l[16].note, "the table follows the bank offset" );
+    t.invalidate();
+    check( t.noteForSlot( 0, 99 ) == 99, "invalidate returns to the fallback" );
+}
+
 int main()
 {
     testChromatic();
@@ -233,6 +282,8 @@ int main()
     testScalesSumTo12();
     testScaleDegree();
     testNotesForAndStrip();
+    testStripNotesTable();
+    testSoundingPads();
     std::puts( "PadMapperTests: OK" );
     return 0;
 }

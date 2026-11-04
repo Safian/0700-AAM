@@ -2,6 +2,7 @@
 #pragma once
 #include <iostream>
 #include <program_edit_ui/program_edit_ui.h>
+#include "DrumVoiceSmoke.h"
 
 // Program Edit against the real engine and the real screen on the message thread (KICK_SMOKE_PROGRAMEDIT=1, see AppSmoke.h):
 // switching between two Clip programs keeps both alive (the editor used to take ownership of the engine's program and delete
@@ -64,6 +65,8 @@ inline juce::String runKickProgramEditSmoke() {
     drumProg->setFilterCutoff( 0, 850.0 );
     if (std::abs(drumProg->getFilterCutoff( 0 ) - 850.0) > 1e-4) return fail("Drum filter cutoff failed");
     say("Drum envelope / LFO / filter model bindings ok");
+    if (auto err = runDrumVoiceProof(*drumProg, drum); err.isNotEmpty()) return err;
+    drumProg->setEnvEnabled( 0, mt::EnvelopeType::AMPLITUDE, true );
     pe->setVisible(false); // showing the screen refreshes the page from the program (the sliders follow the model)
     pe->setVisible(true);
     if (drumProg->getLevel() != 60) return fail("showing the page changed the program Level (page refresh must not write)");
@@ -159,11 +162,22 @@ inline juce::String runKickProgramEditSmoke() {
         pp->toggleSixteenLevels();
         pp->setVisible(false); // hiding releases every held note
     }
-    // PP-22 & PP-25: Pad aftertouch and Arpeggiator / Latch state
+    // PP-25: the ARP / Latch controls of Pad Perform follow the selected track's arpeggiator (needs a track: this smoke has none yet).
+    api.createSequence("ArpSeq");
+    const int arpSeq = api.getNumSequences() - 1;
+    api.setSelectedSequence(arpSeq);
+    api.createTrack(arpSeq, "ArpT");
+    api.setSelectedTrack(0);
     api.setArpEnabled(api.getSelected(), true);
     if (!api.isArpEnabled(api.getSelected())) return fail("ARP enable failed");
     api.setArpLatch(api.getSelected(), true);
     if (!api.isArpLatch(api.getSelected())) return fail("ARP latch failed");
+    api.setArpMode(api.getSelected(), 2);
+    api.setArpRate(api.getSelected(), 5);
+    api.setArpOctaves(api.getSelected(), 3);
+    if (api.getArpMode(api.getSelected()) != 2 || api.getArpRate(api.getSelected()) != 5 || api.getArpOctaves(api.getSelected()) != 3) return fail("ARP mode / rate / octaves round trip failed");
+    pp->setVisible(true); // showing the page reads the arpeggiator state into its controls
+    pp->setVisible(false);
     say("ARP / Latch ok");
     say("Pad Perform pads / Q-Link / 16 LEVELS ok");
 

@@ -982,6 +982,7 @@ namespace mt
     int  MTTrack::getArpMode() { arp::SpinGuard g( arpFlag ); return arpeg.getMode(); }
     int  MTTrack::getArpRate() { arp::SpinGuard g( arpFlag ); return arpeg.getRate(); }
     int  MTTrack::getArpOctaves() { arp::SpinGuard g( arpFlag ); return arpeg.getOctaves(); }
+    int  MTTrack::getArpGate() { arp::SpinGuard g( arpFlag ); return arpeg.getGatePercent(); }
     bool MTTrack::isArpLatch() { arp::SpinGuard g( arpFlag ); return arpeg.isLatch(); }
 
     int MTTrack::recallLiveNotes( int WindowMs )
