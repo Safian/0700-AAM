@@ -367,7 +367,7 @@ namespace kick_logger
             }
             else
             {
-                // Default: info, error, warn, proj
+                // Default: info, error, warn, proj, cmd (kick_cmd injections are rare and needed to read a driven run), bridge
                 m_enabled_categories.clear();
                 m_enabled_categories.insert( "info" );
                 m_enabled_categories.insert( "error" );
@@ -375,6 +375,8 @@ namespace kick_logger
                 m_enabled_categories.insert( "warn" );
                 m_enabled_categories.insert( "warning" );
                 m_enabled_categories.insert( "proj" );
+                m_enabled_categories.insert( "cmd" );
+                m_enabled_categories.insert( "bridge" );
                 m_wildcard_all = false;
             }
         }

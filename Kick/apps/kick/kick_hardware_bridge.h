@@ -1715,7 +1715,10 @@ public:
         if (val127 < 0) val127 = 0;
         if (val127 > 127) val127 = 127;
         if (auto* bus = mt::getAudioInterface().getBusManager().getOutput(0))
+        {
             bus->gain = CommonUtils::midiToGain(val127);
+            kick_log("info", "[INFO] [BRIDGE] Main volume %d/127 -> gain %.4f\n", val127, (double)bus->gain);
+        }
     }
     void on_footswitch2(bool down) override
     {
@@ -1817,9 +1820,8 @@ public:
                 KeyTranspose::Action act = m_key_transpose.pressKey(pitch);
                 if (act != KeyTranspose::None) {
                     updateOctaveLeds();
-                    printf("[BRIDGE] Octave %d, transpose %d semitones (chord key %d)\n",
-                           m_key_transpose.octave(), m_key_transpose.semitone(), pitch);
-                    fflush(stdout);
+                    kick_log("bridge", "[BRIDGE] Octave %d, transpose %d semitones (chord key %d)\n",
+                             m_key_transpose.octave(), m_key_transpose.semitone(), pitch);
                 }
                 return; // Chord key does not sound
             }
