@@ -1,23 +1,17 @@
 # TODO — teljes lista, csoportosítva (2026-11-04)
 
-## A. Egyedül elvégezhető (éjszaka; ebben a sorrendben, az ember nélkül haladó tételek elöl)
-1. **Főszál, azonnal:** mobil ág pusholása a forkra (fast-forward); Looper SYNC fázis mérése és AC2 (nyomkövető sorok egy buildben, injektált forgatókönyv); Aura 45 perces soak figyelése.
-2. **1. hullám (W1-A..D, 4 agy-worker párhuzamosan):** Preferences-csomag, Grid-hibák, MIDI program, CLAP-FX host + `clap.gui`. Utána: átnézés, merge, **egy** ARM-build + telepítés, MPC-s ellenőrzés (összeomlás-mentesség, napló, injektált forgatókönyvek), H3 tételek (pad "csendes állapot", kerék/pedál-mérő, List Edit dial, modális ablakok).
-3. **2. hullám (W2-A, B, C, D):** indítás, főképernyő tabok, fájlböngésző-források (M0 helyi mappa + cache, M1 WebDAV), triázs-frissítés.
-4. **VST- és FX-fejlesztés külön repókban, külön sessionökben fut (owner, 2026-11-04; a Kick-fő vonal nem nyúl hozzájuk):**
-   - **VST-ág (instrumentek)**: `Safian/SynthyBoyVST` (nyilvános, AGPL-3.0; helyi klón `Projects/Safian/SynthyBoyVST`), session "SynthyBoyVST fejlesztése". A spike (egy kódból VST3+CLAP, JUCE 8.0.17 AGPL-módban + clap-juce-extensions) kész és a main-en (`b86cfa1`, CI Linux+macOS zöld, a Windows újrafuttatása folyamatban). Tartalma: szintetizátor, zongora-plugin.
-   - **FX-ág (effektek)**: `Safian/KickEQ` (nyilvános, AGPL-3.0; helyi klón `Projects/Safian/KickEQ`), session "KickEQ fejlesztése": a Kick EQ az első saját FX és a plugin-template pilotja; a spike a `spike/vst3-clap` ágon (`b5096b7d`), a session ellenőrzi és mergeli.
-   - A W3-B, W3-C, W3-D itt **nem a mi feladatunk**: nem ideiglenes helyi worktree, a repók nevei eldőltek. Ehhez a két repóhoz a Kick-oldali munka nem nyúl.
-   - **Platform-követelmény minden pluginra** (docs/plans/02-03-05): mennie kell az Akai MPC-n (Linux ARMv7) ÉS a telefonos appban (iOS/Android); a hivatalos pluginok az app részei, a tartalmuk (minták/presetek) telepítéskor töltődik le, törölhető és visszaállítható; "letölthető-kész" architektúra (`PluginManifest` + `StaticPluginLoader`/`DynamicPluginLoader`); az áruházi egyeztetés csak a kész produktum után.
-   - **A Kick fő vonalán marad** (a host-oldal): W1-D (CLAP-FX az Insert-böngészőben, `clap.gui`), W3-E (`.kickplug` telepítő / plugin-betöltő a `PluginManifest` és a Static/DynamicPluginLoader szerint, mobilra is), W3-A (érintő-zongora a híd után).
-5. Ami **nem** megy ember nélkül, az a B. szakaszban van: reggelre összegyűjtve, pontos lépésekkel.
+## A. Egyedül elvégezhető — ÁLLAPOT (2026-11-04 ~19:00): minden tétel kész és ellenőrzött
+Merge-elve `safian/main`-re (`0c15cf9a`), Mac-build tiszta, ARM-build 0 hiba, ctest 102/102, a smoke-ok PASS, az MPC-n telepítve és igazolva (indulás, képernyők, összeomlás-mentesség, napló). Az egységek (W1-A..D, W2-A..D, W3-A/E, S-A..F, R-1..R-12) mind bent vannak; az agy- és sonnet-worker ágak merge-elve és törölve. A VST/FX-fejlesztés külön repóban/sessionben fut (SynthyBoyVST, KickEQ), ide nem tartozik; a host-oldal (CLAP-FX, `.kickplug`) bent van.
+Az, ami ember vagy hardveres hallgatás nélkül nem igazolható, a B. szakaszban van, tételenként indokolva.
 
-## B. Ember kell (reggelre összegyűjtve)
-- Hallgatás: többmintás zongora alul/középen/fent, halk/hangos (a Demo 01 most a zongora); minden új hangzási funkció.
-- Fizikai: Controller Mode mérés Mac-en, majd iPhone/iPad; fizikai ujjas strip Track Level; többujjas érintés a kijelzőn.
-- Jogi átnézés: Salamander CC BY 3.0 ↔ AGPL, Google API ToS, Splice ToS, libcurl/TLS licenc.
-- Döntések: Akai-specifikus réteg tervezése; Serum-szintű funkciólista; backend hosting és kulcsgazda.
-- iOS: szimulátor/eszköz indulás és külső MIDI a mobil ágon (nem ellenőrzött).
+## B. Ember kell — a pontos lépések a `docs/MORNING.md` "Ember kell" listájában és a `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` 20–51. pontjaiban
+- **Hallgatás** (indok: üres bemenet, nincs hangszóró-visszacsatolás a gépnek): Demo 01 zongora minden tartományban, képernyő-zongora (glissando/bend/vibrato/sustain), Looper Sync füllel, busz-insertek, XY FX presetek, Pad Perform/poly aftertouch, Sample Edit, Sampler felvétel, az `adsr.h` változás hatása a samplerre.
+- **Fizikai** (indok: ujj/gomb kell): strip Track Level ujjal, többujjas érintés, Q-Link/mixer, hardveres REC/OVERDUB/STOP/PLAY, **a bekapcsoló gomb rövid megnyomása és a tényleges Shut Down/Restart (R-12)**, Controller Mode mérés Mac-en.
+- **Eszközön, visszafordíthatatlan vagy külső eszközt igényel** (indok: adatvesztés/hálózat): Format/Eject próba-pendrive-on, 300 MB másolás, dátum/idő, Ethernet/WiFi, Factory Reset, Firmware Update, pendrive-os telepítés/rollback.
+- **Owner-döntések** (indok: termékdöntés, nem műszaki): lista a lenti "Owner-döntések" sorban és a MORNING.md 4. pontjában (köztük a transzport-duplázás, a hivatalos plugin-aláíró kulcs, `assets/Default`, SW-00).
+- **Jogi átnézés**: Salamander CC BY 3.0 ↔ AGPL, Google API ToS, Splice ToS, libcurl/TLS licenc.
+- **iOS**: szimulátor/eszköz indulás és külső MIDI a mobil ágon (nem ellenőrzött).
+- **Nyitott mérés**: a Looper loop-óra ~0,3 s kezdeti vesztése/drift újramérése az MPC-n a lock-free pillanatkép után (a `[LOOP]` nyomkövető build kell).
 
 
 ## Állapot (2026-11-04 03:50) és a képernyő-review backlog (docs/plans/screens/*.md, 22 dokumentum)
@@ -50,7 +44,7 @@ Mindegyik egység a dokumentum TODO-sorait csinálja, a hardvert/hangot kérő t
 ## Állapot (2026-11-04 09:30) — új egység (owner kérése)
 | ID | Tartalom | Állapot |
 |---|---|---|
-| R-12 | **Rendes leállítás a Kickben, mint a gyári MPC-ben**: a bekapcsoló gomb rövid megnyomására "Power" ablak (Shut Down / Restart / Cancel), Menü "Power" csempe, mentetlen-változás kérdés, transzport/felvétel leállítása, projekt-lezárás, `sync`, majd `PlatformServices::powerOff()`; a gomb figyelése (input-eszköz felderítése `/proc/bus/input/devices`-ból, `KEY_POWER`); a logind kettős kezelése ellen a bootstrap `systemd-inhibit --what=handle-power-key` változata | Mac-oldal: sonnet-worker fut (`sonnet/r12-shutdown`); MPC-oldal: a gomb eszköz-azonosítása és a Shut Down végigvitele az MPC bekapcsolása után (csak olvasás + a tulajdonos próbája) |
+| R-12 | **Rendes leállítás a Kickben, mint a gyári MPC-ben**: a bekapcsoló gomb rövid megnyomására "Power" ablak (Shut Down / Restart / Cancel), Menü "Power" csempe, mentetlen-változás kérdés, transzport/felvétel leállítása, projekt-lezárás, `sync`, majd `PlatformServices::powerOff()`; a gomb figyelése (input-eszköz felderítése `/proc/bus/input/devices`-ból, `KEY_POWER`); a logind kettős kezelése ellen a bootstrap `systemd-inhibit --what=handle-power-key` változata | **Kész, merge-elve, telepítve.** MPC-n igazolva: a gomb `gpio-keys` (`/dev/input/event1`, `KEY_POWER`), logind inaktív, nincs `systemd-inhibit`; a Menü 2. oldal "Power" csempéje megnyitja az ablakot (Shut Down / Restart / Cancel), a MAIN gomb zárja, a Kick stabil. A tényleges Shut Down/Restart és a gomb rövid megnyomása a tulajdonos próbája (B) |
 
 ---
 (Részletes egységek és sorrend alább.)
