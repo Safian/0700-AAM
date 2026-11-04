@@ -27,7 +27,7 @@ Minden "kész" tétel: merge-elve `safian/main`-re (`0c15cf9a`), **ARM-build 0 h
 6. **iOS**: szimulátor/eszköz indulás és külső MIDI a mobil ágon.
 
 ## Hibás / nyitott
-- **Preferences-értékek indításkor nullán/üresen (A-PREFS)**: a fényerő 0 % (háttérvilágítás 20), a legördülők üresek, a csúszka nem a tényleges értéket mutatja; a Kick saját `preferences` fájlja nem található az eszközön. Ideiglenesen a csúszka húzásával állítható (a puszta érintése nem). Vizsgálat alatt.
+- **Preferences-értékek nem mentődtek, nullán indultak: javítva** (a prefs-könyvtár az MPC-n nem létezett és a tartalék írásvédett volt; most `/data/prefs`). Fényerő, pad-érzékenység stb. újraindítás után megmarad (mérve). **Döntés kell:** az alapértelmezett időzóna `Asia/Kolkata` (upstream), a Hardware fülön átállítható; beégessük `Europe/Budapest`-re?
 - **Modális ablak X gombja ujjal nem zár (nyitott)**; a Cancel és az ablakon kívüli érintés zár. Az X 24 px-es, az injektált érintés eléri, az ujj nem: valószínűleg érintési pont-eltérés vagy kis célfelület. **Modális ablakok (Power, BPM Selector) gombjai: javítva** (az érintés a mögöttes képernyőt nyomta; `kick_hardware_bridge.h`). Injektált érintéssel MPC-n igazolva, ujjal te próbáld ki (MAIN gomb továbbra is zár).
 - **Looper drift**: MPC-n újramérve a lock-free pillanatkép után: eltérés medián +0,04 s, lejtés ≤0,006 s/s (előtte ~0,3 s vesztés, −0,04 s/s): **megoldva**, csak fülre kell ellenőrizni.
 - **Nem javított, owner-döntés nélkül**: transzport-duplázás; Step Automation (L méretű egység), Convert > Seq (nincs motor-függvény), Song végtelen ismétlés, LE-21 többi eseménytípus (nincs modell).
