@@ -85,6 +85,7 @@ namespace ui
         std::function<void( int, double )>                     onPanChanged;
 
         explicit KickPadButtonGroupComponent( KickPadButton::PadButtonType Type );
+        ~KickPadButtonGroupComponent() override { padHardwareConnection.disconnect(); }
 
         KickListBox& getBankComponent();
 
@@ -176,6 +177,7 @@ namespace ui
         void setFocusOutline( bool State );
 
     private:
+        sigslot::connection padHardwareConnection;
         bool  knobHighlight{ false };
         bool  interceptKeys{ true };
         bool  enableTrackPrefix{ false };

@@ -730,14 +730,12 @@ namespace ui
         };
 
         bool visible = isVisible();
+        // Own connection per group: signal.disconnect( lambda ) matches by the lambda TYPE, so hiding any pad group
+        // used to cut the hardware pads of every group, and a repeated visibilityChanged( true ) connected twice
+        // (one hit = two toggles = no change).
+        padHardwareConnection.disconnect();
         if( visible && isSelectionEnabled() )
-        {
-            contracts::DclSignals::hardwareInputTriggered.connect( handle_Bank );
-        }
-        else
-        {
-            contracts::DclSignals::hardwareInputTriggered.disconnect( handle_Bank );
-       }
+            padHardwareConnection = contracts::DclSignals::hardwareInputTriggered.connect( handle_Bank );
 
         for( auto it : getChildren() )
             it->setVisible( visible );

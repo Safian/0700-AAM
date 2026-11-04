@@ -21,6 +21,9 @@
 
 namespace kick_ui
 {
+    // See kick_trackMute.cpp: no engine side for Instant / Time Division and the Settings window yet.
+    static constexpr bool kPadMuteTimeDivisionAvailable = false;
+
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////PadMuteHeaderComponent
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +32,7 @@ namespace kick_ui
     {
         mt::utils::addChildComponents( this, header, hdrComp, padMute, padGroup, *tab, programLabel, infoLabel );
         tab->setVisible( false );
-        header.showSettingsButton( true );
+        header.showSettingsButton( kPadMuteTimeDivisionAvailable );
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
 
         padMute.setToggleState( true, juce::sendNotification );
@@ -155,12 +158,11 @@ namespace kick_ui
 
     void KickPadMute::visibilityChanged()
     {
+        // Drum tracks only (the info label says so for every other program); the LEDs follow the same program
+        // as the grid: the program of the selected track.
         auto& ae          = mt::getAudioInterface();
-        auto  programType = ae.getProgramType( ae.getSelectedProgram() );
-        if( programType == mt::MTProgramType::Drum || programType == mt::MTProgramType::Clip )
-            tab->setScreenState( true );
-        else
-            tab->setScreenState( false );
+        auto  pTrackProg  = ae.getProgramForTrack( ae.getSelectedSequence(), ae.getSelectedTrack() );
+        tab->setScreenState( pTrackProg && pTrackProg->getType() == mt::MTProgramType::Drum );
 
         bool visible = isVisible();
         for( auto it : getChildren() )
@@ -228,8 +230,10 @@ namespace kick_ui
                     else
                         pProg->setNoteMuteGroup( Id, groups.getSelectedIndex() );
                 }
+                // The MPC bridge only takes whole-bank colour packets (EN_PAD_SET_COLOUR_STATE): a single-pad packet
+                // was dropped and the pad kept its old colour.
                 refreshData();
-                setPadLED( Id );
+                refreshAllLEDs();
             }
         };
 
@@ -253,7 +257,7 @@ namespace kick_ui
         clearSoloBtn.onClick = [&]() {
             if( auto pProg = ae.getProgramForTrack( ae.getSelectedSequence(), ae.getSelectedTrack() ) )
             {
-                if( !dynamic_cast<mt::MTDrumProgram*>( pProg )->resetNotesSolo() )
+                if( !pProg->resetNotesSolo() )
                 {
                     refreshData();
                     refreshAllLEDs();
@@ -330,7 +334,9 @@ namespace kick_ui
 
     void KickPadMuteTab::refreshAllLEDs()
     {
-        ae.getProgramSamples( ae.getSelectedProgram(), samples );
+        samples.clear();
+        if( auto pProg = ae.getProgramForTrack( ae.getSelectedSequence(), ae.getSelectedTrack() ) )
+            pProg->getSamples( samples );
         std::vector<contracts::PadData> padData;
         auto                            bankOffset = pads->getBankOffset();
 
@@ -357,61 +363,13 @@ namespace kick_ui
         contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::setPadColourAndStateInfoMessage( padData ) );
     }
 
-    void KickPadMuteTab::setPadLED( int padIndex )
-    {
-        ae.getProgramSamples( ae.getSelectedProgram(), samples );
-
-        //Check whether the selected pad is a GroupTrack or not
-        int  muteGroup   = -1;
-        bool isMuteGroup = false;
-        for( auto& it : samples )
-        {
-            int muteGroupNum = it->muteGroup.get();
-            if( padIndex == it->keyNote.get() && muteGroupNum != -1 )
-            {
-                isMuteGroup = true;
-                muteGroup   = it->muteGroup.get();
-                break;
-            }
-            else
-                isMuteGroup = false;
-        }
-
-        for( auto& it : samples )
-        {
-            auto index = (int)it->keyNote.get() - pads->getBankOffset();
-            if( !isMuteGroup ) //it is for non group Pad
-            {
-                if( juce::isPositiveAndBelow( index, 16 ) && it->getSource( 0 ).length() && padIndex == (int)it->keyNote.get() )
-                {
-                    contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                 setPadDataMessage( index,
-                                                                                    contracts::DeviceControlContracts::PadButtonState::StateOn,
-                                                                                    it->mute.get() ? contracts::DeviceControlContracts::PadColourIds::PadColourRed :
-                                                                                                     contracts::DeviceControlContracts::PadColourIds::padColourlightGreen1 ) );
-
-                    break;
-                }
-            }
-            else //it is for non group Pad
-            {
-                if( juce::isPositiveAndBelow( index, 16 ) && it->getSource( 0 ).length() && muteGroup == it->muteGroup.get() )
-                {
-                    contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                 setPadDataMessage( index,
-                                                                                    contracts::DeviceControlContracts::PadButtonState::StateOn,
-                                                                                    it->mute.get() ? contracts::DeviceControlContracts::PadColourIds::PadColourRed :
-                                                                                                     contracts::DeviceControlContracts::PadColourIds::padColourlightGreen1 ) );
-                }
-            }
-        }
-    }
-
     void KickPadMuteTab::visibilityChanged()
     {
         bool visible = isVisible();
         for( auto it : getChildren() )
             it->setVisible( visible );
+        instantAndTD.setVisible( visible && kPadMuteTimeDivisionAvailable );
+        timeDivList.setVisible( visible && kPadMuteTimeDivisionAvailable );
 
         if( visible )
         {
@@ -448,12 +406,27 @@ namespace kick_ui
 
     void KickPadMuteTab::assignKnobToPad( int knobId, int value )
     {
-        int padId                 = knobId - 1;
-        int currentGroupNumberStr = pads->getGroupNumber( padId );
-        int currentGroupNumber    = currentGroupNumberStr + value;
-        currentGroupNumber        = juce::jlimit( 1, 16, currentGroupNumber );
-        ae.padAddToGroup( ae.getSelectedSequence(), padId, currentGroupNumber );
-        pads->setGroupText( padId, juce::String( currentGroupNumber ), juce::dontSendNotification );
+        // Q-Link 1..4 = the first four pads of the shown bank. One tick = one group step; 0 is None (-1 in the engine).
+        if( knobId < contracts::DeviceControlContracts::EN_KNOB_1 || knobId > contracts::DeviceControlContracts::EN_KNOB_4 )
+            return;
+
+        // The program of the selected track (what the grid shows), never the sequence index as a program index.
+        auto pProg = ae.getProgramForTrack( ae.getSelectedSequence(), ae.getSelectedTrack() );
+        if( pProg == nullptr || pProg->getType() != mt::MTProgramType::Drum )
+            return;
+
+        const auto padId = mt::mixlogic::bankPadIndex( pads->getBankOffset() / 16, knobId - contracts::DeviceControlContracts::EN_KNOB_1 );
+        if( pProg->getSample( padId ) == nullptr ) // empty pad: no sample is created just to hold a group
+            return;
+
+        const auto current = juce::jmax( 0, pProg->getNoteMuteGroup( padId ) );
+        const auto target  = mt::mixlogic::stepMuteGroup( current, value, 16 );
+        if( target == current )
+            return;
+
+        pProg->setNoteMuteGroup( padId, target == 0 ? -1 : target );
+        refreshData();
+        refreshAllLEDs();
     }
 
     void KickPadMuteTab::resized()
