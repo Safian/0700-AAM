@@ -800,7 +800,11 @@ namespace mt
     void MTAudioManager::playSong( const juce::String& SongName, int SequenceIndexToPlay )
     {
         auto songInfo = getSongInfo( SongName );
-        if( songInfo.steps.size() && SequenceIndexToPlay < songInfo.steps.size() )
+        // A step whose sequence was deleted (seqNo < 0) cannot be played: setupSong would dereference a missing sequence.
+        for( auto& step : songInfo.steps )
+            if( step.seqNo < 0 )
+                return;
+        if( songInfo.steps.size() && SequenceIndexToPlay >= 0 && SequenceIndexToPlay < (int)songInfo.steps.size() )
             setupSong( songInfo, SequenceIndexToPlay ); // Setting up the queue
     }
 

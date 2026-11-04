@@ -155,6 +155,11 @@ namespace ui
             return canvas.selectedRow.getLast();
         };
 
+        // The selected row, or -1 when nothing is selected. getSelectedRow() returns 0 for an empty
+        // selection (juce::Array::getLast of nothing), which let Delete remove row 0 by accident.
+        inline int  getSelectedRowOrNone() const noexcept { return canvas.selectedRow.size() > 0 ? canvas.selectedRow.getLast() : -1; }
+        inline bool hasSelectedRow() const noexcept { return canvas.selectedRow.size() > 0; }
+
         void       setRowHeight( const int RowHeight );
         inline int getRowHeight() const noexcept { return canvas.rowHeight; };
 

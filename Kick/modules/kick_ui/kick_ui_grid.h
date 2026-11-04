@@ -70,6 +70,8 @@
     #include "audio_components/gridview/kick_GridMagnifyTool.h"
 
     // Step sequencer grid
+    #include "audio_components/step_sequencer/kick_StepModel.h"
+    #include "audio_components/step_sequencer/kick_NoteListWatcher.h"
     #include "audio_components/step_sequencer/kick_StepSequencerDataType.h"
     #include "audio_components/step_sequencer/kick_StepSequencerControl.h"
     #include "audio_components/step_sequencer/kick_StepPresets.h"

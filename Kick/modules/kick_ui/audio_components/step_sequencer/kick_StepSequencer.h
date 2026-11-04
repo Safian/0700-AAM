@@ -37,14 +37,19 @@ namespace kick_ui
         void        updateStepValue( int Index, int Velocity );
         inline void updateStepValue( int Index, float Normalized );
 
-        void nudge( bool direction );
+        void nudge( bool direction, int steps = 1 );
         std::function<void()> onNudged;
+        std::function<void()> onPageFollowed; // the view followed the play head to another page
         void knobRotated( int knob, int Velocity );
         void setPadSelect( bool State ) { isPadSelected = State; }
         void setPage( int index ) { control.setSelectedPage( index ); }
         int  getPage() { return control.getPage(); }
         void asyncUpdate() { triggerAsyncUpdate(); };
         void setOnFirstLaunch( bool State ) { onFirstLaunch = State; }
+        // Shown on screen: only then the engine is read, the pads are updated and the play head followed.
+        void setActive( bool Active );
+        // Hardware encoder / pad on the page position 'Index': changes only the shown parameter.
+        void adjustStep( int AbsoluteStep, int Delta );
 
     private:
         int   getStepFromX( int X );
@@ -52,7 +57,18 @@ namespace kick_ui
 
         void updateValuestoEngine( int Values );
         void updateValuestoEngine( std::vector<int>& Values );
-        void addValuestoEngine( std::vector<int>& Values );
+        void mirrorSteps();
+        void flipSteps();
+
+        step_model::Param currentParam() const;
+        int               stepStart( int Index ) const;
+        void              notesOfStep( int Index, std::vector<mt::MTNote>& Out );
+        void              writeParam( const mt::MTNote& N, step_model::Param P, int Value );
+        void              createStepNote( int Index, step_model::Param P, int Value );
+        void              eraseStepNotes( int Index );
+        int               computePlayStep();
+        void              updatePlayStep();
+        const juce::Drawable* stepDrawable( bool Active, int Number );
 
         void handleAsyncUpdate() override;
 
@@ -60,6 +76,7 @@ namespace kick_ui
         void resized() override;
 
         void handleMouse( const juce::MouseEvent& event );
+        void mouseDown( const juce::MouseEvent& event ) override;
         void mouseDrag( const juce::MouseEvent& event ) override;
         void mouseUp( const juce::MouseEvent& event ) override;
 
@@ -101,13 +118,26 @@ namespace kick_ui
         bool isPadSelected{ false };
         bool state{ false };
         bool onFirstLaunch{ false };
+        std::atomic<bool> active{ false };
+        bool              gestureOpen{ false }; // a touch gesture owns the open undo transaction
+
+        struct PlayheadAsync : juce::AsyncUpdater
+        {
+            std::function<void()> fn;
+            void                  handleAsyncUpdate() override
+            {
+                if( fn )
+                    fn();
+            }
+        } playheadAsync;
+        int playStepIndex{ -1 };
+        std::map<juce::String, std::unique_ptr<juce::Drawable>> svgCache;
 
         int width{ 0 };
         int height{ 0 };
         int minWidth{ 0 };
 
-        int lastIndex   = 0;
-        int notePlaying = 0;
+        int lastIndex = -1;
 
         std::vector<std::unique_ptr<ui::KickImageButton>> buttonNum;
     };
@@ -127,6 +157,9 @@ namespace kick_ui
 
         void handleCommand( CPktMgr::HWMsg_t& ) override;
 
+        // CLASSIC (false) or GRID (true) view.
+        void showGridView( bool Grid );
+
         int getTrackNo( void ) const { return track; };
         int getSeqNo( void ) const noexcept { return seq; };
 
@@ -145,6 +178,13 @@ namespace kick_ui
         void clearPadData();
         void clearBarData();
         void setTempo();
+        void movePad( int Delta );
+        void moveBar( int Delta );
+        void updatePadLeds();
+        void updatePadName();
+        void updateAvailability(); // no track / audio or clip track: controls off + notice
+        void externalNotesChanged();
+        int  eraseNotesStartingIn( int Pad, int FromTick, int ToTick );
 
     private:
         mt::MTAudioInterface& ae{ mt::getAudioInterface() };
@@ -153,7 +193,7 @@ namespace kick_ui
 
         ui::KickViewport               stepViewport;
         ui::KickListBox                tracks{ ui::KickListBox::withTitleBar, "TRACK", {} };
-        ui::KickListBox                trackLength{ ui::KickListBox::withTitleBar, "TRACK LENGTH", {} };
+        ui::KickLabel                  padName{ "" };
         ui::KickNumber                 totalBars{ "TOTAL BARS", BAR::MIN, BAR::MAX, BAR::DEFAULT, BAR::STEP, true };
         ui::KickLabel                  warningLabel{ "Create any Track Before using StepSequencer" };
         ui::KickTempoWithAttachedValue bpmTempo{ "BPM", BPM::MIN, BPM::MAX, BPM::DEFAULT, BPM::STEP };
@@ -172,6 +212,7 @@ namespace kick_ui
         DrumGrid                drumGrid{ data, topControl };
         ui::KickToggleButton    viewModeButton{ "View", "GRID", "CLASSIC" };
         static int              lastPressedPad;
+        NoteListWatcher         noteWatcher;
 
         KickModeHeader header{ "Step Sequencer", "Icon_Stepsequencer" };
     };

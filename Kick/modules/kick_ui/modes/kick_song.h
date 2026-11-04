@@ -67,8 +67,12 @@ namespace kick_ui
 
         mt::MTSongInfo getSongInfo( const juce::String& Song ) { return ae.getSongInfo( Song ); }
 
-        void playOrResume();
+        bool playOrResume( bool FromStart = false );
         void stopOrPause();
+        void songEnded();
+        bool isSongPlaying() const { return isPlaying; }
+        void selectSong( const juce::String& Song );
+        bool hasMissingStep() const;
         void refreshSequenceList();
         void seqSongState( bool state );
         void setBpmValue( float BPM );
@@ -143,6 +147,7 @@ namespace kick_ui
         void knobCommand( int knob, int value );
 
     private:
+        void askSongName( const juce::String& Title, const juce::String& Initial, std::function<void( const juce::String& )> OnName );
         void handleAsyncUpdate() override;
         void resized() override;
         void visibilityChanged() override;
@@ -159,6 +164,9 @@ namespace kick_ui
         ui::KickListBox          songListBox{ ui::KickListBox::BoxType::withTitleBar, "Song Name", { "CREATE NEW SONG" }, 0, 3 };
         ui::KickNumberf          bpmNumber{ "BPM", BPM::MIN, BPM::MAX, BPM::DEFAULT, BPM::STEP, true };
         ui::KickToggleButton     seqSongBpm{ "Seq", "Song", "Seq" };
+        ui::KickToggleButton     renameSong{ "Rename", "Rename", "Rename" };
+        ui::KickToggleButton     deleteSongBtn{ "Delete Song", "Delete Song", "Delete Song" };
+        juce::String             pendingSelect;
         int                      bpmValue;
         bool                     state{ false };
 

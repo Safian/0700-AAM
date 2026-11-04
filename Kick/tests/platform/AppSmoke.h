@@ -5,6 +5,7 @@
 #include <iostream>
 #include "MainTabsSmoke.h"
 #include "MixersSmoke.h"
+#include "SequencerSmoke.h"
 
 // Runs on the application's message thread against its real manager and graph.
 // The Python supervisor supplies an isolated data root and trusted test fixture.
@@ -30,6 +31,8 @@ inline juce::String runKickAppSmoke() {
     if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_MAINTABS", {}).isNotEmpty()) return runKickMainTabsSmoke();
     // KICK_SMOKE_MIXERS=1: Clear Solos, mute-group propagation, read-only pad getters (MixersSmoke.h).
     if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_MIXERS", {}).isNotEmpty()) return runKickMixersSmoke();
+    // KICK_SMOKE_SEQUENCERS=1: Step Sequencer / List Edit / Song / Color Edit engine behaviour; the project stays loaded for screenshots.
+    if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SEQUENCERS", {}).isNotEmpty()) return runKickSequencersSmoke();
     const auto path = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_CLAP_PATH", {});
     if (path.isEmpty()) return {};
     const auto catalog = kick::clap::inspect(path.toStdString());

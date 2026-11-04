@@ -28,7 +28,7 @@ namespace kick_ui
         constexpr int gap           = 3;
         constexpr int defaultVel    = 100;
         constexpr int timerHz       = 30;
-        constexpr int pollEveryTick = 6; // re-read notes ~5x per second for hardware/other edits
+        constexpr int selectWidth   = 110; // touch alternative to the physical Shift key
         constexpr int dragThreshold = 4; // pixels before a tap in a value layer becomes a swipe
 
         const juce::StringArray tabNames{ "NOTES", "VELOCITY", "PROBABILITY", "RATCHET" };
@@ -124,9 +124,13 @@ namespace kick_ui
 
             auto& c = cells[(size_t)row][(size_t)col];
             if( c.on )
-                continue; // keep the first note of a step
+            {
+                ++c.count; // the step holds more notes; the first one is shown, the cell says how many
+                continue;
+            }
 
             c.on          = true;
+            c.count       = 1;
             c.start       = start;
             c.length      = n.length.get();
             c.velocity    = (int)n.velocity.get();
@@ -164,6 +168,7 @@ namespace kick_ui
     {
         auto b     = getLocalBounds().reduced( DrumGridConstants::gap );
         tabArea    = b.removeFromTop( DrumGridConstants::tabHeight );
+        selectArea = tabArea.removeFromRight( DrumGridConstants::selectWidth );
         b.removeFromTop( DrumGridConstants::gap * 2 );
         headerArea = b.removeFromLeft( DrumGridConstants::headerWidth );
         b.removeFromLeft( DrumGridConstants::gap * 2 );
@@ -234,17 +239,26 @@ namespace kick_ui
 
     void DrumGrid::setStep( int Row, int Column, bool On )
     {
-        auto& c    = cells[(size_t)Row][(size_t)Column];
+        auto&      c    = cells[(size_t)Row][(size_t)Column];
         const auto note = bankBase() + Row;
+        mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Grid step", !gestureOpen );
         if( On && !c.on )
         {
             const auto st = stepStartTick( Column );
             ae.addOrModifyNote( note, st, data.ticksPerQl, DrumGridConstants::defaultVel, 100, 1 );
-            c = Cell{ true, st, data.ticksPerQl, DrumGridConstants::defaultVel, 100, 1 };
+            c = Cell{ true, st, data.ticksPerQl, DrumGridConstants::defaultVel, 100, 1, 1 };
         }
         else if( !On && c.on )
         {
-            ae.eraseNote( note, c.start, -1 );
+            // Every note that starts in this step, matched exactly (start AND length): never the covering
+            // note of an earlier step.
+            const auto               st = stepStartTick( Column );
+            std::vector<mt::MTNote> found;
+            mt::NotesInRange         r( note, note, st, st + data.ticksPerQl );
+            if( ae.getNotesInRange( aeSel, found, r ) >= 0 )
+                for( auto& n : found )
+                    if( step_model::noteStartsInStep( n.start.get(), st, data.ticksPerQl ) )
+                        ae.eraseNote( note, n.start.get(), n.length.get() );
             c = Cell{};
         }
     }
@@ -253,7 +267,7 @@ namespace kick_ui
     {
         auto& c = cells[(size_t)Row][(size_t)Column];
         if( !c.on ) // setting a value on an empty step creates the note
-            c = Cell{ true, stepStartTick( Column ), data.ticksPerQl, DrumGridConstants::defaultVel, 100, 1 };
+            c = Cell{ true, stepStartTick( Column ), data.ticksPerQl, DrumGridConstants::defaultVel, 100, 1, 1 };
 
         Normalized = juce::jlimit( 0.f, 1.f, Normalized );
         switch( layer )
@@ -269,6 +283,7 @@ namespace kick_ui
     void DrumGrid::writeCell( int Row, int Column )
     {
         const auto& c = cells[(size_t)Row][(size_t)Column];
+        mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Grid value", !gestureOpen );
         ae.addOrModifyNote( bankBase() + Row, c.start, c.length, c.velocity, c.probability, c.ratchet );
     }
 
@@ -318,6 +333,8 @@ namespace kick_ui
             return false;
 
         // Relative change: the differences between the selected notes stay, each one stops at its limit.
+        // One dial click = one undo step.
+        mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Grid dial", !gestureOpen );
         for( int row = 0; row < numRows; ++row )
         {
             for( int col = 0; col < numColumns(); ++col )
@@ -364,6 +381,16 @@ namespace kick_ui
 
         const auto p = e.getPosition();
 
+        if( selectArea.contains( p ) )
+        {
+            if( layer != Layer::Notes ) // selecting only exists in the value layers
+            {
+                selectTool = !selectTool;
+                repaint();
+            }
+            return;
+        }
+
         if( tabArea.contains( p ) )
         {
             const auto idx = juce::jlimit( 0, 3, ( p.x - tabArea.getX() ) * 4 / juce::jmax( 1, tabArea.getWidth() ) );
@@ -385,6 +412,10 @@ namespace kick_ui
         if( row < 0 || col < 0 )
             return;
 
+        // One touch gesture (tap, paint swipe, value swipe) is one undo step.
+        ae.getUndoManager().beginNewTransaction( "Grid edit" );
+        gestureOpen = true;
+
         dragRow    = row;
         lastColumn = col;
         downPos    = p;
@@ -395,7 +426,7 @@ namespace kick_ui
             paintMode = cells[(size_t)row][(size_t)col].on ? Paint::Clear : Paint::Set;
             applyAt( row, col, p.y );
         }
-        else if( contracts::DclContractsHelper::isShiftPressed() )
+        else if( selectTool || contracts::DclContractsHelper::isShiftPressed() )
         {
             // Shift: tap toggles a note's selection, dragging adds a rectangle (decided on mouseUp/drag).
             paintMode       = Paint::Select;
@@ -464,9 +495,10 @@ namespace kick_ui
                 clearSelection();
         }
 
-        rubberBand = {};
-        paintMode  = Paint::None;
-        dragRow    = -1;
+        rubberBand  = {};
+        gestureOpen = false;
+        paintMode   = Paint::None;
+        dragRow     = -1;
         lastColumn = -1;
         dragging   = false;
         readNotes();
@@ -482,6 +514,15 @@ namespace kick_ui
         }
         else
             stopTimer();
+    }
+
+    // The note list changed under us (undo/redo, recording, another screen): re-read, unless a finger is painting.
+    void DrumGrid::externalChange()
+    {
+        if( !isVisible() || paintMode != Paint::None )
+            return;
+        readNotes();
+        repaint();
     }
 
     void DrumGrid::timerCallback()
@@ -501,14 +542,6 @@ namespace kick_ui
         auto changed = newPlayColumn != playColumn;
         playColumn   = newPlayColumn;
 
-        if( paintMode == Paint::None && ++pollCounter >= DrumGridConstants::pollEveryTick )
-        {
-            pollCounter = 0;
-            readPadNames();
-            readNotes();
-            changed = true;
-        }
-
         if( changed )
             repaint();
     }
@@ -518,6 +551,16 @@ namespace kick_ui
         using namespace DrumGridConstants;
 
         mt::utils::fillRoundedRect( g, getLocalBounds(), ui::Theme::backgroundColour( 1 ), 5.0f );
+
+        // Select tool (touch alternative to Shift; only meaningful in the value layers)
+        {
+            const auto r = selectArea.reduced( gap );
+            g.setColour( selectTool && layer != Layer::Notes ? accentHi : ui::Theme::backgroundColour( 5 ) );
+            g.fillRoundedRectangle( r.toFloat(), 4.0f );
+            g.setColour( selectTool && layer != Layer::Notes ? juce::Colours::black : ui::Theme::textColour( 1 ).withAlpha( layer == Layer::Notes ? .35f : 1.f ) );
+            g.setFont( juce::Font( 16.0f, juce::Font::bold ) );
+            g.drawText( "SELECT", r, juce::Justification::centred );
+        }
 
         // Layer tabs
         {
@@ -595,6 +638,12 @@ namespace kick_ui
                     const auto a = .35f + .65f * juce::jlimit( 0.f, 1.f, c.velocity / 127.f );
                     g.setGradientFill( juce::ColourGradient::vertical( accentHi.withAlpha( a ), r.getY(), accent.withAlpha( a ), r.getBottom() ) );
                     g.fillRoundedRectangle( r, 3.0f );
+                    if( c.count > 1 && r.getWidth() > 22 && r.getHeight() > 12 ) // more notes in this step
+                    {
+                        g.setColour( juce::Colours::black.withAlpha( .8f ) );
+                        g.setFont( juce::jmin( 12.0f, r.getHeight() * .6f ) );
+                        g.drawText( "x" + juce::String( c.count ), r.toNearestInt(), juce::Justification::centred );
+                    }
                 }
                 else
                 {
