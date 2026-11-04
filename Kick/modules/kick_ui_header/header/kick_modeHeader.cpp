@@ -28,6 +28,13 @@ namespace kick_ui
     inline static constexpr int rw = 604;
     inline static constexpr int rh = 525;
 
+    void KickModeHeader::showSystemResources()
+    {
+        auto& res = KSystemResources::Instance();
+        res.start();
+        mt::utils::showDialog( res.getTitle(), &res, []( int ) { KSystemResources::Instance().stop(); }, { rx, ry, rw, rh } );
+    }
+
     KickModeHeader::KickModeHeader( const juce::String& Name, const juce::String& Image )
     {
         setTitle( Name );
@@ -78,24 +85,7 @@ namespace kick_ui
                 onNewProjectClick();
         };
 
-        resources.onClick = [this] {
-            auto& _sysResources = KSystemResources::Instance();
-            _sysResources.start(); // Start the timer when the dialog is shown
-
-            mt::utils::showDialog(
-                _sysResources.getTitle(),
-                &_sysResources,
-                []( int ) {
-                    // This lambda is called when the dialog is closed
-                    KSystemResources::Instance().stop();
-                },
-                { rx, ry, rw, rh } );
-
-            // Define the dialog callback for when the dialog is closed
-            auto onDialogClose = [&_sysResources]( int ) {
-                _sysResources.stop();
-            };
-        };
+        resources.onClick = [] { showSystemResources(); };
 
         ui::themeChanged.connect( [&]() {
             resources.setImages( "Resource" );

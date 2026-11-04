@@ -195,6 +195,21 @@ namespace kick_ui
         // Setup default look and feel.
         setLookAndFeel( ui::KickLooknFeel::getLnf() );
 
+        // The System Resources dialog (header module, no engine dependency) shows and purges the sample cache through these.
+        {
+            auto convert = []( const mt::ASoundCache::Stats& st ) {
+                KSystemResources::CacheStats out;
+                out.count       = st.count;
+                out.bytes       = st.bytes;
+                out.unusedCount = st.unusedCount;
+                out.unusedBytes = st.unusedBytes;
+                return out;
+            };
+            auto& res         = KSystemResources::Instance();
+            res.getCacheStats = [convert] { return convert( mt::getAudioSoundCache().getStats() ); };
+            res.purgeUnused   = [convert] { return convert( mt::getAudioSoundCache().purgeUnused() ); };
+        }
+
         // Connect sceeen signals.
         // Open screen as passed in Argument.
         signals::sigScreenOpen.connect( [&]( Screen Scrn ) {

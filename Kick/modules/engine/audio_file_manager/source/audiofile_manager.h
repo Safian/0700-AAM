@@ -32,7 +32,20 @@ namespace mt
         ~ASoundCache();
 
         void clear();
-        void purge();
+
+        /// Sample memory held by the cache. `unused` = only the cache itself references the sound (no slice plays it).
+        struct Stats
+        {
+            int         count       = 0;
+            juce::int64 bytes       = 0;
+            int         unusedCount = 0;
+            juce::int64 unusedBytes = 0;
+        };
+        Stats getStats() const;
+
+        /// Drops the sounds nobody else references (message thread; never touches a sound a slice holds, so the audio
+        /// thread is not affected). A dropped sound is decoded again by the next getOrLoad(). Returns what was freed.
+        Stats purgeUnused();
 
         ASound::Ptr exists( const juce::String& File );
         ASound::Ptr getOrLoad( const juce::String& File, double LengthInSeconds = -1 );
@@ -42,6 +55,7 @@ namespace mt
         ASound::Ptr getOrLoadMetronomeSound( const juce::String& File );
 
     private:
+        mutable juce::CriticalSection       lock;
         juce::AudioFormatManager            fmtMgr;
         juce::ReferenceCountedArray<ASound> aSounds;
         juce::ReferenceCountedArray<ASound> metronomeSounds;

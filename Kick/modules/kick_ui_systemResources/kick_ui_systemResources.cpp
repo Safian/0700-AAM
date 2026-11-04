@@ -12,6 +12,74 @@ header files that the compiler may be using.
 
 namespace kick_ui
 {
+    namespace
+    {
+        juce::String megabytes( double mb )
+        {
+            return mb >= 1024.0 ? juce::String( mb / 1024.0, 1 ) + " GB" : juce::String( juce::roundToInt( mb ) ) + " MB";
+        }
+        juce::String bytesText( juce::int64 bytes ) { return megabytes( (double)bytes / ( 1024.0 * 1024.0 ) ); }
+    }
+
+    /// Samples the system once a second on its own thread; the UI reads the latest snapshot.
+    class KSystemResources::Sampler : public juce::Thread
+    {
+    public:
+        Sampler()
+            : juce::Thread( "System resources" ) {}
+        ~Sampler() override { stopThread( 3000 ); }
+
+        Snapshot get() const
+        {
+            const juce::ScopedLock sl( lock );
+            return snapshot;
+        }
+
+        void run() override
+        {
+            auto& res = mt::SystemResource::getResourceInterface();
+            while( !threadShouldExit() )
+            {
+                Snapshot s;
+                {
+                    double cpuUsage = 0.0;
+                    s.haveCpu       = res.cpuInfo( cpuUsage );
+                    s.cpu           = cpuUsage;
+                    mt::sysRamInfo ri;
+                    res.ramInfo( ri );
+                    s.haveRam    = ri.status;
+                    s.ramPercent = ri.perRam;
+                    s.ramUsedMb  = ri.usedRam;
+                    s.ramTotalMb = ri.totalRam;
+                    s.processMb  = ri.processRam;
+                }
+                auto volume = [&]( kick_sysinfo::Volume v, bool& have, int& percent, double& freeMb ) {
+                    mt::sysSizeInfo si;
+                    const auto      path = res.volumePath( v );
+                    if( !path.empty() )
+                        res.sizeInfo( path, si );
+                    have    = si.status;
+                    percent = si.perSize;
+                    freeMb  = si.avaSize;
+                };
+                volume( kick_sysinfo::Volume::Internal, s.haveInternal, s.internalPercent, s.internalFreeMb );
+                volume( kick_sysinfo::Volume::SdCard, s.haveSd, s.sdPercent, s.sdFreeMb );
+                volume( kick_sysinfo::Volume::Usb, s.haveUsb, s.usbPercent, s.usbFreeMb );
+                {
+                    const juce::ScopedLock sl( lock );
+                    snapshot = s;
+                }
+                // Short sleeps so stop() is quick.
+                for( int i = 0; i < 10 && !threadShouldExit(); ++i )
+                    wait( 100 );
+            }
+        }
+
+    private:
+        mutable juce::CriticalSection lock;
+        Snapshot                      snapshot;
+    };
+
     KSystemResources& KSystemResources::Instance()
     {
         ui::KickLooknFeel::getLnf();
@@ -19,150 +87,159 @@ namespace kick_ui
         return *resources;
     }
 
+    KSystemResources::~KSystemResources()
+    {
+        stopTimer();
+        sampler.reset();
+    }
+
     KSystemResources::KSystemResources()
     {
         setTitle( "SYSTEM RESOURCES" );
 
-        mt::utils::addChildComponents( this, cpu, ram, flash, sdcard, usb );
-        mt::utils::addAndMakeVisible( this, storage, purgeAll, purgeUnused, ok );
+        mt::utils::addAndMakeVisible( this, cpu, ram, flash, sdcard, usb, storage, info, purgeUnused_, ok );
 
-        cpu.setEnabled( false );
-        cpu.setRange( 0.0, 100.0 );
-        cpu.setTextValueSuffix( " %" );
-        cpu.setTitleProportion( .35f );
-        cpu.setValueProportion( .35f );
-        cpu.showTitle( true, juce::Justification::centredTop );
+        auto setup = [this]( ui::KickSlider& s, juce::Justification titleJust, juce::Slider::TextEntryBoxPosition box ) {
+            s.setTitle( s.getName() );
+            s.setTitleColour( ui::Theme::textColour( 2 ) );
+            s.setTitleFontHeight( 16.f );
+            s.setEnabled( false );
+            s.setRange( 0.0, 100.0 );
+            s.setTextValueSuffix( " %" );
+            s.setTitleProportion( .35f );
+            s.setValueProportion( .35f );
+            s.showTitle( true, titleJust );
+            s.showValue( true, juce::Justification::centred, box );
+        };
+        setup( cpu, juce::Justification::centredTop, juce::Slider::TextBoxRight );
         cpu.showValue( true, juce::Justification::centredBottom, juce::Slider::TextBoxRight );
-
-        ram.setEnabled( false );
-        ram.setRange( 0.0, 100.0 );
-        ram.setTextValueSuffix( " %" );
-        ram.setTitleProportion( .35f );
-        ram.setValueProportion( .35f );
-        ram.showTitle( true, juce::Justification::centred );
-        ram.showValue( true, juce::Justification::centred, juce::Slider::TextBoxBelow );
-
-        flash.setEnabled( false );
-        flash.setRange( 0.0, 100.0 );
-        flash.setTextValueSuffix( " %" );
-        flash.setTitleProportion( .35f );
-        flash.setValueProportion( .35f );
-        flash.showTitle( true, juce::Justification::centred );
-        flash.showValue( true, juce::Justification::centred, juce::Slider::TextBoxBelow );
-
-        sdcard.setEnabled( false );
-        sdcard.setRange( 0.0, 100.0 );
-        sdcard.setTextValueSuffix( " %" );
-        sdcard.setTitleProportion( .35f );
-        sdcard.setValueProportion( .35f );
-        sdcard.showTitle( true, juce::Justification::centred );
-        sdcard.showValue( true, juce::Justification::centred, juce::Slider::TextBoxBelow );
-
-        usb.setEnabled( false );
-        usb.setRange( 0.0, 100.0 );
-        usb.setTextValueSuffix( " %" );
-        usb.setTitleProportion( .35f );
-        usb.setValueProportion( .35f );
-        usb.showTitle( true, juce::Justification::centred );
-        usb.showValue( true, juce::Justification::centred, juce::Slider::TextBoxBelow );
+        setup( ram, juce::Justification::centred, juce::Slider::TextBoxBelow );
+        setup( flash, juce::Justification::centred, juce::Slider::TextBoxBelow );
+        setup( sdcard, juce::Justification::centred, juce::Slider::TextBoxBelow );
+        setup( usb, juce::Justification::centred, juce::Slider::TextBoxBelow );
 
         storage.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
         storage.setValueColour( ui::Theme::textColour( 2 ) );
         storage.setValueJustification( juce::Justification::centredTop );
         storage.setValueFontHeight( 16 );
 
-        purgeAll.setPlacementFlag( juce::Justification::centred );
-        purgeUnused.setPlacementFlag( juce::Justification::centred );
+        info.setValueJustification( juce::Justification::centred );
+        info.setValueFontHeight( 14 );
+        info.setValueColour( ui::Theme::textColour( 2 ) );
+
+        purgeUnused_.setPlacementFlag( juce::Justification::centred );
         ok.setPlacementFlag( juce::Justification::centred );
 
-        purgeAll.onClick    = [&]() {};
-        purgeUnused.onClick = [&]() {};
-        ok.onClick          = [&]() {
+        // Purge Unused: drops the decoded samples that no slice uses. Nothing in use is touched, and a dropped sample is
+        // decoded again the next time it is needed. (A "Purge All" would have to pull sample data from under the audio
+        // thread, so the button does not exist.)
+        purgeUnused_.onClick = [this]() {
+            if( !purgeUnused )
+                return;
+            const auto freed = purgeUnused();
+            info.setText( freed.count > 0 ? "Purged " + juce::String( freed.count ) + " unused sample(s), " + bytesText( freed.bytes ) + " freed"
+                                          : "No unused samples to purge",
+                          juce::dontSendNotification );
+            refreshCache();
+        };
+        ok.onClick = [this]() {
             mt::utils::exitDialog( this, UI::APPLY );
         };
 
-        ui::themeChanged.connect( [&]() {
-            purgeAll.setImages( "purge" );
-            purgeUnused.setImages( "purgeused" );
+        ui::themeChanged.connect( [this]() {
+            purgeUnused_.setImages( "purgeused" );
             ok.setImages( "ok_resource" );
         } );
     }
 
     void KSystemResources::start()
     {
-        startTimerHz( 1 );
+        if( !sampler )
+            sampler = std::make_unique<Sampler>();
+        sampler->startThread();
+        info.setText( {}, juce::dontSendNotification );
+        applySnapshot( Snapshot() );
+        refreshCache();
+        startTimerHz( 2 );
     }
 
     void KSystemResources::stop()
     {
         stopTimer();
+        if( sampler )
+            sampler->stopThread( 3000 );
     }
+
+    void KSystemResources::refreshCache()
+    {
+        purgeUnused_.setEnabled( (bool)purgeUnused && ( !getCacheStats || getCacheStats().unusedCount > 0 ) );
+    }
+
     void KSystemResources::timerCallback()
     {
-        double          cpuusage;
-        mt::sysRamInfo  rInfo;
-        mt::sysSizeInfo sInfo;
-        mt::SystemResource::getResourceInterface().cpuInfo( cpuusage );
-        mt::SystemResource::getResourceInterface().ramInfo( rInfo );
+        if( sampler )
+            applySnapshot( sampler->get() );
+    }
 
-        mt::SystemResource::getResourceInterface().sizeInfo( internalPath, sInfo );
-        cpu.setValue( cpuusage, juce::dontSendNotification );
-        ram.setValue( rInfo.perRam, juce::dontSendNotification );
-        flash.setValue( sInfo.perSize, juce::dontSendNotification );
-        mt::SystemResource::getResourceInterface().sizeInfo( sdCardPath, sInfo );
-        if( sInfo.status )
+    void KSystemResources::applySnapshot( const Snapshot& s )
+    {
+        last = s;
+        cpu.setValue( s.haveCpu ? s.cpu : 0.0, juce::dontSendNotification );
+        ram.setValue( s.ramPercent, juce::dontSendNotification );
+        ram.setVisible( s.haveRam );
+        flash.setValue( s.internalPercent, juce::dontSendNotification );
+        flash.setVisible( s.haveInternal );
+        sdcard.setValue( s.sdPercent, juce::dontSendNotification );
+        sdcard.setVisible( s.haveSd );
+        usb.setValue( s.usbPercent, juce::dontSendNotification );
+        usb.setVisible( s.haveUsb );
+
+        if( s.haveRam )
         {
-            sdcard.setVisible( true );
-            sdcard.setValue( sInfo.perSize, juce::dontSendNotification );
+            juce::String text = "RAM " + megabytes( s.ramUsedMb ) + " of " + megabytes( s.ramTotalMb ) + " used";
+            if( s.processMb > 0.0 )
+                text += "   Kick " + megabytes( s.processMb );
+            if( getCacheStats )
+            {
+                const auto cs = getCacheStats();
+                text += "   Samples " + juce::String( cs.count ) + " (" + bytesText( cs.bytes ) + ", " + juce::String( cs.unusedCount ) + " unused)";
+                purgeUnused_.setEnabled( (bool)purgeUnused && cs.unusedCount > 0 );
+            }
+            // A purge result stays visible until the dialog is opened again.
+            if( !info.getText().startsWith( "Purged" ) && !info.getText().startsWith( "No unused" ) )
+                info.setText( text, juce::dontSendNotification );
         }
-        else
-        {
-            sdcard.setVisible( false );
-        }
-        mt::SystemResource::getResourceInterface().sizeInfo( usbDiskPath, sInfo );
-        if( sInfo.status )
-        {
-            usb.setVisible( true );
-            usb.setValue( sInfo.perSize, juce::dontSendNotification );
-        }
-        else
-        {
-            usb.setVisible( false );
-        }
+        repaint();
     }
 
     void KSystemResources::paint( juce::Graphics& g )
     {
+        // Divider lines left and right of the STORAGE caption.
         g.setColour( ui::Theme::backgroundColour( 14 ) );
-        g.drawLine( 20.f, 182.f, 237.f, 182.f );
-        g.drawLine( 367.f, 180.f, 584.f, 182.f );
+        const auto  y  = (float)storage.getBounds().getCentreY();
+        const float x0 = 20.f, x1 = (float)storage.getX() - 8.f, x2 = (float)storage.getRight() + 8.f, x3 = (float)getWidth() - 20.f;
+        g.drawLine( x0, y, x1, y );
+        g.drawLine( x2, y, x3, y );
     }
 
     void KSystemResources::resized()
     {
-        cpu.setBounds( 90, 10, 425, 76 );
+        // Relative layout: the dialog gets its size from the caller.
+        auto b = getLocalBounds().reduced( 20, 10 );
+        auto buttons = b.removeFromBottom( juce::jmax( 48, b.getHeight() / 9 ) );
+        info.setBounds( b.removeFromBottom( 26 ) );
 
-        ram.setBounds( 90, 96, 425, 76 );
-        storage.setBounds( 267, 176, 71, 22 );
+        const int rowH = b.getHeight() / 6;
+        cpu.setBounds( b.removeFromTop( rowH ).reduced( 60, 0 ) );
+        ram.setBounds( b.removeFromTop( rowH ).reduced( 60, 0 ) );
+        storage.setBounds( b.removeFromTop( 24 ).withSizeKeepingCentre( 100, 24 ) );
+        const int volH = b.getHeight() / 3;
+        flash.setBounds( b.removeFromTop( volH ).reduced( 60, 0 ) );
+        sdcard.setBounds( b.removeFromTop( volH ).reduced( 60, 0 ) );
+        usb.setBounds( b.reduced( 60, 0 ) );
 
-        flash.setBounds( 90, 199, 425, 76 );
-        sdcard.setBounds( 90, 275, 425, 76 );
-
-        usb.setBounds( 90, 357, 425, 76 );
-
-        purgeAll.setBounds( 20, 433, 140, 40 );
-        purgeUnused.setBounds( 240, 433, 140, 40 );
-        ok.setBounds( 430, 433, 140, 40 );
-    }
-
-    void KSystemResources::visibilityChanged()
-    {
-        auto visible = isVisible();
-        cpu.setVisible( visible );
-        ram.setVisible( visible );
-        storage.setVisible( visible );
-        flash.setVisible( visible );
-        sdcard.setVisible( visible );
-        usb.setVisible( visible );
+        const int bw = 160;
+        purgeUnused_.setBounds( buttons.removeFromLeft( buttons.getWidth() / 2 ).withSizeKeepingCentre( bw, 44 ) );
+        ok.setBounds( buttons.withSizeKeepingCentre( bw, 44 ) );
     }
 }

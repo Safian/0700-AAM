@@ -60,7 +60,6 @@ namespace kick_ui
         ProcessEdit,
         CVClib,
         //
-        SystemResources,
         Inserts,
         MenuPiano, // touch piano (Keyboard)
         Temp

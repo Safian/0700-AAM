@@ -34,6 +34,9 @@ namespace kick_ui
 
         KickModeHeader( const juce::String& Name, const juce::String& Image );
 
+        /// Opens the System Resources dialog (header button, Menu tile, smoke test).
+        static void showSystemResources();
+
         void showAutoLoad( bool show );
         void showBackButton( bool Show );
         void setPlayState( bool State, juce::NotificationType Notify = juce::sendNotification );

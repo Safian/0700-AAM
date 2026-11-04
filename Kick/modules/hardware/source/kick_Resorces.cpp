@@ -21,156 +21,119 @@
 
 #include "kick_Resorces.h"
 
+#if JUCE_MAC
+    #include <mach/mach.h>
+    #include <sys/sysctl.h>
+#endif
+#if JUCE_LINUX || defined( __linux__ )
+    #include <fstream>
+    #include <sstream>
+#endif
+
 namespace mt
 {
-    void SystemResource::cpuInfo( double& cpuUsage )
+    namespace
     {
-#if( JUCE_LINUX || __linux__ )
-        std::ifstream statFile( "/proc/stat" );
-        std::string   line;
-
-        // Read the first line of /proc/stat, which contains total CPU time information
-        std::getline( statFile, line );
-
-        // Parse the line to extract CPU time values
-        std::istringstream iss( line );
-        std::string        cpuLabel;
-        long               user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice;
-
-        iss >> cpuLabel >> user >> nice >> system >> idle >> iowait >> irq >> softirq >> steal >> guest >> guest_nice;
-
-        // Calculate the total CPU time
-        long totalTime = user + nice + system + idle + iowait + irq + softirq + steal + guest + guest_nice;
-
-        // Calculate CPU usage as a percentage
-        cpuUsage = static_cast<double>( totalTime - idle ) / totalTime * 100.0;
-#elif( defined( _WIN32 ) || defined( _WIN64 ) )
-        // Dummy data for Windows
-        static double dummyCpuUsage = 0.0;
-        dummyCpuUsage += 5.0;
-        if( dummyCpuUsage > 100.0 )
+#if JUCE_LINUX || defined( __linux__ )
+        std::string readWholeFile( const char* path )
         {
-            dummyCpuUsage = 0.0;
+            std::ifstream     f( path );
+            std::stringstream ss;
+            ss << f.rdbuf();
+            return ss.str();
         }
-        cpuUsage = dummyCpuUsage;
-#else
-        // Handle other platforms if necessary
-        cpuUsage = 0.0;
 #endif
     }
 
-    void SystemResource::sizeInfo( std::string& path, sysSizeInfo& info )
+    bool SystemResource::cpuInfo( double& cpuUsage )
     {
-        info.status = false;
-#if( JUCE_LINUX || __linux__ )
-        juce::File fileToCheck( path );
-        if( fileToCheck.exists() )
+        cpuUsage = 0.0;
+        kick_sysinfo::CpuTimes cur;
+#if JUCE_LINUX || defined( __linux__ )
+        cur = kick_sysinfo::parseProcStatCpu( readWholeFile( "/proc/stat" ) );
+#elif JUCE_MAC
+        host_cpu_load_info_data_t load;
+        mach_msg_type_number_t    count = HOST_CPU_LOAD_INFO_COUNT;
+        if( host_statistics( mach_host_self(), HOST_CPU_LOAD_INFO, (host_info_t)&load, &count ) == KERN_SUCCESS )
         {
-            info.status          = true;
-            juce::String command = "df -h ";
-            command += juce::String( path.c_str() ); // Convert std::string to juce::Stringpath;
-
-            // Execute the `df -h` command and capture its output
-            FILE* pipe = popen( command.toRawUTF8(), "r" );
-            if( !pipe )
-            {
-                std::cerr << "Error executing command." << std::endl;
-                return;
-            }
-
-            std::string line;
-            char        buffer[256];
-            std::string filesystem, size, used, available, usePercentage, mountPoint;
-            while( fgets( buffer, sizeof( buffer ), pipe ) )
-            {
-                std::string line( buffer );
-                if( line.find( path ) != std::string::npos )
-                {
-                    std::istringstream iss( line );
-                    iss >> filesystem >> size >> used >> available >> usePercentage >> mountPoint;
-                    DBG( " " << filesystem << "Size -> " << size << "Used" << used << "Availd" << available << "Used Per" << usePercentage );
-                    info.avaSize   = juce::String( available ).getIntValue();
-                    info.usedSize  = juce::String( used ).getIntValue();
-                    info.totalSize = juce::String( size ).getIntValue();
-                    info.perSize   = juce::String( usePercentage ).getIntValue();
-                }
-            }
-            // Close the command output pipe
-            pclose( pipe );
+            cur.total = (unsigned long long)load.cpu_ticks[CPU_STATE_USER] + load.cpu_ticks[CPU_STATE_SYSTEM] + load.cpu_ticks[CPU_STATE_IDLE] + load.cpu_ticks[CPU_STATE_NICE];
+            cur.busy  = cur.total - load.cpu_ticks[CPU_STATE_IDLE];
+            cur.valid = true;
         }
-#elif( defined( _WIN32 ) || defined( _WIN64 ) )
-        // Dummy data for Windows
-        info.status    = true;
-        info.avaSize   = 500; // Dummy available size in MB
-        info.usedSize  = 250; // Dummy used size in MB
-        info.totalSize = 750; // Dummy total size in MB
-        info.perSize   = 33; // Dummy percentage used
 #endif
+        const double pct = kick_sysinfo::cpuPercent( prevCpu_, cur );
+        prevCpu_         = cur;
+        if( pct < 0.0 )
+            return false;
+        cpuUsage = pct;
+        return true;
+    }
+
+    void SystemResource::sizeInfo( const std::string& path, sysSizeInfo& info )
+    {
+        info          = sysSizeInfo{};
+        const auto du = kick_sysinfo::diskUsage( path );
+        if( !du.ok )
+            return;
+        info.status    = true;
+        info.totalSize = du.totalMb;
+        info.usedSize  = du.usedMb;
+        info.avaSize   = du.availMb;
+        info.perSize   = du.percent;
     }
 
     void SystemResource::ramInfo( sysRamInfo& info )
     {
-#if( JUCE_LINUX || __linux__ )
-        struct sysinfo memInfo;
-        sysinfo( &memInfo );
-
-        // Calculate total RAM, used RAM, and available RAM
-        unsigned long long totalRAM = memInfo.totalram * memInfo.mem_unit;
-        unsigned long long freeRAM  = memInfo.freeram * memInfo.mem_unit;
-        unsigned long long usedRAM  = totalRAM - freeRAM;
-
-        unsigned long long availableRAM = freeRAM;
-        info.totalRam                   = totalRAM / ( 1024 * 1024 );
-        info.usedRam                    = usedRAM / ( 1024 * 1024 );
-        info.freeRam                    = availableRAM / ( 1024 * 1024 );
-        info.perRam                     = ( ( info.usedRam * 100 ) / info.totalRam );
-#elif( defined( _WIN32 ) || defined( _WIN64 ) )
-        // Dummy data for Windows
-        info.totalRam = 100;
-        info.usedRam  = 50;
-        info.freeRam  = 50;
-        info.perRam   = 50;
+        info = sysRamInfo{};
+#if JUCE_LINUX || defined( __linux__ )
+        const auto mem = kick_sysinfo::parseMemInfo( readWholeFile( "/proc/meminfo" ) );
+        if( mem.valid )
+        {
+            info.status   = true;
+            info.totalRam = (double)mem.totalKb / 1024.0;
+            info.freeRam  = (double)mem.availableKb / 1024.0;
+            info.usedRam  = info.totalRam - info.freeRam;
+            info.perRam   = kick_sysinfo::percentUsed( info.usedRam, info.totalRam );
+        }
+        // Resident set of this process (VmRSS, kB).
+        const auto status = readWholeFile( "/proc/self/status" );
+        const auto pos    = status.find( "VmRSS:" );
+        if( pos != std::string::npos )
+            info.processRam = std::atof( status.c_str() + pos + 6 ) / 1024.0;
+#elif JUCE_MAC
+        int64_t                memsize = 0;
+        size_t                 len     = sizeof( memsize );
+        vm_statistics64_data_t vm;
+        mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+        if( sysctlbyname( "hw.memsize", &memsize, &len, nullptr, 0 ) == 0 && host_statistics64( mach_host_self(), HOST_VM_INFO64, (host_info64_t)&vm, &count ) == KERN_SUCCESS )
+        {
+            const double page = (double)vm_page_size;
+            info.status       = true;
+            info.totalRam     = (double)memsize / ( 1024.0 * 1024.0 );
+            info.freeRam      = ( (double)vm.free_count + (double)vm.inactive_count + (double)vm.purgeable_count ) * page / ( 1024.0 * 1024.0 );
+            info.freeRam      = std::min( info.freeRam, info.totalRam );
+            info.usedRam      = info.totalRam - info.freeRam;
+            info.perRam       = kick_sysinfo::percentUsed( info.usedRam, info.totalRam );
+        }
+        mach_task_basic_info_data_t task;
+        count = MACH_TASK_BASIC_INFO_COUNT;
+        if( task_info( mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&task, &count ) == KERN_SUCCESS )
+            info.processRam = (double)task.resident_size / ( 1024.0 * 1024.0 );
 #endif
     }
 
-    void SystemResource::folderSize( std::string path )
+    std::string SystemResource::volumePath( kick_sysinfo::Volume volume )
     {
-#if( JUCE_LINUX || __linux__ )
-        const char* folderPath = path.c_str();
-
-        // Create the command to run du -sh on the specified folder
-        char command[256];
-        snprintf( command, sizeof( command ), "du -sh \"%s\"", folderPath );
-
-        // Open a pipe to execute the command and capture its output
-        FILE* pipe = popen( command, "r" );
-        if( !pipe )
-        {
-            std::cerr << "Error executing du command." << std::endl;
-            return;
-        }
-
-        // Read the output of the du command
-        char        buffer[128];
-        std::string result;
-        while( fgets( buffer, sizeof( buffer ), pipe ) != nullptr )
-        {
-            result += buffer;
-        }
-
-        // Parse the result to extract the size
-        char sizeStr[16];
-        if( sscanf( result.c_str(), "%s", sizeStr ) == 1 )
-        {
-            std::cout << "Size of folder '" << folderPath << "': " << sizeStr << std::endl;
-        }
-        else
-        {
-            std::cerr << "Error parsing du command output." << std::endl;
-            pclose( pipe );
-            return;
-        }
-        pclose( pipe );
+#if JUCE_LINUX || defined( __linux__ )
+        const auto mounts = kick_sysinfo::parseMounts( readWholeFile( "/proc/mounts" ) );
+        auto       found  = kick_sysinfo::findVolumeMount( mounts, volume, []( const std::string& p ) { return juce::File( juce::String( p ) ).isDirectory(); } );
+        if( found.empty() && volume == kick_sysinfo::Volume::Internal && juce::File( "/data" ).isDirectory() )
+            found = "/data";
+        return found;
+#else
+        if( volume == kick_sysinfo::Volume::Internal )
+            return juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getFullPathName().toStdString();
+        return {};
 #endif
     }
 }
