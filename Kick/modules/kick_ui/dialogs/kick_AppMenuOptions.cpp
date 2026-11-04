@@ -46,6 +46,11 @@ namespace kick_ui
 
         addOption( { "Keyboard", "Keyboard" }, "" );
 
+        // Commands without a theme icon: text tiles.
+        addOption( { "Save", "" }, "" );
+        addOption( { "Resources", "" }, "" );
+        addOption( { "Kick Update", "" }, "" );
+
         setVisible( true );
         setSelectionEnabled( false );
 
@@ -86,6 +91,7 @@ namespace kick_ui
         const bool hasProject = mt::getAudioInterface().isProjectLoaded();
         for( int i = 0; i < ui::menu_logic::kTileCount; ++i )
             setItemEnabled( i, hasProject || !ui::menu_logic::screenNeedsProject( ui::menu_logic::tileScreen<Screen>( i ) ) );
+        setItemEnabled( ui::menu_logic::kCommandSave, hasProject );
 
         // The highlight starts on the mode the Menu was opened from, so the dial and the pads work from there.
         if( const int tile = ui::menu_logic::screenTile( KickHome::Instance().getLastNonMenuScreen() ); tile >= 0 )
@@ -94,6 +100,19 @@ namespace kick_ui
 
     void AppMenuOptions::loadScreen( int index )
     {
+        switch( index )
+        {
+            case ui::menu_logic::kCommandSave:
+            {
+                auto& ae = mt::getAudioInterface();
+                if( !ae.saveProject() )
+                    AppStatusbar::Instance().setBoxInfo( "UNSAVED: " + ae.getProjectSaveError() );
+                return;
+            }
+            case ui::menu_logic::kCommandResources: KickModeHeader::showSystemResources(); return;
+            case ui::menu_logic::kCommandKickUpdate: signals::sigScreenOpen( Screen::KickUpdate ); return;
+            default: break;
+        }
         const auto target = ui::menu_logic::tileScreen<Screen>( index );
         if( target != Screen::Invalid )
             signals::sigScreenOpen( target );

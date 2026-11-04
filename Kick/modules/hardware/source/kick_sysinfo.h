@@ -179,6 +179,23 @@ namespace kick_sysinfo
         return {};
     }
 
+    // All mount points of a volume kind (several USB drives / partitions), in table order.
+    inline std::vector<std::string> findVolumeMounts( const std::vector<Mount>& mounts, Volume vol, const ExistsFn& exists )
+    {
+        std::vector<std::string> out;
+        std::vector<Mount>       rest = mounts;
+        // findVolumeMount returns the first hit: remove it and ask again.
+        for( ;; )
+        {
+            const auto hit = findVolumeMount( rest, vol, exists );
+            if( hit.empty() )
+                break;
+            out.push_back( hit );
+            rest.erase( std::remove_if( rest.begin(), rest.end(), [&]( const Mount& m ) { return m.mountPoint == hit; } ), rest.end() );
+        }
+        return out;
+    }
+
     // ---- Disk usage ------------------------------------------------------------------------------------------------
     struct DiskUsage
     {

@@ -57,6 +57,7 @@ namespace kick_ui
         //
         SWUpdateView,
         SWUpdateWindow,
+        KickUpdate, // installed Kick vs the package on the USB drive (MPC / desktop)
         ProcessEdit,
         CVClib,
         //

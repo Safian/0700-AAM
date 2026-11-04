@@ -93,6 +93,13 @@ namespace ui
             entry->items.add( new KickImageButton{ menuItem.Name, menuItem.Icon } );
             auto item = entry->items.getLast();
             item->setEnabled( menuItem.enabled );
+            if( menuItem.Icon.isEmpty() )
+            {
+                // No icon: the tile shows its name.
+                item->setValueColour( ui::Theme::textColour( 2 ) );
+                item->setValueFontHeight( 22 );
+                item->setBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+            }
             auto index = entry->items.size() - 1;
 
             mt::utils::addAndMakeVisible( this, item );

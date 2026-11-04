@@ -343,3 +343,8 @@ set_tests_properties(kick-menu-logic PROPERTIES TIMEOUT 10)
 add_executable(kick-sysinfo-tests SysInfoTests.cpp)
 add_test(NAME kick-sysinfo COMMAND kick-sysinfo-tests)
 set_tests_properties(kick-sysinfo PROPERTIES TIMEOUT 10)
+
+# Kick Update logic (VERSION parsing, version compare, package state, SHA-256, USB drive lookup); JUCE-free, header only.
+add_executable(kick-update-tests KickUpdateTests.cpp)
+add_test(NAME kick-update COMMAND kick-update-tests)
+set_tests_properties(kick-update PROPERTIES TIMEOUT 10)

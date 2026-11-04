@@ -315,6 +315,7 @@ namespace kick_ui
                 screenAdder( Screen::MenuAssignSample, std::make_unique<AppAssignSample>() );
                 screenAdder( Screen::SWUpdateView, std::make_unique<SWUpdateView>() );
                 screenAdder( Screen::SWUpdateWindow, std::make_unique<SWUpdateScreen>() );
+                screenAdder( Screen::KickUpdate, std::make_unique<KickUpdateScreen>() );
                 screenAdder( Screen::ProcessEdit, std::make_unique<SampleProcess>() );
                 screenAdder( Screen::CVClib, std::make_unique<CVClib>() );
                 screenAdder( Screen::Inserts, std::make_unique<Inserts>() );

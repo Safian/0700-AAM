@@ -671,7 +671,11 @@ public:
         loadVersionFileIfNeeded();
         if( m_versionInfo.isValid )
             return juce::String( m_versionInfo.version );
+#if defined( KICK_APP_VERSION )
+        return KICK_APP_VERSION; // no /data/Kick.version (desktop, dev build): the version this binary was built as
+#else
         return "0.1.0-alpha";
+#endif
     }
 
     juce::String getBuildStamp() override
