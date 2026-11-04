@@ -4,6 +4,7 @@
 #include <AudIO/Includes/AudioObject.h>
 #include <kick_clap/Host.h>
 #include <kick_clap/Discovery.h>
+#include <kick_clap/PluginManager.h>
 #include <juce_core/juce_core.h>
 #include <string>
 #include <vector>
