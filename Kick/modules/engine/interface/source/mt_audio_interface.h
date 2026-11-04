@@ -130,6 +130,8 @@ namespace mt
 
         // Project API's
         bool isProjectLoaded();
+        // Audio callback load (0..1) and the xrun count of the audio device (-1: not counted); false when no device runs.
+        bool getAudioLoad( double& Cpu, int& XRuns );
         // createIfMissing = true only for New project (creates the folder and an empty project); otherwise a missing project is an
         // error (getProjectLoadError()) and the open one stays untouched.
         bool loadProject( juce::File& ProjectFile, bool createIfMissing = false );

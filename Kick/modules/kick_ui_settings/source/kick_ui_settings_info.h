@@ -62,5 +62,6 @@ namespace kick_ui
         ui::KickImageButton cancel{ "Cancel", "Cancel_Browser" };
         ui::KickLabel       info;
         int                 startX, startY, width;
+        sigslot::scoped_connection themeConn;
     };
 }

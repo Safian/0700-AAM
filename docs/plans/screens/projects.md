@@ -161,11 +161,14 @@ Függőségek: PRJ-05, PRJ-06, PRJ-07 ← PRJ-01 (közös betöltési belépési
   **R-6:** Shift+Dial = row switch, Shift+ENTER = tile menu, the menu takes Dial / ENTER / BACK; dialogs close from the hardware through the bridge keys (S-D).
 
 *Tesztek*
-- [ ] **PRJ-22** (P1, M) `KickProjectsDefault` recent-logika host-teszt (checkAlreadyLoadOrNot, refreshMax, remove, rename, fordított sorrend). 
-- [ ] **PRJ-23** (P1, M) Sablon-másolás / új projekt tmp-könyvtár teszt (név-ütközés, üres név, hiányzó `.kickPrj`, félkész mappa takarítása). Függ: PRJ-02, PRJ-08.
+- [x] **PRJ-22** (P1, M) `KickProjectsDefault` recent-logika host-teszt (checkAlreadyLoadOrNot, refreshMax, remove, rename, fordított sorrend). 
+  **R-7:** `kick_recent_list.h` (pure) + RecentListTests (re-open moves to the end, full list, lowered maximum, missing project file, damaged duplicates, rename, 2000-step property run); KickProjectsDefault applies the plans. Fixes: `removeProject(File)` skipped entries, over-maximum list after a lowered maximum, rename onto an existing entry produced two entries, maximum < 1.
+- [x] **PRJ-23** (P1, M) Sablon-másolás / új projekt tmp-könyvtár teszt (név-ütközés, üres név, hiányzó `.kickPrj`, félkész mappa takarítása). Függ: PRJ-02, PRJ-08.
+  **R-7:** ProjectTemplateFsTests: createFromTemplate against a REAL temp folder (success, trimmed name, name collision leaves the existing project untouched, empty / invalid names create nothing, template without .kickPrj, failing copy removes the half-made folder and spares the neighbours, root that is a file, start-up name on a real folder).
 - [x] **PRJ-24** (P2, M) AppSmoke bővítés: hibás / hiányzó projektútvonal betöltése (hibaüzenet), kétszeri gyors betöltés (PRJ-01), Projects képernyőkép (`KICK_SMOKE_SCREENS=RecentProject`).  
   **R-6:** `ProjectsBrowserSmoke.py` (`kick-projects-smoke`): missing project, Save As / copy, Don't save, demo, queued double / quick loads, Recent updates, screenshots (`kick-browser-smoke`).
 - [ ] **PRJ-25** (P1, M) MPC hardveres ellenőrzőlista végrehajtása (6. szakasz) — a hardveres session végezze.
+  **R-7:** Hardware session: not done here. Steps: see the R-7 hardware checklist entries (recent list order after re-opening a project, template copy, rename / delete from the tile menu).
 
 ## 8. R-6 hardware checklist (what only the MPC can show)
 1. Start-up: Projects screen, then the last project / Demo 01 / a new project, per ON LAUNCH (tap Auto Load); `/data/kick.log` shows one `Project load begin` per start.

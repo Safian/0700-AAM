@@ -33,7 +33,6 @@ namespace kick_ui
         HomeSequencerView,
         HomeXYView,
         HomePreferencesView,
-        HomePreferences,
         //
         MenuSampleEdit,
         MenuProgramEdit,
@@ -53,7 +52,6 @@ namespace kick_ui
         MenuColorEdit,
         MenuAssignSample,
         RecentProject,
-        EditProgram,
         //
         SWUpdateView,
         SWUpdateWindow,
@@ -62,8 +60,7 @@ namespace kick_ui
         CVClib,
         //
         Inserts,
-        MenuPiano, // touch piano (Keyboard)
-        Temp
+        MenuPiano // touch piano (Keyboard)
     };
 
     struct signals

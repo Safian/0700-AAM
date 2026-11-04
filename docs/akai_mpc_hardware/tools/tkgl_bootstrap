@@ -10,6 +10,14 @@
 #  5. Falls back cleanly to stock MPC (exit 0) if no runnable Kick is available.
 #  6. User projects (/data/projects) and preferences (/data/prefs) are never overwritten.
 #  7. Supports USB UNINSTALL trigger (place UNINSTALL on USB drive -> removes Kick -> stock MPC).
+#  8. Never installs an unverified binary: a missing sha256 tool or a package VERSION without KICK_SHA256 refuses the install.
+#  9. Kick.prev always holds the last installed version: an install interrupted after the binary swap (before Kick.version
+#     was written) is recognised through Kick.installing and does not overwrite Kick.prev with the half-installed binary.
+# 10. Rollback: a ROLLBACK file on the USB drive (or /data/Kick.rollback, written by the app) restores Kick.prev /
+#     Kick.version.prev (checked against the KICK_SHA256 stored in Kick.version.prev). The package that was rolled back from is
+#     remembered in /data/Kick.rejected and is not installed again from the same pendrive until a different package appears
+#     (or Kick.rejected is deleted).
+# Test hook: KICK_BOOT_TEST_ABORT_AFTER=replace stops (exit 99) right after the binary swap, simulating a power cut.
 set -u
 
 # Resolve script directory
@@ -90,6 +98,9 @@ if [ -n "$UNINSTALL_TRIGGER" ]; then
 
     rm -f "$KICK_DATA_DIR/Kick" \
           "$KICK_DATA_DIR/Kick.new" \
+          "$KICK_DATA_DIR/Kick.installing" \
+          "$KICK_DATA_DIR/Kick.rejected" \
+          "$KICK_DATA_DIR/Kick.rollback" \
           "$KICK_DATA_DIR/Kick.prev" \
           "$KICK_DATA_DIR/Kick.prev."* \
           "$KICK_DATA_DIR/Kick.version"* \
@@ -114,12 +125,75 @@ if [ -n "$UNINSTALL_TRIGGER" ]; then
 fi
 
 # -----------------------------------------------------------------------------
+# ROLLBACK trigger (USB drive or /data/Kick.rollback)
+# -----------------------------------------------------------------------------
+ROLLBACK_TRIGGER=""
+for cand in "$MOUNT_POINT/ROLLBACK" "$TKGL_ROOT/ROLLBACK" "$TKGL_CONF/ROLLBACK" "$KICK_DATA_DIR/Kick.rollback"; do
+    if [ -f "$cand" ]; then
+        ROLLBACK_TRIGGER="$cand"
+        break
+    fi
+done
+
+consume_trigger() {
+    trig="$1"
+    if [ "$trig" = "$KICK_DATA_DIR/Kick.rollback" ]; then
+        rm -f "$trig" 2>/dev/null || true
+    elif ! mv -f "$trig" "${trig}.done" 2>/dev/null; then
+        rm -f "$trig" 2>/dev/null || true
+    fi
+}
+
+if [ -n "$ROLLBACK_TRIGGER" ]; then
+    log "ROLLBACK trigger detected: $ROLLBACK_TRIGGER"
+    PREV_BIN="$KICK_DATA_DIR/Kick.prev"
+    PREV_VER="$KICK_DATA_DIR/Kick.version.prev"
+    RB_OK=1
+    if [ ! -f "$PREV_BIN" ] || [ ! -f "$PREV_VER" ]; then
+        log "ROLLBACK refused: no previous version ($PREV_BIN / $PREV_VER missing). Nothing changed."
+        RB_OK=0
+    else
+        RB_EXPECTED="$(grep '^KICK_SHA256=' "$PREV_VER" 2>/dev/null | cut -d= -f2- | tr -d ' "\r' | tr 'A-F' 'a-f' || true)"
+        RB_ACTUAL="$(calc_sha256 "$PREV_BIN")"
+        if [ -z "$RB_ACTUAL" ] || [ -z "$RB_EXPECTED" ]; then
+            log "ROLLBACK refused: cannot verify Kick.prev (no sha256 tool or no KICK_SHA256 in Kick.version.prev). Nothing changed."
+            RB_OK=0
+        elif [ "$RB_EXPECTED" != "$RB_ACTUAL" ]; then
+            log "ROLLBACK refused: Kick.prev fails its SHA256 check (expected $RB_EXPECTED, got $RB_ACTUAL). Nothing changed."
+            RB_OK=0
+        fi
+    fi
+    if [ "$RB_OK" -eq 1 ]; then
+        rm -f "$KICK_DATA_DIR/Kick.new" "$KICK_DATA_DIR/Kick.version.new" 2>/dev/null || true
+        if ! cp -f "$PREV_BIN" "$KICK_DATA_DIR/Kick.new" || [ "$(calc_sha256 "$KICK_DATA_DIR/Kick.new")" != "$RB_EXPECTED" ]; then
+            log "ROLLBACK failed: copying Kick.prev did not verify. Nothing changed."
+            rm -f "$KICK_DATA_DIR/Kick.new" 2>/dev/null || true
+        else
+            # Remember the package we are leaving so the same pendrive does not reinstall it at the next boot.
+            if [ -f "$KICK_DATA_DIR/Kick.version" ]; then
+                cp -f "$KICK_DATA_DIR/Kick.version" "$KICK_DATA_DIR/Kick.rejected" 2>/dev/null || true
+            fi
+            chmod 755 "$KICK_DATA_DIR/Kick.new"
+            mv -f "$KICK_DATA_DIR/Kick.new" "$KICK_DATA_DIR/Kick"
+            cp -f "$PREV_VER" "$KICK_DATA_DIR/Kick.version.new"
+            mv -f "$KICK_DATA_DIR/Kick.version.new" "$KICK_DATA_DIR/Kick.version"
+            rm -f "$KICK_DATA_DIR/Kick.installing" 2>/dev/null || true
+            sync 2>/dev/null || true
+            log "ROLLBACK complete: Kick is now $(head -n 1 "$KICK_DATA_DIR/Kick.version" 2>/dev/null)."
+        fi
+    fi
+    consume_trigger "$ROLLBACK_TRIGGER"
+fi
+
+# -----------------------------------------------------------------------------
 # Version and Installation Assessment
 # -----------------------------------------------------------------------------
 PKG_VERSION_FILE="$TKGL_ROOT/VERSION"
 LOCAL_VERSION_FILE="$KICK_DATA_DIR/Kick.version"
 PKG_BIN="$TKGL_BIN/Kick"
 LOCAL_BIN="$KICK_DATA_DIR/Kick"
+REJECTED_FILE="$KICK_DATA_DIR/Kick.rejected"
+INSTALLING_MARK="$KICK_DATA_DIR/Kick.installing"
 
 NEEDS_INSTALL=0
 
@@ -128,6 +202,9 @@ if [ ! -f "$LOCAL_BIN" ] || [ ! -x "$LOCAL_BIN" ]; then
     NEEDS_INSTALL=1
 elif [ ! -f "$PKG_VERSION_FILE" ]; then
     log "Package VERSION file ($PKG_VERSION_FILE) not found. Skipping flash update."
+    NEEDS_INSTALL=0
+elif [ -f "$REJECTED_FILE" ] && cmp -s "$PKG_VERSION_FILE" "$REJECTED_FILE"; then
+    log "Package $(head -n 1 "$PKG_VERSION_FILE" 2>/dev/null | sed 's/^VERSION=//') was rolled back from; not installing it again (delete $REJECTED_FILE to allow it)."
     NEEDS_INSTALL=0
 elif [ ! -f "$LOCAL_VERSION_FILE" ]; then
     log "Local $LOCAL_VERSION_FILE missing. Re-installation / sync required."
@@ -175,23 +252,20 @@ if [ "$NEEDS_INSTALL" -eq 1 ]; then
                 EXPECTED_SHA="$(grep '^KICK_SHA256=' "$PKG_VERSION_FILE" 2>/dev/null | cut -d= -f2- | tr -d ' "\r' || true)"
             fi
 
+            EXPECTED_SHA="$(printf '%s' "$EXPECTED_SHA" | tr 'A-F' 'a-f')"
             COPIED_SHA="$(calc_sha256 "$KICK_DATA_DIR/Kick.new")"
-            PKG_SHA=""
-            if [ -z "$EXPECTED_SHA" ]; then
-                PKG_SHA="$(calc_sha256 "$PKG_BIN")"
-            fi
 
+            # An unverifiable package is refused, never installed silently.
             INTEGRITY_OK=1
-            if [ -n "$EXPECTED_SHA" ] && [ -n "$COPIED_SHA" ]; then
-                if [ "$EXPECTED_SHA" != "$COPIED_SHA" ]; then
-                    log "ERROR: SHA256 mismatch for Kick.new (expected $EXPECTED_SHA, got $COPIED_SHA)!"
-                    INTEGRITY_OK=0
-                fi
-            elif [ -n "$PKG_SHA" ] && [ -n "$COPIED_SHA" ]; then
-                if [ "$PKG_SHA" != "$COPIED_SHA" ]; then
-                    log "ERROR: SHA256 mismatch between source and destination Kick binary!"
-                    INTEGRITY_OK=0
-                fi
+            if [ -z "$COPIED_SHA" ]; then
+                log "ERROR: no sha256sum/shasum available on this system; refusing to install an unverified Kick binary!"
+                INTEGRITY_OK=0
+            elif [ -z "$EXPECTED_SHA" ]; then
+                log "ERROR: package VERSION has no KICK_SHA256; refusing to install an unverified Kick binary!"
+                INTEGRITY_OK=0
+            elif [ "$EXPECTED_SHA" != "$COPIED_SHA" ]; then
+                log "ERROR: SHA256 mismatch for Kick.new (expected $EXPECTED_SHA, got $COPIED_SHA)!"
+                INTEGRITY_OK=0
             fi
 
             if [ "$INTEGRITY_OK" -ne 1 ]; then
@@ -204,19 +278,44 @@ if [ "$NEEDS_INSTALL" -eq 1 ]; then
                     log "Retaining existing installed binary at $LOCAL_BIN."
                 fi
             else
-                # 3. Backup previous binary
-                if [ -f "$LOCAL_BIN" ]; then
-                    cp -f "$LOCAL_BIN" "$KICK_DATA_DIR/Kick.prev" 2>/dev/null || true
-                    if [ -f "$LOCAL_VERSION_FILE" ]; then
-                        cp -f "$LOCAL_VERSION_FILE" "$KICK_DATA_DIR/Kick.version.prev" 2>/dev/null || true
+                # 3. Backup previous binary. If an earlier install was cut after the binary swap, the binary on flash already is the
+                #    package being installed (Kick.installing holds its SHA256) and Kick.prev is still the real previous version.
+                SKIP_BACKUP=0
+                if [ -f "$INSTALLING_MARK" ] && [ -f "$LOCAL_BIN" ]; then
+                    marked="$(head -n 1 "$INSTALLING_MARK" 2>/dev/null | tr -d ' \r')"
+                    if [ -n "$marked" ] && [ "$(calc_sha256 "$LOCAL_BIN")" = "$marked" ]; then
+                        SKIP_BACKUP=1
+                        log "Interrupted installation detected: $LOCAL_BIN already is the package binary. Kick.prev is kept."
                     fi
-                    log "Saved previous binary backup to $KICK_DATA_DIR/Kick.prev."
+                fi
+                if [ "$SKIP_BACKUP" -eq 0 ]; then
+                    rm -f "$KICK_DATA_DIR/Kick.prev.tmp" "$KICK_DATA_DIR/Kick.version.prev.tmp" 2>/dev/null || true
+                    if [ -f "$LOCAL_BIN" ] && cp -f "$LOCAL_BIN" "$KICK_DATA_DIR/Kick.prev.tmp" 2>/dev/null; then
+                        if [ -f "$LOCAL_VERSION_FILE" ]; then
+                            cp -f "$LOCAL_VERSION_FILE" "$KICK_DATA_DIR/Kick.version.prev.tmp" 2>/dev/null || true
+                        fi
+                        mv -f "$KICK_DATA_DIR/Kick.prev.tmp" "$KICK_DATA_DIR/Kick.prev"
+                        if [ -f "$KICK_DATA_DIR/Kick.version.prev.tmp" ]; then
+                            mv -f "$KICK_DATA_DIR/Kick.version.prev.tmp" "$KICK_DATA_DIR/Kick.version.prev"
+                        else
+                            rm -f "$KICK_DATA_DIR/Kick.version.prev" 2>/dev/null || true
+                        fi
+                        log "Saved previous binary backup to $KICK_DATA_DIR/Kick.prev."
+                    elif [ -f "$LOCAL_BIN" ]; then
+                        rm -f "$KICK_DATA_DIR/Kick.prev.tmp" 2>/dev/null || true
+                        log "WARNING: could not back up the previous binary (flash full?); rollback will not be available."
+                    fi
+                    printf '%s\n' "$COPIED_SHA" > "$INSTALLING_MARK"
                 fi
 
                 # 4. Atomic move and permission setup
                 chmod 755 "$KICK_DATA_DIR/Kick.new"
                 mv -f "$KICK_DATA_DIR/Kick.new" "$LOCAL_BIN"
                 log "Atomic replace complete: $LOCAL_BIN is in place."
+                if [ "${KICK_BOOT_TEST_ABORT_AFTER:-}" = "replace" ]; then
+                    log "KICK_BOOT_TEST_ABORT_AFTER=replace: simulating a power cut after the binary swap."
+                    exit 99
+                fi
 
                 # 5. Sync resources (assets, templates, demos)
                 # User projects in /data/projects and user preferences in /data/prefs are NEVER overwritten.
@@ -251,6 +350,7 @@ if [ "$NEEDS_INSTALL" -eq 1 ]; then
                     log "Updated $LOCAL_VERSION_FILE to version: $(head -n 1 "$LOCAL_VERSION_FILE" 2>/dev/null)."
                 fi
 
+                rm -f "$INSTALLING_MARK" "$REJECTED_FILE" 2>/dev/null || true
                 sync 2>/dev/null || true
                 log "Installation/update finished successfully."
             fi

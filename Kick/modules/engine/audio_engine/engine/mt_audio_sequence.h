@@ -104,6 +104,10 @@ namespace mt
         // global tempo. Returns 0, -1 invalid time signature, -2 the tempo map has several time signatures (not editable here).
         // A global change must go through MTAudioSequenceManager::setTimeSignature (it re-maps every sequence that follows it).
         int  setOwnTimeSignature( int Numerator, int Denominator );
+        // A sequence that follows the global tempo also holds the global time signature in its OWN tempo map: the tick conversions of the
+        // map (bar <-> tick, seeks, loop points, track lengths) read the sequence's own map, the length / grid code reads the global
+        // one - both must say the same. Writes through Undo (nullptr = silently, for loading). Returns true when it changed anything.
+        bool mirrorGlobalTimeSignature( juce::UndoManager* Undo );
         // Re-reads everything derived from the bar grid (lengths in ticks, tick data, playhead phase). Also after undo / redo.
         void refreshTimeGrid();
         int  copyTrackBars( int trackIndex, const SequenceCopyBars& copyBars, std::vector<MTNote>& noteList );

@@ -51,6 +51,7 @@ namespace kick_ui
         void selectTab( int Index );
         void refreshDeleteButton();
         void handleUndoRedo( TabType tabType, UndoRedo undoRedoOption );
+        void refreshActiveTab( TabType tabType );
 
     private:
         std::unique_ptr<AppProgram>  pProg;
@@ -63,6 +64,7 @@ namespace kick_ui
         mt::MTAudioInterface& ae{ mt::getAudioInterface() };
         const mt::MTSelected& sel{ mt::getAudioInterface().getSelected() };
 
+        sigslot::scoped_connection          undoConn; // refresh after an undo that did not come from this toolbar (hardware UNDO)
         int                                 tabSelected{ 1 };
         std::array<ui::KickToggleButton, 3> tabButtons;
 
@@ -72,6 +74,7 @@ namespace kick_ui
             ui::KickImageButton del{ "Del", "Trash", "Trash_Active", "Trash", "Trash Disabled" };
             ui::KickButton      undo{ TRANS( "Undo" ) };
             ui::KickButton      redo{ TRANS( "Redo" ) };
+            ui::KickButton      history{ "History" }; // the Undo History window
             juce::UndoManager&  um{ mt::getAudioInterface().getUndoManager() };
             toolbar();
             void paint( juce::Graphics& g ) override;

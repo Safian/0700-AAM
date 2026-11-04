@@ -42,6 +42,25 @@ namespace ui
         resized();
     }
 
+    void KickMenuComponent::clearOptions()
+    {
+        model.clear();
+        navSelect = navGroup = 0;
+        resized();
+    }
+
+    void KickMenuComponent::setMinRows( int Rows )
+    {
+        minRows = juce::jmax( 0, Rows );
+        resized();
+    }
+
+    void KickMenuComponent::setBottomReserved( int Pixels )
+    {
+        bottomReserved = juce::jmax( 0, Pixels );
+        resized();
+    }
+
     void KickMenuComponent::addOption( const MenuItem& Item, const juce::String& Group )
     {
         std::vector<MenuItem> Items{ Item };
@@ -114,6 +133,7 @@ namespace ui
     void KickMenuComponent::resized()
     {
         auto b = getLocalBounds().reduced( padding );
+        b.removeFromBottom( bottomReserved );
         if( b.isEmpty() )
             return;
 
@@ -126,6 +146,7 @@ namespace ui
                 numRows += (int)std::ceil( (float)group->items.size() / (float)noOfColumns );
             }
 
+            numRows = juce::jmax( numRows, minRows );
             auto totalPaddingH = ( itemSpacingH * ( ( numHeaders + numRows ) - 1 ) );
             auto totalPaddingW = ( itemSpacingW * ( noOfColumns - 1 ) );
 
@@ -188,6 +209,8 @@ namespace ui
             return;
         navSelect = Index;
         refreshHighlight();
+        if( onHighlightChanged )
+            onHighlightChanged( navSelect );
     }
 
     void KickMenuComponent::setItemEnabled( int Index, bool Enabled )
@@ -199,17 +222,35 @@ namespace ui
         item->setAlpha( Enabled ? 1.0f : 0.35f );
     }
 
+    bool KickMenuComponent::clickItem( int Index )
+    {
+        if( navGroup < 0 || navGroup >= model.size() || Index < 0 || Index >= model[navGroup]->items.size() )
+            return false;
+        auto* item = model[navGroup]->items[Index];
+        if( !item->isEnabled() )
+            return false;
+        item->triggerClick();
+        return true;
+    }
+
     void KickMenuComponent::knobRotated( double delta )
     {
         if( navGroup < 0 || navGroup >= model.size() || model[navGroup]->items.isEmpty() )
             return;
         // One detent = one tile, Shift + dial = one row; wraps around the ends.
-        navSelect = menu_logic::stepTile( navSelect, (int)delta, contracts::DclContractsHelper::isShiftPressed(), model[navGroup]->items.size(), noOfColumns );
+        const bool shift = contracts::DclContractsHelper::isShiftPressed();
+        if( onDialStep && onDialStep( (int)delta, shift ) )
+            return;
+        navSelect = menu_logic::stepTile( navSelect, (int)delta, shift, model[navGroup]->items.size(), noOfColumns );
         refreshHighlight();
+        if( onHighlightChanged )
+            onHighlightChanged( navSelect );
     }
 
     void KickMenuComponent::knobClicked()
     {
+        if( onDialClick && onDialClick( contracts::DclContractsHelper::isShiftPressed() ) )
+            return;
         if( navGroup < 0 || navGroup >= model.size() || navSelect < 0 || navSelect >= model[navGroup]->items.size() )
             return;
         if( auto* item = model[navGroup]->items[navSelect]; item->isEnabled() )
