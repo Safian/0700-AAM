@@ -120,6 +120,14 @@ target_compile_definitions(kick-audio-platform-tests PRIVATE JUCE_MODAL_LOOPS_PE
 add_test(NAME kick-audio-platform COMMAND kick-audio-platform-tests)
 set_tests_properties(kick-audio-platform PROPERTIES TIMEOUT 20)
 
+# Bus inserts are heard: a constant source through a bus whose DawInserts run as the bus chain's insert (INS-01).
+add_executable(kick-bus-inserts-tests BusInsertsTests.cpp)
+target_link_libraries(kick-bus-inserts-tests PRIVATE kick_audio_core Threads::Threads)
+target_include_directories(kick-bus-inserts-tests PRIVATE
+    ../../../AudIO/AudIO/Includes ../../../AudIO/AudIO/Daw ../../../AudIO/AudIO/Core ../../../AudIO/AudIO)
+add_test(NAME kick-bus-inserts COMMAND kick-bus-inserts-tests)
+set_tests_properties(kick-bus-inserts PROPERTIES TIMEOUT 30)
+
 add_executable(kick-key-transpose-tests KeyTransposeTests.cpp)
 add_test(NAME kick-key-transpose COMMAND kick-key-transpose-tests)
 set_tests_properties(kick-key-transpose PROPERTIES TIMEOUT 10)

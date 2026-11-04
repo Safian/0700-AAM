@@ -93,38 +93,6 @@ namespace AudIO
     //
     // Class: DawBus.
     //
-    // Runs the four inserts of a bus as an insert of the bus' own chain. The DawInserts mixin of a bus used to be processed by
-    // nobody (only programs, audio tracks and the looper call process()), so the effects of Return / Submix / Output / Master
-    // buses were stored and shown but never heard. The chain runs this host before the bus gain / pan, i.e. the inserts are
-    // pre-fader.
-    class DawInsertsHost : public Object
-    {
-    public:
-        explicit DawInsertsHost( DawInserts& Inserts )
-            : Object( 2, 2, 0 )
-            , inserts_( Inserts )
-        {
-            setName( "BusInserts" );
-        }
-
-        const char* getType() const override { return "DawInsertsHost"; }
-
-        void prepareToPlay( uint32_t Samplerate, uint32_t Blocksize ) override
-        {
-            Object::prepareToPlay( Samplerate, Blocksize );
-            inserts_.prepareInserts( Samplerate, Blocksize );
-        }
-
-        void process( Buffer<float>& Buffer ) override
-        {
-            Buffer.copyInputsToOutputs();
-            inserts_.processInserts( Buffer );
-        }
-
-    private:
-        DawInserts& inserts_;
-    };
-
     DawBus::DawBus( Design& Design_, const std::string& Name, BusType Type, BusWidth Width )
         : DawRouting( Design_, Type, Width )
     {

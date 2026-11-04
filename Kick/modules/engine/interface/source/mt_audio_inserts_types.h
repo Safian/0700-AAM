@@ -83,6 +83,8 @@ namespace mt
         ClapEffect* getClapEffect( unsigned int Position );
 
         int          getNumInserts();
+        // False for programs that have no insert chain (MIDI / CV): ADD would do nothing, the screen says so instead.
+        bool         isAvailable() const noexcept;
         int          getNumParameters( unsigned int Position );
         juce::String getInsertName( unsigned int InsertPosition );
         juce::String getParameterName( unsigned int InsertPosition, int Parameter );
