@@ -265,32 +265,18 @@ namespace kick_ui
             case mt::MTTimeBase::_16: return 16;
             case mt::MTTimeBase::_16T: return 24;
             case mt::MTTimeBase::_32: return 32;
-            case mt::MTTimeBase::_32T: return 78;
+            case mt::MTTimeBase::_32T: return 48; // the TimeBase enum value; 78 was a typo
             case mt::MTTimeBase::_64: return 64;
             case mt::MTTimeBase::_64T: return 96;
             default: return 4;
         }
     }
 
+    // Index of a stored quantization (the TimeBase enum value) in the TIME DIV list. Complete: 32T (48),
+    // 1/2 and 1/2T (2, 3) used to fall through to 1/16. See step_model::timeDivIndex.
     int GridData::getTimeBaseIndex( int TimeDiv )
     {
-        auto index = 5;
-        switch( TimeDiv )
-        {
-            case 1: index = 0; break;
-            case 4: index = 1; break;
-            case 6: index = 2; break;
-            case 8: index = 3; break;
-            case 12: index = 4; break;
-            case 16: index = 5; break;
-            case 24: index = 6; break;
-            case 32: index = 7; break;
-            case 78: index = 8; break;
-            case 64: index = 9; break;
-            case 96: index = 10; break;
-            default: index = 5; break;
-        }
-        return index;
+        return step_model::timeDivIndex( TimeDiv );
     }
 
     unsigned int GridData::getTicksPerTimebaseAt( unsigned int Ticks, const juce::String& Timebase )

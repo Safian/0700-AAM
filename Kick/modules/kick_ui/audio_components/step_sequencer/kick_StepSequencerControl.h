@@ -31,7 +31,6 @@ namespace kick_ui
         void resized() override;
 
     public:
-        ui::KickToggleButton trkVolumeButton{ TRANS( "TRK VOLUME" ) };
         // nudge
         ui::KickImageButton leftNudgeButton{ TRANS( "-" ), "Minus", "Minus_Active" };
         ui::KickLabel       nudgeText{ "Nudge" };
@@ -84,7 +83,6 @@ namespace kick_ui
         void setSelectedPage( int index );
 
     public:
-        ui::KickToggleButton trkVolumeButton{ TRANS( "TRK VOLUME" ) };
         ui::KickListBox      paramValueListBox{ ui::KickListBox::BoxType::withoutTitleBar, "Parameter", { "Velocity", "Probability", "Ratchet" } };
         ui::KickListBox      timeDivValueListBox{ ui::KickListBox::BoxType::withoutTitleBar, "Time Div", mt::Kick::TimeDivisionStrings, 0, 4 };
         // Pad
