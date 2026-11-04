@@ -280,6 +280,7 @@ namespace kick_ui
     {
         stop();
         setRecordingLength( Bars );
+        ae.setLooperBars( Bars ); // LO-07: the export rounds to whole bars of this loop
         shownBars = Bars;
         setThumbnail();
     }
@@ -518,6 +519,7 @@ namespace kick_ui
             if( wanted > 0.0 && !looper_logic::sameLoopLength( wanted, ae.getLooperLength(), ae.getLooperSampleRate() ) )
                 setRecordingLength( numBars );
             shownBars = numBars;
+            ae.setLooperBars( numBars ); // LO-07: the export length follows the loop that is shown (also after a project / screen change)
 
             lastExportable = !lastExportable; // force the Export / Clear state to be sent
             startTimerHz( 30 );
