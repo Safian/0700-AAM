@@ -4,7 +4,12 @@
 1. **Főszál, azonnal:** mobil ág pusholása a forkra (fast-forward); Looper SYNC fázis mérése és AC2 (nyomkövető sorok egy buildben, injektált forgatókönyv); Aura 45 perces soak figyelése.
 2. **1. hullám (W1-A..D, 4 agy-worker párhuzamosan):** Preferences-csomag, Grid-hibák, MIDI program, CLAP-FX host + `clap.gui`. Utána: átnézés, merge, **egy** ARM-build + telepítés, MPC-s ellenőrzés (összeomlás-mentesség, napló, injektált forgatókönyvek), H3 tételek (pad "csendes állapot", kerék/pedál-mérő, List Edit dial, modális ablakok).
 3. **2. hullám (W2-A, B, C, D):** indítás, főképernyő tabok, fájlböngésző-források (M0 helyi mappa + cache, M1 WebDAV), triázs-frissítés.
-4. **3. hullám az ember nélkül elvégezhető része:** W3-B zongoramotor és W3-C spike/W3-D Kick EQ egy ideiglenes, helyi, **nem publikált** munkakönyvtárban (a plugin-repó végleges neve és helye owner-döntés: átnevezni/áttenni egyetlen mozdulat), W3-E `.kickplug` telepítő, W3-A érintő-zongora a híd után.
+4. **VST/CLAP-plugin fejlesztés és FX-fejlesztés KÉT KÜLÖN ÁGON (owner, 2026-11-04), mindkettő saját worktree-ben, egymástól és a Kick-fő vonaltól függetlenül:**
+   - **VST-ág** (instrumentek): W3-C spike (egy kódból VST3+CLAP), W3-B zongoramotor + zongora-CLAP, a szintetizátor (03, SynthyBoy munkacím), W3-E `.kickplug` formátum/telepítő a plugin-oldali manifesttel.
+   - **FX-ág** (effektek): W3-D Kick EQ (az első saját FX, a template pilotja), további hivatalos FX-ek (05 §3.4).
+   - A két ág ugyanazt a plugin-template/SDK részt használja; a közös rész egyszer, a spike-ban készül, és mindkét ágba onnan kerül. A Kick-host oldali munka (W1-D: CLAP-FX az Insert-böngészőben, `clap.gui`) a Kick fő vonalán marad.
+   - **Az ágak és repók neve owner-döntés** (nem találom ki): addig a munka helyi, nem publikált worktree-kben megy, a név később egyetlen mozdulattal cserélhető. Kész és ellenőrzött munka csak az owner által megnevezett ágra/repóba kerül.
+   - W3-E (`.kickplug` telepítő a Kickben, host-oldal) a Kick fő vonalán, W3-A érintő-zongora a híd után szintén ott.
 5. Ami **nem** megy ember nélkül, az a B. szakaszban van: reggelre összegyűjtve, pontos lépésekkel.
 
 ## B. Ember kell (reggelre összegyűjtve)
@@ -44,9 +49,9 @@ Keygroup (egy minta kromatikus + több minta zónák/rétegek), fájlböngésző
 | ID | Egység | Terv | Előfeltétel |
 |---|---|---|---|
 | W3-A | **Érintő-zongora**: per-ujj touch a hídban, zongora-képernyő (`KeyboardComponent`), glissando, velocity-módok, pitch bend, sustain, késleltetés-mérés | 04 §4 | W2-A (híd) |
-| W3-B | **Zongoramotor** (plugin-független, C++17: SampleProvider/FLAC, voice-pool, 16 velocity-réteg crossfade, release, folytonos CC64, pedálzaj, streaming) + host-tesztek | 02 §3.1 | **owner döntés: a plugin-repó neve és helye** |
-| W3-C | **Spike**: minimális hangadó instrument egy kódból VST3 + CLAP, CI, clap-validator/pluginval; ebből dől el a GUI-keretrendszer és a wrapper | 02/03 repo-szerkezet | **owner döntés: repó neve/helye** |
-| W3-D | **Kick EQ** (az első saját FX, a template pilotja) | 05 | W3-C |
+| W3-B (VST-ág) | **Zongoramotor** (plugin-független, C++17: SampleProvider/FLAC, voice-pool, 16 velocity-réteg crossfade, release, folytonos CC64, pedálzaj, streaming) + host-tesztek | 02 §3.1 | **owner döntés: a plugin-repó neve és helye** |
+| W3-C (VST-ág, a közös template alapja) | **Spike**: minimális hangadó instrument egy kódból VST3 + CLAP, CI, clap-validator/pluginval; ebből dől el a GUI-keretrendszer és a wrapper | 02/03 repo-szerkezet | **owner döntés: repó neve/helye** |
+| W3-D (FX-ág) | **Kick EQ** (az első saját FX, a template pilotja) | 05 | W3-C |
 | W3-E | `.kickplug` manifest + helyi telepítő a Kickben (aláírás-ellenőrzés kötelező) | 03 1.–3. fázis | W1-D |
 | W3-F | Backend/index, build-farm, publikálói regisztráció, sandbox | 03 4.–6. fázis | terv-szintű döntések (hosting, kulcsgazda) |
 
