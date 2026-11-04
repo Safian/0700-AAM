@@ -194,3 +194,8 @@ set_tests_properties(kick-logging PROPERTIES TIMEOUT 10)
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()
+
+# Startup: state machine + messages, safe-mode boot guard, status strip data, project load queue; JUCE-free, header only.
+add_executable(kick-startup-tests StartupTests.cpp)
+add_test(NAME kick-startup COMMAND kick-startup-tests)
+set_tests_properties(kick-startup PROPERTIES TIMEOUT 20)
