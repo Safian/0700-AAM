@@ -91,6 +91,31 @@ namespace mt
             {
                 engine.addAudioDevice( "Master", dm.get(), true );
                 engine.startAudioDevice( AUDIO_SAMPLE_RATE, AUDIO_BLOCK_SIZE );
+
+                // Startup state: the device error used to be stored and never read (no sound, no message).
+                auto&      startup   = kick_startup::state();
+                const auto devError  = dm->lastError();
+                auto*      current   = dm->getJuceAudioDeviceMgr().getCurrentAudioDevice();
+                if( juce::SystemStats::getEnvironmentVariable( "KICK_NO_AUDIO_DEVICE", {} ) == "1" )
+                {
+                    startup.set( kick_startup::Step::AudioEngine, kick_startup::StepState::Skipped, "disabled" );
+                }
+                else if( devError.isNotEmpty() )
+                {
+                    const auto p = startup.fail( kick_startup::Fault::AudioDevice, devError.toStdString() );
+                    kick_log( "error", "[ERROR] [AUDIO] %s\n", p.cause.c_str() );
+                }
+                else if( current == nullptr )
+                {
+                    const auto p = startup.fail( kick_startup::Fault::AudioDeviceMissing, "" );
+                    kick_log( "error", "[ERROR] [AUDIO] %s\n", p.cause.c_str() );
+                }
+                else
+                {
+                    const auto name = current->getName() + " " + juce::String( (int)current->getCurrentSampleRate() ) + " Hz";
+                    startup.set( kick_startup::Step::AudioEngine, kick_startup::StepState::Ok, name.toStdString() );
+                    kick_log( "info", "[INFO] [AUDIO] device ready: %s\n", name.toRawUTF8() );
+                }
             }
         } );
 

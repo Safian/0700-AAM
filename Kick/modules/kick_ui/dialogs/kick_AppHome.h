@@ -28,6 +28,7 @@ namespace kick_ui
     class KickLEDs;
     class AppStatusbar;
     class MobileHardwareDrawer;
+    class StartupScreen;
 
     class KickHome : public juce::Component
         , private juce::AsyncUpdater
@@ -39,6 +40,8 @@ namespace kick_ui
         inline Screen getCurrentScreen() const { return currentScreen; }
         inline Screen getPreviousScreen() const { return stack.empty() ? Screen::HomeListView : stack.top(); }
         IScreen*      getScreen( Screen screen );
+        IScreen*      findScreen( Screen screen ) const; // null when not (yet) created; never inserts
+        bool          areLazyScreensReady() const { return lazyScreensReady_; }
 
         void AssignSampleStartUp( void );
 
@@ -67,8 +70,15 @@ namespace kick_ui
         std::unique_ptr<Component>                 selectionOutline_;
         std::unique_ptr<KickLEDs>                  ledControl_;
         std::unique_ptr<MobileHardwareDrawer>      hardwareDrawer_;
+        std::unique_ptr<StartupScreen>             startupScreen_;
         juce::Component::SafePointer<AppStatusbar> statusBar_;
         int                                        page{ 0 };
+
+        // The ~29 screens besides Projects are built lazily (thread pool + callAsync). A switch requested before that
+        // finished (auto-load done fast, forced HomeListView) is remembered and applied when they exist, instead of
+        // silently leaving the previous screen up.
+        bool   lazyScreensReady_{ false };
+        Screen pendingScreen_{ Screen::Invalid };
 
         Screen currentScreen{ Screen::Invalid };
         Screen prevScreen{ Screen::Invalid };

@@ -42,6 +42,17 @@ configure_file(${CMAKE_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/confi
 message( "## Project: ${TargetName}" ) 
 message( "## Version: ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" )
 
+## Build identity shown on the startup screen (used when the pendrive's Kick.version file is not there).
+execute_process(
+    COMMAND git -C "${CMAKE_SOURCE_DIR}" rev-parse --short=12 HEAD
+    OUTPUT_VARIABLE KICK_GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE KICK_GIT_RESULT)
+if(NOT KICK_GIT_RESULT EQUAL 0)
+    set(KICK_GIT_HASH "")
+endif()
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 ## iOS: recent SDKs require the UIScene life cycle.
@@ -105,6 +116,9 @@ target_compile_definitions(${TargetName}
         JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:${TargetName},JUCE_VERSION>"
         JUCE_ALSA=1
         JUCE_JACK=1
+
+        KICK_APP_VERSION="${TargetVersion}"
+        KICK_GIT_HASH="${KICK_GIT_HASH}"
 
         JUCE_DISPLAY_SPLASH_SCREEN=0
         JUCE_WEB_BROWSER=0
