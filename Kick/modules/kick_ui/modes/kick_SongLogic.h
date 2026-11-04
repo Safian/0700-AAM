@@ -96,6 +96,63 @@ namespace kick_ui
             return NameCheck::Ok;
         }
 
+        // ---- manual limits (Song Mode: up to 32 songs, up to 999 steps, each step repeats up to 999 times) ------------
+        constexpr int kMaxSongs  = 32;
+        constexpr int kMaxSteps  = 999;
+        constexpr int kMaxRepeat = 999;
+        inline bool canCreateSong( int NumSongs ) { return NumSongs < kMaxSongs; }
+        inline bool canAddStep( int NumSteps ) { return NumSteps < kMaxSteps; }
+
+        // Data Dial / +/- with a step selected: its sequence changes ("tap the sequence name, then dial / +/-").
+        // A step whose sequence is missing (-1) starts at the first (up) or last (down) sequence.
+        inline int stepSequenceAfterDial( int Current, int Delta, int NumSequences )
+        {
+            if( NumSequences <= 0 )
+                return -1;
+            if( Current < 0 || Current >= NumSequences )
+                return Delta >= 0 ? 0 : NumSequences - 1;
+            const int v = Current + Delta;
+            return v < 0 ? 0 : ( v >= NumSequences ? NumSequences - 1 : v );
+        }
+
+        // Dial with no step selected: it walks the steps (the first step down, the last one up).
+        inline int stepRow( int Selected, int Delta, int NumSteps )
+        {
+            if( NumSteps <= 0 )
+                return -1;
+            if( Selected < 0 || Selected >= NumSteps )
+                return Delta >= 0 ? 0 : NumSteps - 1;
+            const int v = Selected + Delta;
+            return v < 0 ? 0 : ( v >= NumSteps ? NumSteps - 1 : v );
+        }
+
+        // Record-armed song (manual: "press or tap the pad ... it appears as the next step ... press a pad several
+        // times to add to the number of times it plays"): the step goes to the END of the song; the same sequence as
+        // the last step only raises that step's repeat. Nothing plays while a song is recorded this way.
+        inline InsertPlan planRecord( int NumSteps, int LastStepSeq, int PadSeq )
+        {
+            InsertPlan p;
+            if( NumSteps > 0 && LastStepSeq == PadSeq )
+            {
+                p.kind        = InsertPlan::Kind::RepeatPlus1;
+                p.index       = NumSteps - 1;
+                p.selectAfter = NumSteps - 1;
+            }
+            else
+            {
+                p.kind        = InsertPlan::Kind::Add;
+                p.index       = NumSteps;
+                p.selectAfter = NumSteps;
+            }
+            return p;
+        }
+
+        // Repeat counts are 1..999.
+        inline int clampRepeat( int R ) { return R < 1 ? 1 : ( R > kMaxRepeat ? kMaxRepeat : R ); }
+
+        // Next / Sudden need a following step.
+        inline bool canSkipStep( int CurrentStep, int NumSteps ) { return CurrentStep >= 0 && CurrentStep + 1 < NumSteps; }
+
         // A step whose sequence no longer exists keeps its slot and is shown as missing.
         inline bool isMissingStep( int SeqNo ) { return SeqNo < 0; }
 

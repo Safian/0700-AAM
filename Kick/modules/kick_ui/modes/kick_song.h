@@ -50,7 +50,7 @@ namespace kick_ui
     private:
         mt::MTSongStepInfo                   step;
         ui::KickLabel                        seqName{ "" };
-        ui::KickNumberWithAttachedValue<int> repeat{ "REPEAT", 1, 128, 1, 1, false };
+        ui::KickNumberWithAttachedValue<int> repeat{ "REPEAT", 1, 999, 1, 1, false };
         ui::KickNumberWithAttachedValue<int> bpm{ "BPM", BPM::MIN, BPM::MAX, BPM::DEFAULT, BPM::STEP, false };
         ui::KickNumberWithAttachedValue<int> bars{ "BARS", 1, 64, 4, 1, false };
 
@@ -77,6 +77,14 @@ namespace kick_ui
         void seqSongState( bool state );
         void setBpmValue( float BPM );
         void displayState( juce::String& song );
+
+        // Data Dial / +/- : with a step selected its sequence changes (Shift, or no selection: the dial walks the steps).
+        void dial( int Delta );
+        // Next / Sudden while the song plays: leave the current step at the next bar / at once.
+        void skipStep( bool AtNextBar );
+        // Record-armed (touch Rec, or the sequence REC armed on the hardware): a pad enters its sequence as the next step.
+        bool isRecArmed() const;
+        bool recordPad( int SequenceIndex );
 
     private:
         struct Header : public juce::Component
@@ -115,6 +123,11 @@ namespace kick_ui
         ui::KickButton clr{ "Clear" };
         ui::KickButton insert{ "Insert" };
         ui::KickButton del{ "Delete" };
+        ui::KickToggleButton rec{ "Rec", "Rec", "Rec" };
+        ui::KickButton       nextStep{ "Next" };
+        ui::KickButton       suddenStep{ "Sudden" };
+        int                  currentStep{ -1 }; // the step the engine plays now
+        void                 refreshButtons();
 
         int   selectedPadSeq{ -1 };
         int   selectedId{ -1 };
