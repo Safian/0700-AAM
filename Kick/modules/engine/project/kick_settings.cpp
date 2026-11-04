@@ -117,6 +117,8 @@ namespace mt
     int          KickBrowserFavourite::getNumProperties() { return vTree.getNumProperties(); }
 
     // Setters...
+    juce::var KickBrowserFavourite::getOption( const juce::String& name ) { return vTree.hasProperty( name ) ? vTree.getProperty( name ) : juce::var(); }
+    void      KickBrowserFavourite::setOption( const juce::String& name, const juce::var& value ) { vTree.setProperty( name, value, nullptr ); }
     void KickBrowserFavourite::setPathToButton( juce::String buttonName, juce::String path ) { vTree.setProperty( buttonName, path, nullptr ); }
     void KickBrowserFavourite::setSelectedLeftRow( juce::String buttonName, int row ) { vTree.setProperty( buttonName, row, nullptr ); }
 
@@ -140,6 +142,7 @@ namespace mt
         defProjectState.attachTo( vTree, IDs::DefaultProjectState, Undo, 5 );
 
         onLaunch.attachTo( vTree, IDs::Onlaunch, Undo, "Selector" );
+        launchTemplate.attachTo( vTree, IDs::LaunchTemplate, Undo, "" );
         bitDepth.attachTo( vTree, IDs::recordBitDeapth, Undo, "16" );
         saveAfter.attachTo( vTree, IDs::SaveAfter, Undo, "30 Sec" );
         numerator.attachTo( vTree, IDs::TimeNumerator, Undo, "4" );

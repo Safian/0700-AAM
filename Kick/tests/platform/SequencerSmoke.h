@@ -11,7 +11,7 @@ inline juce::String runKickSequencersSmoke() {
     auto& api  = mt::getAudioInterface();
     auto  file = juce::File(juce::SystemStats::getEnvironmentVariable("KICK_DATA_ROOT", {})).getChildFile("sequencers/Project.kickPrj");
     if (!file.getParentDirectory().createDirectory()) return "Cannot create project directory";
-    if (!api.loadProject(file)) return "Cannot create project";
+    if (!api.loadProject(file, true)) return "Cannot create project";
     const auto fail = [](const juce::String& m) { std::cout << "SEQUENCERS FAIL: " << m << "\n" << std::flush; return m; };
     const auto say  = [](const juce::String& m) { std::cout << "SEQUENCERS: " << m << "\n" << std::flush; };
 

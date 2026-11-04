@@ -132,6 +132,7 @@ namespace ui
     class KickTableView
         : public KickControlBase<juce::Component>
         , public mt::MTProperties
+        , private KickViewport::Listener
     {
     public:
         std::function<void( int Row )> onRowClicked;
@@ -212,6 +213,21 @@ namespace ui
         void enableRowSelection( bool State ) { enableRowSelectionFlag = State; }
         void setTableEndInfo( const juce::String&, juce::Colour, float, bool bEnable = false );
 
+        // ---- Opt-in extras (the default behaviour of every other table is unchanged) ----
+
+        // Virtual rows: only the rows in (and just around) the visible area get a component (the provider is asked for those only);
+        // the others are null in getRowComponents(). For long lists (a folder with thousands of files).
+        void enableVirtualRows( bool Enable );
+        // Select mode with a cursor: the Data Dial only moves the cursor (it no longer toggles every row it passes); knobClicked()
+        // reports the cursor row (the owner toggles it with toggleRow()). A touch still toggles the touched row.
+        void enableSelectCursor( bool Enable );
+        inline int getCursorRow() const noexcept { return cursorRow; }
+        // The selection as a whole: no callbacks, no toggling (the owner decides). notify: provider.onRowSelected for each changed row.
+        void                    setSelectedRows( const juce::Array<int>& Rows );
+        const juce::Array<int>& getSelectedRows() const noexcept { return canvas.selectedRow; }
+        void                    toggleRow( int Row, juce::NotificationType notify = juce::sendNotification );
+        void                    selectAll();
+
     private:
         void resized() override;
         void paint( juce::Graphics& g ) override;
@@ -219,6 +235,13 @@ namespace ui
         void mouseDoubleClick( const juce::MouseEvent& event ) override;
 
         void setViewPosition();
+        void updateOnViewPositionChange( KickViewport* ) override;
+        void refreshVirtualWindow();
+
+        bool bVirtualRows{ false };
+        bool bSelectCursor{ false };
+        int  cursorRow{ -1 };
+        int  firstBuilt{ -1 }, lastBuilt{ -1 };
 
         KickLabel endLabelInfo{ "END" };
 
@@ -250,6 +273,7 @@ namespace ui
             int                  num{ -1 };
             int                  width{ -1 };
 
+            int cursorRow{ -1 }; // drawn as an outline when >= 0
             int rowHeight{ 60 };
             int rowWidth{ 0 };
             int rowSpacing{ 4 };

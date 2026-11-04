@@ -130,11 +130,21 @@ namespace mt
 
         // Project API's
         bool isProjectLoaded();
-        bool loadProject( juce::File& ProjectFile );
+        // createIfMissing = true only for New project (creates the folder and an empty project); otherwise a missing project is an
+        // error (getProjectLoadError()) and the open one stays untouched.
+        bool loadProject( juce::File& ProjectFile, bool createIfMissing = false );
         bool closeProject();
         bool saveProject();
         juce::String getProjectSaveError() const;
+        juce::String getProjectLoadError() const;
         bool isProjectDirty() const;
+        bool isProjectReadOnly() const; // the open project is a factory demo / template: Save As only
+        bool isProjectAutoSave() const; // Preferences auto save switch
+        // "Don't save": the next close of the open project (a load, quit) does not write it.
+        void discardProjectChangesOnClose();
+        // Save As / Save a Copy (any thread; see KickXML::saveAs).
+        struct SaveAsOutcome { bool ok{ false }; bool cancelled{ false }; juce::String error; juce::File file; };
+        SaveAsOutcome saveProjectAs( const juce::File& newDir, bool switchToNew, const std::function<bool( const juce::File&, const juce::File& )>& copyFolder, const std::atomic<bool>& cancel );
 
         // Master API's....
         const int         getMasterBPM();

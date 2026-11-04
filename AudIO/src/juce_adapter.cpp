@@ -39,6 +39,7 @@ void AudioDevice::audioDeviceAboutToStart(juce::AudioIODevice* device) {
 void AudioDevice::audioDeviceStopped() { teardown(); }
 void AudioDevice::audioDeviceIOCallbackWithContext(const float* const* in, int ni, float* const* out, int no, int frames,
                                                   const juce::AudioIODeviceCallbackContext&) {
+    struct Tick { std::atomic<uint64_t>& n; ~Tick() { n.fetch_add(1, std::memory_order_release); } } tick{callbackCount};
     for (int c = 0; c < no; ++c) if (out[c]) std::fill_n(out[c], frames, 0.f);
     if (!isPlaying() || !engineFrames) return;
     if (resetPipeline.exchange(false)) { filled = 0; inputBlock.clear(); outputBlock.clear(); }

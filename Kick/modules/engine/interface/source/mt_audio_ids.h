@@ -254,6 +254,7 @@ namespace mt
 
         DECLARE_ID( PROJECTDEFAULTS )
         DECLARE_ID( Onlaunch )
+        DECLARE_ID( LaunchTemplate )
         DECLARE_ID( MaxNumOfRecentProject )
         DECLARE_ID( recordBitDeapth )
         DECLARE_ID( Autosave )

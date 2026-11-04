@@ -602,8 +602,7 @@ namespace kick_ui
                                     knobEdit->nextQLinkRow();
                             break;
                         case contracts::DeviceControlContracts::EN_SAVE:
-                            if (!ae.saveProject())
-                                statusBar_->setBoxInfo("UNSAVED: " + ae.getProjectSaveError());
+                            ui::project_actions::saveProject(); // a demo / template opens Save As; a save writes the thumbnail too
                             break;
 
                         default: break;

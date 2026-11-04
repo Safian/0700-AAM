@@ -157,11 +157,20 @@ namespace mt
     /// Project API's
     ///
     bool MTAudioInterface::isProjectLoaded() { return manager->isProjectLoaded(); }
-    bool MTAudioInterface::loadProject( juce::File& ProjectFile ) { return manager->loadProject( ProjectFile ); }
+    bool MTAudioInterface::loadProject( juce::File& ProjectFile, bool createIfMissing ) { return manager->loadProject( ProjectFile, createIfMissing ); }
     bool MTAudioInterface::closeProject() { return manager->closeProject(); }
     bool MTAudioInterface::saveProject() { return manager->saveProject(); }
     juce::String MTAudioInterface::getProjectSaveError() const { return manager->getLastSaveError(); }
+    juce::String MTAudioInterface::getProjectLoadError() const { return manager->getLastLoadError(); }
     bool MTAudioInterface::isProjectDirty() const { return manager->isDirty(); }
+    bool MTAudioInterface::isProjectReadOnly() const { return manager->isProjectLoaded() && manager->isReadOnlyDocument(); }
+    bool MTAudioInterface::isProjectAutoSave() const { return KickXML::isAutoSaveEnabled(); }
+    void MTAudioInterface::discardProjectChangesOnClose() { manager->discardChangesOnClose(); }
+    MTAudioInterface::SaveAsOutcome MTAudioInterface::saveProjectAs( const juce::File& newDir, bool switchToNew, const std::function<bool( const juce::File&, const juce::File& )>& copyFolder, const std::atomic<bool>& cancel )
+    {
+        const auto r = manager->saveProjectAs( newDir, switchToNew, copyFolder, cancel );
+        return { r.ok, r.cancelled, r.error, r.file };
+    }
 
     ///
     /// Selection API's
