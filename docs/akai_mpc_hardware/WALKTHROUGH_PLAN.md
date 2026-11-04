@@ -55,7 +55,7 @@ Minden munkacsomaghoz (WP) egy külön fájl: `docs/akai_mpc_hardware/walkthroug
 | Hardveres ellenőr | hardveres session | build, MPC-teszt, kamera/snapshot |
 | Döntő és fizikai tesztelő | felhasználó | scope-döntés, fotók, LED/gomb-szemrevétel |
 
-Csatorna: `docs/hw-mailbox/` (TO_CLOUD.md / FROM_CLOUD.md), kérdés `KÉRDÉS:`, válasz `VÁLASZ:`.
+Csatorna: a cloud session lezárult (2026-11-02); a postaláda (`docs/hw-mailbox/`) törölve, a munka helyben folyik.
 
 ## 5. Sorrend (javaslat)
 1. **A** (már kész táblázat) kiegészítése a hiányzó sorokkal + a 0. fázis blokkolói.

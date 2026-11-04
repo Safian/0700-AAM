@@ -193,9 +193,6 @@ A kamera a bal oldalra (kerekek, bal gombcsoport, pad bank, Main Volume) nézett
 (Az eredeti mérés:)
 A strip melletti kis LED-sor a kamerán sötét maradt: `strip 0`, `strip 64`, `strip 127` (a bridge `set_touch_strip_leds(val)` → `0xB0 0x21 <val>`, Port 1) és érintés (a felhasználó ujja a stripen) közben is. A strip pozíció-bemenete működik (1040 nyers üzenet CC33/CC34). Gyanú: az Akai nem a CC33-ra (0x21) várja a LED-sor írását (a CC33 a bemeneti pozíció száma is), vagy a `cc` LED-mód `0xB0 <note> <érték>` konvenciójához más szám tartozik; az útmutató a strip LED-sorának vezérlését nem írja le. Mérés: a CC-szám és az érték-tartomány kipróbálása (pl. 0xB0 0x20..0x23, 0x45, érték 0..127, vagy a strip-módonként eltérő) a `ledraw` típusú parancs bővítésével kamera mellett.
 
-### 13. hiba – a touch strip módjai: a Kick 3 módot ismer, a dokumentáció 12-t (MPC v3.10 útmutató, Touch Strip fejezet)
-A TOUCH STRIP gomb a dokumentáció szerint ezeken a módokon lépked (nyomva tartva a kijelzőn választható): **Q-Link, Pitch Bend, Pad Level, Mod Wheel, Track Level, Sustain, Touch FX, Expression, Notes, Crossfader, Note Strum, Off**. A TOUCH FX gomb azonnal a Touch FX módra vált; Shift+TOUCH STRIP / Shift+TOUCH FX a mód beállításait nyitja; az alapmód a Preferences/Hardware menüben állítható. A Kick (`hardware/strip_modes.h`) csak **Kick slider → Pitch bend → Mod wheel** módot ismer (3 mód). Hiányzik: Q-Link, Pad Level, Track Level, Sustain (CC64), Touch FX, Expression (CC11), Notes, Crossfader, Note Strum, Off. A Touch Sense (érintésre Note On, alapból note 78) a nyers adatok szerint megvan.
-
 ## 13. kör – érintés-javítás hardveren (`c4ec7f35`, Z2a + Z1a): MŰKÖDIK
 Build: `safian/main` `c4ec7f35` (`-g`), `KICK_NO_HARDWARE=1 KICK_NO_SERIAL_DEVICE=1`. Napló: `[TOUCH] delivery=manual (peer=1 showing=0)`, `manual mouseDown/mouseUp delivered to '<név>'`.
 
@@ -245,10 +242,8 @@ A fenti körök (1–14) összegzése. Minden állítás a megadott körben mér
 ## Hiba / hiányzó funkció
 | Tétel | Állapot |
 |---|---|
-| **Szekvenciafelvétel (REC + PLAY → pad a sávba)** | **hiányzik** (`setRecordState` nincs hívva, `EN_RECORD` csak a looperé) — 14. kör |
 | REC/OVERDUB LED | nincs bekötve a szekvenciára; felhasználói döntés: REC élesítve piros, felvételkor villog; OVERDUB aktív zöld |
-| Keyboard Control menü, Sounds Mode, Locate ablak, a 12 strip-módból 9 | hiányzik (doksi szerint kell) — `KEY61_DOC_VS_KICK.md` |
-| Main Volume gomb | a Kick alatt nem hat; nem MIDI, nem input-esemény (hardver/firmware) |
+| Keyboard Control menü, Sounds Mode, Locate ablak | hiányzik (doksi szerint kell) — `KEY61_DOC_VS_KICK.md` |
 | Touch strip LED-sor | a doksi szerint nincs szoftveres funkciója (nem hiba) |
 | Automation: Shift | a doksi szerint ki/be kapcsol; a Kick csak kikapcsol |
 | Stop dupla nyomás | nem vizsgált |

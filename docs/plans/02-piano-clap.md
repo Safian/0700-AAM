@@ -68,3 +68,9 @@ A P0 nem „csonka verzió”: a P0 listán minden elem teljes minőségű; a P1
 - CC BY 3.0 ↔ AGPL aggregate értelmezés; jogi átnézés.
 - sfizz archiválva (2026-06) → saját motor, nem SFZ-függőség; a Floe (GPL-3) a legközelebbi architektúra-minta.
 - Piano-modell hangminőség-mérés: halláspróba szükséges (a kutatások fórum-alapúak, nem hallgatási teszt).
+
+## Repo-szerkezet és formátumok (owner döntés, 2026-11-04)
+- **Minden plugin külön repóban él** (vagy a Kick-repóba almodulként bekötve, de akkor is önállóan fejleszthetően): a plugin **a Kick forrása és információi nélkül** épül, tesztelhető és kiadható. A Kick csak a kész, aláírt csomagot (`.kickplug` manifest + bináris, lásd 03) fogyasztja — nincs forrás-függőség a plugin → Kick irányban.
+- Ebből következik: a plugin repója önálló CMake-projekt, saját CI (Linux x86_64/ARMv7/AArch64, macOS, Windows), saját licenc (AGPL-3.0-or-later ott, ahol Kick- vagy Vital-eredetű kód van; egyébként szabadon), saját release-ek és saját mintakönyvtár-csomag. Közös részek (plugin-sablon, manifest-séma, build-/aláíró szkriptek, clap-wrapper-beállítás) egy külön **plugin-template / SDK repóban** élnek, amit a pluginok sablonként használnak.
+- **Formátumok: minden pluginból egyszerre készül a VST3 és a CLAP** ugyanabból a kódból (CLAP-natív + clap-wrapper a VST3/AU-hoz, vagy JUCE + clap-juce-extensions; a választás a próbaépítés eredménye). A CLAP az elsődleges (a Kick csak ezt tölti be), a VST3 a DAW-os felhasználóknak.
+- **Próbaépítés (spike) most:** egy minimális, hangot adó teszt-instrumentből (pl. szinusz/ egyszerű szintetizátor) induló önálló repo, amely egyetlen kódból VST3-at ÉS CLAP-ot épít, CI-vel és clap-validator/pluginval ellenőrzéssel. Ebből dől el a GUI-keretrendszer és a wrapper-út, mielőtt a zongorát/ SynthyBoy-t építjük rá. Nyitott: a repó neve és helye (GitHub-szervezet), a Vital-fork repója külön (GPL-3.0→AGPL, saját név).

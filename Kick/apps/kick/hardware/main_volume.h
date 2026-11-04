@@ -6,7 +6,7 @@
 // ============================================================================
 // Akai MPC Key 61 "Main Volume" knob: incoming SysEx on Port 1. JUCE/ALSA-free, host-testable.
 //
-// MEASURED (raw MIDI capture, docs/hw-mailbox/TO_CLOUD.md, `amidi -p hw:0,0,1 -d -t 100`, identified by
+// MEASURED (raw MIDI capture, `git show 35fce454:docs/hw-mailbox/TO_CLOUD.md`, `amidi -p hw:0,0,1 -d -t 100`, identified by
 // elimination): F0 47 7F 4B 5B 00 01 <v> F7, v = 0x00..0x75, one message per knob step.
 //
 // Field meaning (only partly known):

@@ -7,7 +7,7 @@
 // JUCE- and ALSA-free helpers for the button LEDs of the control surface (T13).
 //
 // HAL LED levels (IControlSurfaceAdapter::set_led_level), same numbering as the two-colour LEDs of the
-// Akai MPC Key 61 (docs/AKAI_MPC_KEY61_HARDWARE_REVIEW.md 3.5):
+// Akai MPC Key 61 (removed doc; see `git show 35fce454:docs/AKAI_MPC_KEY61_HARDWARE_REVIEW.md` 3.5):
 //   0 = off, 1 = dim A, 2 = dim B, 3 = full A, 4 = full B.
 // A single-colour LED shows 'B' as 'A' (1,2 -> dim; 3,4 -> full).
 namespace kick_hw {
@@ -141,7 +141,7 @@ inline void recOverdubLedLevels(bool recording, bool overdubbing, bool blinkOn, 
         recLevel = blinkOn ? kLedFullB : kLedOff;
 }
 
-// REC / OVERDUB LEDs with the SEQUENCE recording state included (user decision, hw-mailbox 2026-11-02):
+// REC / OVERDUB LEDs with the SEQUENCE recording state included (user decision, docs/hw-mailbox 2026-11-02, removed; `git show 35fce454:docs/hw-mailbox/TO_CLOUD.md`):
 // REC armed = steady red (colour B), recording = blinking red, OVERDUB mode (armed/recording) = steady green (colour A).
 // The looper keeps priority while it records (its screen owns EN_RECORD / EN_OVERDUB), so nothing changes for it.
 inline void recOverdubLedLevels(bool looperRecording, bool looperOverdubbing, bool seqArmed, bool seqRecording,
