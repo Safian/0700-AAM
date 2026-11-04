@@ -2133,17 +2133,33 @@ namespace mt
 
     std::vector<juce::String> MTAudioInterface::getInsertCategory()
     {
+        ClapEffectRegistry::getInstance().scanEffects();
         std::set<juce::String> categories;
 
         const auto& map = getInsertsMap();
         for( const auto& it : map )
         {
-            categories.emplace( it.second.Type );
+            if( it.second.Type == "CLAP" )
+            {
+                categories.emplace( "CLAP" );
+            }
+            else
+            {
+                if( !it.second.Category.empty() )
+                    categories.emplace( it.second.Category );
+                else
+                    categories.emplace( it.second.Type );
+            }
         }
 
         std::vector<juce::String> list;
+        list.emplace_back( "All" );
+        list.emplace_back( "CLAP" );
         for( const auto& it : categories )
-            list.emplace_back( it );
+        {
+            if( it != "CLAP" && it != "All" && it != "Plugin" )
+                list.emplace_back( it );
+        }
 
         return list;
     }
@@ -2183,8 +2199,18 @@ namespace mt
         for( const auto& it : map )
         {
             const auto& info = it.second;
-            if( Catogary.equalsIgnoreCase( info.Type.c_str() ) )
+            if( Catogary.equalsIgnoreCase( "All" ) )
+            {
                 list.emplace_back( juce::String( it.first ) );
+            }
+            else if( Catogary.equalsIgnoreCase( "CLAP" ) && ( info.Type == "CLAP" || info.Category == "CLAP" ) )
+            {
+                list.emplace_back( juce::String( it.first ) );
+            }
+            else if( Catogary.equalsIgnoreCase( info.Type.c_str() ) || Catogary.equalsIgnoreCase( info.Category.c_str() ) )
+            {
+                list.emplace_back( juce::String( it.first ) );
+            }
         }
         return list;
     }
