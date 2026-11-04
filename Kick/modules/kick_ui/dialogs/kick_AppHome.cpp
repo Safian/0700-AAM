@@ -534,7 +534,8 @@ namespace kick_ui
         {
             log += " In Recent Prj";
             juce::Logger::writeToLog( log );
-            if( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) && ( contracts::DclContractsHelper::getButtonState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED ) )
+            // While a dialog is open the buttons do not switch screens behind it (the dialog's own keys: bridge, modal_dialog_keys.h).
+            if( !mt::utils::isDialogOpen() && contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) && ( contracts::DclContractsHelper::getButtonState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED ) )
             {
                 log += " In is button";
                 juce::Logger::writeToLog( log );

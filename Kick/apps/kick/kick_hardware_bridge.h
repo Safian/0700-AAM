@@ -981,6 +981,19 @@ public:
                 }
             }
         }
+        // Every other dialog: the same keys, and the buttons that would switch screens behind it are swallowed
+        // (modal_dialog_keys.h). A popup on top of the dialog keeps the dialog open (closeTopDialogFromHardware = false).
+        if (mt::utils::isDialogOpen()) {
+            const auto act = kick_hw::modalDialogAction(btn, isShiftDown(), mt::utils::topDialogHasApply());
+            if (act != kick_hw::ModalDialogAction::None && mt::utils::closeTopDialogFromHardware(act == kick_hw::ModalDialogAction::Apply)) {
+                if (btn >= 0 && btn < NUM_HW_BUTTONS) m_modal_consumed[(size_t)btn] = true;
+                return;
+            }
+            if (!kick_hw::modalAllowsButton(btn)) {
+                if (btn >= 0 && btn < NUM_HW_BUTTONS) m_modal_consumed[(size_t)btn] = true;
+                return;
+            }
+        }
         switch (btn)
         {
             case HW_BTN_SHIFT:
