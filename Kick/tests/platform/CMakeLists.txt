@@ -33,6 +33,10 @@ add_executable(kick-bar-seek-tests BarSeekTests.cpp)
 add_test(NAME kick-bar-seek COMMAND kick-bar-seek-tests)
 set_tests_properties(kick-bar-seek PROPERTIES TIMEOUT 10)
 
+add_executable(kick-play-start-tests PlayStartTests.cpp)
+add_test(NAME kick-play-start COMMAND kick-play-start-tests)
+set_tests_properties(kick-play-start PROPERTIES TIMEOUT 10)
+
 add_executable(kick-pad-colour-tests PadColourMapTests.cpp)
 add_test(NAME kick-pad-colour COMMAND kick-pad-colour-tests "${CMAKE_CURRENT_SOURCE_DIR}/../../assets/Default/theme.xml")
 set_tests_properties(kick-pad-colour PROPERTIES TIMEOUT 10)
