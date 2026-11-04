@@ -8,12 +8,12 @@
 ## 1. Összefoglaló és metrikák
 
 - **Upstream bázis (`origin/main`):** `27194180ce5fbab3776ebce53e2d4b016597364e` (Merge pull request #7 from MusicTribeOpenSource/remove-az01)
-- **Fork csúcs (`fork/safian/main` / `HEAD`):** `6fe002432b746521da8b9311dac3595d8dc91d87` (Merge sonnet/r7-menus-header)
-- **Commitok száma:** **565 commit** (`git rev-list --count origin/main..HEAD`): 467 nem-merge és 98 merge. A ticketek a nem-merge commitokat tartalmazzák (467 + 3 mobil-ági commit), a merge commitok nem külön tételek.
-- **Teljes diff mérete:** **1740 fájl**, `+117694 / -9267` sor (`git diff --stat origin/main...HEAD`); ebből a Proper skin nélkül 862 fájl, `+100592 / -9267` sor.
+- **Fork csúcs (`fork/safian/main`; a triázs-munka ezen az állapoton készült, a doksi és a szkript külön commitokban kerül rá):** `6fe002432b746521da8b9311dac3595d8dc91d87` (Merge sonnet/r7-menus-header)
+- **Commitok száma:** **565 commit** (`git rev-list --count origin/main..fork/safian/main`): 467 nem-merge és 98 merge. A ticketek a nem-merge commitokat tartalmazzák (467 + 3 mobil-ági commit), a merge commitok nem külön tételek.
+- **Teljes diff mérete:** **1740 fájl**, `+117694 / -9267` sor (`git diff --stat origin/main...fork/safian/main`); ebből a Proper skin nélkül 862 fájl, `+100592 / -9267` sor.
 - **Proper skin eszközök:** **878 fájl** a `Kick/assets/Proper/` alatt (önálló skin, **nem upstreamelhető**).
 - **Ticketek:** 71 upstreamelhető jelöltű ticket (`UPSTREAM-FIX/FEAT/PLAT/MOB/HW/TEST`), 2 dokumentációs ticket (`UPSTREAM-DOCS-*`, nem PR) és 5 fork-only ticket (`FORK-*`, nem upstreamelhető).
-- **Mobil ág:** `fork/feat/mobile-slideout-ui` (3 commit nincs a `HEAD`-ben, lásd 6. szakasz); a hardver-kinézet eltávolítása (`61425121`) csak ott van meg.
+- **Mobil ág:** `fork/feat/mobile-slideout-ui` (3 commit nincs a `fork/safian/main`-ben, lásd 6. szakasz); a hardver-kinézet eltávolítása (`61425121`) csak ott van meg.
 - **Alapelv:** *Egy PR = egy önálló, tiszta main-ből indított változtatás*. A Linux és gyári hardver viselkedésének sértetlennek kell maradnia (`#if JUCE_IOS` / `#if JUCE_MAC` védelmek). A `Behringer` és `KICK` nevek/logók, valamint a Proper skin nem upstreamelhetők.
 - **Módszer:** minden ticket pontosan a benne felsorolt nem-merge commitokból áll (minden nem-merge commit pontosan egy ticketben szerepel; a szkript ellenőrzi). A méret a ticket commitjainak diffjeinek összege (Σ), nem nettó diff. A *Cherry-pick* oszlop a ticket commitjait sorban `origin/main`-re szimulálja (`git merge-tree --write-tree --merge-base=<commit>^`); fordítás/teszt tiszta main-en NEM futott. Az upstream PR-/issue-számok (#13, #15, #18, ... #30) a korábbi triázsból öröklődnek, offline nem ellenőrizhetők.
 
@@ -2186,7 +2186,7 @@ Függőségek: kézi + a számított (egy ticket olyan fájlt módosít, amelyet
 
 ## 5. Meglévő fork PR-ágak (tiszta main-ből)
 
-| Ág | Commit az `origin/main` fölött | Nincs a `HEAD`-ben | Ticket |
+| Ág | Commit az `origin/main` fölött | Nincs a `fork/safian/main`-ben | Ticket |
 | :--- | :---: | :---: | :--- |
 | `fork/feat/keyboard-qwertz-layout` | 2 | 0 | UPSTREAM-FEAT-02 |
 | `fork/fix/cv-output-inversion` | 1 | 0 | UPSTREAM-FIX-05 |
@@ -2202,7 +2202,7 @@ A `fix/project-relative-samples` ág (`cf4647c8`) a safian/main-ben nincs benne:
 
 ## 6. Mobil (iOS) szakasz: `feat/mobile-slideout-ui`
 
-**Állapot (élő ellenőrzés):** a `fork/feat/mobile-slideout-ui` (`e1254f35`) a `HEAD`-hez képest 3 commitot tartalmaz, amely a `fork/safian/main`-ben nincs: `61425121` (a hardver-chassis és a fiók eltávolítása, teljes képernyős UI), `e1254f35` (AGENTS.md: csak az ellenőrzöttet állítja, iOS indítás nincs újraellenőrizve) és `d390bb14` (a `cf430255` CV-javítás másik hashen). A `fork/safian/main`-be összefésülve `git merge-tree` szerint **ütközik** 8 fájlban (`AGENTS.md`, `Kick/apps/kick/AGENTS.md`, `Kick/apps/kick/Main.cpp`, `kick_hardware_chassis.h`, `kick_hardware_controls.h`, `kick_mobile_t_layout.h`, `kick_I2c.cpp`, `kick_AppHome.h`); az összefésülés nem történt meg (a `safian/main` változatlan). A szkript a mobil ág commitjait is elfogadja (`--also`).
+**Állapot (élő ellenőrzés):** a `fork/feat/mobile-slideout-ui` (`e1254f35`) a `fork/safian/main`-hez képest 3 commitot tartalmaz, amely a `fork/safian/main`-ben nincs: `61425121` (a hardver-chassis és a fiók eltávolítása, teljes képernyős UI), `e1254f35` (AGENTS.md: csak az ellenőrzöttet állítja, iOS indítás nincs újraellenőrizve) és `d390bb14` (a `cf430255` CV-javítás másik hashen). A `fork/safian/main`-be összefésülve `git merge-tree` szerint **ütközik** 8 fájlban (`AGENTS.md`, `Kick/apps/kick/AGENTS.md`, `Kick/apps/kick/Main.cpp`, `kick_hardware_chassis.h`, `kick_hardware_controls.h`, `kick_mobile_t_layout.h`, `kick_I2c.cpp`, `kick_AppHome.h`); az összefésülés nem történt meg (a `safian/main` változatlan). A szkript a mobil ág commitjait is elfogadja (`--also`).
 
 **Az owner döntése (2026-11-04):** a mobil app NEM hardver-utánzó: teljes képernyős, ugyanaz az UI mint az Akain, külső MIDI-vezérlővel. Ezért a korábbi "nem upstreamelhető: mobil chassis" besorolás érvényét vesztette a **teljes** mobil kódra: csak a hardver-kinézet (FORK-02) marad fork-only, a teljes képernyős mobil port upstreamelhető.
 
