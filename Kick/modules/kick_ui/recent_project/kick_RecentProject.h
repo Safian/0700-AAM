@@ -1,5 +1,7 @@
 #pragma once
 
+#include "kick_ui/dialogs/kick_StartupScreen.h" // StatusStrip (this header is reached early via the file browser header)
+
 namespace ui
 {
     class LongPressComp : public juce::Component
@@ -153,6 +155,8 @@ namespace ui
         kick_ui::KickModeHeader header{ "Projects", "RecentProject" };
         ui::KickNameLabel       projectName{ "", "Project Name" };
         ui::KickImageButton     fileBrowser{ "File Browser", "Browser_Recent" };
+        ui::KickButton          lastProjectBtn{ "LastProject", "Last project" };
+        kick_ui::StatusStrip    statusStrip;
 
         juce::String            seprator = juce::File::getSeparatorString();
         juce::Component         listComp;
@@ -174,6 +178,9 @@ namespace ui
         void                                      addProjectList( int index );
         void                                      clearAllShowBorder();
         void                                      loadProject( juce::File& Project );
+        void                                      loadLastProject();
+        juce::File                                lastProjectFile() const; // empty when there is none (or it was moved/deleted)
+        void                                      updateLastProjectButton();
 
         void visibilityChanged() override;
         void onProjectLoaded( juce::File ) override;

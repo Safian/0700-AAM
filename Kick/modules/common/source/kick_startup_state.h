@@ -86,8 +86,9 @@ namespace kick_startup
             case Step::Midi: return "MIDI";
             case Step::Display: return "Display";
             case Step::Project: return "Project";
-            default: return "?";
+            case Step::Count: break;
         }
+        return "?";
     }
 
     // "Audio engine... OK (ALSA)", "MIDI... FAILED: no port", "Project... loading Demo 01", "Display... skipped"

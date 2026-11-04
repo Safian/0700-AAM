@@ -10,7 +10,8 @@ namespace ui
 
         setHasFocusOutline( false );
 
-        mt::utils::addAndMakeVisible( this, header, fileBrowser, newProj, demoList, templateList, projectList, longPressComp.get() );
+        mt::utils::addAndMakeVisible( this, header, fileBrowser, newProj, lastProjectBtn, statusStrip, demoList, templateList, projectList, longPressComp.get() );
+        lastProjectBtn.onClick = [this]() { loadLastProject(); };
         longPressComp->setVisible( false );
         addDemos();
         addTemplates();
@@ -162,6 +163,12 @@ namespace ui
         juce::String            copyFile = text + mt::__projectFileSuffix;
         juce::Array<juce::File> sourceFiles;
         project.findChildFiles( sourceFiles, juce::File::findFiles, false, "*.kickPrj" );
+        if( sourceFiles.isEmpty() )
+        {
+            const auto p = kick_startup::state().fail( kick_startup::Fault::ProjectLoad, ( "template '" + project.getFileName() + "' has no .kickPrj file" ).toStdString() );
+            kick_log( "error", "[ERROR] [PROJ] %s\n", p.cause.c_str() );
+            return;
+        }
         juce::File destination = projDir.getChildFile( copyFile );
         sourceFiles[0].copyFileTo( destination );
         // Load Project file.
@@ -172,6 +179,30 @@ namespace ui
     void RecentProject::loadProject( juce::File& Project )
     {
         ui::LoadProjectAndAnimation::getInstance().startLoading( Project );
+    }
+
+    juce::File RecentProject::lastProjectFile() const
+    {
+        const auto last = settings.projects.currentProject();
+        if( last.isEmpty() ) return {};
+        juce::File f( last );
+        return f.exists() ? f : juce::File();
+    }
+
+    void RecentProject::updateLastProjectButton()
+    {
+        // One touch back into the project that was open at the last shutdown (hidden when there is none).
+        const auto last = lastProjectFile();
+        lastProjectBtn.setVisible( last != juce::File() );
+        if( last != juce::File() )
+            lastProjectBtn.setButtonText( "Last: " + last.getFileNameWithoutExtension() );
+    }
+
+    void RecentProject::loadLastProject()
+    {
+        auto last = lastProjectFile();
+        if( last != juce::File() )
+            loadProject( last );
     }
 
     int RecentProject::getNumOfChild()
@@ -203,12 +234,16 @@ namespace ui
 
         fileBrowser.setBoundsRelative( .8492f, .0267f, .0429f, .0733f );
 
+        statusStrip.setBounds( b.removeFromBottom( 24 ) );
+
         auto listHeight = b.getHeight() / 3;
         demoList.setBounds( b.removeFromTop( listHeight ).reduced( 10, 10 ) );
         templateList.setBounds( b.removeFromTop( listHeight ).reduced( 10, 10 ) );
 
         auto rem = b.reduced( 10, 5 );
-        newProj.setBounds( rem.removeFromRight( 150 ).reduced( 0, 5 ) );
+        auto col = rem.removeFromRight( 150 );
+        lastProjectBtn.setBounds( col.removeFromTop( col.getHeight() / 2 ).reduced( 0, 5 ) );
+        newProj.setBounds( col.reduced( 0, 5 ) );
         projectList.setBounds( rem );
     }
 
@@ -318,11 +353,11 @@ namespace ui
                     clearAllShowBorder();
                 };
                 recentItemsPtr->onLongPressed = [&, idxOffset]( int Index ) {
-                    auto b = projectList.listOptions[Index - idxOffset]->getBounds();
+                    // Tile in this screen's coordinates (follows the list scroll and the layout; was a hard-coded +432 offset).
+                    auto* tile = projectList.listOptions[Index - idxOffset];
+                    auto  b    = getLocalArea( tile, tile->getLocalBounds() );
 
-                    //TODO - Needs to be changed once finalist
-
-                    b.setY( b.getY() + 432 );
+                    b.setY( b.getY() + 7 );
                     b.setWidth( b.getWidth() - 105 );
                     b.setX( b.getX() + b.getWidth() + 8 );
                     b.setHeight( b.getHeight() - 26 );
@@ -364,13 +399,35 @@ namespace ui
 
     void RecentProject::handleCommand( CPktMgr::HWMsg_t& hwMsg )
     {
-        //Preventing Knob related acion while project is loading
+        using dc = contracts::DeviceControlContracts;
+        using H      = contracts::DclContractsHelper;
 
-        if( contracts::DclContractsHelper::isKnobMessage( hwMsg ) && contracts::DclContractsHelper::getKnobCode( hwMsg ) == contracts::DeviceControlContracts::KnobSequence::EN_KNOB_CENTER )
-            knobRotated( contracts::DclContractsHelper::getKnobValue( hwMsg ) );
+        // Data dial: move the selection.
+        if( H::isKnobMessage( hwMsg ) && H::getKnobCode( hwMsg ) == dc::KnobSequence::EN_KNOB_CENTER )
+        {
+            knobRotated( H::getKnobValue( hwMsg ) );
+            return;
+        }
 
-        if( contracts::DclContractsHelper::isButtonMessage( hwMsg ) && contracts::DclContractsHelper::getButtonCode( hwMsg ) == contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER && ( contracts::DclContractsHelper::getButtonState( hwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED ) )
-            knobClicked();
+        if( !H::isButtonMessage( hwMsg ) || H::getButtonState( hwMsg ) != dc::BTN_PRESSED )
+            return;
+
+        // Front-panel buttons on this screen (they used to do nothing without a project).
+        switch( H::getButtonCode( hwMsg ) )
+        {
+            case dc::BtnLedSequence::EN_KNOB_ENTER: knobClicked(); break;                                     // open the selected tile
+            case dc::BtnLedSequence::EN_PLUS:
+            case dc::BtnLedSequence::EN_KNOB_CW: knobRotated( 1 ); break;                                     // next tile
+            case dc::BtnLedSequence::EN_MINUS:
+            case dc::BtnLedSequence::EN_KNOB_CCW: knobRotated( -1 ); break;                                   // previous tile
+            case dc::BtnLedSequence::EN_MAINMODE:
+                if( !ae.isProjectLoaded() ) loadLastProject();                                                 // one press back into the last project
+                break;
+            case dc::BtnLedSequence::EN_BACK:
+                if( ae.isProjectLoaded() ) closeScreen( kick_ui::Screen::HomeListView );                       // same as the header back arrow
+                break;
+            default: break;
+        }
     }
 
     void RecentProject::knobClicked()
@@ -438,21 +495,13 @@ namespace ui
             if( juce::isPositiveAndBelow( selectedIndex, recentItems.size() ) )
                 recentItems[selectedIndex]->showBorder( true );
 
-            // Check if we have come here on first launch,
+            updateLastProjectButton();
+
+            // First launch: the single start-up decision (safe mode / last project / device default project / none).
             if( bFirstLaunch )
             {
                 bFirstLaunch = false;
-                // Check if we have to auto load a project
-                if( settings.projects.isAutoLoad() )
-                {
-                    // Auto load project.
-                    juce::String prevProj = settings.projects.currentProject();
-                    if( prevProj.isNotEmpty() )
-                    {
-                        auto projFile = juce::File( prevProj );
-                        loadProject( projFile );
-                    }
-                }
+                ui::LoadProjectAndAnimation::getInstance().requestStartupProject();
             }
         }
     }
