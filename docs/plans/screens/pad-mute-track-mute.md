@@ -119,20 +119,20 @@ Forrás: WP-D D-071..D-143, `KEY61_DOC_VS_KICK.md`.
 
 Függőségek: MU-04 a QL-01/QL-07-re, MU-12 a Timing Correct logikára épül.
 
-- [ ] **MU-01** (P0, S) [Track] `MTSequence::resetTrackSolos`: a track `solo` flagek nullázása + `updateTrackSoloList()` — `mt_audio_sequence.cpp:427-434`; host-/engine-teszt (MU-14).
-- [ ] **MU-02** (P0, S) [Pad] `padAddToGroup`: a program-index helyes átadása (a track programja / `getSelectedProgram()`), nem a szekvencia-index — `kick_padMute.cpp:455`; típusosítás (lásd 5/2).
-- [ ] **MU-03** (P0, S) [Mind] Q-Link csoport: bank-eltolás (`padId`/`trackId`), None (0) elérhető, `refreshData()`+LED-frissítés a hozzárendelés után — `kick_padMute.cpp:449-457`, `kick_trackMute.cpp:401-411`. Függ: QL-02, QL-07.
-- [ ] **MU-04** (P0, S) [Mind] Q-Link lépésköz/irány közös réteggel (csoportszám ±1 n-szeresen, jlimit) — QL-02 szerint. Függ: QL-01, QL-02.
-- [ ] **MU-05** (P1, S) [Pad] Pad-LED nyomásra: `setPadLED` helyett `refreshAllLEDs()` (vagy a híd kezelje az `EN_PAD_SET_SINGLE_PAD`-et) — `kick_padMute.cpp:231-232`, `bridge:137-160`.
-- [ ] **MU-06** (P1, S) [Pad] Clear Solos: null-védelem, felesleges `MTDrumProgram` kasztolás eltávolítása — `kick_padMute.cpp:256`.
-- [ ] **MU-07** (P2, S) [Pad] Forrás-egységesítés: minden hely `getProgramForTrack(sel)`-t használjon, a Clip kezelése döntés szerint (Drum+Clip vagy csak Drum) — `kick_padMute.cpp:144-163, 204, 254, 282, 320, 333, 362`.
-- [ ] **MU-08** (P1, S) [Track] Mute a Mixerből a `ae.setTrackMute`-on át (mute-csoport) — `channel-mixer.md` CM-10 (itt hivatkozva).
+- [x] **MU-01** (P0, S) [Track] `MTSequence::resetTrackSolos`: a track `solo` flagek nullázása + `updateTrackSoloList()` — `mt_audio_sequence.cpp:427-434`; host-/engine-teszt (MU-14). — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **MU-02** (P0, S) [Pad] `padAddToGroup`: a program-index helyes átadása (a track programja / `getSelectedProgram()`), nem a szekvencia-index — `kick_padMute.cpp:455`; típusosítás (lásd 5/2). — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **MU-03** (P0, S) [Mind] Q-Link csoport: bank-eltolás (`padId`/`trackId`), None (0) elérhető, `refreshData()`+LED-frissítés a hozzárendelés után — `kick_padMute.cpp:449-457`, `kick_trackMute.cpp:401-411`. Függ: QL-02, QL-07. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **MU-04** (P0, S) [Mind] Q-Link lépésköz/irány közös réteggel (csoportszám ±1 n-szeresen, jlimit) — QL-02 szerint. Függ: QL-01, QL-02. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **MU-05** (P1, S) [Pad] Pad-LED nyomásra: `setPadLED` helyett `refreshAllLEDs()` (vagy a híd kezelje az `EN_PAD_SET_SINGLE_PAD`-et) — `kick_padMute.cpp:231-232`, `bridge:137-160`. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **MU-06** (P1, S) [Pad] Clear Solos: null-védelem, felesleges `MTDrumProgram` kasztolás eltávolítása — `kick_padMute.cpp:256`. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **MU-07** (P2, S) [Pad] Forrás-egységesítés: minden hely `getProgramForTrack(sel)`-t használjon, a Clip kezelése döntés szerint (Drum+Clip vagy csak Drum) — `kick_padMute.cpp:144-163, 204, 254, 282, 320, 333, 362`. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **MU-08** (P1, S) [Track] Mute a Mixerből a `ae.setTrackMute`-on át (mute-csoport) — `channel-mixer.md` CM-10 (itt hivatkozva). — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
 - [ ] **MU-09** (P2, S) [Mind] Dupla transzport-parancs vizsgálata és megszüntetése: a screen-szintű PLAY/STOP/PLAY START kezelők eltávolítása (a híd már végrehajtja), vagy a híd ne küldjön DCL-csomagot — `kick_padMute.cpp:119-121`, `kick_trackMute.cpp:124-126`, `kick_PadMixer.cpp:263-265`, `kick_ui_channel_mixer.cpp:225-228`, `bridge:946-960`; előbb hardveres/injektált ellenőrzés (MU-H8).
-- [ ] **MU-10** (P2, S) [Mind] Pad-sigslot robusztussá tétele: a csatlakozás kapcsolata tárolva (`sigslot::connection`), `disconnect` a saját kapcsolaton, duplázás ellen — `kick_padButtonGroup.cpp:684-742` (MU-H10).
-- [ ] **MU-11** (P1, M) [Mind] A hatástalan Settings ablak és az Instant/Time Division kapcsoló: bekötés (MU-12) vagy eltávolítás.
+- [x] **MU-10** (P2, S) [Mind] Pad-sigslot robusztussá tétele: a csatlakozás kapcsolata tárolva (`sigslot::connection`), `disconnect` a saját kapcsolaton, duplázás ellen — `kick_padButtonGroup.cpp:684-742` (MU-H10). — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **MU-11** (P1, M) [Mind] A hatástalan Settings ablak és az Instant/Time Division kapcsoló: bekötés (MU-12) vagy eltávolítás. — S-A: elrejtve helyi flag mögött (kTrack/PadMuteTimeDivisionAvailable) MU-12-ig
 - [ ] **MU-12** (P2, L) [Mind] Time Division mute: a váltás a következő rácspontnál lép életbe (1/16 … 2 Bar, triola), a Timing Correct tiszta logikájával; Instant = azonnal — D-080..D-083, D-120..D-122. Függ: `mt_timing_correct.h`.
 - [ ] **MU-13** (P2, M) [Mind] Mute/Solo események rögzítése automationbe és az Undo-lista (D-088/D-089/D-126/D-127); pad-solo perzisztencia/undo (PM-16). Függ: automation-terv (T35).
-- [ ] **MU-14** (P1, M) Tesztek: engine-szintű tesztek (Clear Solos, csoport-propagáció, `padAddToGroup`/`seqAddTrackToGroup` indexelés) tiszta fejlécekre bontva, `Kick/tests/platform/MuteSoloTests.cpp` + CMake; híd-teszt a DCL-csomag-feldolgozásra (MU-05).
+- [x] **MU-14** (P1, M) Tesztek: engine-szintű tesztek (Clear Solos, csoport-propagáció, `padAddToGroup`/`seqAddTrackToGroup` indexelés) tiszta fejlécekre bontva, `Kick/tests/platform/MuteSoloTests.cpp` + CMake; híd-teszt a DCL-csomag-feldolgozásra (MU-05). — S-A: tiszta logika host-teszt + valódi motoros Mac-smoke (KICK_SMOKE_MIXERS); híd-teszt nincs
 - [ ] **MU-15** (P2, M) Event Mute vs Audio Mute kapcsoló és ikonok (D-076, D-077, D-094, D-098); Solo Behavior Single/Multi (D-091).
 - [ ] **MU-16** (P2, S) LED: nagyobb fényerő a mute-állapotoknak, narancs/sárga paletta a hardveres összehasonlítás után (D-096/D-097, MU-H11); villogó állapotok animálása a hídban.
 - [ ] **MU-17** (P2, S) Time Counter és Automation gomb a képernyőn (D-078, D-079, D-118, D-119); a szekvencia-választó mellékhatásának tisztázása (MU-H12).
