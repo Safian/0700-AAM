@@ -91,7 +91,27 @@ public:
     bool parameterGesture(clap_id, bool begin) noexcept;
     bool stateDirty() const noexcept;
     uint32_t latency() const noexcept;
+    uint32_t tail() const noexcept;
     Statistics statistics() const noexcept;
+
+    // CLAP GUI extension (clap.gui)
+    bool supportsGui() const noexcept;
+    bool isGuiApiSupported(const char* api, bool isFloating = false) const noexcept;
+    bool getPreferredGuiApi(const char** outApi, bool* outIsFloating) const noexcept;
+    bool createGui(const char* api, bool isFloating = false);
+    void destroyGui();
+    bool setGuiScale(double scale);
+    bool getGuiSize(uint32_t* width, uint32_t* height) const;
+    bool canResizeGui() const;
+    bool adjustGuiSize(uint32_t* width, uint32_t* height) const;
+    bool setGuiSize(uint32_t width, uint32_t height);
+    bool setGuiParent(const clap_window_t* window);
+    bool setGuiTransient(const clap_window_t* window);
+    void suggestGuiTitle(const char* title);
+    bool showGui();
+    bool hideGui();
+    bool isGuiVisible() const noexcept;
+    bool isGuiCreated() const noexcept;
 
     bool enqueue(const Event&) noexcept; // bounded multi-producer queue
     bool popOutput(Event&) noexcept; // main/control-thread consumer

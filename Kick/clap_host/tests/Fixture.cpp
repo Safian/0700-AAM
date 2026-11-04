@@ -7,6 +7,8 @@
 #include <clap/ext/thread-check.h>
 #include <clap/ext/timer-support.h>
 #include <clap/ext/latency.h>
+#include <clap/ext/tail.h>
+#include <clap/ext/gui.h>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -193,6 +195,28 @@ struct Plugin {
                 s.gain = value; return true;
             }};
         static const clap_plugin_latency_t latency{[](const clap_plugin_t*) -> uint32_t { return 13; }};
+        static const clap_plugin_tail_t tail{[](const clap_plugin_t*) -> uint32_t { return 64; }};
+        static const clap_plugin_gui_t gui{
+            [](const clap_plugin_t*, const char* api, bool floating) -> bool {
+                return !floating && (std::strcmp(api, CLAP_WINDOW_API_COCOA) == 0 || std::strcmp(api, CLAP_WINDOW_API_X11) == 0);
+            },
+            [](const clap_plugin_t*, const char** outApi, bool* outFloating) -> bool {
+                *outApi = CLAP_WINDOW_API_COCOA; *outFloating = false; return true;
+            },
+            [](const clap_plugin_t*, const char*, bool) -> bool { return true; },
+            [](const clap_plugin_t*) {},
+            [](const clap_plugin_t*, double) -> bool { return true; },
+            [](const clap_plugin_t*, uint32_t* w, uint32_t* h) -> bool { *w = 400; *h = 300; return true; },
+            [](const clap_plugin_t*) -> bool { return false; },
+            [](const clap_plugin_t*, clap_gui_resize_hints_t*) -> bool { return false; },
+            [](const clap_plugin_t*, uint32_t*, uint32_t*) -> bool { return false; },
+            [](const clap_plugin_t*, uint32_t, uint32_t) -> bool { return true; },
+            [](const clap_plugin_t*, const clap_window_t*) -> bool { return true; },
+            [](const clap_plugin_t*, const clap_window_t*) -> bool { return true; },
+            [](const clap_plugin_t*, const char*) {},
+            [](const clap_plugin_t*) -> bool { return true; },
+            [](const clap_plugin_t*) -> bool { return true; }
+        };
         static const clap_plugin_timer_support_t timers{[](const clap_plugin_t* p, clap_id id) {
             auto& s = get(p); s.main();
             auto* hostTimers = static_cast<const clap_host_timer_support_t*>(s.host->get_extension(s.host, CLAP_EXT_TIMER_SUPPORT));
@@ -204,6 +228,8 @@ struct Plugin {
         if (!std::strcmp(id, CLAP_EXT_PARAMS)) return &params;
         if (!std::strcmp(id, CLAP_EXT_STATE)) return get(plugin).kind == 9 ? nullptr : &state;
         if (!std::strcmp(id, CLAP_EXT_LATENCY)) return &latency;
+        if (!std::strcmp(id, CLAP_EXT_TAIL)) return &tail;
+        if (!std::strcmp(id, CLAP_EXT_GUI)) return &gui;
         if (!std::strcmp(id, CLAP_EXT_TIMER_SUPPORT)) return &timers;
         return nullptr;
     }
