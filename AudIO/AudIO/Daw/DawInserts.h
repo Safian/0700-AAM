@@ -19,9 +19,12 @@ namespace AudIO
 
         // Add or Remove inserts...
         int  addEffect( const std::string& Effect, unsigned int Position );
+        int  addEffect( std::unique_ptr<Object> customObj, unsigned int Position );
         int  removeEffect( const std::string& Effect );
         int  removeEffect( unsigned int Position );
         void removeAllEffects();
+        int  swapEffects( unsigned int fromPos, unsigned int toPos );
+        int  moveEffect( unsigned int fromPos, unsigned int toPos );
 
         // Effects helpers...
         inline static const std::map<const std::string, ObjectInfo>& getEffectsMap() { return ObjectFactory::Get().GetObjectsInfo(); };
@@ -31,6 +34,7 @@ namespace AudIO
         std::vector<bool>        getEffectsBypass() const;
 
         const std::string& getEffectName( unsigned int Position );
+        Object*            getEffectObject( unsigned int Position );
 
         // Effect Parameters...
         int                           getNumEffectParameters( unsigned int Position );
@@ -64,6 +68,7 @@ namespace AudIO
 
             int  reset();
             int  create( const std::string& Effect, uint32_t Samplerate, uint32_t Blocksize );
+            int  setObject( std::unique_ptr<Object> obj, uint32_t Samplerate, uint32_t Blocksize );
             bool isSame( const std::string& Effect ) const;
         };
 
