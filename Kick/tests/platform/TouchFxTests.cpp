@@ -3,10 +3,27 @@
 // periods, beat repeat slice, phaser, no NaN. Build: g++ -std=c++17 -Wall -Wextra -fsanitize=address,undefined TouchFxTests.cpp
 #include "../../../AudIO/AudIO/Dsp/TouchFx.h"
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <new>
 #include <vector>
+
+// Allocation guard: counts every operator new while a test says the audio thread is running.
+static std::atomic<bool> g_trackAlloc{ false };
+static std::atomic<long> g_allocs{ 0 };
+void* operator new( std::size_t n )
+{
+    if( g_trackAlloc.load() )
+        ++g_allocs;
+    if( void* p = std::malloc( n ? n : 1 ) )
+        return p;
+    throw std::bad_alloc();
+}
+void operator delete( void* p ) noexcept { std::free( p ); }
+void operator delete( void* p, std::size_t ) noexcept { std::free( p ); }
 
 static int g_fail = 0;
 #define CHECK( a )                                                                      \
@@ -283,12 +300,16 @@ int main()
             std::vector<float> L = testInput;
             std::vector<float> R = testInput;
 
+            g_allocs = 0;
+            g_trackAlloc = true;
             const auto tStart = std::chrono::high_resolution_clock::now();
             for( int b = 0; b < numBlocks; ++b )
             {
                 float* ch[2] = { L.data() + b * kBlock, R.data() + b * kBlock };
                 fx.process( ch, 2, kBlock );
             }
+            g_trackAlloc = false;
+            CHECK( g_allocs.load() == 0 ); // the audio thread never allocates (no lock either: only atomics are read)
             const auto tEnd = std::chrono::high_resolution_clock::now();
             const auto totalUs = std::chrono::duration_cast<std::chrono::microseconds>( tEnd - tStart ).count();
             const double usPerBlock = static_cast<double>( totalUs ) / numBlocks;
@@ -297,6 +318,35 @@ int main()
                          m, usPerBlock, ( usPerBlock / 5333.3 ) * 100.0 );
             CHECK( usPerBlock < 1500.0 ); // Strict assertion for unoptimized ASan/UBSan build (< 25% of 5.33 ms budget)
         }
+    }
+
+    // ---- automation playback: setGesture only moves the gesture, the preset and the envelope stay; closed gate -> bit exact pass-through
+    {
+        TouchFx fx;
+        fx.prepare( kRate, kBlock );
+        TouchFx::Settings s;
+        s.mode = TouchFx::Mode::FilterManual; s.x = 0.1f; s.y = 0.2f; s.gate = false; s.attackMs = 1.f; s.releaseMs = 1.f; s.wet = 1.f;
+        fx.set( s );
+        std::vector<float> L = sine( 1000.0, kBlock * 4 ), R = L, ref = L;
+        float* ch[2] = { L.data(), R.data() };
+        fx.process( ch, 2, kBlock );
+        for( int i = 0; i < kBlock; ++i )
+            CHECK( L[(std::size_t)i] == ref[(std::size_t)i] ); // gate closed: untouched
+        fx.setGesture( 0.9f, 0.5f, true );
+        g_allocs = 0;
+        g_trackAlloc = true;
+        for( int b = 1; b < 4; ++b )
+        {
+            float* c2[2] = { L.data() + b * kBlock, R.data() + b * kBlock };
+            fx.process( c2, 2, kBlock );
+        }
+        g_trackAlloc = false;
+        CHECK( g_allocs.load() == 0 );
+        bool changed = false;
+        for( int i = 3 * kBlock; i < 4 * kBlock; ++i )
+            changed = changed || L[(std::size_t)i] != ref[(std::size_t)i];
+        CHECK( changed ); // the gesture opened the effect
+        fx.setGesture( 0.9f, 0.5f, false );
     }
 
     if( g_fail == 0 )
