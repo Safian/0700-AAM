@@ -275,7 +275,11 @@ namespace kick_ui
         // todo get ppq from settings
         int ppqResolution = 960;
         if( noOfTickMarkings > 0 )
-            ppqResolution = 960 / ( denominator / 2 );
+        {
+            // A fresh /data has no stored project defaults: the denominator then reads as 0 (or 1), and 960 / 0 is a SIGFPE on ARM
+            // (libgcc raises it from __aeabi_idiv0); opening the Looper screen crashed Kick on the MPC.
+            ppqResolution = 960 / juce::jmax( 1, denominator / 2 );
+        }
 
         float currentPosX = 0;
         float tickWidth   = beatWidth / ( noOfTickMarkings + 1 );
