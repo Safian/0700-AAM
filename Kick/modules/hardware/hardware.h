@@ -25,6 +25,8 @@
 
     #include <juce_core/juce_core.h>
     #include <juce_gui_basics/juce_gui_basics.h>
+    #include "source/kick_PlatformCommands.h"
+    #include "source/kick_PlatformServices.h"
     #include "source/kick_I2c.h"
     #include "source/kick_Resorces.h"
     #include "source/kick_Hwpref.h"

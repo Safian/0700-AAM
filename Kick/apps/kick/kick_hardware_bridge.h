@@ -128,6 +128,9 @@ private:
     std::atomic<uint16_t> m_pad_held { 0 };       // pads currently flashing (hit); the timer must not overwrite them
     std::atomic<bool> m_have_project_colours { false };
     std::atomic<bool> m_pad_aftertouch_enabled { false }; // set by the UI via EN_PAD_SET_AFTER_TOUCH
+    std::atomic<uint8_t> m_pad_threshold { 4 };
+    std::atomic<uint8_t> m_pad_sensitivity { 4 };
+    std::atomic<uint8_t> m_pad_curve { 2 };
     std::atomic<uint8_t> m_pad_last_vel[16] = {};         // note-on velocity of the held pad (aftertouch packet field 3)
     sigslot::connection m_pad_colour_conn;
     sigslot::connection m_screen_conn;
@@ -143,6 +146,14 @@ private:
             msg.pktCmd == contracts::DeviceControlContracts::EN_PAD_SET_AFTER_TOUCH && !msg.data.empty()) {
             // The UI (Hardware settings) switches pad aftertouch reports on/off, as it does on the Kick hardware.
             m_pad_aftertouch_enabled = msg.data[0] != 0;
+            return;
+        }
+        if (msg.pktType == CPktMgr::EN_PKT_TYPE_PAD &&
+            msg.pktCmd == contracts::DeviceControlContracts::EN_PAD_SETTINGS && msg.data.size() >= 4) {
+            // [16, threshold, sensitivity, curve] from SettingsHardware
+            m_pad_threshold.store(static_cast<uint8_t>(msg.data[1]));
+            m_pad_sensitivity.store(static_cast<uint8_t>(msg.data[2]));
+            m_pad_curve.store(static_cast<uint8_t>(msg.data[3]));
             return;
         }
         if (msg.pktType != CPktMgr::EN_PKT_TYPE_PAD ||
@@ -1746,7 +1757,16 @@ public:
 
     void on_pad_note_on(int pad_num, int rawVel) override
     {
-        const int vel = kick_hw::padlevel::padVelocity(padLevelState(), rawVel);
+        const int thr = m_pad_threshold.load();
+        if (rawVel > 0 && rawVel < thr) return;
+
+        int scaledRaw = rawVel;
+        const int sens = m_pad_sensitivity.load();
+        if (sens != 4 && rawVel > 0) {
+            scaledRaw = std::max(1, std::min(127, (rawVel * sens) / 4));
+        }
+
+        const int vel = kick_hw::padlevel::padVelocity(padLevelState(), scaledRaw);
         if (pad_num >= 0 && pad_num < 16)
         {
             m_pad_held.fetch_or(uint16_t(1u << pad_num));

@@ -22,6 +22,7 @@
 #pragma once
 
 // Module include files.
+
 namespace kick_ui
 {
     class SettingsEthernet : public SettingsInterface
@@ -39,16 +40,16 @@ namespace kick_ui
         void handleEnabledClick();
         void setComponentsEnabled( bool enabled );
         void initializeInterfaceState();
+        void update();
 
     private:
         mt::KickSettings&    settings{ mt::getSettings() };
         ui::KickToggleButton enabled{ "ETHERNET", "ENABLED", "DISABLED" };
-        ui::KickToggleButton method{ "MODE", "MANUAL", "AUTOMATIC" };
+        ui::KickToggleButton method{ "MODE", "DHCP", "MANUAL" };
+        ui::KickLabel        statusLabel{ "Status: Initializing" };
         ui::KickIPv4         ipAddr{ "IP ADDRESS", "0:0:0:0" };
         ui::KickIPv4         subnet{ "SUBNET MASK", "255:255:255:0" };
         ui::KickIPv4         gateway{ "GATEWAY", "0:0:0:0" };
         ui::KickIPv4         dns{ "DNS SERVER", "0:0:0:0" };
-
-        void update();
     };
 }

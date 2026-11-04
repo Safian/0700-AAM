@@ -27,78 +27,77 @@ namespace kick_ui
 {
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
-    ////////////////////////////  KickChannelMixer
+    ////////////////////////////  SettingsMidiSync
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
     SettingsMidiSync::SettingsMidiSync()
-        : SettingsInterface( 6, 5, true )
+        : SettingsInterface( 2, 2, true )
     {
         ui::KickGrid::setBackgroundColour( juce::Colours::transparentBlack );
-        setRowTitles( { "", "MidiInput", "MidiOutput" } );
+        setRowTitles( { "MIDI Input", "MIDI Output" } );
 
-        addComponent( inputList, 1, 1 );
-        addComponent( itrack, 1, 2 );
-        addComponent( icontrol, 1, 3 );
+        addComponent( inputList, 0, 0, 2 );
+        addComponent( outputList, 1, 0, 2 );
 
-        addComponent( outputList, 2, 1 );
-        addComponent( otrack, 2, 2 );
-        addComponent( ocontrol, 2, 3 );
+        m_lastInputs  = mt::getAudioInterface().getMidiDeviceNames( true );
+        m_lastOutputs = mt::getAudioInterface().getMidiDeviceNames( false );
 
-        itrack.onClick = [&]() {
-            settings.midiControl.ipTrackState = ( itrack.getToggleState() );
+        inputList.setListOptions( m_lastInputs );
+        outputList.setListOptions( m_lastOutputs );
+
+        juce::String savedInput = settings.midiControl.ipPortName();
+        if( !savedInput.isEmpty() )
+            inputList.setSelected( savedInput, juce::dontSendNotification );
+
+        juce::String savedOutput = settings.midiControl.opPortName();
+        if( !savedOutput.isEmpty() )
+            outputList.setSelected( savedOutput, juce::dontSendNotification );
+
+        inputList.onSelectionChanged = [this]( int index, juce::String name ) {
+            juce::ignoreUnused( index );
+            if( !m_isRefreshing && !name.isEmpty() )
+            {
+                settings.midiControl.ipPortName = name;
+            }
         };
 
-        icontrol.onClick = [&]() {
-            settings.midiControl.ipControlState = ( icontrol.getToggleState() );
-        };
-
-        otrack.onClick = [&]() {
-            settings.midiControl.opTrackState = ( otrack.getToggleState() );
-        };
-
-        ocontrol.onClick = [&]() {
-            settings.midiControl.opControlState = ( ocontrol.getToggleState() );
-        };
-
-        auto list = mt::getAudioInterface().getMidiDeviceNames( true );
-
-        inputList.setListOptions( mt::getAudioInterface().getMidiDeviceNames( true ) );
-        outputList.setListOptions( mt::getAudioInterface().getMidiDeviceNames( false ) );
-
-        inputList.onSelectionChanged = [&]( int index, juce::String name ) {
-            settings.midiControl.ipPortName = ( name );
-        };
-
-        outputList.onSelectionChanged = [&]( int index, juce::String name ) {
-            settings.midiControl.opPortName = ( name );
+        outputList.onSelectionChanged = [this]( int index, juce::String name ) {
+            juce::ignoreUnused( index );
+            if( !m_isRefreshing && !name.isEmpty() )
+            {
+                settings.midiControl.opPortName = name;
+            }
         };
     }
 
     void SettingsMidiSync::refresh()
     {
-        auto inputIndex  = inputList.getSelectedIndex();
-        auto outputIndex = outputList.getSelectedIndex();
+        m_isRefreshing = true;
 
-        const auto& input = mt::getAudioInterface().getMidiDeviceNames( true );
+        const auto input  = mt::getAudioInterface().getMidiDeviceNames( true );
+        const auto output = mt::getAudioInterface().getMidiDeviceNames( false );
 
-        for( auto& it : input )
-            DBG( "InputName " << it );
+        if( input != m_lastInputs )
+        {
+            m_lastInputs = input;
+            inputList.setListOptions( input );
+        }
 
-        const auto& output = mt::getAudioInterface().getMidiDeviceNames( false );
+        if( output != m_lastOutputs )
+        {
+            m_lastOutputs = output;
+            outputList.setListOptions( output );
+        }
 
-        for( auto& it : output )
-            DBG( "OutputName " << it );
+        juce::String savedInput = settings.midiControl.ipPortName();
+        if( !savedInput.isEmpty() )
+            inputList.setSelected( savedInput, juce::dontSendNotification );
 
-        inputList.setListOptions( input, inputIndex );
-        outputList.setListOptions( output, outputIndex );
+        juce::String savedOutput = settings.midiControl.opPortName();
+        if( !savedOutput.isEmpty() )
+            outputList.setSelected( savedOutput, juce::dontSendNotification );
 
-        itrack.setToggleState( settings.midiControl.ipTrackState(), juce::dontSendNotification );
-        icontrol.setToggleState( settings.midiControl.ipControlState(), juce::dontSendNotification );
-
-        otrack.setToggleState( settings.midiControl.opTrackState(), juce::dontSendNotification );
-        ocontrol.setToggleState( settings.midiControl.opControlState(), juce::dontSendNotification );
-
-        inputList.setSelected( settings.midiControl.ipPortName(), juce::dontSendNotification );
+        m_isRefreshing = false;
     }
 
     void SettingsMidiSync::setupHeader( kick_ui::KickModeHeader& Hdr ) {}

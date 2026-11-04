@@ -31,35 +31,34 @@ namespace kick_ui
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
     SettingsHardware::SettingsHardware()
-        : SettingsInterface( 7, 3, true )
+        : SettingsInterface( 5, 3, true )
     {
         ui::KickGrid::setBackgroundColour( juce::Colours::transparentBlack );
-        setRowTitles( { "Pads", "", "Screen", "Tap tempo", "Date & Time" } );
+        setRowTitles( { "Pads", "Pad Monitor", "Screen", "Date", "Time" } );
 
         addComponent( padThreshold, 0, 0 );
         addComponent( padSensitivity, 0, 1 );
         addComponent( padCurve, 0, 2 );
-        addComponent( velocity, 1, 0 );
 
         velocity.setRange( 1, 127, 1.0 );
         velocity.showTitle( true, juce::Justification::centred );
-        addComponent( afterTouch, 1, 2 );
+        addComponent( velocity, 1, 0 );
 
         afterTouch.setRange( 1, 127, 1.0 );
         afterTouch.showTitle( true, juce::Justification::centred );
-        addComponent( brightness, 2, 1 );
+        addComponent( afterTouch, 1, 2 );
+
         brightness.showTitle( true, juce::Justification::centred );
         brightness.setRange( 0, 100, 1.0 );
-        addComponent( enabled, 3, 0 );
-        addComponent( taps, 3, 1 );
+        addComponent( brightness, 2, 1 );
 
-        addComponent( date_DD, 4, 0 );
-        addComponent( date_MM, 4, 1 );
-        addComponent( date_YYYY, 4, 2 );
+        addComponent( date_DD, 3, 0 );
+        addComponent( date_MM, 3, 1 );
+        addComponent( date_YYYY, 3, 2 );
 
-        addComponent( time_HH, 5, 0 );
-        addComponent( time_MM, 5, 1 );
-        addComponent( timezone, 5, 2 );
+        addComponent( time_HH, 4, 0 );
+        addComponent( time_MM, 4, 1 );
+        addComponent( timezone, 4, 2 );
 
         updateDateTime();
         timezone.setListOptions( CONSTANTS::timeZoneList );
@@ -76,19 +75,6 @@ namespace kick_ui
             settings.hardware.curve = ( str );
             SendPadSettings();
         };
-        /* velocity , after touch, done. footswitch 1 and 2 remaining*/
-        velocity.onValueChanged = [this]( double index ) {
-            double vel                 = velocity.getValue();
-            settings.hardware.velocity = ( vel );
-        };
-        afterTouch.onValueChanged = [this]( double index ) {
-            double afterTh               = afterTouch.getValue();
-            settings.hardware.aftertouch = ( afterTh );
-        };
-
-        enabled.onClick = [this]() {
-            settings.hardware.tempoLEDStatus = ( enabled.getToggleState() );
-        };
 
         brightness.onValueChanged = [this]( double value ) {
             settings.hardware.brightness = ( value );
@@ -96,27 +82,26 @@ namespace kick_ui
         };
 
         date_DD.onValueChanged = [&]( int Value ) {
-            DBG( "DATE_DD " << Value );
             setDate();
         };
         date_MM.onValueChanged = [&]( int Value ) {
-            DBG( "date_MM " << Value );
             int days = mt::HwPref::getHwPref().getDaysInMonth( Value, date_YYYY.getValue() );
             date_DD.setRange( 1, days, 1 );
+            if( date_DD.getValue() > days )
+                date_DD.setValue( days, juce::dontSendNotification );
             setDate();
         };
         date_YYYY.onValueChanged = [&]( int Value ) {
-            DBG( "date_YYYY " << Value );
-            int days = mt::HwPref::getHwPref().getDaysInMonth( Value, date_YYYY.getValue() );
+            int days = mt::HwPref::getHwPref().getDaysInMonth( date_MM.getValue(), Value );
             date_DD.setRange( 1, days, 1 );
+            if( date_DD.getValue() > days )
+                date_DD.setValue( days, juce::dontSendNotification );
             setDate();
         };
         time_HH.onValueChanged = [&]( int Value ) {
-            DBG( "time_HH " << Value );
             setTime();
         };
         time_MM.onValueChanged = [&]( int Value ) {
-            DBG( "time_MM " << Value );
             setTime();
         };
         timezone.onSelectionChanged = [&]( int index, juce::String str ) {
@@ -124,11 +109,7 @@ namespace kick_ui
             mt::HwPref::getHwPref().setTimeZone( str );
         };
 
-        taps.onSelectionChanged = [&]( int index, juce::String str ) {
-            settings.hardware.numTaps = ( str );
-        };
-
-        //need to send this settings only 1 time to hardware.
+        // Send hardware brightness and timezone at startup
         int value = settings.hardware.brightness();
         mt::HwPref::getHwPref().setBrightness( value );
         juce::String zone = settings.hardware.timezone();
@@ -145,28 +126,17 @@ namespace kick_ui
         padSettingsData.push_back( settings.hardware.curve().getIntValue() );
 
         contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::setPadSettingsMessage( padSettingsData ) );
-        
     }
 
     void SettingsHardware::refresh()
     {
         updateDateTime();
-        juce::String tet = settings.hardware.threshold();
         padThreshold.setSelected( settings.hardware.threshold(), juce::dontSendNotification );
         padSensitivity.setSelected( settings.hardware.sensitivity(), juce::dontSendNotification );
         padCurve.setSelected( settings.hardware.curve(), juce::dontSendNotification );
 
-        velocity.setValue( settings.hardware.velocity(), juce::dontSendNotification );
-        afterTouch.setValue( settings.hardware.aftertouch(), juce::dontSendNotification );
-        int value = settings.hardware.brightness();
-        brightness.setValue( value, juce::dontSendNotification );
-
-        juce::String test = settings.hardware.numTaps();
-        enabled.setToggleState( settings.hardware.tempoLEDStatus(), juce::dontSendNotification );
-        taps.setSelected( test, juce::dontSendNotification );
-
-        juce::String zone = settings.hardware.timezone();
-        timezone.setSelected( zone, juce::dontSendNotification );
+        brightness.setValue( settings.hardware.brightness(), juce::dontSendNotification );
+        timezone.setSelected( settings.hardware.timezone(), juce::dontSendNotification );
     }
 
     void SettingsHardware::setDate()
@@ -194,10 +164,8 @@ namespace kick_ui
 
     void SettingsHardware::UpdatePadInfo( uint8_t f_velocity, uint8_t f_afterTouch )
     {
-        velocity.setValue( f_velocity, juce::sendNotification );
-        afterTouch.setValue( f_afterTouch, juce::sendNotification );
-        settings.hardware.velocity   = ( f_velocity );
-        settings.hardware.aftertouch = ( f_afterTouch );
+        velocity.setValue( f_velocity, juce::dontSendNotification );
+        afterTouch.setValue( f_afterTouch, juce::dontSendNotification );
     }
 
     void SettingsHardware::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )

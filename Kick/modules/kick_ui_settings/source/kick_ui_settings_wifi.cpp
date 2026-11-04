@@ -29,36 +29,48 @@ namespace kick_ui
 {
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
-    ////////////////////////////  KickChannelMixer
+    ////////////////////////////  SettingsWifi
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
     SettingsWifi::SettingsWifi()
-        : SettingsInterface( 6, 3, true )
+        : SettingsInterface( 4, 4, true )
     {
         ui::KickGrid::setBackgroundColour( juce::Colours::transparentBlack );
-        setRowTitles( { "", "WIFI SETTINGS", "SSID", "PASSWORD", "Connection/Status" } );
+        setRowTitles( { "WIFI SETTINGS", "SCAN & SELECT", "PASSWORD", "CONNECTION" } );
 
-        addComponent( enabled, 1, 0 );
-        addComponent( scanWifi, 2, 0 );
-        addComponent( wifiList, 2, 1 );
-        addComponent( password, 3, 0 );
-        addComponent( connect, 4, 0 );
-        addComponent( wifIP, 4, 1 );
-        addComponent( gateway, 4, 2 );
-        addComponent( subnet, 4, 3 );
+        addComponent( enabled, 0, 0 );
+        addComponent( statusLabel, 0, 1, 2 );
 
+        statusLabel.setValueJustification( juce::Justification::centred );
+        statusLabel.setValueFontHeight( 16 );
+
+        addComponent( scanWifi, 1, 0 );
+        addComponent( wifiList, 1, 1, 2 );
+
+        addComponent( password, 2, 0, 2 );
         password.setEditable( false, true );
+
+        addComponent( connect, 3, 0 );
+        addComponent( wifIP, 3, 1 );
+        addComponent( subnet, 3, 2 );
+        addComponent( gateway, 3, 3 );
+
         enabled.onClick = [&]() {
-            settings.wifi.enabled = ( enabled.getToggleState() );
+            handleEnabledClick();
         };
 
-        scanWifi.onClick = [&]() {
-            if( scanWifi.getToggleState() )
-            {
-                DBG( "Scanning Wifi" );
+        scanWifi.onClick = [this]() {
+            statusLabel.setText( "Scanning WiFi...", juce::dontSendNotification );
+            juce::Thread::launch( [this]() {
                 std::vector<juce::String> list = mt::WifiManager().scanWiFiNetworks();
-                wifiList.setListOptions( list );
-            }
+                juce::MessageManager::callAsync( [this, list]() {
+                    wifiList.setListOptions( list );
+                    juce::String savedSsid = settings.wifi.ssid();
+                    if( !savedSsid.isEmpty() )
+                        wifiList.setSelected( savedSsid, juce::dontSendNotification );
+                    statusLabel.setText( juce::String( (int)list.size() ) + " networks found", juce::dontSendNotification );
+                } );
+            } );
         };
 
         password.onTextChange = [&]() {
@@ -67,31 +79,67 @@ namespace kick_ui
         };
 
         wifiList.onSelectionChanged = [&]( int value, juce::String str ) {
+            juce::ignoreUnused( value );
             settings.wifi.ssid = ( str );
         };
 
         connect.onClick = [&]() {
             connectWifi( connect.getToggleState() );
         };
+
+        initializeInterfaceState();
     }
 
     void SettingsWifi::connectWifi( bool Connect )
     {
         if( Connect )
-            mt::WifiManager().getWifiInterface()->connectToWiFi( wifiList.getSelectedValue(), settings.wifi.pwd() );
+        {
+            juce::String ssid = wifiList.getSelectedValue();
+            if( ssid.isEmpty() )
+                ssid = settings.wifi.ssid();
+            juce::String pwd = settings.wifi.pwd();
+
+            statusLabel.setText( "Connecting to " + ssid + "...", juce::dontSendNotification );
+
+            juce::Thread::launch( [this, ssid, pwd]() {
+                bool ok = mt::WifiManager().getWifiInterface()->connectToWiFi( ssid, pwd );
+                juce::MessageManager::callAsync( [this, ok, ssid]() {
+                    if( ok )
+                    {
+                        statusLabel.setText( "Connected to " + ssid, juce::dontSendNotification );
+                        connect.setToggleState( true, juce::dontSendNotification );
+                    }
+                    else
+                    {
+                        statusLabel.setText( "Failed to connect to " + ssid, juce::dontSendNotification );
+                        connect.setToggleState( false, juce::dontSendNotification );
+                    }
+                } );
+            } );
+        }
         else
+        {
             mt::WifiManager().getWifiInterface()->disconnectWiFi();
+            statusLabel.setText( "Disconnected", juce::dontSendNotification );
+            connect.setToggleState( false, juce::dontSendNotification );
+        }
     }
 
     void SettingsWifi::handleEnabledClick()
     {
         bool status = enabled.getToggleState();
+        settings.wifi.enabled = ( status );
         if( status )
         {
             mt::WifiManager().enableWiFi();
+            statusLabel.setText( "WiFi Enabled", juce::dontSendNotification );
         }
         else
+        {
             mt::WifiManager().disableWiFi();
+            statusLabel.setText( "WiFi Disabled", juce::dontSendNotification );
+            connect.setToggleState( false, juce::dontSendNotification );
+        }
     }
 
     void SettingsWifi::refresh()
@@ -99,35 +147,25 @@ namespace kick_ui
         mt::sysEthInfo info;
         mt::HwPref::getHwPref().getIP( "wlan0", info );
 
-        wifIP.setText( info.IP, juce::dontSendNotification );
-        subnet.setText( info.subnet, juce::dontSendNotification );
-        gateway.setText( info.subnet, juce::dontSendNotification );
-#if 0
-        // Assuming wifiList is a custom UI component or structure managing the list of networks
-        juce::String previouslySelectedSSID = wifiList.getSelected(); // Step 1: Store the currently selected SSID
-
-        std::vector<juce::String> list = mt::WifiManager().scanWiFiNetworks(); // Refresh the list of networks
-
-        wifiList.setListOptions( list ); // Update the UI or list with the new set of networks
-
-        // Step 2: Reselect the previously selected SSID if it's still available
-        if( std::find( list.begin(), list.end(), previouslySelectedSSID ) != list.end() )
-        {
-            wifiList.setSelected( previouslySelectedSSID );
-        }
-        else
-        {
-            // Optionally, handle the case where the previously selected SSID is no longer available
-            wifiList.setSelected( "" ); // or any default behavior
-        }
-#endif
+        wifIP.setText( info.IP.empty() ? "0.0.0.0" : info.IP, juce::dontSendNotification );
+        subnet.setText( info.subnet.empty() ? "0.0.0.0" : info.subnet, juce::dontSendNotification );
+        gateway.setText( info.gateway.empty() ? "0.0.0.0" : info.gateway, juce::dontSendNotification );
     }
 
     void SettingsWifi::initializeInterfaceState()
     {
-        if( settings.wifi.enabled() )
+        bool isWifiEnabled = settings.wifi.enabled();
+        enabled.setToggleState( isWifiEnabled, juce::dontSendNotification );
+        password.setText( settings.wifi.pwd(), juce::dontSendNotification );
+
+        if( isWifiEnabled )
         {
-            mt::WifiManager().getWifiInterface()->connectToWiFi( settings.wifi.ssid(), settings.wifi.pwd() );
+            mt::WifiManager().enableWiFi();
+            statusLabel.setText( "WiFi Ready", juce::dontSendNotification );
+        }
+        else
+        {
+            statusLabel.setText( "WiFi Disabled", juce::dontSendNotification );
         }
     }
 

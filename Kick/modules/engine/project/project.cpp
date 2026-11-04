@@ -76,6 +76,16 @@ namespace mt
         auto project = juce::ValueTree( IDs::Project );
         project.setProperty( IDs::version, __projectVersion, nullptr );
         tree.appendChild( project, nullptr );
+
+        // Apply Project Defaults from preferences to newly created project
+        auto& prefs = getSettings().projects;
+        auto tempos = tree.getOrCreateChildWithName( IDs::TEMPOS, nullptr );
+        auto tempo = tempos.getOrCreateChildWithName( IDs::TEMPO, nullptr );
+        tempo.setProperty( IDs::bpm, static_cast<float>( prefs.tempo() ), nullptr );
+        tempo.setProperty( IDs::num, prefs.numerator().getIntValue(), nullptr );
+        tempo.setProperty( IDs::den, prefs.denominator().getIntValue(), nullptr );
+        tempo.setProperty( IDs::length, prefs.bars(), nullptr );
+
         return tree;
     }
 
