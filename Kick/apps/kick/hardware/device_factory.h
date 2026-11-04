@@ -1,6 +1,8 @@
 #pragma once
 
 #include "hardware_adapter.h"
+
+#if JUCE_LINUX || __linux__
 #include "adapters/akai_mpc_key61_adapter.h"
 #include "adapters/ni_kontrol_adapter.h"
 #include <stdio.h>
@@ -41,3 +43,11 @@ public:
         return new AkaiMpcKey61Adapter();
     }
 };
+#else
+class HardwareDeviceFactory {
+public:
+    static IHardwareAdapter* create() {
+        return nullptr;
+    }
+};
+#endif

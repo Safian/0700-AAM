@@ -34,6 +34,13 @@ namespace ui
         void  clearHighlight(); // no cell lit (leaving the screen)
         float getXCoordinate() { return xCoordinate; }
         float getYCoordinate() { return yCoordinate; }
+        void  setNormalizedY( float y )
+        {
+            yCoordinate = juce::jlimit( 0.0f, 1.0f, y );
+            if( onValueChanged )
+                onValueChanged( xCoordinate, yCoordinate );
+            repaint();
+        }
         void  setLatch( bool State )
         {
             isLatch = State;

@@ -188,6 +188,21 @@ namespace kick_ui
             push();
         };
 
+        // XY-11 / XY-12: Touch strip Touch FX mode & Shift+TOUCH_FX setup toggle
+        signals::sigTouchFxStripPos.connect( [this]( float y ) {
+            xyFx.setNormalizedY( y );
+        } );
+        signals::sigTouchFxStripGate.connect( [this]( bool down ) {
+            if( down && !on_off.getToggleState() )
+                on_off.setToggleState( true, juce::sendNotification );
+            if( down ) gate.touchDown();
+            else gate.touchUp();
+            push();
+        } );
+        signals::sigTouchFxToggleSetup.connect( [this]() {
+            setup.setToggleState( !setup.getToggleState(), juce::sendNotification );
+        } );
+
         ui::themeChanged.connect( [&]() {
             latch.setToggleButtonText( "Latch", "Latch" );
             setup.setToggleButtonText( "Setup", "Setup" );

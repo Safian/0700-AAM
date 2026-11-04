@@ -465,3 +465,14 @@ set_tests_properties(kick-unsaved-gate PROPERTIES TIMEOUT 10)
 add_executable(kick-fblogic-tests FbLogicTests.cpp)
 add_test(NAME kick-fblogic COMMAND kick-fblogic-tests)
 set_tests_properties(kick-fblogic PROPERTIES TIMEOUT 10)
+
+# Q-Link banking arithmetic (0..3 banks -> EN_KNOB_1..16)
+add_executable(kick-qlink-bank-tests QLinkBankTests.cpp)
+add_test(NAME kick-qlink-bank COMMAND kick-qlink-bank-tests)
+set_tests_properties(kick-qlink-bank PROPERTIES TIMEOUT 10)
+
+# Transport router (Sampler / Looper / Sequence routing)
+add_executable(kick-transport-router-tests TransportRouterTests.cpp)
+add_test(NAME kick-transport-router COMMAND kick-transport-router-tests)
+set_tests_properties(kick-transport-router PROPERTIES TIMEOUT 10)
+

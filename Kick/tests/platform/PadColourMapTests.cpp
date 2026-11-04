@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Host test for the Akai pad colour mapping. Optional argv[1]: path to assets/Default/theme.xml,
-// the palette table is then compared against the PADBUTTON attributes.
+// Host test for the Akai pad colour mapping and DCL packet parsing (CE-02, CE-08, SS-07, NS-04, SG-10).
+// Optional argv[1]: path to assets/Default/theme.xml, the palette table is then compared against PADBUTTON attributes.
 #include "../../apps/kick/hardware/pad_colour_map.h"
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 static void check(bool ok, const char* why)
 {
@@ -38,6 +39,68 @@ int main(int argc, char** argv)
     check(scaleTo7bit(0xFF, 5000) == 127, "clamp high");
     check(scaleTo7bit(0xFF, -100) == 0, "clamp low");
 
+    // ---- CE-02, CE-08, SS-07, NS-04, SG-10: DCL pad packet parsing tests
+    PadStateArray arr;
+    // 1. Color mode packet (CE-02, CE-08)
+    const int modeData[] = { 3 }; // mode 3
+    uint16_t mask = applyPadPacket(kCmdPadColorMode, modeData, 1, arr);
+    check(mask == 0xFFFF, "ColorMode returns all-pad mask");
+    check(arr.colorMode == 3, "ColorMode updated");
+
+    // 2. Set single pad (NS-04, SG-10, Step Seq)
+    const int singleData[] = { 4 /*pad*/, kPadStateOn /*state*/, 12 /*colour red*/ };
+    mask = applyPadPacket(kCmdPadSetSinglePad, singleData, 3, arr);
+    check(mask == (1u << 4), "SinglePad updates pad 4");
+    check(arr.colours[4] == 12 && arr.states[4] == kPadStateOn, "Pad 4 colour and state");
+    // Repeating same data returns 0 (no redundant dirty flags)
+    check(applyPadPacket(kCmdPadSetSinglePad, singleData, 3, arr) == 0, "SinglePad duplicate -> 0");
+
+    // 3. Clear all pads / All single colour (clearAllPads in NS-04, SG-10)
+    const int clearData[] = { kPadStateOff, kPadColourTrans };
+    mask = applyPadPacket(kCmdPadSetAllSingleColour, clearData, 2, arr);
+    check(mask != 0 && arr.colours[0] == kPadColourTrans && arr.states[0] == kPadStateOff, "Clear all pads");
+
+    // 4. All multi colour (pushToHW from PadPerform / PadColor)
+    int multiData[17];
+    multiData[0] = kPadStateOn;
+    for (int i = 0; i < 16; ++i) multiData[1 + i] = i % kPadColourCount;
+    mask = applyPadPacket(kCmdPadSetAllMultiColour, multiData, 17, arr);
+    check(mask == 0xFFFF, "AllMultiColour dirty mask 0xFFFF");
+    for (int i = 0; i < 16; ++i) {
+        check(arr.colours[i] == (i % kPadColourCount), "Multi colour pad matches");
+        check(arr.states[i] == kPadStateOn, "Multi colour state on");
+    }
+
+    // 5. Step Sequencer single pad (SS-07)
+    const int stepSingleData[] = { 7 /*pad*/, kPadStateOn, 5 /*colour*/, 110 /*velocity*/ };
+    mask = applyPadPacket(kCmdPadSetStepSinglePad, stepSingleData, 4, arr);
+    check(mask == (1u << 7), "StepSinglePad updates pad 7");
+    check(arr.colours[7] == 5 && arr.states[7] == kPadStateOn, "Pad 7 step colour and state");
+
+    // 6. Step Sequencer all pads (SS-07)
+    int stepAllData[33];
+    stepAllData[0] = kPadStateOn;
+    for (int i = 0; i < 16; ++i) stepAllData[1 + i] = 3;  // colour 3
+    for (int i = 0; i < 16; ++i) stepAllData[17 + i] = 100; // velocity 100
+    mask = applyPadPacket(kCmdPadSetStepAllPad, stepAllData, 33, arr);
+    check(mask != 0 && arr.colours[0] == 3 && arr.states[0] == kPadStateOn, "StepAllPad updates all");
+
+    // 7. Blinking pad (NS-04)
+    const int blinkData[] = { 2 /*pad*/, kPadStateOnBlink, 9 /*onColor*/, 0 /*offColor*/ };
+    mask = applyPadPacket(kCmdPadSetBlinking, blinkData, 4, arr);
+    check(mask == (1u << 2), "Blinking updates pad 2");
+    check(arr.colours[2] == 9 && arr.states[2] == kPadStateOnBlink, "Pad 2 blinking state");
+
+    // 8. Full colour state packet
+    int fullState[32];
+    for (int i = 0; i < 16; ++i) fullState[i] = 1;     // colour 1
+    for (int i = 0; i < 16; ++i) fullState[16 + i] = 2; // state 2
+    mask = applyPadPacket(kCmdPadSetColourState, fullState, 32, arr);
+    check(mask == 0xFFFF, "SetColourState dirty 0xFFFF");
+    for (int i = 0; i < 16; ++i) {
+        check(arr.colours[i] == 1 && arr.states[i] == 2, "SetColourState pad matches");
+    }
+
     if (argc > 1) {
         std::ifstream f(argv[1]);
         std::stringstream ss; ss << f.rdbuf();
@@ -53,6 +116,6 @@ int main(int argc, char** argv)
             check(static_cast<uint32_t>(v) == kPadPalette[id], "palette matches theme.xml");
         }
     }
-    std::puts("OK");
+    std::puts("PadColourMapTests: OK");
     return 0;
 }
