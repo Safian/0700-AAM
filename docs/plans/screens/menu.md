@@ -118,25 +118,40 @@ Forrás: `WP-G.md` (G-001 – G-024, G-044, G-285 – G-286), `KEY61_DOC_VS_KICK
 Függőségek: MENU-04 ← MENU-01 (verem-modell); MENU-07 ← PRJ-14 (Save As), Settings; MENU-12 ← a közös képernyő-regisztráció (`kick_AppHome.cpp:262-315`).
 
 *Hibák*
-- [ ] **MENU-01** (P1, S) Toggle és Back-verem: `lastNonMenuScreen`, a második MENU / Menu gomb visszatér, csempéből indított képernyő Back-je a Menüre — `MENU/kick_AppTopbar.cpp:88`, `bridge:1162-1169`, `kick_AppHome.cpp:196-231`. (WP-G G-004 „OK” ítélet helyesbítése.)
-- [ ] **MENU-02** (P1, S) Projekt-kapu a Menüre és a csempékre (szürke projektfüggő csempék; a bridge MENU/SOUNDS/MAIN ugyanazt a kaput használja, mint a `handleCommand`) — `bridge:1162-1197`, `kick_AppHome.cpp:346-353, 487`, `MC:31`. MPC-n ellenőrizendő a tényleges összeomlás.
-- [ ] **MENU-03** (P1, S) Pad → csempe leképezés javítása az MPC pad-elrendezéséhez (és határellenőrzés); tiszta függvény + host-teszt — `MC:195-201`, `A/hardware/akai_map.h:20-42`. MPC-n ellenőrizendő (6./2.).
-- [ ] **MENU-04** (P2, S) Dial/± navigáció: Shift+Dial = sor-ugrás, körbefordulás, a kiemelés az aktuális módra áll be megnyitáskor — `MC:175-185, 57-64`.
-- [ ] **MENU-05** (P2, S) Csempe-feliratok és egységes ikon-/csempe-nevek; hiányzó ikon fallback — `kick_AppMenuOptions.cpp:27-45`, `MC:91-103`.
-- [ ] **MENU-06** (P2, S) Halott kód takarítás (`getSelectedId`, `selectedId`, üres `visibilityChanged`, `//hide()`) — `kick_AppMenuOptions.{h,cpp}`, `MC:101`.
+- [x] **MENU-01** (P1, S) Toggle és Back-verem: `lastNonMenuScreen`, a második MENU / Menu gomb visszatér, csempéből indított képernyő Back-je a Menüre — `MENU/kick_AppTopbar.cpp:88`, `bridge:1162-1169`, `kick_AppHome.cpp:196-231`. (WP-G G-004 „OK” ítélet helyesbítése.)
+  **R-7:** verified in code: `ScreenNav` (kick_menu_logic.h) = MENU toggle + Back to the Menu, host-tested (S-D work).
+- [x] **MENU-02** (P1, S) Projekt-kapu a Menüre és a csempékre (szürke projektfüggő csempék; a bridge MENU/SOUNDS/MAIN ugyanazt a kaput használja, mint a `handleCommand`) — `bridge:1162-1197`, `kick_AppHome.cpp:346-353, 487`, `MC:31`. MPC-n ellenőrizendő a tényleges összeomlás.
+  **R-7:** verified in code: `itemNeedsProject` / `screenNeedsProject`, project-less tiles are grayed out and ignore touch, dial and pad; tile-open smoke below covers it (S-D work).
+- [x] **MENU-03** (P1, S) Pad → csempe leképezés javítása az MPC pad-elrendezéséhez (és határellenőrzés); tiszta függvény + host-teszt — `MC:195-201`, `A/hardware/akai_map.h:20-42`. MPC-n ellenőrizendő (6./2.).
+  **R-7:** `padToTile` (kick_menu_logic.h), host-tested; the pad layout itself still has to be checked on the MPC (MENU-16).
+- [x] **MENU-04** (P2, S) Dial/± navigáció: Shift+Dial = sor-ugrás, körbefordulás, a kiemelés az aktuális módra áll be megnyitáskor — `MC:175-185, 57-64`.
+  **R-7:** `stepTile`: wrap, Shift + dial = one row; the highlight starts on the mode the Menu was opened from.
+- [~] **MENU-05** (P2, S) Csempe-feliratok és egységes ikon-/csempe-nevek; hiányzó ikon fallback — `kick_AppMenuOptions.cpp:27-45`, `MC:91-103`.
+  **R-7:** The tile name is shown in the status bar (Box Info) while the dial / pad / touch highlight moves; the four text tiles (Save, Resources, Kick Update, Favorites) show their name. Not done: a caption under the icon tiles (the themes' icons have no text; a caption needs a design decision).
+- [x] **MENU-06** (P2, S) Halott kód takarítás (`getSelectedId`, `selectedId`, üres `visibilityChanged`, `//hide()`) — `kick_AppMenuOptions.{h,cpp}`, `MC:101`.
+  **R-7:** AppMenuOptions rewritten on the registry; the dead calls and members are gone.
 
 *Hiányzó funkciók*
-- [ ] **MENU-07** (P1, M) Hiányzó útvonalak a Menüben/felső sávon: Grid, Step Sequencer, XY / Touch FX, Preferences, Projects, **Save / Save As** (PRJ-14), Sounds/Favorites, SW Update; az árva `CVClib` útvonal tisztázása (`kick_AppHome.cpp:313`). Függ: MENU-12.
+- [x] **MENU-07** (P1, M) Hiányzó útvonalak a Menüben/felső sávon: Grid, Step Sequencer, XY / Touch FX, Preferences, Projects, **Save / Save As** (PRJ-14), Sounds/Favorites, SW Update; az árva `CVClib` útvonal tisztázása (`kick_AppHome.cpp:313`). Függ: MENU-12.
+  **R-7:** R-7: Favorites tile (the browser opens on its next assigned favourite). There is no separate Sounds screen in Kick: the SOUNDS button and the Browser tile open the same file browser. `Screen::CVClib` is not orphaned: Preferences > CV opens it (`kick_ui_settings_cv.cpp:93`; CV code is not touched here). Grid / Step Sequencer / XY / Preferences / Projects stay on their buttons and the top bar (the Menu keeps 16 pad-reachable mode tiles + commands).
 - [ ] **MENU-08** (P2, M) Hardveres elérés a Key 61-en hiányzó képernyőkhöz (Next Sequence, Song, Color Edit, Looper): a Menün át Dial+ENTER és pad; esetleg Shift+gomb-kiosztás döntéssel (nincs szabad dedikált gomb) — döntés kell.
-- [ ] **MENU-09** (P2, M) Oldalak (nyilak), átrendezés, Reset Mode Menu, gyorsparancs-panel (G-005, G-010 – G-012); a sorrend a settings fában.
+- [x] **MENU-09** (P2, M) Oldalak (nyilak), átrendezés, Reset Mode Menu, gyorsparancs-panel (G-005, G-010 – G-012); a sorrend a settings fában.
+  **R-7:** Pages of 16 tiles (the 16 pads select the tiles of the shown page), page arrows, "Move tiles" (touch a tile, then its new place; Shift + Data Dial press toggles the mode, the dial carries the picked-up tile over page edges), "Reset menu"; the order is stored in `<prefs>/menu_layout.txt` and read leniently (`MenuLayout`, host-tested). Not done: the left quick panel of 5 modes (G-011) and dragging a tile with a finger (tap, tap is used instead). To check on the MPC: Shift + Data Dial press, pad mapping on page 2.
 - [ ] **MENU-10** (P2, M) Menü-eszköztár: Sync mező (MIDI Clock / MTC; Link NEM-KICK), Help/QR, Undo History, hangoló, MIDI-monitor ikon (G-013 – G-022) — Akai-paritás réteg, owner döntés.
+  **R-7:** Not done: owner decision (Akai parity layer; Link / controller mode are NEM-KICK). The pieces that exist elsewhere: Undo History (Main toolbar), tuner / Help / QR / MIDI monitor / Sync field do not exist. Needs: which of G-013..G-022 the owner wants on the Menu.
 
 *Javaslatok*
-- [ ] **MENU-11** (P2, S) Az aktuális mód jelzése a Menüben (kiemelt csempe) és a név/hover-szöveg az állapotsorban Dial-navigáció közben.
-- [ ] **MENU-12** (P1, M) `ModeRegistry`: a csempék és a hardveres kötések egy forrásból (ikon, felirat, képernyő, feltétel, HW-megfelelő) — a 16-os `switch` kiváltása; a `KickHome` regisztráció és a Menü közös adatból.
+- [x] **MENU-11** (P2, S) Az aktuális mód jelzése a Menüben (kiemelt csempe) és a név/hover-szöveg az állapotsorban Dial-navigáció közben.
+  **R-7:** Dial / pad / touch highlight writes the tile name to the status bar.
+- [x] **MENU-12** (P1, M) `ModeRegistry`: a csempék és a hardveres kötések egy forrásból (ikon, felirat, képernyő, feltétel, HW-megfelelő) — a 16-os `switch` kiváltása; a `KickHome` regisztráció és a Menü közös adatból.
+  **R-7:** `tileDef<S>( item )` in kick_menu_logic.h is the one table (button name, theme icon, label, screen); the Menu, the tile gate, the tests and the smoke use it. The hardware button bindings stay in kick_hardware_bridge.h (R-3); the KickHome screen registration stays a separate list (screens are built lazily there).
 
 *Tesztek*
-- [ ] **MENU-13** (P1, S) `menuTileScreen( int )` és `padToTile( int )` tiszta függvények + host-teszt (minden index érvényes, nincs duplikátum, MPC pad-elrendezés). Függ: MENU-03, MENU-12.
-- [ ] **MENU-14** (P2, S) Asset-teszt: mind a 16 ikon-név létezik mindkét témában (`Default`, `Proper`).
-- [ ] **MENU-15** (P2, S) AppSmoke: `HomeOptions` képernyőkép (`KICK_SMOKE_SCREENS=HomeOptions`), + csempe-megnyitás smoke (projekttel és anélkül).
+- [x] **MENU-13** (P1, S) `menuTileScreen( int )` és `padToTile( int )` tiszta függvények + host-teszt (minden index érvényes, nincs duplikátum, MPC pad-elrendezés). Függ: MENU-03, MENU-12.
+  **R-7:** MenuLogicTests (S-D) + registry and layout tests (R-7).
+- [x] **MENU-14** (P2, S) Asset-teszt: mind a 16 ikon-név létezik mindkét témában (`Default`, `Proper`).
+  **R-7:** MenuAssetTests: every icon of the registry exists in `assets/Default` and `assets/Proper` (theme.xml entry + file); registered as `kick-menu-assets`.
+- [x] **MENU-15** (P2, S) AppSmoke: `HomeOptions` képernyőkép (`KICK_SMOKE_SCREENS=HomeOptions`), + csempe-megnyitás smoke (projekttel és anélkül).
+  **R-7:** `KICK_SMOKE_MENUTILES=1` presses all 21 tiles (each on its page) without and with a project: grayed out and closed without a project, opens its screen with one; `ProjectsBrowserSmoke.py menutiles`, ctest `kick-menu-tiles-smoke`.
 - [ ] **MENU-16** (P1, S) MPC hardveres ellenőrzőlista végrehajtása (6. szakasz) — a hardveres session végezze.
+  **R-7:** Hardware session: see the R-7 entries of the hardware checklist (Menu pages / Move, Shift + Data Dial, pad mapping on page 2, status bar hover text).

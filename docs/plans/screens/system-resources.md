@@ -97,11 +97,14 @@ Az Akai MPC (WP-G, `docs/akai_mpc_hardware/walkthrough/WP-G.md`):
 - [ ] **SR-07** (P1, M) Engine-statisztika: gyorsítótárazott minták száma/mérete, „használt/nem használt" bontás; megjelenítés a dialógusban.
 - [ ] **SR-08** (P1, S) Elérhetőség: Resources-gomb a felső sávon / menü-csempe. — `kick_AppTopbar.cpp`, `kick_AppMenuOptions.cpp`
 - [ ] **SR-09** (P1, S) Hardveres bezárás (ENTER/Data Dial/MAIN) — az általános modális megoldás része. ⟵ HDR-02
-- [ ] **SR-10** (P2, M) Audio-terhelés (`getCpuUsage`), xrun-számláló a dialógusban.
-- [ ] **SR-11** (P2, S) Kis szabad hely / magas memória figyelmeztetés a státuszsorban. ⟵ HDR-14
+- [x] **SR-10** (P2, M) Audio-terhelés (`getCpuUsage`), xrun-számláló a dialógusban.
+  **R-7:** The dialog shows an AUDIO bar (callback load, JUCE `getCpuUsage`) with "dropouts: N" (device xrun count; -1 = not counted by the driver, shown without the number). Check on the MPC what the ALSA driver reports.
+- [x] **SR-11** (P2, S) Kis szabad hely / magas memória figyelmeztetés a státuszsorban. ⟵ HDR-14
+  **R-7:** Status bar standing text: "Low storage: N MB free" at >= 95 % used internal storage, "Low memory: N % used" at >= 92 % (`kick_sysinfo::resourceWarnings`, host-tested), checked every 5 s; priority audio fault > low storage > unsaved > low memory.
 - [ ] **SR-12** (P2, S) Holt kód rendezése: `Screen::SystemResources`, `KickSysResources`, `onDialogClose` lambda, hibás modul-leírás; döntés: dialógus marad, enum törlendő. — `kick_IScreen.h:63`, `kick_ui_systemResources.h:30, 84-93`, `kick_modeHeader.cpp:95-97`
 - [ ] **SR-13** (P2, S) Relatív elrendezés, nagyobb érintési célok, a ferde elválasztóvonal javítása. — `kick_ui_systemResources.cpp:134-156`
 - [ ] **SR-20** (P0, M) Host-tesztek: CPU-delta, `MemAvailable`, mount-parser, `statvfs`-wrapper (JUCE-mentes fejléc + `Kick/tests/platform/*Tests.cpp`).
-- [ ] **SR-21** (P1, M) `ASoundCache` Purge host-teszt. ⟵ SR-06
+- [x] **SR-21** (P1, M) `ASoundCache` Purge host-teszt. ⟵ SR-06
+  **R-7:** SoundCacheTests links the REAL ASoundCache (module audio_file_manager + juce_audio_formats): stats, unused = only the cache holds it, Purge Unused drops exactly those, a held sound keeps its data, reload after the purge, clear(); ctest `kick-sound-cache`.
 - [ ] **SR-22** (P1, S) Smoke: a `Main.cpp:167` tábla javítása (a dialógus valódi képernyőképe), AppSmoke: megnyitás/zárás. ⟵ SR-12
 - [ ] **SR-23** (P0, M) MPC-s hardveres próba a 6. pont listájával. ⟵ SR-01…SR-06

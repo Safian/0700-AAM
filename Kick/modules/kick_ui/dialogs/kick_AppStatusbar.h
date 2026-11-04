@@ -21,6 +21,7 @@
 
 #pragma once
 #include "kick_ui/audio_components//gridview/kick_Locate.h"
+#include "kick_statusbar_logic.h"
 namespace kick_ui
 {
 
@@ -55,13 +56,20 @@ namespace kick_ui
 
         static AppStatusbar& Instance();
 
+        // A message in the Box Info line: it shows for a few seconds, then the standing state comes back.
         void setBoxInfo( juce::String );
+        // The standing state of the line (e.g. "Unsaved project changes"; empty = nothing). A device fault of the startup
+        // report takes its place.
+        void setStanding( juce::String );
 
-        // A message with an UNDO button in the status bar (destructive actions: Clear Pad / Clear Bar / shortening the
-        // sequence ...). Shown for a few seconds, until the next setBoxInfo() or offerUndo(), or until it is pressed;
-        // pressing it runs 'UndoAction' once. Message thread only.
+        // The popups of the three fields (also used by the smoke test): playhead control (STP), BBT locate, tempo editor.
+        void showStpPopup() { left.stp.displaySTPPopup(); }
+        void showBbtPopup() { right.bbt.displayPopup(); }
+        void showTempoEditor() { editTempo(); }
+
+        // A message with an UNDO button next to it (for destructive actions): the button runs `UndoAction` and shows "Undone"; the offer
+        // runs out after 8 s or when another message replaces it.
         void offerUndo( const juce::String& Text, std::function<void()> UndoAction );
-        bool isUndoOffered() const { return undoAction != nullptr; }
 
     private:
         mt::MTPlayhead&   playHead{ mt::getAudioInterface().getPlayhead() };
@@ -69,11 +77,22 @@ namespace kick_ui
         LeftControl       left;
         RightControl      right;
         ui::KickLabel     boxInfo{ "Box Info" };
-        ui::KickButton    undoButton{ "UNDO" };
+        // Tempo and time signature of the selected sequence; a tap opens the Tempo editor / the Time Signature dialog.
+        ui::KickImageButton tempoBtn{ "Tempo", "" }, timeSigBtn{ "Time signature", "" };
+        ui::KickButton        undoButton{ "UNDO" };
         std::function<void()> undoAction;
+        double                undoOfferUntilMs{ 0.0 };
 
-        void clearUndoOffer();
+        kick_ui::statusbar_logic::BoxInfoState boxState;
+        juce::String                           projectStanding, shownBox, shownTempo, shownTimeSig, lowStorage, lowMemory;
+        int                                    resourceTicks{ 0 };
+
         void timerCallback() override;
+        void refreshBox();
+        void refreshTempo();
+        void refreshResources(); // low storage / memory (every 5 s)
+        void editTempo();
+        void clearUndoOffer();
 
         // Don't any direct instantiaion of this class.
         AppStatusbar();

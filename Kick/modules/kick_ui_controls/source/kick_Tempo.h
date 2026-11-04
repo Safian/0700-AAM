@@ -45,6 +45,11 @@ namespace ui
 
         void show( const juce::String& Title, std::function<void( int )> CallbackOnExit );
 
+        // Number of taps of the TAP TEMPO button (Preferences). The app sets the source; each opening of the editor reads it.
+        // Without a source the editor keeps its own value.
+        static inline std::function<int()> numTapsSource;
+        void                               setNumTaps( int NumTaps ) { tapTempo.setNumTaps( NumTaps ); }
+
     private:
         double getIncrement() override { return slider.getInterval(); }
         void   sliderMoved( float v ) override { slider.sliderMoved( v ); };

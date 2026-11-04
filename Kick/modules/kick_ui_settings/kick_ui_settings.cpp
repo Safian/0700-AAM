@@ -82,7 +82,7 @@ namespace kick_ui
     ////////////////////////////  KickChannelMixer
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
     Settings::Settings()
-        : kick_ui::IScreen( kick_ui::Screen::HomePreferences )
+        : kick_ui::IScreen( kick_ui::Screen::HomePreferencesView )
     {
         // Add header...
         mt::utils::addChildComponents( this, header );

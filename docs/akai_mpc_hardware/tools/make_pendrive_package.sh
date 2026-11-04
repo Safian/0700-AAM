@@ -29,6 +29,8 @@
 #   --templates-dir <path>  Templates directory (default: Kick/templates)
 #   --demos-dir <path>      Demos directory (default: Kick/demos)
 #   --out-dir <path>        Output directory (default: dist)
+#   --changelog <file>      Release notes (plain text) stored as CHANGELOG in the package; the Kick Update screen shows the
+#                           first lines before the update is installed
 #   --allow-dummy-binary    Allow non-ARM / dummy binary for testing
 #   --dry-run               Validate and print actions without creating zip
 #   -h, --help              Show this help message
@@ -42,6 +44,7 @@ GIT_COMMIT=""
 ASSETS_DIR="$TOP_DIR/Kick/assets"
 TEMPLATES_DIR="$TOP_DIR/Kick/templates"
 DEMOS_DIR="$TOP_DIR/Kick/demos"
+CHANGELOG_FILE=""
 OUT_DIR="$TOP_DIR/dist"
 ALLOW_DUMMY_BINARY=0
 DRY_RUN=0
@@ -74,6 +77,10 @@ while [ $# -gt 0 ]; do
             ;;
         --out-dir)
             OUT_DIR="$2"
+            shift 2
+            ;;
+        --changelog)
+            CHANGELOG_FILE="$2"
             shift 2
             ;;
         --allow-dummy-binary)
@@ -229,6 +236,15 @@ fi
 
 # Ensure logs dir has placeholder
 touch "$ROOT_DIR/logs/.gitkeep"
+
+# Release notes (optional)
+if [ -n "$CHANGELOG_FILE" ]; then
+    if [ ! -f "$CHANGELOG_FILE" ]; then
+        echo "ERROR: --changelog file not found: $CHANGELOG_FILE" >&2
+        exit 1
+    fi
+    cp "$CHANGELOG_FILE" "$ROOT_DIR/CHANGELOG"
+fi
 
 # Write VERSION file
 cat > "$ROOT_DIR/VERSION" <<EOF

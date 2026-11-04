@@ -34,6 +34,9 @@ namespace kick_ui
         }
     }
 
+    static const juce::String kHowTo = "To install: save your project, power the MPC off and on again with the USB drive inserted.\n"
+                                       "Your projects and settings are kept; the previous Kick is saved on the MPC as Kick.prev.";
+
     /// Looks at the installed Kick and at every USB drive on a worker thread (a slow stick must not freeze the UI; the SHA-256
     /// of the package binary is read in full). Result is delivered once on the message thread.
     class KickUpdateScreen::Scanner : public juce::Thread
@@ -95,6 +98,7 @@ namespace kick_ui
             if( in.versionFileFound )
             {
                 in.packageText  = readText( root.getChildFile( "VERSION" ) );
+                scan.changelog  = kick_update::changelogExcerpt( readText( root.getChildFile( "CHANGELOG" ) ) );
                 scan.package    = kick_update::parseVersionText( in.packageText );
                 const auto bin  = root.getChildFile( "bin" ).getChildFile( "Kick" );
                 in.binaryFound  = bin.existsAsFile() && bin.getSize() > 0;
@@ -155,9 +159,7 @@ namespace kick_ui
         howtoLabel.setValueJustification( juce::Justification::centredLeft );
         // The Kick package is installed by the pendrive bootstrap when the MPC starts with the drive inserted: the screen says
         // exactly that (no button that would only look as if it installed something).
-        howtoLabel.setText( "To install: save your project, power the MPC off and on again with the USB drive inserted.\n"
-                            "Your projects and settings are kept; the previous Kick is saved on the MPC as Kick.prev.",
-                            juce::dontSendNotification );
+        howtoLabel.setText( kHowTo, juce::dontSendNotification );
         refresh.setValueColour( ui::Theme::textColour( 1 ) );
         back.setValueColour( ui::Theme::textColour( 1 ) );
         mt::utils::setValueFontHeight( 20, refresh, back );
@@ -206,6 +208,8 @@ namespace kick_ui
         }
         driveLabel.setText( drive, juce::dontSendNotification );
         stateLabel.setText( kick_update::describe( scan.state, scan.installed, scan.package, scan.reason ), juce::dontSendNotification );
+        // The release notes of the package are shown before anything is installed (the how-to stays below them).
+        howtoLabel.setText( scan.changelog.empty() ? kHowTo : "What's new:\n" + juce::String::fromUTF8( scan.changelog.c_str() ) + "\n\n" + kHowTo, juce::dontSendNotification );
         stateLabel.setValueColour( scan.state == kick_update::State::PackageBroken ? juce::Colours::orangered : ui::Theme::textColour( 2 ) );
         repaint();
     }

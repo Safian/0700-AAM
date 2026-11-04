@@ -12,6 +12,9 @@
 #  8. Scenario 6: Preservation of user projects (/data/projects) and sounds across installs
 #  9. Scenario 7: USB UNINSTALL trigger (/media/PenDrive/UNINSTALL removes Kick and exits 0)
 # 10. Scenario 8: Standalone uninstall_kick.sh execution and --all cleanup
+# 11. Scenario 9: Install cut by a power loss after the binary swap (Kick.prev keeps the real previous version)
+# 12. Scenario 10: No sha256 tool on the system / VERSION without KICK_SHA256 (install refused, old Kick kept)
+# 13. Scenario 11: ROLLBACK trigger (USB file and /data/Kick.rollback), refused rollbacks, rejected package not reinstalled
 set -eu
 
 TOP_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -60,6 +63,12 @@ assert_file_not_exists() {
     else
         fail "Path unexpectedly exists: $1"
     fi
+}
+
+# expect <ok text> <failure text> <command...>: pass when the command succeeds.
+expect() {
+    ex_ok="$1"; ex_bad="$2"; shift 2
+    if "$@"; then pass "$ex_ok"; else fail "$ex_bad"; fi
 }
 
 echo "=========================================================="
@@ -176,6 +185,17 @@ if [ -d "$TKGL_DIR/demos" ]; then
 else
     fail "Demos folder missing from package"
 fi
+
+# --changelog stores the release notes next to VERSION (shown by the Kick Update screen)
+printf 'Fixes the MPC Menu.\nAdds rollback.\n' > "$TEST_TMP/notes.txt"
+"$TOOLS_DIR/make_pendrive_package.sh" --binary "$MOCK_BIN" --version "0.1.1-notes" --git-commit "notes123" --out-dir "$TEST_TMP/dist_notes" --changelog "$TEST_TMP/notes.txt" --allow-dummy-binary > /dev/null
+mkdir -p "$TEST_TMP/unpacked_notes"
+unzip -q "$TEST_TMP/dist_notes/kick-mpc-key61-0.1.1-notes.zip" -d "$TEST_TMP/unpacked_notes"
+assert_file_exists "$TEST_TMP/unpacked_notes/tkgl_bootstrap_[ProjectData]/CHANGELOG"
+expect "CHANGELOG content is the given file" "CHANGELOG content differs" cmp -s "$TEST_TMP/notes.txt" "$TEST_TMP/unpacked_notes/tkgl_bootstrap_[ProjectData]/CHANGELOG"
+STATUS=0
+"$TOOLS_DIR/make_pendrive_package.sh" --binary "$MOCK_BIN" --version "0.1.2" --git-commit "x" --out-dir "$TEST_TMP/dist_nonotes" --changelog "$TEST_TMP/missing.txt" --allow-dummy-binary > /dev/null 2>&1 || STATUS=$?
+expect "a missing --changelog file is an error" "a missing --changelog file was accepted" test "$STATUS" -ne 0
 
 # Verify VERSION file contents
 if grep -q "VERSION=0.1.0-test" "$TKGL_DIR/VERSION" && grep -q "KICK_SHA256=" "$TKGL_DIR/VERSION"; then
@@ -466,6 +486,173 @@ if [ -f "$MOCK_DATA/projects/MyEpicTrack/MyEpicTrack.kickPrj" ]; then
 else
     fail "User project was deleted by standalone uninstall_kick.sh"
 fi
+
+
+# -----------------------------------------------------------------------------
+# Helpers for the scenarios 9-11: a package folder with a mock binary and a matching VERSION
+# -----------------------------------------------------------------------------
+sha_of() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+# make_pkg <dir> <label> [nosha]: tkgl layout in <dir> with bin/Kick printing "label" and VERSION=<label>.
+make_pkg() {
+    mp_dir="$1"; mp_label="$2"
+    mkdir -p "$mp_dir/scripts" "$mp_dir/bin" "$mp_dir/logs"
+    cp -f "$TOOLS_DIR/tkgl_bootstrap" "$mp_dir/scripts/tkgl_bootstrap"
+    printf '#!/bin/sh\necho "Mock Kick %s"\n' "$mp_label" > "$mp_dir/bin/Kick"
+    chmod +x "$mp_dir/bin/Kick"
+    {
+        echo "VERSION=$mp_label"
+        echo "GIT_COMMIT=c$mp_label"
+        echo "BUILD_DATE=2026-11-04"
+        if [ "${3:-}" != "nosha" ]; then echo "KICK_SHA256=$(sha_of "$mp_dir/bin/Kick")"; fi
+    } > "$mp_dir/VERSION"
+    cat > "$mp_dir/scripts/tkgl_path" <<EOP
+DEVICE="/dev/sdb2"
+MOUNT_POINT="$(dirname "$mp_dir")"
+TKGL_ROOT="$mp_dir"
+TKGL_SCRIPT="$mp_dir/scripts"
+TKGL_BIN="$mp_dir/bin"
+TKGL_LOGS="$mp_dir/logs"
+TKGL_CONF="$mp_dir/conf"
+TKGL_LIB="$mp_dir/lib"
+EOP
+}
+
+run_boot() {  # run_boot <pkgdir> <datadir> <outfile> [extra env assignments via env]
+    rb_status=0
+    KICK_DATA_DIR="$2" KICK_BOOT_DRY_RUN=1 sh "$1/scripts/tkgl_bootstrap" > "$3" 2>&1 || rb_status=$?
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# Test 11: Scenario 9 - Install cut after the binary swap (power loss)
+# -----------------------------------------------------------------------------
+echo ""
+echo "--- Test 11: Scenario 9 - Interrupted update keeps Kick.prev ---"
+
+S9="$TEST_TMP/s9"; S9_DATA="$S9/data"; mkdir -p "$S9_DATA"
+make_pkg "$S9/usb1/pkg" "1.0.0"
+run_boot "$S9/usb1/pkg" "$S9_DATA" "$TEST_TMP/s9a.out"
+expect "S9: v1 installed" "S9: v1 not installed" grep -q "Mock Kick 1.0.0" "$S9_DATA/Kick"
+expect "S9: no install marker left after a complete install" "S9: marker left behind" [ ! -e "$S9_DATA/Kick.installing" ]
+
+make_pkg "$S9/usb2/pkg" "2.0.0"
+rb_status=0
+KICK_DATA_DIR="$S9_DATA" KICK_BOOT_DRY_RUN=1 KICK_BOOT_TEST_ABORT_AFTER=replace sh "$S9/usb2/pkg/scripts/tkgl_bootstrap" > "$TEST_TMP/s9b.out" 2>&1 || rb_status=$?
+expect "S9: simulated power cut after the swap (exit 99)" "S9: expected exit 99, got $rb_status" [ "$rb_status" -eq 99 ]
+expect "S9: binary is already v2 when the power is cut" "S9: swap did not happen" grep -q "Mock Kick 2.0.0" "$S9_DATA/Kick"
+expect "S9: Kick.version still says v1 (written last)" "S9: Kick.version changed too early" grep -q "VERSION=1.0.0" "$S9_DATA/Kick.version"
+expect "S9: Kick.prev holds v1" "S9: Kick.prev lost v1" grep -q "Mock Kick 1.0.0" "$S9_DATA/Kick.prev"
+expect "S9: install marker present" "S9: install marker missing" [ -f "$S9_DATA/Kick.installing" ]
+
+run_boot "$S9/usb2/pkg" "$S9_DATA" "$TEST_TMP/s9c.out"
+expect "S9: retry recognises the interrupted install" "S9: interrupted install not recognised" grep -q "Interrupted installation detected" "$TEST_TMP/s9c.out"
+expect "S9: Kick.prev still holds the real previous version (v1)" "S9: Kick.prev was overwritten by the half-installed binary" grep -q "Mock Kick 1.0.0" "$S9_DATA/Kick.prev"
+expect "S9: Kick.version.prev still pairs with Kick.prev" "S9: Kick.version.prev not paired" grep -q "VERSION=1.0.0" "$S9_DATA/Kick.version.prev"
+expect "S9: retry finished: Kick.version = v2" "S9: retry did not finish" grep -q "VERSION=2.0.0" "$S9_DATA/Kick.version"
+expect "S9: marker removed after the retry" "S9: marker still present" [ ! -e "$S9_DATA/Kick.installing" ]
+
+# A cut BEFORE the swap leaves the old binary: the retry backs it up normally.
+make_pkg "$S9/usb3/pkg" "3.0.0"
+run_boot "$S9/usb3/pkg" "$S9_DATA" "$TEST_TMP/s9d.out"
+expect "S9: a normal update 2 -> 3 backs up v2" "S9: normal update did not back up v2" grep -q "Mock Kick 2.0.0" "$S9_DATA/Kick.prev"
+if ls "$S9_DATA"/*.tmp >/dev/null 2>&1; then fail "S9: temp files left in /data"; else pass "S9: no temp files left in /data"; fi
+
+# -----------------------------------------------------------------------------
+# Test 12: Scenario 10 - no sha256 tool / VERSION without KICK_SHA256
+# -----------------------------------------------------------------------------
+echo ""
+echo "--- Test 12: Scenario 10 - Unverifiable package is refused ---"
+
+S10="$TEST_TMP/s10"; S10_DATA="$S10/data"; mkdir -p "$S10_DATA"
+make_pkg "$S10/usb1/pkg" "1.0.0"
+run_boot "$S10/usb1/pkg" "$S10_DATA" "$TEST_TMP/s10a.out"
+
+# (a) VERSION without KICK_SHA256: refuse, keep v1
+make_pkg "$S10/usb2/pkg" "2.0.0" nosha
+run_boot "$S10/usb2/pkg" "$S10_DATA" "$TEST_TMP/s10b.out"
+expect "S10: missing KICK_SHA256 is reported" "S10: missing KICK_SHA256 not reported" grep -q "no KICK_SHA256" "$TEST_TMP/s10b.out"
+expect "S10: installed v1 kept" "S10: installed Kick was replaced by an unverifiable package" grep -q "Mock Kick 1.0.0" "$S10_DATA/Kick"
+expect "S10: Kick.version unchanged" "S10: Kick.version changed" grep -q "VERSION=1.0.0" "$S10_DATA/Kick.version"
+assert_file_not_exists "$S10_DATA/Kick.new"
+
+# (b) no sha tool on the system: only the tools the script needs, no sha256sum / shasum
+NOSHA_BIN="$TEST_TMP/nosha_bin"; mkdir -p "$NOSHA_BIN"
+for t in cp mv rm mkdir date cmp head grep cut tr awk chmod sync touch dirname cat printf ls sed; do
+    tp="$(command -v "$t" 2>/dev/null || true)"
+    case "$tp" in /*) ln -sf "$tp" "$NOSHA_BIN/$t" ;; esac
+done
+make_pkg "$S10/usb3/pkg" "3.0.0"
+rb_status=0
+PATH="$NOSHA_BIN" KICK_DATA_DIR="$S10_DATA" KICK_BOOT_DRY_RUN=1 /bin/sh "$S10/usb3/pkg/scripts/tkgl_bootstrap" > "$TEST_TMP/s10c.out" 2>&1 || rb_status=$?
+expect "S10: missing sha tool is reported" "S10: missing sha tool not reported" grep -q "no sha256sum/shasum available" "$TEST_TMP/s10c.out"
+expect "S10: installed v1 kept without a sha tool" "S10: Kick replaced without verification" grep -q "Mock Kick 1.0.0" "$S10_DATA/Kick"
+
+# (c) fresh /data and an unverifiable package: nothing installed, exit 0 (stock MPC)
+S10_EMPTY="$S10/empty"; mkdir -p "$S10_EMPTY"
+rb_status=0
+KICK_DATA_DIR="$S10_EMPTY" KICK_BOOT_DRY_RUN=1 sh "$S10/usb2/pkg/scripts/tkgl_bootstrap" > "$TEST_TMP/s10d.out" 2>&1 || rb_status=$?
+expect "S10: fresh /data + unverifiable package exits 0 (stock MPC)" "S10: non-zero exit $rb_status" [ "$rb_status" -eq 0 ]
+assert_file_not_exists "$S10_EMPTY/Kick"
+
+# -----------------------------------------------------------------------------
+# Test 13: Scenario 11 - ROLLBACK
+# -----------------------------------------------------------------------------
+echo ""
+echo "--- Test 13: Scenario 11 - ROLLBACK trigger ---"
+
+S11="$TEST_TMP/s11"; S11_DATA="$S11/data"; mkdir -p "$S11_DATA"
+make_pkg "$S11/usb1/pkg" "1.0.0"; run_boot "$S11/usb1/pkg" "$S11_DATA" "$TEST_TMP/s11a.out"
+
+# Rollback without a previous version: refused, nothing changes, the boot continues.
+touch "$S11/usb1/ROLLBACK"
+run_boot "$S11/usb1/pkg" "$S11_DATA" "$TEST_TMP/s11b.out"
+expect "S11: rollback without Kick.prev refused" "S11: rollback without Kick.prev not refused" grep -q "ROLLBACK refused: no previous version" "$TEST_TMP/s11b.out"
+expect "S11: Kick unchanged after the refused rollback" "S11: Kick changed" grep -q "Mock Kick 1.0.0" "$S11_DATA/Kick"
+assert_file_exists "$S11/usb1/ROLLBACK.done"
+assert_file_not_exists "$S11/usb1/ROLLBACK"
+
+# Update to v2 from a second pendrive, then roll back from the pendrive that holds v2.
+make_pkg "$S11/usb2/pkg" "2.0.0"; run_boot "$S11/usb2/pkg" "$S11_DATA" "$TEST_TMP/s11c.out"
+expect "S11: v2 installed (prev = v1)" "S11: v2 not installed" grep -q "Mock Kick 2.0.0" "$S11_DATA/Kick"
+touch "$S11/usb2/ROLLBACK"
+run_boot "$S11/usb2/pkg" "$S11_DATA" "$TEST_TMP/s11d.out"
+expect "S11: rollback completed" "S11: rollback did not complete" grep -q "ROLLBACK complete" "$TEST_TMP/s11d.out"
+expect "S11: Kick is v1 again" "S11: Kick is not v1 after the rollback" grep -q "Mock Kick 1.0.0" "$S11_DATA/Kick"
+expect "S11: Kick.version is v1 again" "S11: Kick.version not rolled back" grep -q "VERSION=1.0.0" "$S11_DATA/Kick.version"
+assert_file_exists "$S11/usb2/ROLLBACK.done"
+assert_file_exists "$S11_DATA/Kick.rejected"
+expect "S11: same boot does not reinstall v2" "S11: v2 reinstalled in the rollback boot" grep -q "Package 2.0.0 was rolled back from" "$TEST_TMP/s11d.out"
+
+# Next boot with the same pendrive: v2 is NOT installed again.
+run_boot "$S11/usb2/pkg" "$S11_DATA" "$TEST_TMP/s11e.out"
+expect "S11: rejected v2 is not reinstalled at the next boot" "S11: rollback undone by the next boot" grep -q "Mock Kick 1.0.0" "$S11_DATA/Kick"
+expect "S11: rolled-back Kick is executable" "S11: rolled-back Kick not executable" [ -x "$S11_DATA/Kick" ]
+
+# A different package (v3) clears the rejection and installs.
+make_pkg "$S11/usb3/pkg" "3.0.0"; run_boot "$S11/usb3/pkg" "$S11_DATA" "$TEST_TMP/s11f.out"
+expect "S11: a new package installs after a rollback" "S11: new package blocked" grep -q "Mock Kick 3.0.0" "$S11_DATA/Kick"
+assert_file_not_exists "$S11_DATA/Kick.rejected"
+
+# App-side trigger (/data/Kick.rollback): back to v1 (prev of the 1 -> 3 update), flag consumed.
+touch "$S11_DATA/Kick.rollback"
+run_boot "$S11/usb3/pkg" "$S11_DATA" "$TEST_TMP/s11g.out"
+expect "S11: /data/Kick.rollback rolls back to the previous version" "S11: /data/Kick.rollback ignored" grep -q "Mock Kick 1.0.0" "$S11_DATA/Kick"
+assert_file_not_exists "$S11_DATA/Kick.rollback"
+
+# Corrupt Kick.prev: rollback refused, the running Kick stays.
+make_pkg "$S11/usb4/pkg" "4.0.0"; run_boot "$S11/usb4/pkg" "$S11_DATA" "$TEST_TMP/s11h.out"
+echo "TRUNCATED" > "$S11_DATA/Kick.prev"
+touch "$S11/usb4/ROLLBACK"
+run_boot "$S11/usb4/pkg" "$S11_DATA" "$TEST_TMP/s11i.out"
+expect "S11: corrupt Kick.prev refused" "S11: corrupt Kick.prev accepted" grep -q "fails its SHA256 check" "$TEST_TMP/s11i.out"
+expect "S11: running Kick kept after the refused rollback" "S11: Kick changed by a refused rollback" grep -q "Mock Kick 4.0.0" "$S11_DATA/Kick"
 
 # -----------------------------------------------------------------------------
 # Summary

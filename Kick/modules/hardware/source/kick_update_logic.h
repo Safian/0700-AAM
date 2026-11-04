@@ -259,4 +259,27 @@ namespace kick_update
         if( playing ) return "Playback is running";
         return {};
     }
+
+    // The release notes of a package (the CHANGELOG file next to VERSION), shortened for the screen: at most maxLines non-empty lines
+    // of at most maxChars characters each (a longer line is cut with "..."). Empty when there are no notes.
+    inline std::string changelogExcerpt( const std::string& text, size_t maxLines = 4, size_t maxChars = 90 )
+    {
+        std::string out;
+        size_t      lines = 0, pos = 0;
+        while( pos <= text.size() && lines < maxLines )
+        {
+            auto nl = text.find( '\n', pos );
+            if( nl == std::string::npos )
+                nl = text.size();
+            std::string line = trimmed( text.substr( pos, nl - pos ) );
+            pos              = nl + 1;
+            if( line.empty() )
+                continue;
+            if( line.size() > maxChars )
+                line = line.substr( 0, maxChars - 3 ) + "...";
+            out += ( out.empty() ? "" : "\n" ) + line;
+            ++lines;
+        }
+        return out;
+    }
 }

@@ -11,6 +11,7 @@ namespace kick_ui
         restartLabel.setValueJustification( juce::Justification::centred );
         poweroffLabel.setValueJustification( juce::Justification::centred );
         header.showOptions( false, false );
+        header.showResourcesButton( false ); // a running update: no system dialog
         header.showBackButton( false );
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
         updateLabel.setValueColour( ui::Theme::textColour( 2 ) );

@@ -60,35 +60,29 @@ namespace kick_ui
 
         fwUpdate.onClick = [&]() {
             auto& ps = mt::PlatformServices::getInstance();
-            if( !ps.isHardwareControlAvailable() )
-            {
-                auto p = new ConfirmationPopup{ "Firmware update unavailable on this platform.", false, true };
-                mt::utils::showOptions( "INFO", p, [p]( int ) { delete p; },
-                                        ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
-                return;
-            }
-            signals::sigScreenOpen( kick_ui::Screen::SWUpdateView );
+            // The Behringer image updater needs the Behringer hardware; everywhere else the Kick Update screen applies.
+            signals::sigScreenOpen( ps.isHardwareControlAvailable() ? kick_ui::Screen::SWUpdateView : kick_ui::Screen::KickUpdate );
         };
-        fReset.onClick   = [&]() {
-            auto p = new ConfirmationPopup{ "Factory Reset will erase all projects, settings, and WiFi credentials. Continue?", false, false };
-            mt::utils::showOptions(
-                "CONFIRMATION!", p, [&, p]( int R ) {
-                   if( R == UI::APPLY )
-                   {
-                       mt::PlatformServices::getInstance().factoryReset();
-                   }
-                   delete p; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
+        fReset.onClick = [this]() {
+            mt::utils::showDialogOwned<ConfirmationPopup>(
+                "CONFIRMATION!", std::make_unique<ConfirmationPopup>( "Factory Reset will erase all projects, settings, and WiFi credentials. Continue?", false, false ),
+                []( int R, ConfirmationPopup& ) {
+                    if( R == UI::APPLY )
+                        mt::PlatformServices::getInstance().factoryReset();
+                },
+                ui::layout::warningPopup, true );
         };
-        rDefaults.onClick = [&]() {
-            auto p = new ConfirmationPopup{ "Are You Sure You Want To Restore Defaults ?", false, false };
-            mt::utils::showOptions(
-                "CONFIRMATION!", p, [&, p]( int R ) {
-                   if( R == UI::APPLY )
-                   {
-                       mt::getSettings().makeDefaults();
-                       updateInfo();
-                   }
-                   delete p; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
+        rDefaults.onClick = [this]() {
+            mt::utils::showDialogOwned<ConfirmationPopup>(
+                "CONFIRMATION!", std::make_unique<ConfirmationPopup>( "Are You Sure You Want To Restore Defaults ?", false, false ),
+                [this]( int R, ConfirmationPopup& ) {
+                    if( R == UI::APPLY )
+                    {
+                        mt::getSettings().makeDefaults();
+                        updateInfo();
+                    }
+                },
+                ui::layout::warningPopup, true );
         };
 
         updateInfo();
@@ -107,11 +101,6 @@ namespace kick_ui
         cVer.value.setText( ControlSurfaceVersion, juce::dontSendNotification );
         fVer.value.setText( firmWareVersion, juce::dontSendNotification );
         date.value.setText( buildStamp, juce::dontSendNotification );
-
-        if( !ps.isHardwareControlAvailable() )
-        {
-            fwUpdate.setEnabled( false );
-        }
     }
 
     void SettingsInfo::refresh()
@@ -126,6 +115,7 @@ namespace kick_ui
     ConfirmationPopup::ConfirmationPopup( juce::String Info, bool isYes, bool isNo, int x, int y, int width )
         : info( Info ), startX( x ), startY( y ), width( width )
     {
+        getProperties().set( "outsideTapCancels", true ); // a confirmation: a tap beside it is a "No"
         mt::utils::addChildComponents( this, yes, no, info );
         yes.setVisible( isYes );
         no.setVisible( isNo );
@@ -137,15 +127,14 @@ namespace kick_ui
         info.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
         info.setValueJustification( juce::Justification::centred );
 
-        ui::themeChanged.connect( [&]() {
+        themeConn = ui::themeChanged.connect( [this]() {
             no.setImages( "No" );
             yes.setImages( "Yes" );
         } );
     }
     void ConfirmationPopup::close( int State )
     {
-        if( auto dw = getCurrentlyModalComponent() )
-            dw->exitModalState( State );
+        mt::utils::exitDialog( this, State );
     }
     void ConfirmationPopup::resized()
     {

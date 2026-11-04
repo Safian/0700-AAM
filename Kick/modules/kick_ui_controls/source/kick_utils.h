@@ -143,6 +143,25 @@ namespace mt
                           juce::Rectangle<int> bounds   = ui::layout::dialog,
                           juce::Colour backgroundColour = ui::Theme::backgroundColour( 1 ), juce::Colour titleTextColour = ui::Theme::titleColour( 1 ), juce::Colour titleBackgroundColour = ui::Theme::backgroundColour( 2 ), juce::Colour buttonBackgroundColour = ui::Theme::backgroundColour( 1 ) );
 
+        // A dialog that owns its content: the content lives exactly as long as the dialog and is released on EVERY way the modal
+        // state can end (Apply, Cancel, the X, a tap outside, the hardware, a shutdown) - no manual new / delete in the caller.
+        // The callback gets the exit code and the content (still alive).
+        template<class T>
+        void showDialogOwned( const juce::String& Title, std::unique_ptr<T> Content, std::function<void( int, T& )> Callback,
+                              juce::Rectangle<int> bounds = ui::layout::dialog, bool WithButtons = false )
+        {
+            std::shared_ptr<T> owned( std::move( Content ) );
+            T*                 raw = owned.get();
+            auto               cb  = [owned, Callback = std::move( Callback )]( int R ) {
+                if( Callback )
+                    Callback( R, *owned );
+            };
+            if( WithButtons )
+                showOptions( Title, raw, cb, bounds );
+            else
+                showDialog( Title, raw, cb, bounds );
+        }
+
         void showNotification( const juce::String& Msg );
 
         fsPopup* showPopup( juce::Component* Comp, juce::Rectangle<int> Bounds, std::function<void( int )> Callback );
@@ -154,6 +173,10 @@ namespace mt
         bool isDialogOpen();
         bool topDialogHasApply();
         bool closeTopDialogFromHardware( bool apply );
+        // A picture of the topmost open dialog (a popup window is not part of the screen snapshot); empty when none is open.
+        // Smoke test / screenshots.
+        juce::Image snapshotTopDialog();
+        int         openDialogCount();
 
         ///
         /// Graphic Utilities...

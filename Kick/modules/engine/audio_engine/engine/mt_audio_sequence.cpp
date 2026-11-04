@@ -187,8 +187,28 @@ namespace mt
 
     int MTSequence::useMasterBPM( bool UseMasterBPM )
     {
-        isMasterBPM = UseMasterBPM;
+        // Following the global tempo means following its time signature too: the bar grid changes, so the lengths are re-mapped
+        // (the grid is captured while the old setting is still in force).
+        const bool switchingToGlobal = UseMasterBPM && !isUsingMasterBPM();
+        const auto old               = switchingToGlobal ? captureTimeGrid() : TimeGrid{};
+        isMasterBPM                  = UseMasterBPM;
+        if( switchingToGlobal && mirrorGlobalTimeSignature( undoManager ) )
+            remapTimeGrid( old );
         return getBPM();
+    }
+
+    bool MTSequence::mirrorGlobalTimeSignature( juce::UndoManager* Undo )
+    {
+        if( !isUsingMasterBPM() || manager.getNumTempoSettings() != 1 || getNumTempoSettings() != 1 )
+            return false;
+        auto&      global = manager.getTempoSettings( 0 );
+        const int  num    = global.getNumerator(), den = global.getDenominator();
+        auto       own    = getTempoState( 0 );
+        if( !own.isValid() || ( getTempoSettings( 0 ).getNumerator() == num && getTempoSettings( 0 ).getDenominator() == den ) )
+            return false;
+        own.setProperty( IDs::num, num, Undo );
+        own.setProperty( IDs::den, den, Undo );
+        return true;
     }
 
     int MTSequence::setLooping( bool IsLooping )

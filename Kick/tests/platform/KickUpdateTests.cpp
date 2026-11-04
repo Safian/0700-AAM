@@ -119,6 +119,14 @@ int main()
     CHECK( drives.size() == 2 && drives[0] == "/media/A" && drives[1] == "/media/B" );
     CHECK( findVolumeMounts( parseMounts( "" ), Volume::Usb, nullptr ).empty() );
 
+    // Release notes excerpt (SW-15).
+    CHECK( changelogExcerpt( "" ).empty() && changelogExcerpt( "\n \n" ).empty() );
+    CHECK( changelogExcerpt( "Fixes the Menu.\n\nAdds rollback.\r\n" ) == "Fixes the Menu.\nAdds rollback." );
+    CHECK( changelogExcerpt( "1\n2\n3\n4\n5\n6" ) == "1\n2\n3\n4" );
+    CHECK( changelogExcerpt( "1\n2\n3", 2 ) == "1\n2" );
+    CHECK( changelogExcerpt( std::string( 100, 'a' ), 4, 10 ) == std::string( 7, 'a' ) + "..." );
+    CHECK( changelogExcerpt( std::string( 10, 'a' ), 4, 10 ) == std::string( 10, 'a' ) );
+
     if( g_fail == 0 ) std::printf( "KickUpdateTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;
 }

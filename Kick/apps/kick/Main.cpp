@@ -273,6 +273,132 @@ public:
         } );
     }
 
+    // KICK_SMOKE_DIALOGS="Metronome,TimeSignature,Locate,Stp,Tempo,UndoHistory,SystemResources" (+ KICK_SMOKE_SHOTS_DIR for the pictures,
+    // KICK_SMOKE_DIALOG_CYCLES, default 3): each dialog is opened and closed the way the hardware closes it, the cycle is repeated with a
+    // theme reload after every round (the slots of a closed dialog must not run). Prints "DIALOG ..." per step and "PASS: dialogs".
+    void smokeDialogs( juce::StringArray names, juce::File dir, int index, int cycle, int cycles )
+    {
+        const auto fail = [this]( const juce::String& m ) {
+            std::cerr << "FAIL: " << m << std::endl;
+            setApplicationReturnValue( 3 );
+        };
+        if( index >= names.size() )
+        {
+            // A theme reload between the rounds: every slot that is still connected runs (a dead dialog would crash here).
+            ui::Theme::loadTheme( ui::Theme::getCurrentTheme(), true );
+            if( cycle + 1 >= cycles )
+            {
+                if( getApplicationReturnValue() == 0 )
+                    std::cout << "PASS: dialogs" << std::endl;
+                quit();
+                return;
+            }
+            juce::Timer::callAfterDelay( 300, [this, names, dir, cycle, cycles] { smokeDialogs( names, dir, 0, cycle + 1, cycles ); } );
+            return;
+        }
+        const auto name = names[index].trim();
+        auto&      ae   = mt::getAudioInterface();
+        auto&      bar  = kick_ui::AppStatusbar::Instance();
+        if( name.equalsIgnoreCase( "Metronome" ) ) kick_ui::MetronomePopup::Show();
+        else if( name.equalsIgnoreCase( "TimeSignature" ) ) kick_ui::TimeSignatureDialog::show( ae.getSelectedSequence() );
+        else if( name.equalsIgnoreCase( "Locate" ) ) bar.showBbtPopup();
+        else if( name.equalsIgnoreCase( "Stp" ) ) bar.showStpPopup();
+        else if( name.equalsIgnoreCase( "Tempo" ) ) bar.showTempoEditor();
+        else if( name.equalsIgnoreCase( "UndoHistory" ) ) kick_ui::UndoHistory::show();
+        else if( name.equalsIgnoreCase( "SystemResources" ) ) kick_ui::KickModeHeader::showSystemResources();
+        else
+        {
+            fail( "unknown dialog " + name );
+            quit();
+            return;
+        }
+        juce::Timer::callAfterDelay( 800, [this, names, dir, index, cycle, cycles, name, fail] {
+            const bool open = mt::utils::isDialogOpen();
+            std::cout << "DIALOG " << name << " cycle " << cycle << " open=" << open << std::endl;
+            if( !open )
+                fail( "dialog " + name + " did not open" );
+            if( cycle == 0 && dir != juce::File() )
+            {
+                auto image = mt::utils::snapshotTopDialog();
+                if( image.isValid() )
+                {
+                    auto shotFile = dir.getChildFile( "Dialog_" + name + ".png" );
+                    shotFile.deleteFile();
+                    juce::FileOutputStream output{ shotFile };
+                    juce::PNGImageFormat   png;
+                    if( !output.openedOk() || !png.writeImageToStream( image, output ) ) setApplicationReturnValue( 2 );
+                }
+            }
+            mt::utils::closeTopDialogFromHardware( false );
+            juce::Timer::callAfterDelay( 500, [this, names, dir, index, cycle, cycles, name, fail] {
+                const bool stillOpen = mt::utils::isDialogOpen();
+                if( stillOpen )
+                {
+                    fail( "dialog " + name + " did not close" );
+                    juce::ModalComponentManager::getInstance()->cancelAllModalComponents();
+                }
+                smokeDialogs( names, dir, index + 1, cycle, cycles );
+            } );
+        } );
+    }
+
+    // KICK_SMOKE_MENUTILES=1: every tile of the Menu is pressed (on its page), first without a project (screens that need one stay
+    // closed and the tile is grayed out), then with one (each opens its screen). Prints "MENUTILE ..." per item and "PASS: menu tiles".
+    void smokeMenuTiles( int item, bool withProject )
+    {
+        namespace ml = ui::menu_logic;
+        using kick_ui::Screen;
+        auto& home = kick_ui::KickHome::Instance();
+        const auto fail = [this]( const juce::String& m ) {
+            std::cerr << "FAIL: " << m << std::endl;
+            setApplicationReturnValue( 3 );
+        };
+        if( item >= ml::kMenuItemCount )
+        {
+            if( !withProject )
+            {
+                auto file = juce::File( juce::SystemStats::getEnvironmentVariable( "KICK_DATA_ROOT", {} ) ).getChildFile( "menutiles/Project.kickPrj" );
+                if( !file.getParentDirectory().createDirectory() || !mt::getAudioInterface().loadProject( file, true ) )
+                {
+                    fail( "menu tiles: cannot create the project" );
+                    quit();
+                    return;
+                }
+                smokeMenuTiles( 0, true );
+                return;
+            }
+            std::cout << "PASS: menu tiles" << std::endl;
+            quit();
+            return;
+        }
+        if( home.getCurrentScreen() != Screen::HomeOptions )
+            kick_ui::signals::sigScreenClose( Screen::HomeOptions );
+        juce::Timer::callAfterDelay( 500, [this, item, withProject, fail] {
+            auto& home = kick_ui::KickHome::Instance();
+            auto* menu = dynamic_cast<kick_ui::AppMenuOptions*>( home.findScreen( Screen::HomeOptions ) );
+            if( menu == nullptr || home.getCurrentScreen() != Screen::HomeOptions )
+            {
+                fail( "menu tiles: the Menu is not open for item " + juce::String( item ) );
+                quit();
+                return;
+            }
+            const bool shouldWork = withProject || !ml::itemNeedsProject<Screen>( item );
+            const bool clicked    = menu->activateItem( item );
+            juce::Timer::callAfterDelay( 700, [this, item, withProject, fail, shouldWork, clicked] {
+                auto& home = kick_ui::KickHome::Instance();
+                const Screen want = item < ml::kTileCount ? ml::tileScreen<Screen>( item ) : item == ml::kCommandKickUpdate ? Screen::KickUpdate : item == ml::kCommandFavorites ? Screen::MenuFileBrowser : Screen::HomeOptions;
+                const Screen expect = shouldWork ? want : Screen::HomeOptions;
+                const bool   ok     = clicked == shouldWork && home.getCurrentScreen() == expect;
+                std::cout << "MENUTILE " << ( withProject ? "project" : "no-project" ) << " item " << item << " '" << ml::tileDef<Screen>( item ).name << "' clicked=" << clicked
+                          << " screen=" << (int)home.getCurrentScreen() << " expected=" << (int)expect << ( ok ? " ok" : " FAIL" ) << std::endl;
+                if( !ok )
+                    fail( "menu tile " + juce::String( ml::tileDef<Screen>( item ).name ) + ( withProject ? " (project)" : " (no project)" ) );
+                juce::ModalComponentManager::getInstance()->cancelAllModalComponents(); // the Resources dialog
+                smokeMenuTiles( item + 1, withProject );
+            } );
+        } );
+    }
+
     void initialise( const juce::String& commandLine ) override
     {
         kick_logger::init();
@@ -464,6 +590,30 @@ public:
                 juce::FileOutputStream output{juce::File(path)};
                 juce::PNGImageFormat png;
                 if (!output.openedOk() || !png.writeImageToStream(image, output)) setApplicationReturnValue(2);
+            }
+            if (const auto dialogs = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_DIALOGS", {}); dialogs.isNotEmpty())
+            {
+                auto file = juce::File(juce::SystemStats::getEnvironmentVariable("KICK_DATA_ROOT", {})).getChildFile("dialogs/Project.kickPrj");
+                auto& api = mt::getAudioInterface();
+                if (!file.getParentDirectory().createDirectory() || !api.loadProject(file, true))
+                {
+                    std::cerr << "FAIL: dialogs smoke: cannot create the project" << std::endl;
+                    setApplicationReturnValue(3);
+                    quit();
+                    return;
+                }
+                if (api.getNumSequences() == 0) api.createSequence("DialogSeq"); // the sequence dialogs need one
+                api.setSelectedSequence(0);
+                const auto shots = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SHOTS_DIR", {});
+                if (shots.isNotEmpty()) juce::File(shots).createDirectory();
+                const auto cycles = juce::jmax(1, juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_DIALOG_CYCLES", "3").getIntValue());
+                smokeDialogs(juce::StringArray::fromTokens(dialogs, ",", ""), shots.isNotEmpty() ? juce::File(shots) : juce::File(), 0, 0, cycles);
+                return;
+            }
+            if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_MENUTILES", {}).isNotEmpty())
+            {
+                smokeMenuTiles(0, false);
+                return;
             }
             const auto screens = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SCREENS", {});
             const auto shotsDir = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SHOTS_DIR", {});

@@ -221,4 +221,42 @@ namespace kick_sysinfo
         out.ok             = true;
         return out;
     }
+
+    // ---- Warnings for the status bar -------------------------------------------------------------------------------
+    constexpr int kDiskWarnPercent = 95; // used share of the internal storage at which saving gets risky (< 5 % free)
+    constexpr int kRamWarnPercent  = 92; // used share of the memory at which a big project load may fail
+
+    struct ResourceWarnings
+    {
+        std::string disk, ram; // empty = fine
+    };
+
+    // The internal storage and the memory against the limits above. A value that could not be read never warns.
+    inline ResourceWarnings resourceWarnings( bool haveDisk, int diskPercent, double diskFreeMb, bool haveRam, int ramPercent )
+    {
+        ResourceWarnings w;
+        if( haveDisk && diskPercent >= kDiskWarnPercent )
+            w.disk = "Low storage: " + std::to_string( (long long)( diskFreeMb < 0.0 ? 0.0 : diskFreeMb ) ) + " MB free";
+        if( haveRam && ramPercent >= kRamWarnPercent )
+            w.ram = "Low memory: " + std::to_string( ramPercent ) + " % used";
+        return w;
+    }
+
+    // ---- The CPU badge on the header's Resources icon (HDR-23) -------------------------------------------------------
+    constexpr double kCpuCritical = 85.0; // percent of the CPU at which the badge turns red
+
+    // "23%" (rounded, 0..100); empty when the CPU could not be read.
+    inline std::string cpuBadgeText( bool haveCpu, double cpuPercent )
+    {
+        if( !haveCpu || cpuPercent < 0.0 )
+            return {};
+        const int v = (int)( cpuPercent + 0.5 );
+        return std::to_string( v > 100 ? 100 : v ) + "%";
+    }
+
+    // The badge is red when the CPU is nearly used up or the memory is short.
+    inline bool cpuBadgeCritical( bool haveCpu, double cpuPercent, bool haveRam, int ramPercent )
+    {
+        return ( haveCpu && cpuPercent >= kCpuCritical ) || ( haveRam && ramPercent >= kRamWarnPercent );
+    }
 }

@@ -21,6 +21,7 @@
 
 #include "../../hardware/source/kick_PlatformServices.h"
 #include "../../hardware/source/kick_I2c.h"
+#include "kick_recent_list.h"
 
 namespace mt
 {
@@ -185,27 +186,43 @@ namespace mt
 
     void KickProjectsDefault::removeProject( int Index ) { vTree.removeChild( Index, undo ); }
 
+    // The stored list as plain strings (oldest first), for the pure list logic (kick_recent_list.h).
+    static std::vector<std::string> recentList( juce::ValueTree& tree )
+    {
+        std::vector<std::string> out;
+        for( int i = 0; i < tree.getNumChildren(); ++i )
+            out.push_back( tree.getChild( i ).getProperty( IDs::FULLPATH, "" ).toString().toStdString() );
+        return out;
+    }
+
     void KickProjectsDefault::removeProject( juce::File& ProjectFile )
     {
         juce::File project = ProjectFile.exists() ? ProjectFile.isDirectory() ? ProjectFile : ProjectFile.getParentDirectory() : ProjectFile;
 
-        for( auto i = 0; i < vTree.getNumChildren(); i++ )
-        {
-            auto recentProjectName = getProject( i );
-            if( recentProjectName == project.getFullPathName() )
-                removeProject( i );
-        }
+        // Highest index first: removing an entry must not shift the ones still to be removed.
+        for( int i : kick_recent::indicesOf( recentList( vTree ), project.getFullPathName().toStdString() ) )
+            removeProject( i );
     }
 
     void KickProjectsDefault::renameProject( juce::File& ProjectFile, juce::File& newFile )
     {
         juce::File project = ProjectFile.exists() ? ProjectFile.isDirectory() ? ProjectFile : ProjectFile.getParentDirectory() : ProjectFile;
-        for( auto i = 0; i < vTree.getNumChildren(); i++ )
+        const auto list    = recentList( vTree );
+        const auto after   = kick_recent::renamed( list, project.getFullPathName().toStdString(), newFile.getFullPathName().toStdString() );
+        if( after == list )
+            return;
+        if( after.size() == list.size() )
         {
-            juce::String projName = getProject( i );
-            if( projName == project.getFullPathName() )
-                setProject( i, newFile.getFullPathName() );
+            for( size_t i = 0; i < after.size(); ++i )
+                if( after[i] != list[i] )
+                    setProject( (int)i, juce::String( after[i] ) );
+            return;
         }
+        // The new path was already in the list: one project, one entry.
+        while( vTree.getNumChildren() > 0 )
+            removeProject( vTree.getNumChildren() - 1 );
+        for( const auto& e : after )
+            addProject( juce::String( e ) );
     }
 
     void KickProjectsDefault::createProject( const juce::File& file )
@@ -240,38 +257,18 @@ namespace mt
 
     bool KickProjectsDefault::checkAlreadyLoadOrNot( juce::File& ProjectFile )
     {
-        auto       recentProjectChildNum = getNumChildren();
-        juce::File project               = getProjectPath( ProjectFile );
-        if( project.exists() )
-        {
-            if( recentProjectChildNum )
-            {
-                for( auto i = 0; i < recentProjectChildNum; i++ )
-                {
-                    auto recentProjectName = getProject( i );
-                    if( recentProjectName == ProjectFile.getFullPathName() )
-                    {
-                        removeProject( i );
-                        return ADDPROJECT;
-                    }
-                }
-                //If It is a NewFile
-                if( getNumChildren() == maxRecentProjects() )
-                    removeProject( 0 );
-                return ADDPROJECT;
-            }
-            return ADDPROJECT;
-        }
-        return DONT_ADDPROJECT;
+        // The project is opened again: its old entry goes, the oldest ones make room (the list never exceeds its maximum), the
+        // caller adds it as the newest. A project without a project file is not added.
+        juce::File project = getProjectPath( ProjectFile );
+        const auto plan    = kick_recent::planOpen( recentList( vTree ), ProjectFile.getFullPathName().toStdString(), project.exists(), maxRecentProjects() );
+        for( int i : plan.remove )
+            removeProject( i );
+        return plan.add ? ADDPROJECT : DONT_ADDPROJECT;
     }
 
     void KickProjectsDefault::refreshMaxNumOfRecentProj()
     {
-        int num = 0;
-        if( getNumChildren() >= maxRecentProjects() )
-            num = getNumChildren() - maxRecentProjects();
-
-        for( auto i = 0; i < num; i++ )
+        for( int i = kick_recent::excess( (size_t)getNumChildren(), maxRecentProjects() ); i > 0; --i )
             removeProject( 0 );
     }
 

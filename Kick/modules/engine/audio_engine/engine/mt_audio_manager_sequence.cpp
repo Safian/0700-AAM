@@ -171,7 +171,10 @@ namespace mt
         tempo.setProperty( IDs::num, Numerator, undoManager );
         tempo.setProperty( IDs::den, Denominator, undoManager );
         for( auto& it : before )
+        {
+            it.first->mirrorGlobalTimeSignature( undoManager ); // the own tempo map follows (seek / loop / track ticks read it)
             it.first->remapTimeGrid( it.second );
+        }
         kick_log( "info", "[INFO] [SEQ] Global time signature set to %d/%d, %d sequence(s) re-mapped\n", Numerator, Denominator, (int)before.size() );
         return 0;
     }
@@ -302,8 +305,8 @@ namespace mt
         if( auto seqPtr = makeSequence( VT ) )
         {
             auto pSeq = seqPtr.get();
+            pSeq->mirrorGlobalTimeSignature( nullptr ); // a new / loaded sequence that follows the global tempo has the global grid
             sequences.push_back( std::move( seqPtr ) );
-            (void)pSeq;
 
             if( 1 == sequences.size() )
                 setSelectedSequence( 0 );

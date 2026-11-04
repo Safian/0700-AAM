@@ -20,7 +20,7 @@ namespace kick_ui
         {
             kick_update::State        state = kick_update::State::NoDrive;
             kick_update::PackageInfo  installed, package;
-            std::string               reason, drive, previousVersion;
+            std::string               reason, drive, previousVersion, changelog; // changelog: excerpt of the package's CHANGELOG
             bool                      hasPrevious = false;
         };
         class Scanner;

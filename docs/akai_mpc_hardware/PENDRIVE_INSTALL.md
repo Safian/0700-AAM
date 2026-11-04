@@ -136,6 +136,12 @@ A frissítés folyamata teljesen automatikus:
    - Elindítja az új verziót.
    - **A felhasználói projektekhez (`/data/projects`) és beállításokhoz nem nyúl.**
 
+Védelmek (R-7):
+- A csomag csak akkor települ, ha a `VERSION` tartalmaz `KICK_SHA256`-ot ÉS van `sha256sum`/`shasum` az MPC-n; különben a telepítés megtagad­tatik (a régi Kick marad, üres `/data`-nál a gyári MPC indul).
+- Megszakadt frissítés (áramkimaradás a bináris cseréje után): a `/data/Kick.installing` jelző (a cél SHA256-ja) alapján a következő indítás felismeri, és a `Kick.prev` NEM íródik felül a félig telepített binárissal.
+- **Visszalépés:** tegyél egy üres `ROLLBACK` fájlt a pendrive gyökerébe (vagy `/data/Kick.rollback` az appból) és indítsd újra az MPC-t: a bootstrap a `Kick.prev` + `Kick.version.prev` párost állítja vissza (SHA256-ellenőrzéssel; hiányzó vagy sérült `Kick.prev` esetén nem változtat semmit). A visszalépett csomag a `/data/Kick.rejected`-ben van megjegyezve, ezért ugyanarról a pendriveról nem települ újra, amíg más csomag nem kerül rá (vagy a `Kick.rejected` törlésre nem kerül).
+- Kiadási jegyzet: `make_pendrive_package.sh --changelog <fájl>` a csomagba teszi a `CHANGELOG`-ot; a Kick Update képernyő az első 4 sorát mutatja telepítés előtt.
+
 ---
 
 ## 6. Visszaállítás a Gyári Állapothoz (Eltávolítás)

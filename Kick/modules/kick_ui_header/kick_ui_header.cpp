@@ -10,3 +10,4 @@
 #include "kick_ui_header.h"
 
 #include "header/kick_modeHeader.cpp"
+#include "header/kick_TimeSignatureDialog.cpp"

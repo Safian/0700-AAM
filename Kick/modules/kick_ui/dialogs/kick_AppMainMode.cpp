@@ -164,6 +164,11 @@ namespace kick_ui
     {
         mt::utils::addAndMakeVisible( this, tBar );
         mt::utils::addChildComponents( this, pSeq.get(), pTrack.get(), pProg.get(), seqoptions, trackoptions, prgOptions );
+        undoConn = UndoWatcher::undoRedoDone.connect( [this]() {
+            if( !isVisible() )
+                return;
+            refreshActiveTab( tabButtons[0].getToggleState() ? TabType::Sequence : tabButtons[2].getToggleState() ? TabType::Program : TabType::Track );
+        } );
 
         mt::utils::setValueColour( ui::Theme::textColour( 1 ), tabButtons[0], tabButtons[1], tabButtons[2] );
         mt::utils::setValueFontHeight( 18, tabButtons[0], tabButtons[1], tabButtons[2] );
@@ -313,6 +318,11 @@ namespace kick_ui
             tBar.undo.setToggleState( false, juce::dontSendNotification );
         };
 
+        tBar.history.onClick = [&]() {
+            UndoHistory::show();
+            tBar.history.setToggleState( false, juce::dontSendNotification );
+        };
+
         tBar.redo.onClick = [&]() {
             if( tabButtons[0].getToggleState() )
             {
@@ -403,35 +413,35 @@ namespace kick_ui
 
     void AppMainmode::handleUndoRedo( TabType tabType, UndoRedo undoRedoOption )
     {
+        // Same entry as the hardware UNDO button (the engine's undo manager); the "Undid: ..." notification and the refresh of
+        // the tab come from the UndoWatcher for both. Not while a take is being recorded: the take is not part of the history yet.
+        if( ae.isSequenceRecording() )
+        {
+            mt::utils::showNotification( "Undo / Redo is off while recording" );
+            return;
+        }
+        if( undoRedoOption == UndoRedo::Undo )
+            ae.performUndo();
+        else
+            ae.performRedo();
+        refreshActiveTab( tabType );
+    }
+
+    void AppMainmode::refreshActiveTab( TabType tabType )
+    {
         switch( tabType )
         {
             case TabType::Sequence:
-                if( undoRedoOption == UndoRedo::Undo )
-                    ae.performUndo();
-                else
-                    ae.performRedo();
-                if( pSeq )
-                    pSeq->refresh();
+                if( pSeq ) pSeq->refresh();
                 break;
-
             case TabType::Track:
-                if( undoRedoOption == UndoRedo::Undo )
-                    ae.performUndo();
-                else
-                    ae.performRedo();
-                if( pTrack )
-                    pTrack->refresh();
+                if( pTrack ) pTrack->refresh();
                 break;
-
             case TabType::Program:
-                if( undoRedoOption == UndoRedo::Undo )
-                    ae.performUndo();
-                else
-                    ae.performRedo();
-                if( pProg )
-                    pProg->refresh();
+                if( pProg ) pProg->refresh();
                 break;
         }
+        tBar.repaint(); // the Undo / Redo buttons are enabled from the history
     }
 
     void AppMainmode::resized()
@@ -458,7 +468,7 @@ namespace kick_ui
 
     AppMainmode::toolbar::toolbar()
     {
-        mt::utils::addAndMakeVisible( this, add, del, undo, redo );
+        mt::utils::addAndMakeVisible( this, add, del, undo, redo, history );
         del.setPlacementFlag( juce::Justification::centred );
     }
 
@@ -477,6 +487,7 @@ namespace kick_ui
         del.setBounds( b.removeFromRight( 50 ).reduced( 5, 2 ) );
         redo.setBounds( b.removeFromRight( 60 ).reduced( 5, 2 ) );
         undo.setBounds( b.removeFromRight( 70 ).reduced( 5, 2 ) );
+        history.setBounds( b.removeFromRight( 80 ).reduced( 5, 2 ) );
     }
 
     void AppMainmode::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
