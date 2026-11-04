@@ -46,6 +46,12 @@ Mindegyik egység a dokumentum TODO-sorait csinálja, a hardvert/hangot kérő t
 | R-5 | S-D (menu, projects, file-browser, system-resources, header, sw-update), S-E (looper UI, inserts, xy-fx, knob-edit, midi-control), S-F (pad-perform, program-edit) | sonnet, fájlkör szerint egyenként |
 **Owner-döntések (új, a jelentésekből):** mixerek közös skálája (MIDI vs dB), Main Volume nem perzisztens trim, Keygroup Pad Mixer, pad-solo perzisztencia, Mixer-elrendezés/Akai-paritás, Time Division mute, transzport-duplázás helye, Song Export tartalma, CLASSIC 127 vs GRID 100 alap-velocity, NS-04 pad-LED irány, Keygroup/MIDI alapszínek, Sampler Export célja, DSP-könyvtár/licenc a Sample Edit Pitch/Time/Bit-reduce-hoz, AS-15 holt kód törlése, SE-21 PLAY-szemantika, a hivatalos plugin-aláíró kulcs (a beépített publikus kulcs helykitöltő, privát kulcs nincs: fail-closed), `assets/Default` módosítása (a "Keyboard" menü-csempe ikonja + theme.xml sor; az eszközön a Default skin fut).
 
+
+## Állapot (2026-11-04 09:30) — új egység (owner kérése)
+| ID | Tartalom | Állapot |
+|---|---|---|
+| R-12 | **Rendes leállítás a Kickben, mint a gyári MPC-ben**: a bekapcsoló gomb rövid megnyomására "Power" ablak (Shut Down / Restart / Cancel), Menü "Power" csempe, mentetlen-változás kérdés, transzport/felvétel leállítása, projekt-lezárás, `sync`, majd `PlatformServices::powerOff()`; a gomb figyelése (input-eszköz felderítése `/proc/bus/input/devices`-ból, `KEY_POWER`); a logind kettős kezelése ellen a bootstrap `systemd-inhibit --what=handle-power-key` változata | Mac-oldal: sonnet-worker fut (`sonnet/r12-shutdown`); MPC-oldal: a gomb eszköz-azonosítása és a Shut Down végigvitele az MPC bekapcsolása után (csak olvasás + a tulajdonos próbája) |
+
 ---
 (Részletes egységek és sorrend alább.)
 
