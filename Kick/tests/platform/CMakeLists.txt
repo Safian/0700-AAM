@@ -191,6 +191,11 @@ add_executable(kick-logging-tests LoggingTests.cpp)
 add_test(NAME kick-logging COMMAND kick-logging-tests)
 set_tests_properties(kick-logging PROPERTIES TIMEOUT 10)
 
+# Preferences & Platform command helpers (sanitization, injection protection, date/time formatting, CV calibration math, VERSION parsing); JUCE-free, header only.
+add_executable(kick-platform-command-tests PlatformCommandTests.cpp)
+add_test(NAME kick-platform-command COMMAND kick-platform-command-tests)
+set_tests_properties(kick-platform-command PROPERTIES TIMEOUT 10)
+
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()

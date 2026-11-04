@@ -28,7 +28,7 @@ namespace kick_ui
 {
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
-    ////////////////////////////  KickChannelMixer
+    ////////////////////////////  SettingsEthernet
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
     SettingsEthernet::SettingsEthernet()
@@ -39,6 +39,10 @@ namespace kick_ui
 
         addComponent( enabled, 0, 0 );
         addComponent( method, 0, 1 );
+        addComponent( statusLabel, 0, 2 );
+
+        statusLabel.setValueJustification( juce::Justification::centred );
+        statusLabel.setValueFontHeight( 16 );
 
         addComponent( ipAddr, 1, 0, 2 );
         addComponent( subnet, 2, 0, 2 );
@@ -54,52 +58,82 @@ namespace kick_ui
         };
 
         ipAddr.onTextChange = [&]() {
-            settings.eth.ipAddress = ( ipAddr.getTextValue().toString() );
-            update();
-            DBG( "IPAddress -> " << ipAddr.getTextValue().toString() );
+            if( settings.eth.mode() == "MANUAL" )
+            {
+                settings.eth.ipAddress = ( ipAddr.getTextValue().toString() );
+                update();
+            }
         };
 
         gateway.onTextChange = [&]() {
-            settings.eth.gateway = ( gateway.getTextValue().toString() );
-            update();
-            DBG( "gateWay -> " << gateway.getTextValue().toString() );
+            if( settings.eth.mode() == "MANUAL" )
+            {
+                settings.eth.gateway = ( gateway.getTextValue().toString() );
+                update();
+            }
         };
 
         subnet.onTextChange = [&]() {
-            settings.eth.subnetMask = ( subnet.getTextValue().toString() );
-            update();
-            DBG( "subnet -> " << subnet.getTextValue().toString() );
+            if( settings.eth.mode() == "MANUAL" )
+            {
+                settings.eth.subnetMask = ( subnet.getTextValue().toString() );
+                update();
+            }
         };
+
         dns.onTextChange = [&]() {
-            update();
-            DBG( "dns -> " << dns.getTextValue().toString() );
+            if( settings.eth.mode() == "MANUAL" )
+            {
+                settings.eth.dns = ( dns.getTextValue().toString() );
+                update();
+            }
         };
+
         initializeInterfaceState();
     }
 
     void SettingsEthernet::handleEnabledClick()
     {
-        bool status          = enabled.getToggleState();
-        settings.eth.enabled = ( status );
-        setComponentsEnabled( status );
+        bool isEthEnabled = enabled.getToggleState();
+        settings.eth.enabled = isEthEnabled;
+        bool isDhcp = ( settings.eth.mode() == "DHCP" );
 
-        mt::HwPref::getHwPref().ethernetEnable( status );
+        setComponentsEnabled( isEthEnabled && !isDhcp );
+        method.setEnabled( isEthEnabled );
+        mt::HwPref::getHwPref().ethernetEnable( isEthEnabled );
+
+        if( isEthEnabled )
+        {
+            if( isDhcp )
+                mt::HwPref::getHwPref().startDhcp();
+            else
+            {
+                mt::HwPref::getHwPref().stopDhcp();
+                update();
+            }
+        }
+        else
+        {
+            mt::HwPref::getHwPref().stopDhcp();
+        }
     }
 
     void SettingsEthernet::handleMethodClick()
     {
-        bool useDhcp      = method.getToggleState();
-        settings.eth.mode = ( useDhcp ? "MANUAL" : "DHCP" );
+        // Toggle state ON means DHCP; OFF means MANUAL
+        bool isDhcp = method.getToggleState();
+        settings.eth.mode = ( isDhcp ? "DHCP" : "MANUAL" );
 
-        if( useDhcp )
+        if( isDhcp )
         {
             setComponentsEnabled( false );
             mt::HwPref::getHwPref().startDhcp();
         }
         else
         {
-            setComponentsEnabled( true );
+            setComponentsEnabled( enabled.getToggleState() );
             mt::HwPref::getHwPref().stopDhcp();
+            update();
         }
     }
 
@@ -113,50 +147,81 @@ namespace kick_ui
 
     void SettingsEthernet::refresh()
     {
-        bool status          = mt::HwPref::getHwPref().isInterfaceUp();
-        settings.eth.enabled = ( status );
-        enabled.setToggleState( status, juce::dontSendNotification );
+        bool ifUp = mt::HwPref::getHwPref().isInterfaceUp();
+        bool isEthEnabled = settings.eth.enabled();
+        bool isDhcp = ( settings.eth.mode() == "DHCP" );
 
-        mt::sysEthInfo info;
-        mt::HwPref::getHwPref().getIP( "eth0", info );
+        if( !isEthEnabled )
+        {
+            statusLabel.setText( "Disabled", juce::dontSendNotification );
+        }
+        else if( !ifUp )
+        {
+            statusLabel.setText( "Link Down", juce::dontSendNotification );
+        }
+        else
+        {
+            mt::sysEthInfo info;
+            mt::HwPref::getHwPref().getIP( "eth0", info );
+            if( info.IP.empty() || info.IP == "0.0.0.0" )
+            {
+                statusLabel.setText( isDhcp ? "Acquiring IP..." : "No IP", juce::dontSendNotification );
+            }
+            else
+            {
+                statusLabel.setText( juce::String( "Online (" ) + ( isDhcp ? "DHCP" : "Manual" ) + ")", juce::dontSendNotification );
+            }
 
-        ipAddr.setText( info.IP, juce::dontSendNotification );
-
-        subnet.setText( info.subnet, juce::dontSendNotification );
-        gateway.setText( info.gateway, juce::dontSendNotification );
-        dns.setText( "0.0.0.0", juce::dontSendNotification );
-
-        settings.eth.ipAddress  = ( info.IP );
-        settings.eth.gateway    = ( info.gateway );
-        settings.eth.subnetMask = ( info.subnet );
+            if( isDhcp )
+            {
+                ipAddr.setText( info.IP, juce::dontSendNotification );
+                subnet.setText( info.subnet, juce::dontSendNotification );
+                gateway.setText( info.gateway, juce::dontSendNotification );
+            }
+        }
     }
 
     void SettingsEthernet::initializeInterfaceState()
     {
-        bool status          = mt::HwPref::getHwPref().isInterfaceUp();
-        settings.eth.enabled = ( status );
-        enabled.setToggleState( status, juce::dontSendNotification );
+        bool isEthEnabled = settings.eth.enabled();
+        enabled.setToggleState( isEthEnabled, juce::dontSendNotification );
+        method.setEnabled( isEthEnabled );
 
         juce::String mode = settings.eth.mode();
-        DBG( "i####################################################3mode -> " << mode );
-        if( mode == "DHCP" )
+        bool isDhcp = ( mode == "DHCP" );
+        method.setToggleState( isDhcp, juce::dontSendNotification );
+        setComponentsEnabled( isEthEnabled && !isDhcp );
+
+        ipAddr.setText( settings.eth.ipAddress(), juce::dontSendNotification );
+        subnet.setText( settings.eth.subnetMask(), juce::dontSendNotification );
+        gateway.setText( settings.eth.gateway(), juce::dontSendNotification );
+        dns.setText( settings.eth.dns(), juce::dontSendNotification );
+
+        mt::HwPref::getHwPref().ethernetEnable( isEthEnabled );
+        if( isEthEnabled )
         {
-            mt::HwPref::getHwPref().startDhcp();
-        }
-        else
-        {
-            //here it will update based on value tree.
-            update();
-            mt::HwPref::getHwPref().stopDhcp();
+            if( isDhcp )
+            {
+                mt::HwPref::getHwPref().startDhcp();
+            }
+            else
+            {
+                mt::HwPref::getHwPref().stopDhcp();
+                update();
+            }
         }
     }
 
     void SettingsEthernet::update()
     {
+        if( !settings.eth.enabled() || settings.eth.mode() == "DHCP" )
+            return;
+
         juce::String ip   = settings.eth.ipAddress();
-        juce::String gate = settings.eth.gateway();
         juce::String sub  = settings.eth.subnetMask();
-        mt::HwPref::getHwPref().setIP( "eth0", ip.toStdString(), sub.toStdString(), gate.toStdString() );
+        juce::String gate = settings.eth.gateway();
+        juce::String dnsServer = settings.eth.dns();
+        mt::HwPref::getHwPref().setIP( "eth0", ip.toStdString(), sub.toStdString(), gate.toStdString(), dnsServer.toStdString() );
     }
 
     void SettingsEthernet::setupHeader( kick_ui::KickModeHeader& Hdr ) {}

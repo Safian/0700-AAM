@@ -23,6 +23,7 @@
 
 #include "kick_ui_settings_info.h"
 #include "../modules/hardware/source/kick_Hwpref.h"
+#include "../modules/hardware/source/kick_PlatformServices.h"
 #include "../modules/engine/interface/source/mt_audio_ids.h"
 
 namespace kick_ui
@@ -57,13 +58,25 @@ namespace kick_ui
             logo.setImage( "LOGO" );
         } );
 
-        fwUpdate.onClick = [&]() { signals::sigScreenOpen( kick_ui::Screen::SWUpdateView ); };
+        fwUpdate.onClick = [&]() {
+            auto& ps = mt::PlatformServices::getInstance();
+            if( !ps.isHardwareControlAvailable() )
+            {
+                auto p = new ConfirmationPopup{ "Firmware update unavailable on this platform.", false, true };
+                mt::utils::showOptions( "INFO", p, [p]( int ) { delete p; },
+                                        ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
+                return;
+            }
+            signals::sigScreenOpen( kick_ui::Screen::SWUpdateView );
+        };
         fReset.onClick   = [&]() {
-            auto p = new ConfirmationPopup{ " Are You Sure You Want To Do Factory Reset ?", false, false };
+            auto p = new ConfirmationPopup{ "Factory Reset will erase all projects, settings, and WiFi credentials. Continue?", false, false };
             mt::utils::showOptions(
                 "CONFIRMATION!", p, [&, p]( int R ) {
                    if( R == UI::APPLY )
-                     mt::HwPref::getHwPref().factoryReset();
+                   {
+                       mt::PlatformServices::getInstance().factoryReset();
+                   }
                    delete p; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
         };
         rDefaults.onClick = [&]() {
@@ -71,7 +84,10 @@ namespace kick_ui
             mt::utils::showOptions(
                 "CONFIRMATION!", p, [&, p]( int R ) {
                    if( R == UI::APPLY )
-                    mt::getSettings().makeDefaults();
+                   {
+                       mt::getSettings().makeDefaults();
+                       updateInfo();
+                   }
                    delete p; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
         };
 
@@ -80,25 +96,28 @@ namespace kick_ui
 
     void SettingsInfo::updateInfo()
     {
-        auto& hwpref = mt::HwPref::getHwPref();
+        auto& ps = mt::PlatformServices::getInstance();
 
-        juce::String serialNumber          = hwpref.getDevSerial();
-        juce::String ControlSurfaceVersion = hwpref.getSurfaceVersion();
-        juce::String firmWareVersion       = hwpref.getFirmwareVersion();
+        juce::String serialNumber          = ps.getDevSerial();
+        juce::String ControlSurfaceVersion = ps.getControlSurfaceVersion();
+        juce::String firmWareVersion       = ps.getFirmwareVersion();
+        juce::String buildStamp            = ps.getBuildStamp();
 
         srNo.value.setText( serialNumber, juce::dontSendNotification );
         cVer.value.setText( ControlSurfaceVersion, juce::dontSendNotification );
         fVer.value.setText( firmWareVersion, juce::dontSendNotification );
-
-#if defined( TIMESTAMP ) && ( TIMESTAMP > 0 )
-        juce::String buildStamp = juce::String( BUILD_TIMESTAMP_STR ) + " :: " + juce::String( GIT_SHORT_HASH_STR ) + " :: " + juce::String( GIT_BRANCH_STR );
-#else
-        juce::String buildStamp = juce::String( __DATE__ ) + " :: " + juce::String( __TIME__ );
-#endif
         date.value.setText( buildStamp, juce::dontSendNotification );
+
+        if( !ps.isHardwareControlAvailable() )
+        {
+            fwUpdate.setEnabled( false );
+        }
     }
 
-    void SettingsInfo::refresh() {}
+    void SettingsInfo::refresh()
+    {
+        updateInfo();
+    }
 
     void SettingsInfo::setupHeader( kick_ui::KickModeHeader& Hdr ) {}
 

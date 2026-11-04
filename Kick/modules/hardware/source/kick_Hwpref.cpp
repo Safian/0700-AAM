@@ -1,4 +1,5 @@
 #include "kick_HardwareMode.h"
+#include "kick_PlatformServices.h"
 /*
  * Copyright (c) 2021 MUSIC Tribe
  *
@@ -121,26 +122,22 @@ namespace mt
 
     int HwPref::startDhcp( void )
     {
-	    DBG("Starting DHCP");
-        std::string command = "/usr/sbin/udhcpc -i eth0 &";
-        return executeSetCommand( command.c_str() );
+        return PlatformServices::getInstance().startDhcp();
     }
 
     int HwPref::stopDhcp( void )
     {
-	    DBG("Stoping DHCP");
-        std::string command = "killall udhcpc";
-        return executeSetCommand( command.c_str() );
+        return PlatformServices::getInstance().stopDhcp();
     }
 
     int HwPref::factoryReset( void )
     {
-        return executeSetCommand( FACTORY_RESET_CMD );
+        return PlatformServices::getInstance().factoryReset();
     }
 
     int HwPref::shutdown( void )
     {
-        return executeSetCommand( POWEROFF );
+        return PlatformServices::getInstance().powerOff();
     }
 
     // Function to compare firmware versions
@@ -246,28 +243,12 @@ namespace mt
     }
     juce::String HwPref::getDevSerial()
     {
-        std::string serialNo = "000000000";
-#if defined( __linux__ ) || defined( __linux ) || defined( linux )
-        std::string path = "/sys/devices/soc0/serial_number";
-
-        std::ifstream serialFile( path.c_str() );
-        if( serialFile.is_open() )
-        {
-            serialFile >> serialNo;
-        }
-#endif
-        return juce::String( serialNo );
+        return PlatformServices::getInstance().getDevSerial();
     }
 
     juce::String HwPref::getFirmwareVersion()
     {
-        std::string     fwVersion;
-        std::string     path = "/etc/";
-        mt::linuxFwInfo linfo;
-
-        getLinuxVersion( path, linfo );
-        juce::String FwVersion = juce::String::formatted( "%d.%d.%d",linfo.major, linfo.minor, linfo.patch );
-        return FwVersion;
+        return PlatformServices::getInstance().getFirmwareVersion();
     }
 
     bool HwPref::getLinuxVersion( std::string& path, mt::linuxFwInfo& linfo )
@@ -607,308 +588,65 @@ namespace mt
 
     bool HwPref::isEthernetCableConnected()
     {
-#if( JUCE_LINUX || __linux__ )
-        std::string ethtoolOutput = executeCommand( "ethtool eth0 | grep 'Link detected'" );
-        return ( ethtoolOutput.find( "yes" ) != std::string::npos );
-#endif
-        return false;
+        return PlatformServices::getInstance().isEthernetCableConnected();
     }
 
     bool HwPref::ethernetEnable( bool status )
     {
-        if (!hardwareEnabled()) return false;
-#if( JUCE_LINUX || __linux__ )
-        std::string command = status ? "ifconfig eth0 up" : "ifconfig eth0 down";
-        int         result  = runBoardCommand( command.c_str() ); // Execute the command using system call
-        if( result == 0 )
-        {
-            return true; // Command executed successfully
-        }
-        else
-        {
-            return false; // Command execution failed
-        }
-#else
-        return true; // Not supported on non-Linux systems
-#endif
+        return PlatformServices::getInstance().ethernetEnable( status );
     }
 
     bool HwPref::isInterfaceUp()
     {
-#if( JUCE_LINUX || __linux__ )
-        std::string   path = "/sys/class/net/eth0/operstate";
-        std::ifstream file( path );
-
-        if( !file.is_open() )
-        {
-            std::cerr << "Error: Could not open " << path << std::endl;
-            return false;
-        }
-
-        std::string state;
-        file >> state;
-        file.close();
-
-        return state == "up";
-#else
-        return true;
-#endif
+        return PlatformServices::getInstance().isEthernetInterfaceUp();
     }
 
-    int HwPref::setIP( const std::string& interface, const std::string& ipAddress, const std::string& subnetMask, const std::string& gateway )
+    int HwPref::setIP( const std::string& interface, const std::string& ipAddress, const std::string& subnetMask, const std::string& gateway, const std::string& dns )
     {
-        DBG( "SetIP Fucntion Called" );
-        int         result  = 0;
-        std::string command = "ifconfig " + interface + " " + ipAddress + " netmask " + subnetMask;
-	DBG("cmd = " <<command);
-#if( JUCE_LINUX || __linux__ )
-        result = executeSetCommand( command.c_str() );
-#endif
-        return result;
+        juce::ignoreUnused( interface );
+        return PlatformServices::getInstance().setEthernetIP( ipAddress, subnetMask, gateway, dns );
     }
 
     std::string HwPref::getSubnetMask( const std::string& interface )
     {
-        std::string subnetMask = "0.0.0.0";
-#if( JUCE_LINUX || __linux__ )
-        int          sockfd;
-        struct ifreq ifr;
-
-        // Create a socket to use for the ioctl call
-        sockfd = socket( AF_INET, SOCK_DGRAM, 0 );
-        if( sockfd == -1 )
-        {
-            std::cerr << "Failed to create socket\n";
-            return "";
-        }
-
-        // Prepare the struct for the ioctl call
-        ifr.ifr_addr.sa_family = AF_INET;
-        std::strncpy( ifr.ifr_name, interface.c_str(), IFNAMSIZ - 1 );
-
-        // Perform the ioctl to get the subnet mask
-        if( ioctl( sockfd, SIOCGIFNETMASK, &ifr ) == -1 )
-        {
-            std::cerr << "Failed to get subnet mask\n";
-            close( sockfd );
-            return "";
-        }
-
-        // Convert the result to a readable string
-        struct sockaddr_in* netmask = reinterpret_cast<struct sockaddr_in*>( &ifr.ifr_netmask );
-        subnetMask                  = inet_ntoa( netmask->sin_addr );
-
-        // Close the socket
-        close( sockfd );
-#endif
-        return subnetMask;
+        sysEthInfo info;
+        getIP( interface, info );
+        return info.subnet;
     }
 
     std::string HwPref::getGateway( const std::string& interface )
     {
-#if( JUCE_LINUX || __linux__ )
-        // Command to retrieve routing information
-        std::string command = "ip route show";
-        char        buffer[128];
-        std::string result = "";
-
-        // Open the command for reading
-        FILE* pipe = popen( command.c_str(), "r" );
-        if( !pipe )
-        {
-            std::cerr << "Failed to run command\n";
-            return "";
-        }
-
-        // Read the output of the command
-        while( fgets( buffer, sizeof( buffer ), pipe ) != nullptr )
-        {
-            result += buffer;
-        }
-
-        // Close the pipe
-        pclose( pipe );
-
-        // Parse the result to find the line corresponding to the desired interface
-        std::istringstream iss( result );
-        std::string        line;
-        while( std::getline( iss, line ) )
-        {
-            if( line.find( "default via" ) != std::string::npos && line.find( interface ) != std::string::npos )
-            {
-                // Extract the gateway IP from the line
-                std::istringstream lineStream( line );
-                std::string        word;
-                lineStream >> word; // Skip "default"
-                lineStream >> word; // Skip "via"
-                std::string gatewayIP;
-                lineStream >> gatewayIP; // Gateway IP
-
-                return gatewayIP;
-            }
-        }
-#endif
-        return "0.0.0.0";
+        sysEthInfo info;
+        getIP( interface, info );
+        return info.gateway;
     }
 
     void HwPref::getIP( const std::string interface, sysEthInfo& info )
     {
-        DBG( "GetIP Fucntion Called" );
-        std::string ipAddress = "0.0.0.0";
-
-        std::string command = "ip -4 addr show " + interface + " | awk '/inet / {split($2, a, \"\\\\/\"); print a[1]}'";
-#if( JUCE_LINUX || __linux__ )
-
-        // Get the local IP address
-        ipAddress = executeCommand( command );
-        info.IP   = ipAddress;
-
-        // Get Ethernet adapter status
-        std::string ifconfigOutput = executeCommand( "ifconfig eth0" );
-        if( ifconfigOutput.find( "UP" ) != std::string::npos )
-        {
-            info.status = true;
-            DBG( "Ethernet Adapter Status: Operational" );
-        }
+        if( interface == "wlan0" )
+            PlatformServices::getInstance().getWiFiIP( info );
         else
-        {
-            info.status = false;
-            DBG( "Ethernet Adapter Status: Not Operational" );
-        }
-
-        // Get the gateway
-        std::string gateway = getGateway( interface );
-        DBG( "Gateway: " << gateway );
-        info.gateway = gateway;
-
-        // Get the subnet mask
-        std::string subnetMask = getSubnetMask( interface );
-        info.subnet            = subnetMask;
-        DBG( "Subnet Mask: " << subnetMask );
-#endif
+            PlatformServices::getInstance().getEthernetIP( info );
     }
 
     int HwPref::getDateTime( dateInfo& date, timeInfo& time, const juce::String& timezone )
     {
-        DBG( "GetDate Fucntion Called" );
-
-#if defined( __linux__ ) || defined( __linux ) || defined( linux )
-        setenv( "TZ", timezone.toRawUTF8(), 1 );
-#endif
-
-        // Use tzset to update the timezone information
-        tzset();
-
-        std::time_t currentTime = std::time( nullptr );
-
-        // Convert the time to a struct tm
-        std::tm* timeInfo = std::localtime( &currentTime );
-
-        if( timeInfo != nullptr )
-        {
-            // Extract and display each component separately
-            date.YYYY = timeInfo->tm_year + 1900; // Add 1900 to get the actual year
-            date.MM   = timeInfo->tm_mon + 1; // Add 1 since months are 0-based
-            date.DD   = timeInfo->tm_mday;
-            time.HH   = timeInfo->tm_hour;
-            time.MM   = timeInfo->tm_min;
-
-            DBG( "Date-> " << date.YYYY << "/" << date.MM << "/" << date.DD );
-            DBG( "Time-> " << time.HH << "/" << time.MM );
-
-            return 1;
-        }
-        return 0;
+        return PlatformServices::getInstance().getDateTime( date, time, timezone );
     }
 
     int HwPref::setTimeZone( juce::String& str )
     {
-        if (!hardwareEnabled()) return 0;
-#if defined( __linux__ ) || defined( __linux ) || defined( linux )
-        std::string cmd = "timedatectl set-timezone " + str.toStdString();
-        int         ret = runBoardCommand( cmd.c_str() );
-        if( ret == 0 )
-        {
-            DBG( "setting timezone Success" << cmd );
-            return 1;
-        }
-        else
-            DBG( "Failed to set timeZone" );
-#endif
-        return 0;
+        return PlatformServices::getInstance().setTimeZone( str );
     }
 
     int HwPref::setBrightness( int value )
     {
-        if (!hardwareEnabled()) return 0;
-#if defined( __linux__ ) || defined( __linux ) || defined( linux )
-        if( value < 20 )
-        {
-            value = 20;
-        }
-        std::string setBrightness = "echo  " + std::to_string( value ) + " > /sys/devices/platform/backlight/backlight/backlight/brightness";
-        DBG( "Command = " << setBrightness );
-
-        int returnCode = runBoardCommand( setBrightness.c_str() );
-        if( returnCode == 0 )
-        {
-            DBG( "Command executed successfully." );
-            return 1;
-        }
-        else
-        {
-            DBG( "Command execution failed or returned non-zero: " );
-        }
-#endif
-        return 0;
+        return PlatformServices::getInstance().setBrightness( value );
     }
 
     DeviceInfo HwPref::getDeviceInfo()
     {
-        DeviceInfo info;
-        //Serial number
-        juce::String serialnumber = getDevSerial().toRawUTF8();
-        std::strncpy( info.serialNumber, serialnumber.toRawUTF8(), sizeof( info.serialNumber ) );
-
-        //FirmwareVersion
-        juce::String fwVersion = getFirmwareVersion().toRawUTF8();
-        std::strncpy( info.firmwareVersion, fwVersion.toRawUTF8(), sizeof( info.firmwareVersion ) );
-
-        //buildDate
-        juce::String buildStamp = juce::String( __DATE__ ) + " :: " + juce::String( __TIME__ );
-        std::strncpy( info.firmwareBuildDate, buildStamp.toRawUTF8(), sizeof( info.firmwareBuildDate ) );
-
-        mt::sysRamInfo rInfo;
-        mt::SystemResource::getResourceInterface().ramInfo( rInfo );
-
-        std::strncpy( info.memoryStatus.available, juce::String( rInfo.freeRam ).toRawUTF8(), sizeof( info.memoryStatus.available ) );
-        std::strncpy( info.memoryStatus.total, juce::String( rInfo.totalRam ).toRawUTF8(), sizeof( info.memoryStatus.total ) );
-        std::strncpy( info.memoryStatus.used, juce::String( rInfo.usedRam ).toRawUTF8(), sizeof( info.memoryStatus.used ) );
-
-        mt::sysSizeInfo sInfo;
-        std::string     internalPath = "/home/Kick";
-        mt::SystemResource::getResourceInterface().sizeInfo( internalPath, sInfo );
-
-        std::strncpy( info.internalStorageStatus.availableSpace, juce::String( sInfo.avaSize ).toRawUTF8(), sizeof( info.internalStorageStatus.availableSpace ) );
-        std::strncpy( info.internalStorageStatus.totalSpace, juce::String( sInfo.totalSize ).toRawUTF8(), sizeof( info.internalStorageStatus.totalSpace ) );
-        std::strncpy( info.internalStorageStatus.usedSpace, juce::String( sInfo.usedSize ).toRawUTF8(), sizeof( info.internalStorageStatus.usedSpace ) );
-
-        internalPath = "/mnt/flash";
-
-        if( isStorageconnected( "flash" ) )
-        {
-            mt::SystemResource::getResourceInterface().sizeInfo( internalPath, sInfo );
-
-            std::strncpy( info.usbStorageStatus.availableSpace, juce::String( sInfo.avaSize ).toRawUTF8(), sizeof( info.usbStorageStatus.availableSpace ) );
-            std::strncpy( info.usbStorageStatus.totalSpace, juce::String( sInfo.totalSize ).toRawUTF8(), sizeof( info.usbStorageStatus.totalSpace ) );
-        }
-        else
-        {
-            memcpy( info.usbStorageStatus.totalSpace, "usb not connected", sizeof( info.usbStorageStatus.totalSpace ) );
-            memcpy( info.usbStorageStatus.availableSpace, "usb not connected", sizeof( info.usbStorageStatus.availableSpace ) );
-        }
-
-        return info;
+        return PlatformServices::getInstance().getDeviceInfo();
     }
 
     bool HwPref::isStorageconnected( std::string id ) // flash-> usb , sdcard->SDCARD
@@ -936,60 +674,23 @@ namespace mt
 
     void HwPref::setDate( int day, int month, int year )
     {
-        if (!hardwareEnabled()) return;
-        //date - s "2024-05-15"
-        std::string cmd = std::to_string( year ) + "-" + std::to_string( month ) + "-" + std::to_string( day );
-        DBG( "Setting Day -> " << cmd );
-        // Execute the command
-        int result = runBoardCommand( cmd.c_str() );
-        // Check if the command executed successfully
-        if( result == 0 )
-        {
-            DBG( "Date successfully updated to: " << day << "/" << month << "/" << year );
-        }
-        else
-        {
-            DBG( "Failed to update date." );
-        }
+        dateInfo d;
+        timeInfo t;
+        PlatformServices::getInstance().getDateTime( d, t, "" );
+        PlatformServices::getInstance().setDateTime( day, month, year, t.HH, t.MM );
     }
 
     void HwPref::setTime( int hour, int minute )
     {
-        if (!hardwareEnabled()) return;
-        std::string cmd = std::to_string( hour ) + ":" + std::to_string( minute ) + ":00";
-        DBG( "Setting Day -> " << cmd );
-        // Execute the command
-        int result = runBoardCommand( cmd.c_str() );
-        // Check if the command executed successfully
-        if( result == 0 )
-        {
-            DBG( "Time successfully updated to: " << hour << "/" << minute );
-        }
-        else
-        {
-            DBG( "Failed to update Time." );
-        }
-
-        DBG( "Setting Day -> " << hour << "::" << minute );
+        dateInfo d;
+        timeInfo t;
+        PlatformServices::getInstance().getDateTime( d, t, "" );
+        PlatformServices::getInstance().setDateTime( d.DD, d.MM, d.YYYY, hour, minute );
     }
 
     // Get the number of days in a month, considering leap years
     int HwPref::getDaysInMonth( int month, int year )
     {
-        if( month == 2 )
-        {
-            if( ( year % 4 == 0 && year % 100 != 0 ) || ( year % 400 == 0 ) )
-                return 29; // Leap year
-            else
-                return 28; // Non-leap year
-        }
-        else if( month == 4 || month == 6 || month == 9 || month == 11 )
-        {
-            return 30;
-        }
-        else
-        {
-            return 31;
-        }
+        return PlatformServices::getInstance().getDaysInMonth( month, year );
     }
 }

@@ -22,6 +22,7 @@
 #pragma once
 
 // Module include files.
+
 namespace kick_ui
 {
     class SettingsMidiSync : public SettingsInterface
@@ -40,10 +41,8 @@ namespace kick_ui
         ui::KickListBox inputList{ ui::KickListBox::withoutTitleBar, "MidiInput", {}, 0, 1 };
         ui::KickListBox outputList{ ui::KickListBox::withoutTitleBar, "MidiOutput", {}, 0, 1 };
 
-        ui::KickToggleButton itrack{ "TRACK", "TRACK", "TRACK" };
-        ui::KickToggleButton icontrol{ "CONTROL", "CONTROL", "CONTROL" };
-
-        ui::KickToggleButton otrack{ "TRACK", "TRACK", "TRACK" };
-        ui::KickToggleButton ocontrol{ "CONTROL", "CONTROL", "CONTROL" };
+        bool                      m_isRefreshing{ false };
+        std::vector<juce::String> m_lastInputs;
+        std::vector<juce::String> m_lastOutputs;
     };
 }

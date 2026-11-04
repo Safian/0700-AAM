@@ -21,6 +21,7 @@
 
 #include "kick_xml_manager.h"
 #include "../../common/source/kick_paths.h"
+#include "../../common/source/kick_logger.h"
 #include <map>
 #include <set>
 
@@ -163,7 +164,7 @@ KickXML::~KickXML() {
     // Owners with live-state hooks must close explicitly while their programs
     // still exist. Preferences retain their original destructor-save behavior.
     timer.stopTimer(); cancelPendingUpdate();
-    if (!prepareSave) save();
+    if (!prepareSave && dirty.load()) save(SaveReason::Close);
     vt.removeListener(this);
 }
 bool KickXML::autoSave{true};
@@ -195,13 +196,46 @@ juce::ValueTree KickXML::loadOrCreate(const juce::File& requested) {
         const bool existing = file.existsAsFile() && file.getSize() != 0;
         if (existing) {
             loaded = juce::ValueTree::fromXml(file.loadFileAsString());
-            if (!loaded.isValid()) { failSave("Project XML could not be read", SaveReason::Explicit); return; }
+            if (!loaded.isValid()) {
+                kick_log( "warn", "[XML] Corrupted XML in '%s', creating backup and attempting recovery\n",
+                          file.getFullPathName().toRawUTF8() );
+                auto corruptBak = file.getSiblingFile( file.getFileNameWithoutExtension() + "_corrupt_" +
+                                                       juce::Time::getCurrentTime().formatted( "%Y%m%d_%H%M%S" ) + extn );
+                file.copyFileTo( corruptBak );
+
+                auto bakFile = file.getSiblingFile( file.getFileName() + ".bak" );
+                if (bakFile.existsAsFile()) {
+                    loaded = juce::ValueTree::fromXml( bakFile.loadFileAsString() );
+                    if (loaded.isValid()) {
+                        kick_log( "info", "[XML] Successfully restored from backup '%s'\n", bakFile.getFullPathName().toRawUTF8() );
+                    }
+                }
+
+                if (!loaded.isValid()) {
+                    kick_log( "warn", "[XML] Resetting '%s' to defaults\n", file.getFullPathName().toRawUTF8() );
+                    loaded = juce::ValueTree{id};
+                    loaded.setProperty("manufacturer", __manufacturer, nullptr);
+                    loaded.setProperty("version", version, nullptr);
+                }
+            }
         } else {
             if (directory.createDirectory().failed()) { failSave("Cannot create project directory", SaveReason::Explicit); return; }
             loaded = juce::ValueTree{id};
             loaded.setProperty("manufacturer", __manufacturer, nullptr);
             loaded.setProperty("version", version, nullptr);
         }
+
+        // Schema & version migration
+        if (loaded.isValid()) {
+            auto fileVer = loaded.getProperty("version").toString();
+            if (fileVer.isEmpty() || fileVer != version) {
+                kick_log( "info", "[XML] Migrating '%s' version from '%s' to '%s'\n",
+                          file.getFileName().toRawUTF8(), fileVer.toRawUTF8(), version.toRawUTF8() );
+                loaded.setProperty("version", version, nullptr);
+                dirty.store(true);
+            }
+        }
+
         vt.removeListener(this);
         vt = loaded;
         sessionCopies.clear();
@@ -308,6 +342,10 @@ bool KickXML::saveOnMessageThread(SaveReason reason) {
         }
         if (!written || !temporary.overwriteTargetFileWithTemporary())
             return failSave("Cannot write project: " + xmlFile.getFullPathName(), reason);
+
+        // Update disaster recovery backup
+        auto bakFile = xmlFile.getSiblingFile( xmlFile.getFileName() + ".bak" );
+        xmlFile.copyFileTo( bakFile );
     }
     lastSaveError.clear(); dirty.store(false);
     if (onDirtyChanged) onDirtyChanged(false);

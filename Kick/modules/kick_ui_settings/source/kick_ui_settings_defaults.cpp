@@ -27,21 +27,20 @@ namespace kick_ui
 {
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
-    ////////////////////////////  KickChannelMixer
+    ////////////////////////////  SettingsPDefault
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
     SettingsPDefault::SettingsPDefault()
-        : SettingsInterface( 5, 4, true )
+        : SettingsInterface( 4, 4, true )
     {
         ui::KickGrid::setBackgroundColour( juce::Colours::transparentBlack );
-        setRowTitles( { "Startup Settings", "Auto Save", "Time Defaults", "Project Defaults", "Default Project Name" } );
+        setRowTitles( { "Recent Projects", "Auto Save", "Project Defaults", "Default Project Name" } );
 
         asEnabled.setToggleState( settings.projects.isAutoSave(), juce::dontSendNotification );
         settings.setAutoSave( asEnabled.getToggleState() );
-        asTimeout.setSelected( settings.projects.saveAfter(), juce::sendNotification );
+        asTimeout.setSelected( settings.projects.saveAfter(), juce::dontSendNotification );
 
-        addComponent( ssLaunch, 0, 0 );
-        addComponent( ssRecProjects, 0, 1 );
+        addComponent( ssRecProjects, 0, 0 );
 
         addComponent( asEnabled, 1, 0 );
         addComponent( asTimeout, 1, 1 );
@@ -51,24 +50,11 @@ namespace kick_ui
         addComponent( pdNum, 2, 2 );
         addComponent( pdDen, 2, 3 );
 
-        addComponent( pdRootNote, 3, 0 );
-        addComponent( pdScale, 3, 1 );
-        addComponent( pdSeq, 3, 2 );
-        addComponent( pdTracks, 3, 3 );
-        addComponent( bitDepath, 0, 2 );
+        addComponent( enableList, 3, 0 );
+        addComponent( defaultName, 3, 1 );
 
-        addComponent( enableList, 4, 0 );
-        addComponent( defaultName, 4, 1 );
-
-        ssLaunch.onSelectionChanged = [this]( int index, const juce::String& str ) {
-            settings.projects.onLaunch = ( str );
-        };
         ssRecProjects.onValueChanged = [this]( int value ) {
             settings.projects.maxRecentProjects = ( value );
-        };
-
-        bitDepath.onSelectionChanged = [this]( int index, const juce::String& str ) {
-            settings.projects.bitDepth = ( str );
         };
 
         asEnabled.onClick = [this]() {
@@ -78,9 +64,9 @@ namespace kick_ui
         asTimeout.onSelectionChanged = [this]( int index, const juce::String& str ) {
             settings.projects.saveAfter = ( str );
             if( index == 0 || index == 1 )
-                settings.setAutoSaveTime( str.getIntValue() * 1000 ); //convert sec to ms
+                settings.setAutoSaveTime( str.getIntValue() * 1000 ); // convert sec to ms
             else
-                settings.setAutoSaveTime( str.getIntValue() * 1000 * 60 ); //convert min to ms
+                settings.setAutoSaveTime( str.getIntValue() * 1000 * 60 ); // convert min to ms
         };
 
         pdTempo.onValueChanged = [this]( int value ) {
@@ -98,20 +84,6 @@ namespace kick_ui
             settings.projects.denominator = ( str );
         };
 
-        pdRootNote.onSelectionChanged = [this]( int index, const juce::String& str ) {
-            settings.projects.rootNote = ( index );
-        };
-
-        pdScale.onSelectionChanged = [this]( int index, const juce::String& str ) {
-            settings.projects.scale = ( index );
-        };
-
-        pdSeq.onValueChanged = [this]( int value ) {
-            settings.projects.numSeq = ( value );
-        };
-        pdTracks.onValueChanged = [this]( int value ) {
-            settings.projects.numTrackPerSeq = ( value );
-        };
         enableList.onSelectionChanged = [this]( int index, const juce::String& ) {
             if( index == 0 )
             {
@@ -119,7 +91,7 @@ namespace kick_ui
                 settings.projects.defProjectState = ( 0 );
                 settings.projects.namingStyle     = ( "DISABLE" );
                 settings.projects.namePrefix      = ( "" );
-                defaultName.setText( settings.projects.namePrefix(), juce::dontSendNotification );
+                defaultName.setText( "", juce::dontSendNotification );
             }
             else if( index == 1 )
             {
@@ -136,43 +108,41 @@ namespace kick_ui
                 defaultName.setEditable( false, true );
                 settings.projects.defProjectState = ( 2 );
                 settings.projects.namingStyle     = ( "CUSTOM" );
-                settings.projects.namePrefix      = ( "KICK_" );
-                defaultName.setText( settings.projects.namePrefix(), juce::dontSendNotification );
+                juce::String currentPrefix = settings.projects.namePrefix();
+                if( currentPrefix.isEmpty() )
+                {
+                    currentPrefix = "KICK_";
+                    settings.projects.namePrefix = ( currentPrefix );
+                }
+                defaultName.setText( currentPrefix, juce::dontSendNotification );
             }
         };
 
         defaultName.setValueJustification( juce::Justification::centred );
         defaultName.setValueFontHeight( 20 );
         defaultName.onTextChange = [&]() {
-            juce::String text            = defaultName.getText();
+            juce::String text = defaultName.getText();
+            text = text.replaceCharacter( '/', '_' ).replaceCharacter( '\\', '_' ).replaceCharacter( ':', '_' );
             settings.projects.namePrefix = ( text );
         };
     }
 
     void SettingsPDefault::refresh()
     {
-        juce::String str = settings.projects.onLaunch();
-        ssLaunch.setSelected( str, juce::dontSendNotification );
-
         ssRecProjects.setValue( settings.projects.maxRecentProjects(), juce::dontSendNotification );
         asEnabled.setToggleState( settings.projects.isAutoSave(), juce::dontSendNotification );
         asTimeout.setSelected( settings.projects.saveAfter(), juce::dontSendNotification );
 
-        bitDepath.setSelected( settings.projects.bitDepth(), juce::dontSendNotification );
         pdBars.setValue( settings.projects.bars(), juce::dontSendNotification );
         pdTempo.setValue( settings.projects.tempo(), juce::dontSendNotification );
 
         pdNum.setSelected( settings.projects.numerator(), juce::dontSendNotification );
         pdDen.setSelected( settings.projects.denominator(), juce::dontSendNotification );
 
-        pdRootNote.setSelected( settings.projects.rootNote(), juce::dontSendNotification );
-        pdScale.setSelected( settings.projects.scale(), juce::dontSendNotification );
-
-        pdSeq.setValue( settings.projects.numSeq(), juce::dontSendNotification );
-        pdTracks.setValue( settings.projects.numTrackPerSeq(), juce::dontSendNotification );
-
-        enableList.setSelected( settings.projects.namingStyle(), juce::dontSendNotification );
+        juce::String namingStyle = settings.projects.namingStyle();
+        enableList.setSelected( namingStyle, juce::dontSendNotification );
         defaultName.setText( settings.projects.namePrefix(), juce::dontSendNotification );
+        defaultName.setEditable( false, namingStyle == "CUSTOM" );
     }
 
     void SettingsPDefault::setupHeader( kick_ui::KickModeHeader& Hdr ) {}
