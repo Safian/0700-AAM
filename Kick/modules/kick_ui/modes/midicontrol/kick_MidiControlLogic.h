@@ -184,4 +184,144 @@ namespace kick_ui::midictl
         if( Entries.size() > Max )
             Entries.erase( Entries.begin(), Entries.begin() + static_cast<std::ptrdiff_t>( Entries.size() - Max ) );
     }
+
+    // ---- MC-23: Navigating button identification
+    inline bool isNavigatingButton( const std::string& name ) noexcept
+    {
+        return name == "Step Seq" || name == "Next Seq" || name == "Sample Edit"
+            || name == "Program Edit" || name == "Browser" || name == "Track Mix"
+            || name == "Pad Mixer" || name == "sampler" || name == "XYFX";
+    }
+
+    // ---- MC-22: ControllerMap & MidiLearnEngine clean architecture
+    struct ControllerMapItem
+    {
+        int         controlId{ -1 };
+        std::string name;
+        int         defaultCc{ 0 };
+        int         midiChannel{ 1 };
+        bool        momentary{ true };
+        std::string ledMode{ "Never" }; // "Never", "Midi Input", "Local" (MC-20)
+        int         lowRange{ 0 };
+        int         highRange{ 127 };
+        bool        isAbsolute{ true };
+    };
+
+    class ControllerMap
+    {
+    public:
+        ControllerMap()
+        {
+            initDefaults();
+        }
+
+        void initDefaults()
+        {
+            items.clear();
+            const auto& bTable = buttons();
+            for( size_t i = 0; i < bTable.size(); ++i )
+            {
+                ControllerMapItem item;
+                item.controlId   = static_cast<int>( i );
+                item.name        = bTable[i].name;
+                item.defaultCc   = bTable[i].defaultCc;
+                item.momentary   = true;
+                item.ledMode     = "Never";
+                items.push_back( item );
+            }
+            for( int i = 0; i < kQLinks; ++i )
+            {
+                ControllerMapItem item;
+                item.controlId   = kFirstQLink + i;
+                item.name        = qlinkName( i );
+                item.defaultCc   = 16 + i;
+                item.isAbsolute  = true;
+                items.push_back( item );
+            }
+            for( int i = 0; i < kPads; ++i )
+            {
+                ControllerMapItem item;
+                item.controlId   = kFirstPad + i;
+                item.name        = padName( i );
+                item.defaultCc   = 36 + i;
+                items.push_back( item );
+            }
+        }
+
+        const std::vector<ControllerMapItem>& getItems() const noexcept { return items; }
+        std::vector<ControllerMapItem>&       getItems() noexcept { return items; }
+
+        const ControllerMapItem* findItem( int controlId ) const noexcept
+        {
+            for( const auto& item : items )
+                if( item.controlId == controlId )
+                    return &item;
+            return nullptr;
+        }
+
+        ControllerMapItem* findItem( int controlId ) noexcept
+        {
+            for( auto& item : items )
+                if( item.controlId == controlId )
+                    return &item;
+            return nullptr;
+        }
+
+    private:
+        std::vector<ControllerMapItem> items;
+    };
+
+    struct MidiLearnBinding
+    {
+        std::string sourcePort; // empty = any
+        std::string type;       // "cc", "Note", "PitchBend", "ProgramChange"
+        int         channel{ 1 };
+        int         number{ -1 }; // CC or Note number
+        std::string target;       // target parameter description
+        bool        flip{ false };
+        bool        isToggle{ false };
+        float       lastValue{ 0.0f };
+    };
+
+    struct ProcessedMapping
+    {
+        bool        matched{ false };
+        std::string target;
+        float       value{ 0.0f };
+        bool        isToggle{ false };
+    };
+
+    class MidiLearnEngine
+    {
+    public:
+        void clearBindings() noexcept { bindings.clear(); }
+
+        void addBinding( const MidiLearnBinding& binding )
+        {
+            bindings.push_back( binding );
+        }
+
+        std::size_t numBindings() const noexcept { return bindings.size(); }
+        const MidiLearnBinding& getBinding( std::size_t index ) const { return bindings.at( index ); }
+
+        ProcessedMapping processIncoming( const std::string& type, int channel, int number, int rawValue127, const std::string& port = "" ) noexcept
+        {
+            for( auto& b : bindings )
+            {
+                if( !b.sourcePort.empty() && !port.empty() && b.sourcePort != port )
+                    continue;
+                if( b.type == type && b.channel == channel && ( b.number == number || b.number < 0 ) )
+                {
+                    const int   v    = flipped( rawValue127, b.flip );
+                    const float norm = v / 127.0f;
+                    b.lastValue      = norm;
+                    return { true, b.target, norm, b.isToggle };
+                }
+            }
+            return { false, "", 0.0f, false };
+        }
+
+    private:
+        std::vector<MidiLearnBinding> bindings;
+    };
 }

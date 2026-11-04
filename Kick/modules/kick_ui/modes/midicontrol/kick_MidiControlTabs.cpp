@@ -780,7 +780,13 @@ namespace kick_ui
                 rightComp.setCurentComponent( 1 );
             }
             if( !bankSel )
-                refresh();
+            {
+                if( index != lastRefreshedIndex )
+                {
+                    lastRefreshedIndex = index;
+                    refresh();
+                }
+            }
         };
 
         rightComp.button.typeOptions.onClick                = [&]() { saveData(); };
@@ -1027,8 +1033,12 @@ namespace kick_ui
     }
     void MidiControlHardware::refresh()
     {
+        const auto selected = leftComp.option1List.getSelected();
         for( auto id = 0; id < midiControl.getNumChildren(); ++id )
         {
+            auto child = midiControl.getChild( id );
+            if( child.getProperty( "PadParameters" ) != selected )
+                continue;
             if( midiControl.getChild( id ).hasProperty( "Type" ) && ( midiControl.getChild( id ).getProperty( "PadParameters" ) == leftComp.option1List.getSelected() ) )
             {
                 auto& option      = midiControl.getChild( id ).getProperty( "Type" );
@@ -1169,6 +1179,7 @@ namespace kick_ui
                 bool  togglestate = mute == "Active" ? true : false;
                 rightComp.xy.mute2.setToggleState( togglestate, juce::dontSendNotification );
             }
+            break; // found the matching child node
         }
     }
     void MidiControlHardware::padSelect( bool sel )
@@ -2355,6 +2366,8 @@ namespace kick_ui
         ui::themeChanged.connect( [&]() {
             add.setImages( "Add_normal", "Add_normal", "Add_active" );
         } );
+
+        startMapping(); // MC-18: startup mappings active in background
     }
 
     void MidiControlMidiLearn::saveData( int index )
@@ -2379,9 +2392,10 @@ namespace kick_ui
 
         rightComp.addStructure( data, index );
     }
-    void MidiControlMidiLearn::startLearning()
+
+    void MidiControlMidiLearn::startMapping()
     {
-        // Every available MIDI input is opened (it used to be the first device only).
+        // MC-18: Every available MIDI input is opened on startup so learned rows work in background
         if( activeInputs.empty() )
         {
             for( const auto& device : juce::MidiInput::getAvailableDevices() )
@@ -2393,8 +2407,13 @@ namespace kick_ui
                 }
             }
         }
-        isLearning       = !activeInputs.empty();
         isMappingEnabled = !activeInputs.empty();
+    }
+
+    void MidiControlMidiLearn::startLearning()
+    {
+        startMapping();
+        isLearning = isMappingEnabled;
         if( activeInputs.empty() )
             kick_log( "MidiLearn", "no MIDI input device" );
     }
