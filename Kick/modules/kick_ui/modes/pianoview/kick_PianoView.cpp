@@ -297,6 +297,8 @@ namespace kick_ui
 
     void PianoView::sendVibrato( int value )
     {
+        if( value == 0 && ! vibratoActive_ ) return; // never write a mod wheel the piano did not move
+        vibratoActive_ = value != 0;
         ae.addLiveMidiMsg( ae.getSelected(), juce::MidiMessage::controllerEvent( 1, 1, value ) );
     }
 
