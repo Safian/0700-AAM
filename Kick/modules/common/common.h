@@ -47,6 +47,9 @@
 
 // Module include files.
     #include "source/kick_logger.h"
+    #include "source/kick_startup_state.h"
+    #include "source/kick_boot_guard.h"
+    #include "source/kick_status_strip.h"
     #include "source/kick_atomics.h"
     #include "source/kick_common_utils.h"
     #include "source/kick_CachedValue.h"
