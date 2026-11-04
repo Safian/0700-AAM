@@ -94,6 +94,15 @@ int main()
         CHECK( resourceWarnings( true, 96, 10.0, true, 97 ).disk != "" && resourceWarnings( true, 96, 10.0, true, 97 ).ram != "" );
     }
 
+    // CPU badge on the Resources icon (HDR-23).
+    {
+        using namespace kick_sysinfo;
+        CHECK( cpuBadgeText( true, 23.4 ) == "23%" && cpuBadgeText( true, 23.5 ) == "24%" && cpuBadgeText( true, 0.0 ) == "0%" && cpuBadgeText( true, 140.0 ) == "100%" );
+        CHECK( cpuBadgeText( false, 50.0 ).empty() && cpuBadgeText( true, -1.0 ).empty() );
+        CHECK( !cpuBadgeCritical( true, 84.9, true, 91 ) && cpuBadgeCritical( true, 85.0, false, 0 ) && cpuBadgeCritical( true, 10.0, true, 92 ) );
+        CHECK( !cpuBadgeCritical( false, 99.0, false, 99 ) );
+    }
+
     if( g_fail == 0 ) std::printf( "SysInfoTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;
 }

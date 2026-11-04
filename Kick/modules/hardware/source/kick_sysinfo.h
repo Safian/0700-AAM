@@ -241,4 +241,22 @@ namespace kick_sysinfo
             w.ram = "Low memory: " + std::to_string( ramPercent ) + " % used";
         return w;
     }
+
+    // ---- The CPU badge on the header's Resources icon (HDR-23) -------------------------------------------------------
+    constexpr double kCpuCritical = 85.0; // percent of the CPU at which the badge turns red
+
+    // "23%" (rounded, 0..100); empty when the CPU could not be read.
+    inline std::string cpuBadgeText( bool haveCpu, double cpuPercent )
+    {
+        if( !haveCpu || cpuPercent < 0.0 )
+            return {};
+        const int v = (int)( cpuPercent + 0.5 );
+        return std::to_string( v > 100 ? 100 : v ) + "%";
+    }
+
+    // The badge is red when the CPU is nearly used up or the memory is short.
+    inline bool cpuBadgeCritical( bool haveCpu, double cpuPercent, bool haveRam, int ramPercent )
+    {
+        return ( haveCpu && cpuPercent >= kCpuCritical ) || ( haveRam && ramPercent >= kRamWarnPercent );
+    }
 }

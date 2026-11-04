@@ -28,6 +28,87 @@ namespace kick_ui
     inline static constexpr int rw = 604;
     inline static constexpr int rh = 525;
 
+    // One 1 Hz sampler for all headers (every screen has its own): the CPU of the system and the memory share, shown as a badge on
+    // the Resources icon. Message thread; reading /proc/stat and /proc/meminfo is cheap. A header registers itself on creation.
+    class LoadBadgeSampler : private juce::Timer
+    {
+    public:
+        static LoadBadgeSampler& instance()
+        {
+            static auto* s = new LoadBadgeSampler; // lives to the end of the process (a header may be destroyed late)
+            return *s;
+        }
+        void add( KickModeHeader* h )
+        {
+            headers.add( h );
+            if( !isTimerRunning() )
+                startTimerHz( 4 );
+            push( h );
+        }
+
+    private:
+        juce::Array<juce::Component::SafePointer<KickModeHeader>> headers;
+        juce::String                                              text;
+        bool                                                      critical{ false };
+
+        void push( KickModeHeader* h ) { h->setLoadBadge( text, critical ); }
+        int ticks{ 0 };
+
+        void timerCallback() override
+        {
+            // 4 Hz: the live state of the headers (Automation mode changed by the hardware button); the CPU badge every 4th tick.
+            for( int i = headers.size(); --i >= 0; )
+            {
+                if( auto* h = headers[i].getComponent() )
+                    h->refreshLive();
+                else
+                    headers.remove( i );
+            }
+            if( ticks++ % 4 != 0 )
+                return;
+            auto&  res = mt::SystemResource::getResourceInterface();
+            double cpu = 0.0;
+            const bool haveCpu = res.cpuInfo( cpu );
+            mt::sysRamInfo ri;
+            res.ramInfo( ri );
+            text     = juce::String( kick_sysinfo::cpuBadgeText( haveCpu, cpu ) );
+            critical = kick_sysinfo::cpuBadgeCritical( haveCpu, cpu, ri.status, ri.perRam );
+            for( int i = headers.size(); --i >= 0; )
+            {
+                if( auto* h = headers[i].getComponent() )
+                    push( h );
+                else
+                    headers.remove( i );
+            }
+        }
+    };
+
+    void KickModeHeader::setLoadBadge( const juce::String& Text, bool Critical )
+    {
+        if( Text == loadBadge && Critical == loadCritical )
+            return;
+        loadBadge    = Text;
+        loadCritical = Critical;
+        if( isVisible() )
+            repaint( resources.getBounds() );
+    }
+
+    void KickModeHeader::refreshLive()
+    {
+        if( isVisible() )
+            syncAutomationButton();
+    }
+
+    void KickModeHeader::paintOverChildren( juce::Graphics& g )
+    {
+        if( loadBadge.isEmpty() || !resources.isVisible() )
+            return;
+        auto area = resources.getBounds().removeFromBottom( 13 );
+        g.setColour( loadCritical ? juce::Colour( 0xffff5a4a ) : ui::Theme::textColour( 2 ) );
+        g.setFont( juce::Font( 11.0f, juce::Font::bold ) );
+        g.drawText( loadBadge, area, juce::Justification::centred, false );
+    }
+
     void KickModeHeader::showSystemResources()
     {
         auto& res = KSystemResources::Instance();
@@ -94,6 +175,7 @@ namespace kick_ui
         };
 
         resources.onClick = [] { showSystemResources(); };
+        LoadBadgeSampler::instance().add( this );
 
         ui::themeChanged.connect( [&]() {
             resources.setImages( "Resource" );
@@ -314,8 +396,12 @@ namespace kick_ui
 
     void KickModeHeader::syncAutomationButton()
     {
+        const float opacity = mt::getAudioInterface().getAutomationMode() == 0 ? 0.35f : 1.0f;
+        if( opacity == automationOpacity )
+            return;
+        automationOpacity = opacity;
         automation.setToggleState( false, juce::dontSendNotification );
-        automation.setOpacity( mt::getAudioInterface().getAutomationMode() == 0 ? 0.35f : 1.0f );
+        automation.setOpacity( opacity );
         automation.repaint();
     }
 

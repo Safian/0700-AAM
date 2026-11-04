@@ -46,6 +46,10 @@ namespace kick_ui
         void showOptions( bool ShowMetronome, bool ShowAutomation );
         // The System Resources icon (right end); screens where a system dialog has no place (a running update) hide it.
         void showResourcesButton( bool Show );
+        // CPU badge on the Resources icon, set by the shared 1 Hz sampler (text "23%", critical = red). Empty text hides it.
+        void setLoadBadge( const juce::String& Text, bool Critical );
+        // Things that change outside the screen while it is shown (the hardware AUTOMATION button): polled by the shared sampler.
+        void refreshLive();
         void setIcon( const juce::String& Image );
         void addComponent( juce::Component* Child );
         void addButton( juce::Component* Button, int Width = 44 );
@@ -85,9 +89,13 @@ namespace kick_ui
         ui::KickImageButton                           back{ "Back", "Back", "Back_Active" };
         ui::KickToggleButton                          autoLoad{ "A", "A", "A" };
         juce::Component*                              comp{ nullptr };
+        float                                         automationOpacity{ -1.0f }; // last shown, so the live poll repaints only on a change
+        juce::String                                  loadBadge;
+        bool                                          loadCritical{ false };
         std::vector<std::pair<juce::Component*, int>> buttons;
 
         void paint( juce::Graphics& g ) override;
+        void paintOverChildren( juce::Graphics& g ) override;
         void resized() override;
         void visibilityChanged() override;
         void syncAutomationButton();
