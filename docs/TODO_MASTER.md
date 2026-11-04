@@ -68,7 +68,7 @@ Keygroup (egy minta kromatikus + több minta zónák/rétegek), fájlböngésző
 - Többmintás zongora hallgatás alul/középen/fent, halk/hangos (a Demo 01 most a zongora).
 - Controller Mode mérés Mac-en (a Key 61-et Controller Módba kell kapcsolni), majd iPhone/iPad.
 - Jogi átnézés: Salamander CC BY 3.0 ↔ AGPL, Google API ToS, Splice ToS, libcurl/TLS licenc.
-- Döntések: plugin-repó neve/helye; Akai-specifikus réteg (Locate, Sounds Mode, Keyboard Control menü) tervezése (a mód még nincs kitalálva); Serum-szintű funkciólista.
+- Döntések: Akai-specifikus réteg (Locate, Sounds Mode, Keyboard Control menü) tervezése (a mód még nincs kitalálva); Serum-szintű funkciólista.
 
 ## Nem ebben a körben
 Akai-specifikus réteg (Locate ablak, Sounds Mode, Keyboard Control menü, Menu tartalma, Track View): az owner 2026-11-02-i döntése szerint a Kick-funkciók után, az Akai rétegben, tervezve. WALKTHROUGH WP-A,C,E,F,H,I,J,K: nincs elkészítve.

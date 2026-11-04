@@ -40,6 +40,7 @@
 #if JUCE_LINUX
  #include <execinfo.h>
  #include <dlfcn.h>
+ #include <sys/mman.h>
  #include <fcntl.h>
  #include <signal.h>
  #include <ucontext.h>
@@ -234,8 +235,17 @@ public:
                 {
                     const auto base = reinterpret_cast<unsigned long>( mod.dli_fbase );
                     int        found = 0;
+                    unsigned long checkedPage = 0;
                     for( int i = 0; i < 4096 && found < 80; ++i )
                     {
+                        // Never read past the end of the stack mapping (that fault would replace the report): check each page once.
+                        const auto page = reinterpret_cast<unsigned long>( sp + i ) & ~4095UL;
+                        if( page != checkedPage )
+                        {
+                            unsigned char vec = 0;
+                            if( mincore( reinterpret_cast<void*>( page ), 4096, &vec ) != 0 ) break;
+                            checkedPage = page;
+                        }
                         const auto w = sp[i];
                         if( w > base && w < base + 0x1800000 )
                         {
