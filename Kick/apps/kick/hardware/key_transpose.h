@@ -40,6 +40,13 @@ public:
             m_semitone = 0;
             return Reset;
         }
+        return step(up, shift);
+    }
+
+    // One octave (or, with shift, semitone) step without any held-button state: the on-screen octave buttons of the touch
+    // piano use it, so the screen and the physical OCT-/OCT+ buttons share this one transposition.
+    Action step(bool up, bool shift)
+    {
         const int d = up ? 1 : -1;
         if (shift) {
             const int v = m_semitone + d;
@@ -51,6 +58,15 @@ public:
         if (v < -kMaxOctave || v > kMaxOctave) return None;
         m_octave = v;
         return OctaveChanged;
+    }
+
+    // Octave and semitone back to 0 (touch piano reset button); held-button state untouched.
+    Action resetTranspose()
+    {
+        if (m_octave == 0 && m_semitone == 0) return None;
+        m_octave = 0;
+        m_semitone = 0;
+        return Reset;
     }
 
     // While both OCT buttons are held, pressing a key on the keybed sets the transposition to that key value

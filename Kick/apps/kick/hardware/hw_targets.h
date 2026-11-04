@@ -88,7 +88,8 @@ struct SustainKey
 };
 inline bool sameSustainKey(const SustainKey& a, const SustainKey& b) { return !a.empty() && a == b; }
 
-// Sustain (CC64) with two sources, the physical pedal and the touch strip in Sustain mode. Each source has its OWN
+// Sustain (CC64) with three sources: the physical pedal, the touch strip in Sustain mode and the on-screen Sustain button
+// of the touch piano. Each source has its OWN
 // HeldTarget (the release goes to the track that got that source's press) and the SustainKey resolved at its press.
 // A release only sends CC64=0 when the other source does not still hold the pedal at the same effect place (same
 // sequence/track lane OR same SustainKey), else the other source's pedal would be lifted early.
@@ -96,7 +97,7 @@ template <typename Target>
 class SustainSources
 {
 public:
-    enum Source { kPedal = 0, kStrip = 1 };
+    enum Source { kPedal = 0, kStrip = 1, kScreen = 2, kNumSources = 3 };
     // Target for the CC64=127 of `s`; `key` = the effect place of that target (kept until the release of `s`).
     Target press(Source s, const Target& current, const SustainKey& key = SustainKey())
     {
@@ -110,15 +111,19 @@ public:
     {
         const bool wasActive = m_held[s].active();
         out = m_held[s].end(current);
-        const HeldTarget<Target>& other = m_held[1 - s];
-        if (!other.active()) return true;
-        if (sameTarget(other.peek(current), out)) return false;
-        return !(wasActive && sameSustainKey(m_key[1 - s], m_key[s]));
+        bool send = true;
+        for (int o = 0; o < kNumSources; ++o)
+        {
+            if (o == s || !m_held[o].active()) continue;
+            if (sameTarget(m_held[o].peek(current), out)) return false;
+            if (wasActive && sameSustainKey(m_key[o], m_key[s])) send = false;
+        }
+        return send;
     }
     bool held(Source s) const { return m_held[s].active(); }
 private:
-    HeldTarget<Target> m_held[2];
-    SustainKey         m_key[2];
+    HeldTarget<Target> m_held[kNumSources];
+    SustainKey         m_key[kNumSources];
 };
 
 // Lane identity of the CC64 output: MTAudioInterface::addLiveMidiMsg -> manager->getTrack(Selection) picks the track by
@@ -153,7 +158,16 @@ public:
         m_stripDown = down;
         return edge(SustainSources<Target>::kStrip, down, current, resolveKey, out);
     }
+    // On-screen Sustain button of the touch piano; a repeated value (no edge) sends nothing.
+    template <typename KeyFn>
+    bool screen(bool down, const Target& current, KeyFn resolveKey, Target& out)
+    {
+        if (m_screenDown == down) return false;
+        m_screenDown = down;
+        return edge(SustainSources<Target>::kScreen, down, current, resolveKey, out);
+    }
     bool stripDown() const { return m_stripDown; }
+    bool screenDown() const { return m_screenDown; }
     bool held(Source s) const { return m_src.held(s); }
 private:
     template <typename KeyFn>
@@ -164,6 +178,7 @@ private:
     }
     SustainSources<Target> m_src;
     bool m_stripDown = false;
+    bool m_screenDown = false;
 };
 
 // G16: a pitch wheel rarely rests on exactly 8192; values within +-2 of the centre count as "centred" (ends the hold).

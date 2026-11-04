@@ -306,6 +306,7 @@ namespace kick_ui
                 screenAdder( Screen::MenuKnobEdit, std::make_unique<KnobEdit>() );
                 screenAdder( Screen::MenuListEdit, std::make_unique<ListEditMode>() );
                 screenAdder( Screen::MenuPadPerform, std::make_unique<PadPerform>() );
+                screenAdder( Screen::MenuPiano, std::make_unique<PianoView>() );
                 screenAdder( Screen::MenuMidiControl, std::make_unique<MidiControl>() );
                 screenAdder( Screen::MenuFileBrowser, std::make_unique<ui::FileBrowser>() );
                 screenAdder( Screen::MenuNextSequence, std::make_unique<KickNextSequenceMode>() );

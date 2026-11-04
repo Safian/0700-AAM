@@ -54,6 +54,17 @@ Minden gomb: lenyomás → várt funkció; felengedés → **nem ragad be** (T6b
 - [ ] Popup/dropdown/modális ablakok megjelennek és érinthetők.
 - [ ] Multitouch (2 ujj).
 
+## 5b. Érintő-zongora (Menü → Keyboard, `MenuPiano`) — W3-A, hardveren még NEM mért
+Injektálás a `/data/kick_cmd` FIFO-n (fb-tér 1280x800): `touch_down <slot> X Y`, `touch_move <slot> X Y`, `touch_up <slot>` (slot 0..9); a slot nélküli alakok slot 0. `snapshot /data/x.ppm` a képhez, `/data/kick.log` az eseményekhez.
+- [ ] **Két ujj, két hang:** `touch_down 0 X1 Y`, `touch_down 1 X2 Y` két külön billentyűre → a logban két `[TOUCH] manual mouseDown`, két note-on; `touch_up 0` csak az elsőt engedi el. (Azonos billentyűre két ujj: egy note-on, note-off az utolsó ujjnál.)
+- [ ] **Glissando:** `touch_down 0 X Y`, majd `touch_move 0` több billentyűn át, `touch_up 0` → Glide módban minden váltásnál off-majd-on, a végén egyetlen off; Legato módban on-majd-off (átfedés); sehol nem marad beragadt hang (a motor-meter és a hang elhallgat).
+- [ ] **Velocity:** Fixed (a `-`/`+` értéke), Position (a billentyű alja = 127, teteje = a minimum), Speed (lassú csúszás = halk, gyors = hangos; az egyszerű koppintásnak nincs sebessége → a Fixed érték).
+- [ ] **Bend / Vibrato:** Bend módban vízszintes húzás a billentyűn → pitch wheel (a hang magassága a motorban: dob/keygroup programon, a tartomány ±2/4/7/12 a gombbal), elengedéskor 8192-re visszaáll; Vibrato módban CC1. MIDI programnál a külső szinti dönt a tartományról.
+- [ ] **Sustain gomb:** gomb le, billentyű le-fel → a hang szól tovább; gomb fel → elhalkul (CC64 előbb, aztán a note-off-ok); a lábpedál és a touch strip Sustain módja nem emeli fel egymás pedálját.
+- [ ] **Közös transzponálás / track:** a Key 61 OCT-/OCT+ gombja és a képernyő OCT-/ST- gombjai ugyanazt állítják (a képernyő felirata és az OCT LED-ek követik egymást); a képernyő és a fizikai billentyű ugyanarra a kijelölt trackre ütnek; track-váltás lenyomott hang közben → a note-off az eredeti trackre megy.
+- [ ] **Külső hangok kirajzolása:** fizikai billentyű / lejátszott szekvencia hangja cián kerettel jelenik meg a megfelelő billentyűn; a skála/gyökér/akkord jelölés a Pad Perform beállításával egyezik.
+- [ ] **Késleltetés (touch → hang):** `echo "latency 1" > /data/kick_cmd` (vagy `KICK_LATENCY=1` indításkor), majd `touch_down 0 X Y` / `touch_up 0`. A `/data/kick.log` `[LAT]` sorai: `touch down ... read_us=` (az eseményszál olvasta), `message thread ... +Nus` (az üzenetszál felvette), `note-on ... addLiveMidiNote called Nus after the touch was read (call took Mus)` (a hívásig eltelt idő). A mért érték a motorba kerülésig tart; a hallható késleltetéshez a hangblokk-méret (audio puffer) adódik hozzá. Mérés a 30 Hz-es festés mellett és nélküle (pl. állandó képernyő vs. üres képernyő) összevetve; `latency 0` kikapcsolja.
+
 ## 6. Hang
 - [ ] A kimenet peak ~0 dBFS körül (korábbi −54 dBFS hiba javítva); Main és Phones.
 - [ ] Audio bemenet (INPUT 1/2, +48V): a Looper/Sampler látja-e (a teljes app a JUCE audioeszközt használja, nem az adaptert).

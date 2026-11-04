@@ -42,6 +42,14 @@ namespace mt
         , public juce::ValueTree::Listener
     {
     public:
+        // Notes that sound on this track right now (from the messages handed to the program: sequence, arpeggiator and live
+        // input alike), for the on-screen piano. Written on the tick / live threads, read on the message thread: a display
+        // value, not a synchronisation point.
+        void getActiveNotes( uint64_t& Lo, uint64_t& Hi ) const noexcept
+        {
+            Lo = activeNotes[0].load( std::memory_order_relaxed );
+            Hi = activeNotes[1].load( std::memory_order_relaxed );
+        }
         explicit MTTrack( MTAudioManager& M, MTSequence& Seq, juce::UndoManager* UM, juce::ValueTree& VT );
         ~MTTrack()
         {
@@ -266,6 +274,8 @@ namespace mt
         juce::String          panRestoreId;           // laneWriteLock
         bool                  inPanCommit{ false };    // true while commitPanLane writes the tree (G14); laneWriteLock
         std::atomic<bool>     liveBendActive{ false }; // a live pitch wheel != centre arrived (G12); stop() centres only then
+        void                  recordNoteActivity( const juce::Array<juce::MidiMessage>& Msgs ) noexcept;
+        std::atomic<uint64_t> activeNotes[2]{ { 0 }, { 0 } }; // W3-A: note-on / note-off seen at the program input (sequence, arp, live), bit n of word n/64
         juce::String          lanePanProgId;           // program id the lane belongs to; laneWriteLock
         juce::ValueTree       progTree;                // the played program's tree (listened to for pan moves in Write mode)
         std::atomic<bool>     lanePanActive{ false };  // lane non-empty and its program id == the track's program id
