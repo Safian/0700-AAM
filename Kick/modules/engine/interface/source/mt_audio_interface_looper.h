@@ -90,6 +90,7 @@ namespace mt
         void    looperUndo() noexcept;
         void    looperRedo() noexcept;
         void    looperSave( const juce::String& FilePath ) noexcept;
+        juce::String getLooperError() const noexcept; // reason of the last failed save (empty = ok)
         double& getLooperProgress() noexcept;
     };
 

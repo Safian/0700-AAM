@@ -669,7 +669,8 @@ namespace mt
     {
         // The Looper's sync record also calls setSequencePlay(Now) (LoopRecorder::record, after setLooperRecord): that play
         // must not start a sequence take (it would erase the armed tracks' notes while the user records the Looper).
-        const bool looperBusy = getLooper()->isRecording() || getLooper()->isOverdubbing();
+        // The overdub flag alone (it used to outlive the recording) must not block sequence takes: busy = writing now.
+        const bool looperBusy = getLooper()->isRecording();
         bool       clear      = false;
         {
             const juce::ScopedLock sl( seqRecLock );

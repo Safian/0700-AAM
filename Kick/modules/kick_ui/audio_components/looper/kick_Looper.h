@@ -37,10 +37,12 @@ namespace kick_ui
         void resized() override;
         void visibilityChanged() override;
         void paint( juce::Graphics& ) override;
+        void exportLoop( const juce::String& Name, int SelectedProgram, int PadIndex );
 
     private:
         ui::KickImageButton clearBtn{ " Clear", "Song_Clear", "Song_Clear_Active" };
         ui::KickImageButton exportBtn{ "Export", "Song_Export", "Song_Export_Active" };
+        ui::KickButton      undoBtn{ "UNDO" }; // a second press redoes
 
         kick_ui::KickModeHeader header{ "Looper", "Icon_Looper" };
         ui::KickIOComponent     options;

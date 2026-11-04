@@ -99,6 +99,7 @@
     #include "audio_components/sampler/kick_Sampler.h"
 
     //looper
+    #include "audio_components/looper/kick_LooperLogic.h"
     #include "audio_components/looper/kick_LoopRecorder.h"
     #include "audio_components/looper/kick_Looper.h"
 

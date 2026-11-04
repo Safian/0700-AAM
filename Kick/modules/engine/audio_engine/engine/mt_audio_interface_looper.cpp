@@ -79,6 +79,7 @@ namespace mt
     void    MTLooperInterface::looperUndo() noexcept { manager->getLooper()->undo(); }
     void    MTLooperInterface::looperRedo() noexcept { manager->getLooper()->redo(); }
     void    MTLooperInterface::looperSave( const juce::String& FilePath ) noexcept { manager->getLooper()->save( FilePath ); }
+    juce::String MTLooperInterface::getLooperError() const noexcept { return manager->getLooper()->lastError(); }
     double& MTLooperInterface::getLooperProgress() noexcept { return manager->getLooper()->getProgress(); }
 
 }
