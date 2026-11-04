@@ -756,6 +756,7 @@ namespace mt
                     reloadMidiMeter( levelScaler );
                     break;
                 }
+            recordNoteActivity( midiMsgs );
             pProgram->noteProcess( midiMsgs ); // sequence + arp output: not live (decision 7)
             midiMsgs.clearQuick();
         }
@@ -829,6 +830,7 @@ namespace mt
             else
                 list.insert( -1, Msg );
 
+            recordNoteActivity( list );
             pProgram->noteProcess( list, true ); // live input
         }
         if( !muted && Msg.isNoteOn() ) // G8
@@ -883,7 +885,10 @@ namespace mt
         juce::Array<juce::MidiMessage> list;
         arpEmit( R, list );
         if( auto p = program.load(); p && !list.isEmpty() )
+        {
+            recordNoteActivity( list );
             p->noteProcess( list, false ); // decision 7: the pedal does not act on arp output
+        }
     }
 
     void MTTrack::arpPanic()
@@ -986,6 +991,27 @@ namespace mt
         auto msg = juce::MidiMessage::noteOff( getMidiOutChannel(), NoteNumber );
         processIncomingMidiMessage( msg );
     }*/
+
+    void MTTrack::recordNoteActivity( const juce::Array<juce::MidiMessage>& Msgs ) noexcept
+    {
+        for( const auto& m : Msgs )
+        {
+            if( m.isNoteOnOrOff() )
+            {
+                const int n = m.getNoteNumber();
+                if( n < 0 || n > 127 ) continue;
+                const uint64_t bit = uint64_t( 1 ) << ( n & 63 );
+                auto&          w   = activeNotes[n >> 6];
+                if( m.isNoteOn() ) w.fetch_or( bit, std::memory_order_relaxed );
+                else w.fetch_and( ~bit, std::memory_order_relaxed );
+            }
+            else if( m.isAllNotesOff() || m.isAllSoundOff() )
+            {
+                activeNotes[0].store( 0, std::memory_order_relaxed );
+                activeNotes[1].store( 0, std::memory_order_relaxed );
+            }
+        }
+    }
 
     inline void MTTrack::stopAllMidiNotes()
     {
