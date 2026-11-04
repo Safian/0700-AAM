@@ -2,6 +2,10 @@
 
 | Fájl | Mire való |
 |---|---|
+| `tkgl_bootstrap` | POSIX sh bootstrap szkript az MPC-hez: automatikus atomi telepítés a belső `/data` tárhelyre, verzió-összehasonlítás, indítás és fallback a gyári MPC-re. |
+| `make_pendrive_package.sh` | Letölthető pendrive kiadási csomag előállítása (`dist/kick-mpc-key61-<verzió>.zip` + SHA256 ellenőrzőösszeg fájl). |
+| `uninstall_kick.sh` | Kick eltávolító szkript: visszaállítja a gépet a gyári állapotba (`/data/Kick*` törlése, felhasználói projektek megőrzése). |
+| `test_tkgl_bootstrap.sh` | Offline tesztcsomag: a bootstrap, a csomagoló és az uninstaller funkcióinak szimulált és automatizált tesztelése (linting, telepítés, frissítés, visszalépés, korrupció-védelem). |
 | `build-armv7.sh`, `armv7.cmake` | ARMv7 build Dockerben (`W=<checkout> CACHE=<cache> [DEBUG=1] bash build-armv7.sh`); recept: [../../AKAI_MPC_KEY61_BUILD_RECIPE.md](../../AKAI_MPC_KEY61_BUILD_RECIPE.md). `JOBS=2` az alap (4-nél a konténer memóriája elfogy). |
 | `pdf2txt.swift` | a teljes PDF szöveggé (macOS PDFKit; `swiftc -O pdf2txt.swift -o pdf2txt`) |
 | `pdfpages.swift` | a PDF oldalanként (`<mappa>/NNN.txt`); a v3.10 útmutatónál a PDF-oldalszám egyezik a nyomtatott oldalszámmal |

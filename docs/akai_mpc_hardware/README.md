@@ -30,6 +30,10 @@ try d.string!.write(toFile: CommandLine.arguments[2], atomically: true, encoding
 
 - **Main Volume** (Quickstart v1.2, 45. pont; v3.10 útmutató): a gomb a kimenetek és a fejhallgató-kimenet közös hangerejét állítja. A dokumentáció nem mondja, hogy analóg, MIDI vagy szoftveres. Műszaki adatok: (4) TRS kimenet (2 sztereó pár), (1) sztereó fejhallgató-kimenet, (8) CV/Gate. Mérés: nem MIDI és nem input-esemény (lásd a riportot), a Kick alatt nem hat.
 
+## Telepítés és pendrive-os indítás
+- [PENDRIVE_INSTALL.md](PENDRIVE_INSTALL.md): Felhasználói útmutató a Kick pendrive-os indításához, belső flashre telepítéséhez, frissítéséhez és visszaállításához.
+- Eszközök: [tools/README.md](tools/README.md) (`tkgl_bootstrap`, `make_pendrive_package.sh`, `uninstall_kick.sh`, `test_tkgl_bootstrap.sh`).
+
 ## Mért viselkedés
 - [KEY61_LED_COLOURS.md](KEY61_LED_COLOURS.md): a gombok LED-protokollja és színei (kamerás mérés, 2026-11-01).
 - [KEY61_HW_BEHAVIOUR.md](KEY61_HW_BEHAVIOUR.md): a hardver gombjainak fizikai működése (tudás-napló: portok, csatornák, jegyzetek, LED, mérési napló). Ami itt "mért", azt nem kell újra megmérni.
