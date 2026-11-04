@@ -63,6 +63,14 @@ inline int akaiLedNote(HardwareLed led, bool& twoColour)
         case HW_LED_METRONOME:        return 112;
         case HW_LED_TAP_TEMPO:        return 53;
         case HW_LED_QLINK:            return 0;
+        // Octave indicator row: Control Change 0x5F..0x65 = -3..+3 (MEASURED on the stock MPC app, KEY61_HW_BEHAVIOUR.md)
+        case HW_LED_OCTAVE_M3:        return 0x5F;
+        case HW_LED_OCTAVE_M2:        return 0x60;
+        case HW_LED_OCTAVE_M1:        return 0x61;
+        case HW_LED_OCTAVE_ZERO:      return 0x62;
+        case HW_LED_OCTAVE_P1:        return 0x63;
+        case HW_LED_OCTAVE_P2:        return 0x64;
+        case HW_LED_OCTAVE_P3:        return 0x65;
         case NUM_HW_LEDS:
         default:                      return -1;
     }
@@ -114,6 +122,21 @@ public:
 private:
     std::atomic<int> m_level[NUM_HW_LEDS];
 };
+
+// Octave indicator row (-3 .. +3, left to right under the OCT buttons). Measured on the stock MPC app: the LEDs from 0 up to the
+// current octave are lit, 0 always; at -3 the LEDs -3, -2, -1 and 0 light, at +2 the LEDs 0, +1 and +2.
+inline HardwareLed octaveBarLed(int position)   // position -3..+3
+{
+    if (position < -3) position = -3;
+    if (position > 3) position = 3;
+    return (HardwareLed)(HW_LED_OCTAVE_M3 + (position + 3));
+}
+inline int octaveBarLevel(int octave, int position)
+{
+    const int lo = octave < 0 ? octave : 0;
+    const int hi = octave > 0 ? octave : 0;
+    return (position >= lo && position <= hi) ? kLedFullA : kLedOff;
+}
 
 // Pad bank (0..7 = A..H), LED index 0..3 (A..D): banks A..D light their LED in colour A (full A),
 // banks E..H light the LED of (bank % 4) in colour B (full B).

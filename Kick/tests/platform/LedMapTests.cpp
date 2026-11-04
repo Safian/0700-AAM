@@ -13,6 +13,18 @@ static void check(bool ok, const char* why)
 int main()
 {
     using namespace kick_hw;
+    { // octave indicator row (measured on the stock MPC app): CC 0x5F..0x65 = -3..+3, lit from 0 to the current octave
+        bool two = false;
+        check(akaiLedNote(HW_LED_OCTAVE_M3, two) == 0x5F && !two, "octave -3 is CC 0x5F");
+        check(akaiLedNote(HW_LED_OCTAVE_ZERO, two) == 0x62 && !two, "octave 0 is CC 0x62");
+        check(akaiLedNote(HW_LED_OCTAVE_P3, two) == 0x65 && !two, "octave +3 is CC 0x65");
+        for (int p = -3; p <= 3; ++p) check(akaiLedNote(octaveBarLed(p), two) == 0x62 + p, "bar position maps to CC 0x62+p");
+        for (int p = -3; p <= 3; ++p) check(octaveBarLevel(0, p) == (p == 0 ? kLedFullA : kLedOff), "octave 0: only the 0 LED");
+        for (int p = -3; p <= 3; ++p) check(octaveBarLevel(-3, p) == (p <= 0 ? kLedFullA : kLedOff), "octave -3: -3..0 lit (user-observed)");
+        for (int p = -3; p <= 3; ++p) check(octaveBarLevel(2, p) == (p >= 0 && p <= 2 ? kLedFullA : kLedOff), "octave +2: 0..+2 lit");
+        check(octaveBarLevel(-1, -1) == kLedFullA && octaveBarLevel(-1, -2) == kLedOff, "octave -1: -1 and 0 (the boot picture of the photo)");
+        check(akaiLedValue(false, kLedFullA) == 127 && akaiLedValue(false, kLedOff) == 0, "bar LEDs take 0x7F / 0x00");
+    }
     { // every LED has a unique note in 0..127
         std::set<int> notes;
         for (int l = 0; l < NUM_HW_LEDS; ++l) {
