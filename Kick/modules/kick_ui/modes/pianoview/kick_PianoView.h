@@ -86,6 +86,7 @@ namespace kick_ui
 
         Sounding sounding_[128];
         bool     bendActive_{ false };
+        bool     vibratoActive_{ false };
         mt::MTSelected bendTarget_;
         int      lastTransposeVersion_{ -1 };
         int      lastSelTrack_{ -1 }, lastSelSeq_{ -1 };
