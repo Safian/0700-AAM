@@ -109,6 +109,7 @@
     // preferences
     #include "swupdate/kick_SWUpdateScreen.h"
     #include "swupdate/kick_SWUpdateView.h"
+    #include "swupdate/kick_KickUpdate.h"
 
     // modes
     #include "modes/kick_ListEditLogic.h"

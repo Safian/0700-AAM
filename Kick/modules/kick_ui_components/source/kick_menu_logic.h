@@ -59,7 +59,12 @@ namespace ui::menu_logic
             default: return S::Invalid;
         }
     }
-    constexpr int kTileCount = 17;
+    constexpr int kTileCount = 17; // tiles that open a screen
+    // Text-only command tiles after them (no icon in the theme).
+    constexpr int kCommandSave       = 17;
+    constexpr int kCommandResources  = 18;
+    constexpr int kCommandKickUpdate = 19;
+    constexpr int kMenuItemCount     = 20;
 
     // Reverse lookup: the tile of a screen, -1 when the screen has no tile.
     template<class S>
@@ -85,6 +90,7 @@ namespace ui::menu_logic
             case S::MenuFileBrowser:
             case S::SWUpdateView:
             case S::SWUpdateWindow:
+            case S::KickUpdate:
             case S::Temp: return false;
             default: return true;
         }

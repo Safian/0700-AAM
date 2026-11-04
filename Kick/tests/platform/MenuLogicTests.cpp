@@ -11,7 +11,7 @@ enum class S
     Invalid = -9999, HomeOptions = 1000, HomeListView, HomeGridView, HomeSequencerView, HomeXYView, HomePreferencesView, HomePreferences,
     MenuSampleEdit, MenuProgramEdit, MenuSampler, MenuLooper, MenuPadMute, MenuTrackMute, MenuPadMixer, MenuChannelMixer, MenuKnobEdit,
     MenuListEdit, MenuPadPerform, MenuMidiControl, MenuFileBrowser, MenuNextSequence, MenuSong, MenuColorEdit, MenuAssignSample,
-    RecentProject, SWUpdateView, SWUpdateWindow, MenuPiano, Temp
+    RecentProject, SWUpdateView, SWUpdateWindow, KickUpdate, MenuPiano, Temp
 };
 
 static int g_fail = 0;

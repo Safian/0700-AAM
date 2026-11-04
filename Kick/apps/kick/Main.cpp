@@ -166,7 +166,7 @@ public:
             { "MenuPadPerform", Screen::MenuPadPerform }, { "MenuPiano", Screen::MenuPiano }, { "MenuMidiControl", Screen::MenuMidiControl },
             { "MenuFileBrowser", Screen::MenuFileBrowser }, { "MenuNextSequence", Screen::MenuNextSequence },
             { "MenuSong", Screen::MenuSong }, { "MenuColorEdit", Screen::MenuColorEdit },
-            { "RecentProject", Screen::RecentProject },
+            { "RecentProject", Screen::RecentProject }, { "KickUpdate", Screen::KickUpdate },
         };
 
         if( index >= names.size() || w == nullptr || w->getContentComponent() == nullptr )
