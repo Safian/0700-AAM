@@ -112,15 +112,31 @@ namespace kick_ui
         // Shift + tap on a colour button: every pad takes that colour.
         left.onColourAll = [this]() { colourAllPads(); };
 
-        // Back to the default colours of the program type (Drum / Clip / other), one undo step. Asks first (the
-        // manual's Make Default window: Do It / Cancel); UNDO stays one tap away in the status bar.
+        // Make Default (the manual): the current colours and pad colour modes of this program become the defaults of every
+        // program of the same type (new programs start with them); asks first (Do It / Cancel).
         right.defaultBtn.onClick = [&]() {
             right.defaultBtn.setToggleState( false, juce::dontSendNotification );
             if( !ae.getNumPrograms() )
                 return;
-            auto* p = new ui::FilePopup{ "Set all pad colours of this program to the default of its type?", false, false };
+            auto* p = new ui::FilePopup{ "Make the current pad colours the default of all programs of this type?", false, false };
             mt::utils::showOptions(
                 "MAKE DEFAULT", p, [this, p]( int R ) {
+                    if( R == UI::APPLY && ae.makeProgramPadColoursDefault( ae.getSelectedProgram() ) == 0 )
+                        mt::utils::showNotification( "Default pad colours saved for this program type" );
+                    delete p;
+                },
+                ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
+        };
+
+        // Reset: every pad of this program back to the default of its type (the stored Make Default, else the factory
+        // colours), one undo step; asks first, UNDO stays one tap away in the status bar.
+        right.resetBtn.onClick = [&]() {
+            right.resetBtn.setToggleState( false, juce::dontSendNotification );
+            if( !ae.getNumPrograms() )
+                return;
+            auto* p = new ui::FilePopup{ "Set all pad colours of this program to the default of its type?", false, false };
+            mt::utils::showOptions(
+                "RESET PAD COLOURS", p, [this, p]( int R ) {
                     if( R == UI::APPLY )
                     {
                         {
@@ -129,7 +145,7 @@ namespace kick_ui
                         }
                         refresh();
                         refreshLEDs();
-                        offerUndo( "Pad colours set to the default" );
+                        offerUndo( "Pad colours reset to the default" );
                     }
                     delete p;
                 },
@@ -525,16 +541,19 @@ namespace kick_ui
     KickColorEditorRightPanel::KickColorEditorRightPanel()
         : pads( std::make_unique<ui::KickPadButtonGroupComponent>( ui::KickPadButton::PadButtonType::colorMode ) )
     {
-        mt::utils::addAndMakeVisible( this, pads.get(), defaultBtn );
+        mt::utils::addAndMakeVisible( this, pads.get(), defaultBtn, resetBtn );
 
         pads->setActive( -1, false );
         pads->setPadButtonSpacer( padButtonSpacer );
 
         defaultBtn.setValueColour( ui::Theme::textColour( 1 ) );
         defaultBtn.setValueFontHeight( 18 );
+        resetBtn.setValueColour( ui::Theme::textColour( 1 ) );
+        resetBtn.setValueFontHeight( 18 );
 
         ui::themeChanged.connect( [&]() {
             defaultBtn.setToggleButtonText( "Make Default", "Make Default" );
+            resetBtn.setToggleButtonText( "Reset", "Reset" );
         } );
     }
 
@@ -542,6 +561,7 @@ namespace kick_ui
     {
         pads->setBoundsRelative( 0.f, 0.f, 1.f, 0.8899f );
         defaultBtn.setBoundsRelative( 0.8136f, 0.922f, 0.186f, 0.078f );
+        resetBtn.setBoundsRelative( 0.6f, 0.922f, 0.2f, 0.078f );
     }
     void KickColorEditorRightPanel::paint( juce::Graphics& g )
     {
