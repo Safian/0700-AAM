@@ -151,6 +151,54 @@ int main()
             CHECK(ss.release(SS::kStrip, Sel{ 5 }, same, out) && out.track == 4);
         }
     }
+    { // W3-A: the on-screen Sustain button of the touch piano is a third source with its own target
+        using SS = kick_hw::SustainSources<Sel>;
+        auto same = kick_hw::sameSequenceTrack<Sel>;
+        Sel out;
+        { // pedal + screen on the same lane: the first release is silent, the last one sends CC64=0
+            SS ss;
+            ss.press(SS::kPedal, Sel{ 0 });
+            ss.press(SS::kScreen, Sel{ 0 });
+            CHECK(!ss.release(SS::kScreen, Sel{ 0 }, same, out));
+            CHECK(ss.release(SS::kPedal, Sel{ 0 }, same, out));
+        }
+        { // all three hold the lane: only the last release sends
+            SS ss;
+            ss.press(SS::kPedal, Sel{ 1 });
+            ss.press(SS::kStrip, Sel{ 1 });
+            ss.press(SS::kScreen, Sel{ 1 });
+            CHECK(!ss.release(SS::kPedal, Sel{ 1 }, same, out));
+            CHECK(!ss.release(SS::kScreen, Sel{ 1 }, same, out));
+            CHECK(ss.release(SS::kStrip, Sel{ 1 }, same, out));
+        }
+        { // screen holds T1, selection moves, pedal gets T2; the screen release goes to T1
+            SS ss;
+            ss.press(SS::kScreen, Sel{ 1 });
+            CHECK(ss.press(SS::kPedal, Sel{ 2 }).track == 2);
+            CHECK(ss.release(SS::kScreen, Sel{ 2 }, same, out) && out.track == 1);
+            CHECK(ss.release(SS::kPedal, Sel{ 3 }, same, out) && out.track == 2);
+        }
+        { // shared effect place through a different track: held by the other source -> silent
+            kick_hw::SustainKey k; k.program = "X";
+            SS ss;
+            ss.press(SS::kScreen, Sel{ 0, 0, 0 }, k);
+            ss.press(SS::kStrip, Sel{ 0, 1, 0 }, k);
+            CHECK(!ss.release(SS::kStrip, Sel{ 0, 1, 0 }, same, out));
+            CHECK(ss.release(SS::kScreen, Sel{ 0, 1, 0 }, same, out) && out.track == 0);
+        }
+        { // state machine: repeated values are no edge; the resolver runs on a press only
+            kick_hw::SustainState<Sel> st;
+            int calls = 0;
+            auto res = [&](const Sel&) { ++calls; return kick_hw::SustainKey(); };
+            Sel t;
+            CHECK(st.screen(true, Sel{ 0 }, res, t) && calls == 1 && st.screenDown());
+            CHECK(!st.screen(true, Sel{ 0 }, res, t) && calls == 1);
+            CHECK(st.pedal(true, Sel{ 0 }, res, t));
+            CHECK(!st.screen(false, Sel{ 0 }, res, t) && !st.screenDown()); // the pedal still holds the lane
+            CHECK(!st.screen(false, Sel{ 0 }, res, t));
+            CHECK(st.pedal(false, Sel{ 0 }, res, t));
+        }
+    }
     if (g_fail == 0) std::printf("hw_targets: all passed\n");
     return g_fail ? 1 : 0;
 }

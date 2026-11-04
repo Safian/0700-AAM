@@ -345,6 +345,7 @@ private:
 
     void updateOctaveLeds()
     {
+        ui::PianoHub::instance().publishTranspose(m_key_transpose.octave(), m_key_transpose.semitone()); // the on-screen piano follows OCT-/OCT+
         if (m_hw && m_hw->control_surface()) {
             m_hw->control_surface()->set_led(HW_LED_OCTAVE_DOWN, m_key_transpose.octave() < 0);
             m_hw->control_surface()->set_led(HW_LED_OCTAVE_UP, m_key_transpose.octave() > 0);
@@ -465,8 +466,18 @@ private:
             m_last_touch_y[slot] = y;
         }
 
-        juce::MessageManager::callAsync([this, alive = m_alive, slot, x, y, is_down, is_up]() {
+        // W3-A: when the finger event was read (reader thread): carried to the widgets through ui::TouchSlot (finger
+        // speed from real time stamps, touch -> sound latency trace) and used for the manual MouseEvent time stamps.
+        const int64_t touchUs   = ui::TouchSlot::nowUs();
+        const int64_t touchMs   = juce::Time::currentTimeMillis();
+        const bool    latTrace  = ui::LatencyTrace::enabled();
+        if (latTrace && (is_down || is_up))
+            kick_log("bridge", "[LAT] touch %s slot=%d fb=(%d,%d) read_us=%lld\n", is_down ? "down" : "up", slot, x, y, (long long)touchUs);
+
+        juce::MessageManager::callAsync([this, alive = m_alive, slot, x, y, is_down, is_up, touchUs, touchMs, latTrace]() {
             if (!alive->load()) return;
+            if (latTrace && (is_down || is_up))
+                kick_log("bridge", "[LAT] message thread slot=%d %s +%lldus after the read\n", slot, is_down ? "down" : "up", (long long)(ui::TouchSlot::nowUs() - touchUs));
             auto* root = (m_window != nullptr) ? (juce::Component*)m_window : m_root;
             if (!root) return;
             // G3: an invisible (headless, no display) window is skipped by Component::getComponentAt(), so the hit
@@ -560,10 +571,14 @@ private:
                 for (auto& s : juce::Desktop::getInstance().getMouseSources())
                     if (s.getType() == juce::MouseInputSource::InputSourceType::touch && s.getIndex() == slot) { mouseSrc = s; break; }
             }
+            const juce::Time touchTime(touchMs);
+            // One finger = one slot: the widgets (ui::KeyboardComponent) tell fingers apart through ui::TouchSlot, because the
+            // manual path's mouse source is the main one (index 0) for every finger.
+            ui::TouchSlot::Scope touchScope(slot, touchUs);
             juce::MouseEvent e(mouseSrc,
                                localPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                target, target,
-                               juce::Time::getCurrentTime(),
+                               touchTime,
                                localPt,
                                juce::Time::getCurrentTime(),
                                clicks, false);
@@ -592,7 +607,7 @@ private:
                     juce::MouseEvent downE(mouseSrc,
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                            effectiveTarget, effectiveTarget,
-                                           juce::Time::getCurrentTime(),
+                                           touchTime,
                                            downLocalPt,
                                            juce::Time::getCurrentTime(),
                                            clicks, wasDragged);
@@ -624,8 +639,11 @@ private:
                 // Drag-jitter: Button::mouseDrag would reset a pressed button (mouse source, no real hover), so
                 // drags below the touch slop are not forwarded; past it they are, and stay forwarded (latched).
                 const bool inSlot = slot >= 0 && slot < 10;
+                // A widget that tracks the finger itself (the piano keyboard: glissando, bend) is fed every move: it sets the
+                // component property "kickTouchNoSlop" and applies its own dead zone.
+                const bool noSlop = downTarget != nullptr && downTarget->getProperties().getWithDefault("kickTouchNoSlop", false);
                 if (inSlot && !m_touch_dragging[slot]
-                    && kick_hw::probe::exceedsTouchSlop(m_touch_down_x[slot], m_touch_down_y[slot], ix, iy))
+                    && (noSlop || kick_hw::probe::exceedsTouchSlop(m_touch_down_x[slot], m_touch_down_y[slot], ix, iy)))
                     m_touch_dragging[slot] = true;
                 if (inSlot && !m_touch_dragging[slot]) {
                     // finger still within the tap slop: nothing to deliver
@@ -638,7 +656,7 @@ private:
                     juce::MouseEvent downE(mouseSrc,
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                            downTarget, downTarget,
-                                           juce::Time::getCurrentTime(),
+                                           touchTime,
                                            pressLocalPt,
                                            juce::Time::getCurrentTime(),
                                            clicks, true);
@@ -870,6 +888,8 @@ public:
             m_cmd_fd = open("/data/kick_cmd", O_RDONLY | O_NONBLOCK);
             m_cmd_fd_w = open("/data/kick_cmd", O_WRONLY | O_NONBLOCK);
 
+            registerPianoHub();
+            if (const char* lat = getenv("KICK_LATENCY")) ui::LatencyTrace::set(lat[0] == '1');
             kick_log("info", "[HAL] KickHardwareBridge fully operational (Display 1280x800 @ 30FPS, Touch, ControlSurface, CmdFIFO)\n");
         }
     }
@@ -878,6 +898,7 @@ public:
     {
         m_stopping.store(true);
         m_alive->store(false);
+        unregisterPianoHub();
         m_pad_colour_conn.disconnect();
         m_screen_conn.disconnect();
         m_play_conn.disconnect();
@@ -1666,6 +1687,49 @@ public:
         if (m_sustain.strip(down, ae.getSelected(), sustainKeyResolver(ae), target))
             ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
     }
+    // On-screen Sustain button of the touch piano (W3-A): the third CC64 source, same critical section and lane rules as
+    // the pedal and the strip, so a release of one source never lifts the pedal another one still holds.
+    void screenSustainSet(bool down)
+    {
+        auto& ae = mt::getAudioInterface();
+        std::lock_guard<std::mutex> lk(m_target_mutex);
+        mt::MTSelected target;
+        if (m_sustain.screen(down, ae.getSelected(), sustainKeyResolver(ae), target))
+            ae.addLiveMidiMsg(target, juce::MidiMessage::controllerEvent(1, 64, down ? 127 : 0));
+    }
+    // The touch piano steps the SAME transposition as the OCT-/OCT+ buttons (m_key_transpose) and sustains through m_sustain.
+    void registerPianoHub()
+    {
+        auto& hub = ui::PianoHub::instance();
+        hub.stepTranspose = [this](bool up, bool shift) {
+            KeyTranspose::Action act;
+            {
+                std::lock_guard<std::mutex> lk(m_transpose_mutex);
+                act = m_key_transpose.step(up, shift);
+            }
+            if (act != KeyTranspose::None) {
+                updateOctaveLeds();
+                kick_log("bridge", "[BRIDGE] Octave %d, transpose %d semitones (screen piano)\n", m_key_transpose.octave(), m_key_transpose.semitone());
+            }
+        };
+        hub.resetTranspose = [this]() {
+            KeyTranspose::Action act;
+            {
+                std::lock_guard<std::mutex> lk(m_transpose_mutex);
+                act = m_key_transpose.resetTranspose();
+            }
+            if (act != KeyTranspose::None) updateOctaveLeds();
+        };
+        hub.setSustain = [this](bool down) { screenSustainSet(down); };
+        hub.publishTranspose(m_key_transpose.octave(), m_key_transpose.semitone());
+    }
+    void unregisterPianoHub()
+    {
+        auto& hub = ui::PianoHub::instance();
+        hub.stepTranspose  = nullptr;
+        hub.resetTranspose = nullptr;
+        hub.setSustain     = nullptr;
+    }
     // Level modes: apply the newest strip value on the message thread (setNoteGain / setTrackLevel are UI-thread calls).
     void postStripPadLevel(int val)
     {
@@ -2008,6 +2072,33 @@ public:
         char op[64] = { 0 };
         int a1 = 0, a2 = 0;
         char sval[128] = { 0 };
+        // W3-A: multi-finger injection with an explicit slot (0..9), fb coordinates (1280x800) like "touch X Y":
+        //   touch <slot> X Y   touch_down <slot> X Y   touch_move <slot> X Y   touch_up <slot>
+        // The forms without a slot (touch X Y, touch_down X Y, touch_move X Y, touch_up) are slot 0, unchanged.
+        // "latency 1|0" switches the touch -> sound [LAT] trace (kick_log "bridge").
+        {
+            int slot = 0, ax = 0, ay = 0;
+            if (sscanf(cmd.c_str(), "%63s %d %d %d", op, &slot, &ax, &ay) == 4
+                && (strcmp(op, "touch") == 0 || strcmp(op, "touch_down") == 0 || strcmp(op, "touch_move") == 0)) {
+                if (slot < 0 || slot >= 10) { kick_log("cmd", "[CMD] %s: bad slot %d (0..9)\n", op, slot); return; }
+                kick_log("cmd", "[CMD] %s slot=%d %d %d\n", op, slot, ax, ay);
+                if (strcmp(op, "touch") == 0) { on_touch_down(slot, ax, ay); on_touch_up(slot); }
+                else if (strcmp(op, "touch_down") == 0) on_touch_down(slot, ax, ay);
+                else on_touch_move(slot, ax, ay);
+                return;
+            }
+            if (sscanf(cmd.c_str(), "%63s %d", op, &slot) == 2 && strcmp(op, "touch_up") == 0) {
+                if (slot < 0 || slot >= 10) { kick_log("cmd", "[CMD] touch_up: bad slot %d (0..9)\n", slot); return; }
+                kick_log("cmd", "[CMD] touch_up slot=%d\n", slot);
+                on_touch_up(slot);
+                return;
+            }
+            if (sscanf(cmd.c_str(), "%63s %d", op, &slot) == 2 && strcmp(op, "latency") == 0) {
+                ui::LatencyTrace::set(slot != 0);
+                kick_log("cmd", "[CMD] latency trace %s\n", slot != 0 ? "ON" : "OFF");
+                return;
+            }
+        }
         if (sscanf(cmd.c_str(), "%63s %d %d", op, &a1, &a2) == 3) {
             if (strcmp(op, "touch") == 0) {
                 kick_log("cmd", "[CMD] touch %d %d\n", a1, a2);
