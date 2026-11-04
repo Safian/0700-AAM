@@ -104,6 +104,21 @@ inline juce::String runKickFxLanesSmoke() {
     ins->removeInsert(3);
     say("switch parameters are stepped, knobs are not");
 
+    // ---- XY-17: the TOUCHFX node (preset, envelope, wet, latch, location) is part of the project
+    {
+        auto tree = api.getValueTree().getOrCreateChildWithName("TOUCHFX", nullptr);
+        tree.setProperty("preset", 6, nullptr);
+        tree.setProperty("attack", 12.5, nullptr);
+        tree.setProperty("latch", true, nullptr);
+        tree.setProperty("destination", "Track", nullptr);
+        if (!api.saveProject() || !api.closeProject() || !api.loadProject(file)) return fail("save / reopen failed (TOUCHFX)");
+        const auto back = api.getValueTree().getChildWithName("TOUCHFX");
+        if (!back.isValid() || (int)back.getProperty("preset", -1) != 6 || std::abs((double)back.getProperty("attack", 0) - 12.5) > 1e-9 || !(bool)back.getProperty("latch", false) || back.getProperty("destination").toString() != "Track")
+            return fail("the TOUCHFX node did not survive save / reopen");
+        ins = api.getInsertsInterface(api.getProgramIndexByName("FxProg"));
+        say("TOUCHFX node survives save / reopen");
+    }
+
     // ---- bus inserts: pre-fader by default, post-fader selectable and persistent; a program has no such choice
     if (ins->supportsPostFader()) return fail("a program chain claims a pre/post-fader choice");
     const auto returns = api.getBusManager().getReturnBusNames();
