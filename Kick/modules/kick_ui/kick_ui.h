@@ -126,6 +126,7 @@
     #include "modes/midicontrol/kick_MidiControlTabs.h"
     #include "modes/midicontrol/kick_MidiControl.h"
     #include "modes/padperform/kick_PadPerform.h"
+    #include "modes/pianoview/kick_PianoView.h"
     #include "modes/filebrowser/kick_fileUtils.h"
     #include "modes/filebrowser/kick_sourceHub.h"
     #include "modes/filebrowser/kick_fileBrowser.h"

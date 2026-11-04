@@ -162,7 +162,7 @@ public:
             { "MenuPadMute", Screen::MenuPadMute }, { "MenuTrackMute", Screen::MenuTrackMute },
             { "MenuPadMixer", Screen::MenuPadMixer }, { "MenuChannelMixer", Screen::MenuChannelMixer },
             { "MenuKnobEdit", Screen::MenuKnobEdit }, { "MenuListEdit", Screen::MenuListEdit },
-            { "MenuPadPerform", Screen::MenuPadPerform }, { "MenuMidiControl", Screen::MenuMidiControl },
+            { "MenuPadPerform", Screen::MenuPadPerform }, { "MenuPiano", Screen::MenuPiano }, { "MenuMidiControl", Screen::MenuMidiControl },
             { "MenuFileBrowser", Screen::MenuFileBrowser }, { "MenuNextSequence", Screen::MenuNextSequence },
             { "MenuSong", Screen::MenuSong }, { "MenuColorEdit", Screen::MenuColorEdit },
             { "RecentProject", Screen::RecentProject }, { "SystemResources", Screen::SystemResources },

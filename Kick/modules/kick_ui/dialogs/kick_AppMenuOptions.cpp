@@ -44,6 +44,8 @@ namespace kick_ui
         addOption( { "Qlinks", "Qlinks" }, "" );
         addOption( { "Midicontrol", "Midicontrol" }, "" );
 
+        addOption( { "Keyboard", "Keyboard" }, "" );
+
         setVisible( true );
         setSelectionEnabled( false );
 
@@ -101,6 +103,8 @@ namespace kick_ui
             case 13: signals::sigScreenOpen( kick_ui::Screen::MenuLooper ); break;
             case 14: signals::sigScreenOpen( kick_ui::Screen::MenuKnobEdit ); break;
             case 15: signals::sigScreenOpen( kick_ui::Screen::MenuMidiControl ); break;
+
+            case 16: signals::sigScreenOpen( kick_ui::Screen::MenuPiano ); break;
             default: break;
         }
     }
