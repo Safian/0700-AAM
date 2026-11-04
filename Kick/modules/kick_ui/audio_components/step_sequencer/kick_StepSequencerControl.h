@@ -45,6 +45,7 @@ namespace kick_ui
         ui::KickToggleButton clearpad{ "Clear Pad", "Clear Pad", "Clear Pad" };
         ui::KickToggleButton clearbar{ "Clear Bar", "Clear Bar", "Clear Bar" };
         ui::KickToggleButton padSelect{ "Pad Select", "Pad Select", "Pad Select" };
+        ui::KickToggleButton settingsBtn{ "Settings", "Settings", "Settings" }; // step entry settings (default velocity, pad velocity)
 
         int totalBars = 1;
         int rangeLow  = 1;
