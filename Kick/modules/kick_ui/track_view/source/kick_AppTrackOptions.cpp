@@ -133,7 +133,7 @@ namespace kick_ui
         addOption( { "HalfSpeed", "Half Speed" }, "" );
         addOption( { "DoubleSpeed", "Double Speed" }, "" );
         addOption( { "Explode", "Explode" }, "" );
-        //addOption( { "Bounce", "Bounce_Track" }, "" );
+        // No "Bounce" entry: the engine has no offline render to bounce a track to a sample, so the menu does not offer it.
         addOption( { "Quantize", "Quantize_Track" }, "" );
 
         addOption( { "Humanize", "Humanize" }, "" );
@@ -189,8 +189,6 @@ namespace kick_ui
                     close.triggerClick();
                     break;
                 }
-                //case 3: // Bounce to Sample
-                //    break;
                 case 3: // Pitch Quantize
                 {
                     auto p = new APPTrackOptionPitchQuantize();
@@ -232,9 +230,8 @@ namespace kick_ui
                                     else
                                         openWarningPopUp( "No Events Are Present To Split" );
                                 }
-
-                                if( p ) delete p;
                             }
+                            if( p ) delete p; // also on cancel (it leaked there before)
                         },
                         ui::layout::warningPopup );
                 }
