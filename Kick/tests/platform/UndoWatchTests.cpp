@@ -48,6 +48,11 @@ int main()
         CHECK( classify( a, b ).kind == Kind::Undid && classify( b, a ).kind == Kind::Redid );
     }
 
+    // Undo History rows.
+    CHECK( rowText( 0, "Create track" ) == "1  Create track" && rowText( 2, "" ) == "3  (unnamed step)" );
+    CHECK( stepsToUndo( 0, 5 ) == 1 && stepsToUndo( 4, 5 ) == 5 && stepsToUndo( 5, 5 ) == 0 && stepsToUndo( -1, 5 ) == 0 && stepsToUndo( 0, 0 ) == 0 );
+    CHECK( historySummary( 0 ) == "Choose how far back to go" && historySummary( 1 ) == "Undo the last step" && historySummary( 3 ) == "Undo the last 3 steps" );
+
     if( g_fail == 0 ) std::printf( "UndoWatchTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;
 }

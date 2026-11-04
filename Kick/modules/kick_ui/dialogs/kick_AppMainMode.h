@@ -74,6 +74,7 @@ namespace kick_ui
             ui::KickImageButton del{ "Del", "Trash", "Trash_Active", "Trash", "Trash Disabled" };
             ui::KickButton      undo{ TRANS( "Undo" ) };
             ui::KickButton      redo{ TRANS( "Redo" ) };
+            ui::KickButton      history{ "History" }; // the Undo History window
             juce::UndoManager&  um{ mt::getAudioInterface().getUndoManager() };
             toolbar();
             void paint( juce::Graphics& g ) override;

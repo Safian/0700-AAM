@@ -318,6 +318,11 @@ namespace kick_ui
             tBar.undo.setToggleState( false, juce::dontSendNotification );
         };
 
+        tBar.history.onClick = [&]() {
+            UndoHistory::show();
+            tBar.history.setToggleState( false, juce::dontSendNotification );
+        };
+
         tBar.redo.onClick = [&]() {
             if( tabButtons[0].getToggleState() )
             {
@@ -463,7 +468,7 @@ namespace kick_ui
 
     AppMainmode::toolbar::toolbar()
     {
-        mt::utils::addAndMakeVisible( this, add, del, undo, redo );
+        mt::utils::addAndMakeVisible( this, add, del, undo, redo, history );
         del.setPlacementFlag( juce::Justification::centred );
     }
 
@@ -482,6 +487,7 @@ namespace kick_ui
         del.setBounds( b.removeFromRight( 50 ).reduced( 5, 2 ) );
         redo.setBounds( b.removeFromRight( 60 ).reduced( 5, 2 ) );
         undo.setBounds( b.removeFromRight( 70 ).reduced( 5, 2 ) );
+        history.setBounds( b.removeFromRight( 80 ).reduced( 5, 2 ) );
     }
 
     void AppMainmode::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )

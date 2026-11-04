@@ -23,6 +23,7 @@
 
 #include <stack>
 #include "kick_UndoWatcher.h"
+#include "kick_UndoHistory.h"
 
 namespace kick_ui
 {

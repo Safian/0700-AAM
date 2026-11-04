@@ -44,4 +44,23 @@ namespace kick_ui::undo_watch
         const std::string verb = e.kind == Kind::Undid ? "Undid" : "Redid";
         return e.name.empty() ? verb : verb + ": " + e.name;
     }
+
+    // ---- Undo History window ---------------------------------------------------------------------------------------
+    // Rows are listed newest first (the first one is what a single Undo takes back). Unnamed steps get a placeholder.
+    inline std::string rowText( int index, const std::string& description )
+    {
+        return std::to_string( index + 1 ) + "  " + ( description.empty() ? std::string( "(unnamed step)" ) : description );
+    }
+
+    // Choosing row r undoes that step and every newer one: r + 1 steps. 0 for no / an invalid selection.
+    inline int stepsToUndo( int selectedRow, int rowCount )
+    {
+        return selectedRow >= 0 && selectedRow < rowCount ? selectedRow + 1 : 0;
+    }
+
+    inline std::string historySummary( int steps )
+    {
+        if( steps <= 0 ) return "Choose how far back to go";
+        return steps == 1 ? "Undo the last step" : "Undo the last " + std::to_string( steps ) + " steps";
+    }
 }
