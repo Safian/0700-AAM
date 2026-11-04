@@ -52,8 +52,8 @@ namespace kick_ui
         ui::KickRotary        padPan{ "Pan", juce::Slider::TextBoxAbove, true };
         ui::KickRotary        padSemi{ "Semi", juce::Slider::TextBoxAbove, true };
         ui::KickRotary        padFine{ "Fine", juce::Slider::TextBoxAbove, true };
-        ui::KickToggleOptions layerPlay{ "Layer Play", { "Cycle", "Velocity", "Random" } };
-        ui::KickToggleOptions samplePlay{ "Sample Play", { "One Shot", "Note Off", "Note On" } };
+        ui::KickToggleOptions layerPlay{ "Layer Play", progedit::layerPlayOptions() };
+        ui::KickToggleOptions samplePlay{ "Sample Play", progedit::samplePlayOptions() };
         ui::KickNumberT<int>  muteGroup{ "Mute Group", MUTEGROUP::MIN, MUTEGROUP::MAX, MUTEGROUP::DEFAULT, true };
 
         void visibilityChanged() override;

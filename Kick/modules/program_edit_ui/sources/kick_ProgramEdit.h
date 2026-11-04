@@ -95,6 +95,14 @@ namespace kick_ui
 
         void loadProgram( mt::MTProgramType Type, int Index );
 
+        // Opens the plugin (CLAP) editor of a Plugin program. Set once by the application (program_edit_ui does not know the
+        // CLAP host): the HW EDIT button on a Plugin program opens the same panel the Program tab's EDIT opens.
+        static std::function<void( mt::MTIProgram* )>& pluginOpener()
+        {
+            static std::function<void( mt::MTIProgram* )> f;
+            return f;
+        }
+
         bool canClose() { return true; }
         bool requiresControlBar() override { return false; }
         bool requiresHandleCommand() override { return true; }
@@ -112,6 +120,22 @@ namespace kick_ui
         ProgEditInterface*                              selectedProgram{ nullptr };
         juce::Component*                                comp{ nullptr };
         ui::KickLabel                                   infoLabel{ "" };
+        ui::KickButton                                  pluginOpen{ "OpenPlugin", "OPEN PLUGIN EDITOR" };
+        // Touch pad selection (Drum / Keygroup / Clip): the on-screen way to do what a hardware pad press does.
+        ui::KickListBox padSelect{ ui::KickListBox::withoutTitleBar, "PAD", mt::Kick::padNames, 0, 8 };
+        void            selectPad( int padIndex );
+        bool            qLinkToPage( int knob, int value );
+
+        struct HeldPad
+        {
+            int            note{ -1 };
+            mt::MTSelected target;
+        };
+        HeldPad heldPad[16];
+        void    padNote( int padNo, bool pressed, int velocity );
+        void    releaseHeldPads();
+        void    openPlugin( int Index );
+        bool    pluginMode_{ false };
 
         void          resized() override;
         void          visibilityChanged() override;

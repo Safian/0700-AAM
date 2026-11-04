@@ -27,6 +27,14 @@ namespace kick_ui
     {
         setRowTitles( { "AMPLITUDE", "FILTER", "PITCH" } );
 
+        // Controls shown for an envelope type. DEPTH of the pitch / filter envelope shows for every type: the voice applies the
+        // depth whatever the type is (an AD pitch fall - the 808 kick - had no way to set its depth).
+        showFor = [&]( int row, int type ) {
+            h[row].setVisible( type >= 2 && type <= 4 );
+            s[row].setVisible( type == 1 || type == 3 || type == 4 );
+            dep[row].setVisible( row != (int)mt::AMPLITUDE || type == 1 || type == 4 );
+        };
+
         for( auto i = 0; i < 3; ++i )
         {
             //env[i].showTitle( true );
@@ -65,10 +73,9 @@ namespace kick_ui
             addComponent( s[i], i, 5 );
             addComponent( dep[i], i, 6 );
 
+            showFor( i, 0 );
             env[i].onSelectionChanged = [&, i]( int Index, const juce::String& Option ) {
-                h[i].setVisible( Index >= 2 && Index <= 4 );
-                s[i].setVisible( Index == 1 || Index == 3 || Index == 4 );
-                dep[i].setVisible( Index == 1 || Index == 4 );
+                showFor( i, Index );
                 if( pDrum )
                     pDrum->setEnvType( pads[0], toEnum<mt::ADSRType>( Index ), toEnum<mt::EnvelopeType>( i ) );
             };
@@ -112,7 +119,9 @@ namespace kick_ui
         {
             for( auto index = 0; index < 3; ++index )
             {
-                env[index].setSelected( pDrum->getEnvType( pads[0], toEnum<mt::EnvelopeType>( index ) ), juce::sendNotification );
+                // No notification: showing the page must not write the model (modified flag, undo step) on every pad change.
+                env[index].setSelected( pDrum->getEnvType( pads[0], toEnum<mt::EnvelopeType>( index ) ), juce::dontSendNotification );
+                showFor( index, env[index].getSelectedIndex() );
                 a[index].setValue( pDrum->getEnvelopeAttack( pads[0], toEnum<mt::EnvelopeType>( index ) ), juce::dontSendNotification );
                 h[index].setValue( pDrum->getEnvelopeHold( pads[0], toEnum<mt::EnvelopeType>( index ) ), juce::dontSendNotification );
                 d[index].setValue( pDrum->getEnvelopeDecay( pads[0], toEnum<mt::EnvelopeType>( index ) ), juce::dontSendNotification );

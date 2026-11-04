@@ -30,7 +30,7 @@ namespace kick_ui
 
         for( auto i = 0; i < 4; ++i )
         {
-            auto name = "Layer " + juce::String( i );
+            auto name = "Layer " + juce::String( i + 1 ); // 1..4 like the Layer Mix page (the id stays 0..3)
             layer[i].setName( name );
             layer[i].setTitle( name );
             layer[i].showTitle( true );
@@ -169,7 +169,7 @@ namespace kick_ui
             auto source = pDrum->getLayerSource( pads[0], selectedLayer );
             int  min{ 0 };
             int  max{ 1 };
-            if( auto sPtr = mt::getAudioSoundCache().getOrLoad( source ) )
+            if( auto sPtr = progedit::soundOrLoadAsync( source, this, [this]() { refreshPads(); } ) )
             {
                 max            = sPtr->getNumSamplesPerChannel();
 
