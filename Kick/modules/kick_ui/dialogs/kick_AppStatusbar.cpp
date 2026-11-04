@@ -38,6 +38,8 @@ namespace kick_ui
 
         setInterceptsMouseClicks( false, true );
 
+        undoOfferHandler() = [this]( const juce::String& Text, std::function<void()> Action ) { offerUndo( Text, std::move( Action ) ); };
+
         mt::utils::addChildComponents( this, progressBar, boxInfo, undoButton, left, right );
         undoButton.setValueFontHeight( 18 );
         undoButton.setValueColour( ui::Theme::textColour( 1 ) );

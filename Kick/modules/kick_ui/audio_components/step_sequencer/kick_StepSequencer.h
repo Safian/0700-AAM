@@ -141,6 +141,43 @@ namespace kick_ui
 
         std::vector<std::unique_ptr<ui::KickImageButton>> buttonNum;
     };
+    // Step entry settings (the manual's Step Sequencer gear window).
+    class StepSequencerSettings : public juce::Component
+    {
+    public:
+        StepSequencerSettings()
+        {
+            mt::utils::addAndMakeVisible( this, velocity, padVelocity, hint );
+            mt::utils::setValueColour( ui::Theme::textColour( 2 ), velocity, padVelocity );
+            mt::utils::setValueFontHeight( 20, velocity, padVelocity );
+            mt::utils::setTitleFontHeight( 16, velocity, padVelocity );
+            mt::utils::setTitleProportion( .4f, velocity, padVelocity );
+            hint.setValueFontHeight( 15 );
+            hint.setValueColour( ui::Theme::textColour( 1 ) );
+            hint.setValueJustification( juce::Justification::centred );
+            hint.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+        }
+        void load( int Velocity, bool PadVelocity )
+        {
+            velocity.setValue( Velocity, juce::dontSendNotification );
+            padVelocity.setSelected( PadVelocity ? 1 : 0, juce::dontSendNotification );
+        }
+        int  getVelocity() const { return velocity.getValue(); }
+        bool getPadVelocity() { return padVelocity.getSelected() == 1; }
+
+    private:
+        ui::KickNumber        velocity{ "VELOCITY  (0 = Auto)", 0, 127, 0, 1, true };
+        ui::KickToggleOptions padVelocity{ "PAD VELOCITY", { "Off", "On" } };
+        ui::KickLabel         hint{ "Velocity of steps you switch on. Auto: CLASSIC 127, GRID 100. Pad velocity: the pad's own velocity." };
+
+        void resized() override
+        {
+            velocity.setBoundsRelative( .1076f, .12f, .784f, .22f );
+            padVelocity.setBoundsRelative( .1076f, .40f, .784f, .22f );
+            hint.setBoundsRelative( .06f, .72f, .88f, .2f );
+        }
+    };
+
     class StepSequencer : public juce::Component
         , public kick_ui::IScreen
         , private juce::AsyncUpdater
@@ -185,6 +222,7 @@ namespace kick_ui
         void updateAvailability(); // no track / audio or clip track: controls off + notice
         void externalNotesChanged();
         int  eraseNotesStartingIn( int Pad, int FromTick, int ToTick );
+        void offerUndo( const juce::String& Message ); // status bar: message + UNDO button
 
     private:
         mt::MTAudioInterface& ae{ mt::getAudioInterface() };
@@ -215,5 +253,6 @@ namespace kick_ui
         NoteListWatcher         noteWatcher;
 
         KickModeHeader header{ "Step Sequencer", "Icon_Stepsequencer" };
+        StepSequencerSettings settings;
     };
 }
