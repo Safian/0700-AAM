@@ -54,6 +54,10 @@ namespace AudIO
         void serializeEffect( unsigned int Position, std::vector<float>& Values );
         void deserializeEffect( unsigned int Position, const std::vector<float>& Values );
 
+        // For hosts that run the inserts from outside (a bus runs them as a chain insert, see DawBus.cpp).
+        inline void prepareInserts( uint32_t Samplerate, uint32_t Blocksize ) { prepareToPlay( Samplerate, Blocksize ); }
+        inline void processInserts( Buffer<float>& Buffer ) { process( Buffer ); }
+
         AUD_IO_MAKE_NON_COPYABLE( DawInserts );
 
     protected:
@@ -61,16 +65,26 @@ namespace AudIO
         void process( Buffer<float>& Buffer );
 
     private:
+        // Slot. The UI thread owns pObj (create, replace, delete). The audio thread only reads `live`: a slot is taken out of
+        // service (live = nullptr), the audio thread is waited for (waitForAudio) and only then is the object replaced or
+        // deleted, so process() can never run on an object that is being destroyed.
         struct InsertEffects
         {
             std::atomic<bool>       bypassed{ true };
+            std::atomic<Object*>    live{ nullptr };
             std::unique_ptr<Object> pObj;
+            std::string             key;           // registration key the effect was created with (the name Object::getName() reports can differ: "NC-17")
+            DawInserts*             owner{ nullptr };
 
             int  reset();
             int  create( const std::string& Effect, uint32_t Samplerate, uint32_t Blocksize );
             int  setObject( std::unique_ptr<Object> obj, uint32_t Samplerate, uint32_t Blocksize );
             bool isSame( const std::string& Effect ) const;
         };
+
+        // Odd while the audio thread is inside process(): the UI thread waits for it to change before it deletes an object.
+        mutable std::atomic<uint32_t>          _epoch{ 0 };
+        void                                   waitForAudio() const;
 
         std::atomic<bool>                      _bypassAll{ false };
         uint32_t                               _rate{ 0 };  // set in prepareToPlay, used for effects created later
