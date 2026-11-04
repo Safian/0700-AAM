@@ -109,7 +109,17 @@ int main()
     // --- PAN lane ---
     CHECK_EQ( (int)Level, 0 ); // persisted ids: never reorder
     CHECK_EQ( (int)Pan, 1 );
-    CHECK_EQ( (int)Count, 2 );
+    CHECK_EQ( (int)TouchX, 2 ); // XY FX gesture + insert lanes: persisted ids, never reorder
+    CHECK_EQ( (int)TouchY, 3 );
+    CHECK_EQ( (int)InsertParam0, 4 );
+    CHECK_EQ( (int)InsertParam3, 7 );
+    CHECK_EQ( (int)Count, 8 );
+    CHECK_EQ( normToValue( 0.5 ), 500 );
+    CHECK_EQ( normToValue( -3.0 ), 0 );
+    CHECK_EQ( normToValue( 9.0 ), 1000 );
+    CHECK_EQ( normToValue( 0.0 / 0.0 ), 0 );
+    for( int v = 0; v <= 1000; ++v )
+        CHECK_EQ( normToValue( valueToNorm( v ) ), v );
     CHECK_EQ( panToValue( 0.0 ), 0 );
     CHECK_EQ( panToValue( -1.0 ), -1000 );
     CHECK_EQ( panToValue( 1.0 ), 1000 );
@@ -129,7 +139,8 @@ int main()
     CHECK_EQ( paramFromStored( false, 1 ), (int)Level ); // value ignored when the property is absent
     CHECK_EQ( paramFromStored( true, 0 ), (int)Level );
     CHECK_EQ( paramFromStored( true, 1 ), (int)Pan );
-    CHECK_EQ( paramFromStored( true, 2 ), -1 );  // unknown (future) param: not ours
+    CHECK_EQ( paramFromStored( true, 2 ), (int)TouchX );
+    CHECK_EQ( paramFromStored( true, 8 ), -1 );  // unknown (future) param: not ours
     CHECK_EQ( paramFromStored( true, -1 ), -1 );
 
     // negative pan values survive the text form; interpolation through the centre
