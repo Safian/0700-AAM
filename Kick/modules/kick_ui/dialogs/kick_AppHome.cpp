@@ -276,6 +276,11 @@ namespace kick_ui
         // Host loading animation on KickHome screen only (prevents full-screen white flash)
         mt::utils::LoadAnimation::setHost( this );
 
+        // Start-up screen: on top of everything until the start-up steps have a final state.
+        startupScreen_ = std::make_unique<StartupScreen>();
+        addAndMakeVisible( startupScreen_.get() );
+        startupScreen_->setBounds( getLocalBounds() );
+
         // Load default startup screen.
         //signals::sigScreenOpen( Screen::Temp );
         signals::sigScreenOpen( Screen::RecentProject );
@@ -313,6 +318,16 @@ namespace kick_ui
                 screenAdder( Screen::CVClib, std::make_unique<CVClib>() );
                 screenAdder( Screen::Inserts, std::make_unique<Inserts>() );
                 //screenAdder( Screen::Temp, std::make_unique<TempScreen>() );
+
+                lazyScreensReady_ = true;
+                if( startupScreen_ ) startupScreen_->toFront( false ); // the screens just added must not cover it
+                if( pendingScreen_ != Screen::Invalid )
+                {
+                    const auto pending = pendingScreen_;
+                    pendingScreen_     = Screen::Invalid;
+                    kick_log( "info", "[INFO] [HOME] applying screen %d that was requested before the screens were built\n", (int)pending );
+                    load( pending );
+                }
             } );
         } );
     }
@@ -343,8 +358,21 @@ namespace kick_ui
         return screens_[screen].get();
     }
 
+    IScreen* KickHome::findScreen( Screen screen ) const
+    {
+        const auto it = screens_.find( screen );
+        return it == screens_.end() ? nullptr : it->second.get();
+    }
+
     void KickHome::load( Screen screen )
     {
+        // Lazy screens not built yet: keep what is on screen and switch as soon as they exist (see lazyScreensReady_).
+        if( !lazyScreensReady_ && screen != Screen::RecentProject )
+        {
+            pendingScreen_ = screen;
+            return;
+        }
+
         ui::clearFocusComponent();
 
         // Emit signal...
@@ -358,7 +386,7 @@ namespace kick_ui
 
     void KickHome::setupLoadScreenVisibility()
     {
-        if( auto p = screens_[currentScreen].get() )
+        if( auto p = findScreen( currentScreen ) )
         {
             // Turn off all screens.
             for( const auto& it : screens_ )
@@ -413,7 +441,8 @@ namespace kick_ui
             ctrlBar_->setBounds( b.removeFromTop( ui::layout::header.getHeight() ) );
             statusBar_->setBounds( b.removeFromBottom( ui::layout::statusBar.getHeight() ) );
         }
-        if( auto p = screens_[currentScreen].get() )
+        if( startupScreen_ ) startupScreen_->setBounds( bounds );
+        if( auto p = findScreen( currentScreen ) )
             if( auto pScr = dynamic_cast<juce::Component*>( p ) )
                 pScr->setBounds( getScreenBounds( p ) );
         if( hardwareDrawer_ && hardwareDrawer_->isVisible() )
@@ -577,18 +606,27 @@ namespace kick_ui
                 ui::getComponentInFocus()->handleCommand( f_HwMsg );
             }
 
-            else if( getScreen( getCurrentScreen() )->requiresHandleCommand() )
+            else if( auto* cur = findScreen( getCurrentScreen() ); cur && ( cur->requiresHandleCommand() || getCurrentScreen() == Screen::RecentProject ) )
             {
+                // The Projects list takes the dial, +/-, arrows and ENTER also while a project is open.
                 log += " register handle command";
                 juce::Logger::writeToLog( log );
-                getScreen( getCurrentScreen() )->handleCommand( f_HwMsg );
+                cur->handleCommand( f_HwMsg );
             }
         }
         else if( !ui::RecentProject::isProjectLoading && contracts::DclContractsHelper::isCenterKnobMessage( f_HwMsg ) )
         {
-            log += " project is loading and center knob message";
+            log += " no project and center knob message";
             juce::Logger::writeToLog( log );
-            getScreen( getCurrentScreen() )->handleCommand( f_HwMsg );
+            if( auto* cur = findScreen( getCurrentScreen() ) ) cur->handleCommand( f_HwMsg );
+        }
+        else if( !ui::RecentProject::isProjectLoading && getCurrentScreen() == Screen::RecentProject
+                 && ( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) || contracts::DclContractsHelper::isNavigationMessage( f_HwMsg ) ) )
+        {
+            // No project yet: the front-panel buttons used to be dead. They drive the Projects list (RecentProject::handleCommand).
+            log += " no project: Projects list navigation";
+            juce::Logger::writeToLog( log );
+            if( auto* cur = findScreen( Screen::RecentProject ) ) cur->handleCommand( f_HwMsg );
         }
     }
 }

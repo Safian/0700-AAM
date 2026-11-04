@@ -20,6 +20,8 @@
 #include "kick_ui_controls/source/kick_Theme.h"
 #include "kick_ui_controls/source/kick_ControlBase.h"
 #include "audio_engine/audio_engine.h"
+#include <cerrno>
+#include <cstring>
 #include <chrono>
 #include <atomic>
 #include <array>
@@ -63,6 +65,7 @@ private:
     // changed on the message thread (button) and read on the ALSA reader thread (pad hit), so it is a packed atomic.
     std::atomic<uint32_t> m_pad_level_bits { 0 };  // bit0 full, bit1 user level, bits 8..15 user level velocity
     int m_frame_counter = 0;
+    bool m_theme_reapplied = false;
     int m_cmd_fd = -1;
     int m_cmd_fd_w = -1;
     std::string m_cmd_buf;
@@ -685,22 +688,13 @@ private:
         int compH = targetComp->getHeight();
         if (compW <= 0 || compH <= 0) return;
 
-        if (m_frame_counter == 30) {
-            kick_log("bridge", "[BRIDGE] Transitioning to Screen::HomeListView (AppMainmode)...\n");
-            kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
+        // The lazily built screens exist now (KickHome builds them after its constructor): re-apply the theme once so they
+        // pick up the MPC theme images. Event based, not a frame count. Project loading is NOT done here: the start-up
+        // decision (last project / Demo 01 / none) is made once by ui::LoadProjectAndAnimation::requestStartupProject().
+        if (!m_theme_reapplied && kick_ui::KickHome::Instance().areLazyScreensReady()) {
+            m_theme_reapplied = true;
+            kick_log("bridge", "[BRIDGE] screens ready, re-applying theme\n");
             ui::Theme::loadTheme("Default", true);
-            juce::File demoPrj("/data/demos/Demo 01/Demo 01.kickPrj");
-            if (demoPrj.existsAsFile()) {
-                kick_log("bridge", "[BRIDGE] Found '%s', loading project...\n", demoPrj.getFullPathName().toRawUTF8());
-                mt::getAudioInterface().loadProject(demoPrj);
-            }
-        }
-
-        static bool project_refresh_triggered = false;
-        if (!project_refresh_triggered && m_frame_counter > 40 && mt::getAudioInterface().isProjectLoaded()) {
-            project_refresh_triggered = true;
-            kick_log("bridge", "[BRIDGE] Project loaded! Triggering UI refresh...\n");
-            kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
         }
 
         if (kick_logger::is_category_enabled("frame")) {
@@ -760,6 +754,20 @@ private:
         }
     }
 
+    // Startup problem: state (-> dialog) + kick.log.
+    static void reportFault(kick_startup::Fault fault, const std::string& detail)
+    {
+        const auto p = kick_startup::state().fail(fault, detail);
+        kick_log("error", "[ERROR] [BRIDGE] %s\n", p.cause.c_str());
+    }
+
+    // "<what>: <strerror(errno)>" when the failed call left an errno, else just <what>.
+    static std::string errnoText(const char* what)
+    {
+        const int e = errno;
+        return e != 0 ? std::string(what) + ": " + std::strerror(e) : std::string(what);
+    }
+
 public:
     KickHardwareBridge()
         : m_framebuffer_img(juce::Image::ARGB, 1280, 800, false)
@@ -785,21 +793,54 @@ public:
         kick_log("bridge", "[BRIDGE] getAppDirs(MTAssets) = '%s' exists=%d\n", assetsDir.getFullPathName().toRawUTF8(), assetsDir.exists());
         ui::Theme::loadTheme("Default", true);
 
+        // Device default project for the start-up decision (see ui::LoadProjectAndAnimation::requestStartupProject).
+        ui::LoadProjectAndAnimation::setDefaultProject(juce::File("/data/demos/Demo 01/Demo 01.kickPrj"));
+
+        auto& startup = kick_startup::state();
+        startup.set(kick_startup::Step::Display, kick_startup::StepState::Running, "framebuffer");
+        startup.set(kick_startup::Step::Midi, kick_startup::StepState::Running, "control surface");
+
         m_hw.reset(HardwareDeviceFactory::create());
+        if (!m_hw)
+        {
+            reportFault(kick_startup::Fault::Framebuffer, "no hardware adapter for this device");
+            startup.set(kick_startup::Step::Midi, kick_startup::StepState::Skipped, "no hardware adapter");
+        }
         if (m_hw)
         {
-            m_hw->init();
+            // The adapters report failure by return value (and perror); these used to be dropped. Now they reach the startup
+            // state (dialog with cause + action) and kick.log.
+            bool displayOk = true;
+            errno = 0;
+            if (!m_hw->init()) {
+                displayOk = false;
+                reportFault(kick_startup::Fault::Framebuffer, errnoText("cannot open the framebuffer /dev/fb0"));
+            }
 
             if (m_hw->touch()) {
-                m_hw->touch()->start(this, kFbW, kFbH);
-                auto* uiRoot = (m_window != nullptr) ? (juce::Component*)m_window : m_root;
-                kick_log("touch", "[TOUCH] init: framebuffer touch space %dx%d -> UI %dx%d (ui = fb * ui / fb size)\n",
-                       kFbW, kFbH, uiRoot ? uiRoot->getWidth() : 0, uiRoot ? uiRoot->getHeight() : 0);
+                errno = 0;
+                if (!m_hw->touch()->start(this, kFbW, kFbH)) {
+                    displayOk = false;
+                    reportFault(kick_startup::Fault::Touch, errnoText("cannot open the touch device"));
+                } else {
+                    auto* uiRoot = (m_window != nullptr) ? (juce::Component*)m_window : m_root;
+                    kick_log("touch", "[TOUCH] init: framebuffer touch space %dx%d -> UI %dx%d (ui = fb * ui / fb size)\n",
+                           kFbW, kFbH, uiRoot ? uiRoot->getWidth() : 0, uiRoot ? uiRoot->getHeight() : 0);
+                }
             }
+            if (displayOk) startup.set(kick_startup::Step::Display, kick_startup::StepState::Ok, "1280x800, touch");
+
+            bool midiOk = true;
             if (m_hw->control_surface()) {
-                m_hw->control_surface()->start(this);
-                initButtonLeds();
+                errno = 0;
+                if (!m_hw->control_surface()->start(this)) {
+                    midiOk = false;
+                    reportFault(kick_startup::Fault::MidiPort, errnoText("MIDI port 1 (control surface) is not available"));
+                } else {
+                    initButtonLeds();
+                }
             }
+            if (midiOk) startup.set(kick_startup::Step::Midi, kick_startup::StepState::Ok, m_hw->get_device_badge());
 
             if (!m_screen_conn.connected()) {
                 m_screen_conn = kick_ui::signals::onScreenLoaded.connect(

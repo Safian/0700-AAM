@@ -206,6 +206,30 @@ public:
     {
         kick_logger::init();
         kick_log( "info", "[INFO] [APP] Kick %s initialising...\n", getApplicationVersion().toRawUTF8() );
+        const bool smoke = commandLine.contains("--smoke-test");
+        kick_startup::state().set( kick_startup::Step::AudioEngine, kick_startup::StepState::Running, "starting" );
+#if JUCE_LINUX
+        // Boot-loop guard: counts starts that did not stay up for kick_boot::kStableSeconds. After two such starts with a crash file
+        // present, this start is a safe-mode start (no project, reason + crash file path shown). Not in the smoke test.
+        if( !smoke )
+        {
+            const auto dir   = juce::SystemStats::getEnvironmentVariable( "KICK_BOOT_GUARD_DIR", {} ).toStdString();
+            const auto paths = dir.empty() ? kick_boot::Paths() : kick_boot::Paths::inDir( dir );
+            const auto d     = kick_boot::onBoot( paths );
+            if( !d.counterWritten ) kick_log( "error", "[ERROR] [BOOT] cannot write %s: a boot loop cannot be detected\n", paths.countFile.c_str() );
+            if( d.safeMode )
+            {
+                kick_startup::state().setSafeMode( true, d.crashPath );
+                const auto p = kick_startup::state().fail( kick_startup::Fault::SafeMode, "crash file: " + d.crashPath );
+                kick_startup::state().set( kick_startup::Step::Project, kick_startup::StepState::Skipped, "safe mode" );
+                kick_log( "error", "[ERROR] [BOOT] SAFE MODE: %s (%s)\n", p.cause.c_str(), d.reason.c_str() );
+            }
+            juce::Timer::callAfterDelay( kick_boot::kStableSeconds * 1000, [paths] {
+                if( kick_boot::markStable( paths ) ) kick_log( "info", "[INFO] [BOOT] stable start: boot counter cleared\n" );
+                else kick_log( "error", "[ERROR] [BOOT] cannot clear %s\n", paths.countFile.c_str() );
+            } );
+        }
+#endif
 #if JUCE_LINUX
         // A crash (SIGSEGV/SIGBUS/...) leaves its signal, fault address, registers and call stack in /data/kick.crash
         // (module-relative addresses: resolve with arm-linux-gnueabihf-addr2line against the unstripped binary). On ARM the
@@ -273,7 +297,6 @@ public:
         
         adapter.reset( new KickDeviceAdapter() );
         // This method is where you should put your application's initialisation code ...
-        const bool smoke = commandLine.contains("--smoke-test");
         // Headless hardware (no X server): register a fallback display before any UI is built, so the many
         // parent-less setBoundsRelative() calls do not dereference a null Display (hardware issue 8).
         const bool usingFallbackDisplay = kick_app::ensureFallbackDisplay();
@@ -340,7 +363,14 @@ public:
             hwBridge = std::make_unique<KickHardwareBridge>();
             hwBridge->start( w.get(), &kick_ui::KickHome::Instance() );
         }
+        else
 #endif
+        {
+            // No hardware bridge here (desktop, iOS, smoke test): nothing reports display / MIDI, so they are not applicable.
+            kick_startup::state().set( kick_startup::Step::Display, kick_startup::StepState::Skipped, "no hardware bridge" );
+            kick_startup::state().set( kick_startup::Step::Midi, kick_startup::StepState::Skipped, "no hardware bridge" );
+        }
+        if( smoke ) kick_startup::state().set( kick_startup::Step::Project, kick_startup::StepState::Skipped, "smoke test" );
         if (smoke) juce::Timer::callAfterDelay(1500, [this] {
 #if KICK_APP_SMOKE_TEST
             const auto error = runKickAppSmoke();
@@ -395,6 +425,13 @@ public:
         mt::getAudioInterface().closeProject();
         w = nullptr;
         adapter = nullptr;
+#if JUCE_LINUX
+        // A clean quit is not a crash: forget the unstable-start count (deploys / restarts must not trip safe mode).
+        {
+            const auto dir = juce::SystemStats::getEnvironmentVariable( "KICK_BOOT_GUARD_DIR", {} ).toStdString();
+            kick_boot::markStable( dir.empty() ? kick_boot::Paths() : kick_boot::Paths::inDir( dir ) );
+        }
+#endif
         kick_logger::shutdown();
     }
 

@@ -130,6 +130,7 @@
     #include "modes/filebrowser/kick_sourceHub.h"
     #include "modes/filebrowser/kick_fileBrowser.h"
 
+    #include "dialogs/kick_StartupScreen.h"
     #include "dialogs/kick_AppHome.h"
     //new file
     #include "recent_project/kick_RecentProject.h"
