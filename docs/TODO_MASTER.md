@@ -16,6 +16,12 @@ Az, ami ember vagy hardveres hallgatás nélkül nem igazolható, a B. szakaszba
 - **iOS**: szimulátor/eszköz indulás és külső MIDI a mobil ágon (nem ellenőrzött).
 - **Looper drift**: egy nyomkövetős buildel mérve megszűnt (KEY61_HW_BEHAVIOUR.md); a **fül szerinti ellenőrzés** B-ben marad, indok: üres bemenet, a hangot csak ember hallja.
 - **R-9..R-11 képernyők az MPC-n (a végleges `4dfe9a81` buildel, injektált menü-érintéssel, 2026-11-04)**: Track Mixer (Programs nézet, Insert/Inserts), Track Mute, Pad Mute ("not available" Keygroup programra: helyes), Pad Mixer (ugyanúgy), Pad Notes (skála/root/bank/pad-rács), Program Edit (Main/Samples, Master, KeyGroup, Layer Control), Q-Link Edit, MIDI Control (Hardware/XY/MIDI Learn/MIDI Monitor) **megnyílik, nincs összeomlás, 0 ERROR sor**. A hang-, LED- és ujjas viselkedés B-ben van (hallgatás/fizikai).
+**R-9 / R-10 / R-11 egységenkénti igazolás** (az ágak merge-elve és törölve; az igazolás az őket tartalmazó integrált buildre, `4dfe9a81`, ARM 0 hiba, MPC-re telepítve):
+| Egység | Merge | MPC-n megnyitva (injektált menü-érintés, 2026-11-04) | Ujj/fül (B) |
+|---|---|---|---|
+| R-9 mixer/mute | `dbd3d970` | Track Mixer (Programs nézet, Insert/Inserts), Track Mute, Pad Mute, Pad Mixer ("not available" Keygroupra) | mute/solo ujjal, mixer-hangerők füllel |
+| R-10 Program Edit / Pad Perform | `f06bb3f4` | Program Edit (Main/Samples, Master, KeyGroup, Layer Control), Pad Notes | Layer Play/Pad Perform füllel, poly aftertouch |
+| R-11 Inserts / XY FX / Q-Link / MIDI Control / Looper UI | `0c15cf9a` | Q-Link Edit, MIDI Control (Hardware/XY/MIDI Learn/MIDI Monitor), Looper (REC/overdub/play, Sync); XY FX és Inserts korábbi buildeken nyílt | insert/XY FX hallhatóság, Q-Link tárcsák ujjal |
 
 
 ## Állapot (2026-11-04 03:50) és a képernyő-review backlog (docs/plans/screens/*.md, 22 dokumentum)
