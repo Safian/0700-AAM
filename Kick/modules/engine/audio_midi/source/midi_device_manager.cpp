@@ -28,6 +28,7 @@ namespace mt
     ///
     /// Static member definitions...
     ///
+    juce::CriticalSection                            MTMidiDeviceManager::midiDeviceListLock;
     std::vector<juce::String>                        MTMidiDeviceManager::midiInPorts{ "None" };
     std::vector<juce::String>                        MTMidiDeviceManager::midiOutPorts{ "None" };
     juce::ReferenceCountedArray<MidiDeviceListEntry> MTMidiDeviceManager::midiInputs;
@@ -68,6 +69,8 @@ namespace mt
         // Stop MIDI devices....
         internalTimer.stopTimer();
 
+        const juce::ScopedLock sl( midiDeviceListLock );
+
         for( auto mDev : midiInputs )
             closeMidiDevice( mDev );
         for( auto mDev : midiOutputs )
@@ -78,14 +81,24 @@ namespace mt
         virtualOutputs.clear();
     }
 
-    int                              MTMidiDeviceManager::getNumMidiInputDevices() noexcept { return midiInputs.size(); }
-    int                              MTMidiDeviceManager::getNumMidiOutputDevices() noexcept { return midiOutputs.size(); }
+    int                              MTMidiDeviceManager::getNumMidiInputDevices() noexcept
+    {
+        const juce::ScopedLock sl( midiDeviceListLock );
+        return midiInputs.size();
+    }
+    int                              MTMidiDeviceManager::getNumMidiOutputDevices() noexcept
+    {
+        const juce::ScopedLock sl( midiDeviceListLock );
+        return midiOutputs.size();
+    }
     const std::vector<juce::String>& MTMidiDeviceManager::getMidiInputPortNames() noexcept { return midiInPorts; }
     const std::vector<juce::String>& MTMidiDeviceManager::getMidiOutputPortNames() noexcept { return midiOutPorts; }
 
     juce::ReferenceCountedObjectPtr<MidiDeviceListEntry> MTMidiDeviceManager::getMidiDevice( int index, bool isInput ) noexcept
     {
-        return isInput ? midiInputs[index] : midiOutputs[index];
+        const juce::ScopedLock sl( midiDeviceListLock );
+        auto& arr = isInput ? midiInputs : midiOutputs;
+        return juce::isPositiveAndBelow( index, arr.size() ) ? arr[index] : nullptr;
     }
     const juce::ReferenceCountedArray<MidiDeviceListEntry>& MTMidiDeviceManager::getMidiDeviceList( bool isInput ) noexcept
     {
@@ -130,7 +143,8 @@ namespace mt
     ///
     bool MTMidiDeviceManager::hasMidiDeviceListChanged( const juce::Array<juce::MidiDeviceInfo>& availableDevices, bool isInputDevice )
     {
-        juce::ReferenceCountedArray<MidiDeviceListEntry>& midiDevices = isInputDevice ? midiInputs : midiOutputs;
+        const juce::ScopedLock sl( midiDeviceListLock );
+        const juce::ReferenceCountedArray<MidiDeviceListEntry>& midiDevices = isInputDevice ? midiInputs : midiOutputs;
         if( availableDevices.size() != midiDevices.size() )
             return true;
 
@@ -149,9 +163,6 @@ namespace mt
 
         if( hasMidiDeviceListChanged( availableDevices, isInputDevice ) )
         {
-            juce::ReferenceCountedArray<MidiDeviceListEntry>& midiDevices     = isInputDevice ? midiInputs : midiOutputs;
-            auto&                                             midiDeviceNames = isInputDevice ? midiInPorts : midiOutPorts;
-
             closeUnpluggedMidiDevices( availableDevices, isInputDevice );
 
             juce::ReferenceCountedArray<MidiDeviceListEntry> newDeviceList;
@@ -162,7 +173,11 @@ namespace mt
             // add all currently plugged-in devices to the device list
             for( auto& newDevice : availableDevices )
             {
-                MidiDeviceListEntry::Ptr entry = findMidiDevice( newDevice, isInputDevice );
+                MidiDeviceListEntry::Ptr entry;
+                {
+                    const juce::ScopedLock sl( midiDeviceListLock );
+                    entry = findMidiDevice( newDevice, isInputDevice );
+                }
 
                 if( entry == nullptr )
                 {
@@ -175,24 +190,38 @@ namespace mt
                 newPortNames.push_back( entry->deviceInfo.name );
             }
 
-            // Actually update the device list
-            midiDevices = newDeviceList;
-            // Update port names...
-            midiDeviceNames = newPortNames;
+            // Actually update the device list under lock
+            {
+                const juce::ScopedLock sl( midiDeviceListLock );
+                if( isInputDevice )
+                {
+                    midiInputs = newDeviceList;
+                    midiInPorts = newPortNames;
+                }
+                else
+                {
+                    midiOutputs = newDeviceList;
+                    midiOutPorts = newPortNames;
+                }
+            }
+
             // Display information...
             dumpMidiInfo( isInputDevice );
 
             // Emit MIDI device changed signal
             if( isInputDevice )
                 signals::midiInputsChanged();
+            else
+                signals::midiOutputsChanged();
         }
     }
 
     juce::ReferenceCountedObjectPtr<MidiDeviceListEntry> MTMidiDeviceManager::findMidiDevice( juce::MidiDeviceInfo device, bool isInputDevice ) const
     {
+        const juce::ScopedLock sl( midiDeviceListLock );
         const juce::ReferenceCountedArray<MidiDeviceListEntry>& midiDevices = isInputDevice ? midiInputs : midiOutputs;
         for( auto& d : midiDevices )
-            if( d->deviceInfo == device )
+            if( d && d->deviceInfo == device )
                 return d;
 
         return nullptr;
@@ -200,9 +229,10 @@ namespace mt
 
     juce::ReferenceCountedObjectPtr<MidiDeviceListEntry> MTMidiDeviceManager::findMidiDevice( const juce::String& device, bool isInputDevice ) const
     {
+        const juce::ScopedLock sl( midiDeviceListLock );
         const juce::ReferenceCountedArray<MidiDeviceListEntry>& midiDevices = isInputDevice ? midiInputs : midiOutputs;
         for( auto& d : midiDevices )
-            if( d->deviceInfo.name == device )
+            if( d && d->deviceInfo.name == device )
                 return d;
 
         return nullptr;
@@ -278,6 +308,7 @@ namespace mt
 
     void MTMidiDeviceManager::closeUnpluggedMidiDevices( const juce::Array<juce::MidiDeviceInfo>& currentlyPluggedInDevices, bool isInputDevice )
     {
+        const juce::ScopedLock sl( midiDeviceListLock );
         juce::ReferenceCountedArray<MidiDeviceListEntry>& midiDevices = isInputDevice ? midiInputs : midiOutputs;
 
         for( auto i = midiDevices.size(); --i >= 0; )
@@ -323,25 +354,28 @@ namespace mt
 
     void MTMidiDeviceManager::sendToOutputs( const juce::MidiMessage& Msg )
     {
-        for( auto midiOutput : midiOutputs )
-            if( midiOutput->outDevice.get() != nullptr )
+        juce::ReferenceCountedArray<MidiDeviceListEntry> outputsCopy;
+        {
+            const juce::ScopedLock sl( midiDeviceListLock );
+            outputsCopy = midiOutputs;
+        }
+        for( auto midiOutput : outputsCopy )
+            if( midiOutput && midiOutput->outDevice.get() != nullptr )
                 midiOutput->outDevice->sendMessageNow( Msg );
     }
 
     void MTMidiDeviceManager::sendToOutput( juce::MidiDeviceInfo Device, const juce::MidiMessage& Msg )
     {
-        auto midiOutput = findMidiDevice( Device, false );
-        if( midiOutput )
-            if( midiOutput->outDevice.get() != nullptr )
-                midiOutput->outDevice->sendMessageNow( Msg );
+        juce::ReferenceCountedObjectPtr<MidiDeviceListEntry> midiOutput = findMidiDevice( Device, false );
+        if( midiOutput && midiOutput->outDevice.get() != nullptr )
+            midiOutput->outDevice->sendMessageNow( Msg );
     }
 
     void MTMidiDeviceManager::sendToOutput( const juce::String& Device, const juce::MidiMessage& Msg )
     {
-        auto midiOutput = findMidiDevice( Device, false );
-        if( midiOutput )
-            if( midiOutput->outDevice.get() != nullptr )
-                midiOutput->outDevice->sendMessageNow( Msg );
+        juce::ReferenceCountedObjectPtr<MidiDeviceListEntry> midiOutput = findMidiDevice( Device, false );
+        if( midiOutput && midiOutput->outDevice.get() != nullptr )
+            midiOutput->outDevice->sendMessageNow( Msg );
     }
 
 }

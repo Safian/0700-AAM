@@ -113,7 +113,7 @@ namespace mt
     }
 
     void MTTrack::setTranspose( int Transpose ) { MTITrackData::transpose = Transpose; }
-    void MTTrack::setMidiPort( const juce::String& MidiPort ) { MTITrackData::midiPort.setValue( midiPort, undoManager ); }
+    void MTTrack::setMidiPort( const juce::String& MidiPort ) { MTITrackData::midiPort.setValue( MidiPort, undoManager ); }
     void MTTrack::setMidiChannel( int MidiChannel ) { MTITrackData::midiChannel = MidiChannel; }
     void MTTrack::setMidiOutChannel( int MidiChannel ) { MTITrackData::midiOutChannel = MidiChannel; }
     void MTTrack::setMuteGroup( int Group ) { MTITrackData::muteGroup = Group; }

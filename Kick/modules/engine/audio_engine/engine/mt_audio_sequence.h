@@ -194,6 +194,8 @@ namespace mt
         void                          updateTrackList();
         void                          lengthChangeHandler();
         void                          valueTreePropertyChanged( juce::ValueTree& treeWhosePropertyHasChanged, const juce::Identifier& property ) override;
+        void                          valueTreeChildAdded( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenAdded ) override;
+        void                          valueTreeChildRemoved( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenRemoved, int index ) override;
         void                          setupMidiClock( unsigned int bar );
         void                          initializeTickDataFromTempoSettings( const MTTempoSettings& tempoSettings );
         inline const MTTempoSettings& getSequenceTempoSettings( unsigned int bar )

@@ -38,7 +38,10 @@ namespace kick_ui
             buttonAdder( cv, mt::MTProgramType::Cv );
             buttonAdder( plugin, mt::MTProgramType::Plugin );
 
-            mt::utils::addAndMakeVisible( this, drumLabel, keyLabel, audioLabel, clipLabel, pluginLabel, midiLabel, cvLabel, apply, cancel );
+            mt::utils::addAndMakeVisible( this, drumLabel, keyLabel, audioLabel, clipLabel, pluginLabel, midiLabel, cvLabel, apply, cancel, createTrackToggle );
+            createTrackToggle.setToggleState( false, juce::dontSendNotification );
+            createTrackToggle.setValueFontHeight( 16 );
+            apply.setEnabled( false );
             drumLabel.setValueColour( ui::Theme::textColour( 1 ) );
             drumLabel.setValueJustification( juce::Justification::centred );
             drumLabel.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
@@ -66,7 +69,10 @@ namespace kick_ui
             cvLabel.setValueJustification( juce::Justification::centred );
             cvLabel.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
 
-            apply.onClick  = [&]() { mt::utils::exitDialog( this, UI::APPLY ); };
+            apply.onClick  = [&]() {
+                if( selectedProgram != mt::MTProgramType::Unknown )
+                    mt::utils::exitDialog( this, UI::APPLY );
+            };
             cancel.onClick = [&]() { mt::utils::exitDialog( this, UI::CANCEL ); };
 
             ui::themeChanged.connect( [&]() {
@@ -83,6 +89,22 @@ namespace kick_ui
         }
         mt::MTProgramType selectedProgram{ mt::MTProgramType::Unknown };
 
+        bool shouldCreateTrack() const noexcept { return createTrackToggle.getToggleState(); }
+
+        void reset()
+        {
+            selectedProgram = mt::MTProgramType::Unknown;
+            apply.setEnabled( false );
+            drum.setToggleState( false, juce::dontSendNotification );
+            keygroup.setToggleState( false, juce::dontSendNotification );
+            clip.setToggleState( false, juce::dontSendNotification );
+            audio.setToggleState( false, juce::dontSendNotification );
+            midi.setToggleState( false, juce::dontSendNotification );
+            cv.setToggleState( false, juce::dontSendNotification );
+            plugin.setToggleState( false, juce::dontSendNotification );
+            createTrackToggle.setToggleState( false, juce::dontSendNotification );
+        }
+
     private:
         ui::KickImageButtonWithAttachedValue drum{ "Drum", "Drum", "Drum_Active" };
         ui::KickImageButton                  keygroup{ "Key Group", "Piano", "Piano_Active" };
@@ -92,6 +114,7 @@ namespace kick_ui
         ui::KickImageButton                  midi{ "Midi", "Cord", "Cord_Active" };
         ui::KickImageButton                  cv{ "CV", "CV", "CV_Active" };
         ui::KickLabel                        drumLabel{ "DRUM" }, keyLabel{ "KEY" }, audioLabel{ "AUDIO" }, clipLabel{ "CLIP" }, pluginLabel{ "PLUGIN" }, midiLabel{ "MIDI" }, cvLabel{ "CV" };
+        ui::KickToggleButton                 createTrackToggle{ "Create Track", "Create Track", "Create Track" };
         ui::KickImageButton                  apply{ "Apply", "Icon_Apply" }, cancel{ "Cancel", "Icon_Cancel" };
 
         void buttonAdder( ui::KickImageButton& B, mt::MTProgramType T )
@@ -99,7 +122,10 @@ namespace kick_ui
             addAndMakeVisible( B );
             B.setRadioGroupId( (int)kick_ui::RadioGroupId::AppSelectProgram, juce::NotificationType::dontSendNotification );
             B.setPlacementFlag( juce::Justification::centred );
-            B.onClick = [&, T]() { selectedProgram = T; };
+            B.onClick = [&, T]() {
+                selectedProgram = T;
+                apply.setEnabled( true );
+            };
         }
 
         void resized() override
@@ -118,6 +144,7 @@ namespace kick_ui
             pluginLabel.setBoundsRelative( .1461f, .7641f, .1538f, .0343f );
             midiLabel.setBoundsRelative( .3307f, .7641f, .1538f, .0343f );
             cvLabel.setBoundsRelative( .5153f, .7641f, .1538f, .0343f );
+            createTrackToggle.setBoundsRelative( .3307f, .83f, .3386f, .09f );
         };
 
         void knobClicked() override
@@ -180,11 +207,29 @@ namespace kick_ui
                 if( !addProgramDialog.get() )
                     addProgramDialog = std::make_unique<AppSelectProgramMode>();
 
+                addProgramDialog->reset();
+
                 mt::utils::showOptions(
                     "CREATE PROGRAM", addProgramDialog.get(), [this]( int R ) {
-                        if( R == UI::APPLY )
+                        if( R == UI::APPLY && addProgramDialog->selectedProgram != mt::MTProgramType::Unknown )
                         {
-                            ae.createProgram( addProgramDialog->selectedProgram );
+                            int progIdx = ae.createProgram( addProgramDialog->selectedProgram );
+                            if( progIdx >= 0 )
+                            {
+                                if( addProgramDialog->shouldCreateTrack() )
+                                {
+                                    if( !ae.getNumSequences() )
+                                        ae.createSequence();
+                                    int seqIdx = ae.getSelectedSequence();
+                                    int trackIdx = ae.createTrack( seqIdx );
+                                    if( trackIdx >= 0 )
+                                    {
+                                        ae.setProgramToTrack( progIdx, seqIdx, trackIdx );
+                                        ae.setSelectedTrack( trackIdx );
+                                    }
+                                }
+                                ae.setSelectedProgram( progIdx );
+                            }
                             mt::utils::makeHidden( prgOptions );
                         }
                         refreshDeleteButton();

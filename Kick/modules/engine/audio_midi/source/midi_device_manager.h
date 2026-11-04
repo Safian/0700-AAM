@@ -66,6 +66,8 @@ namespace mt
         void refreshMIDIDeviceLists();
 
     private:
+        static juce::CriticalSection                            midiDeviceListLock;
+
         // MIDI devices...
         static std::vector<juce::String>                        midiInPorts;
         static std::vector<juce::String>                        midiOutPorts;
