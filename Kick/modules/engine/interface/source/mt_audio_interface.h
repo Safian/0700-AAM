@@ -545,6 +545,7 @@ namespace mt
         int  getArpMode( const MTSelected& Selection );
         int  getArpRate( const MTSelected& Selection );
         int  getArpOctaves( const MTSelected& Selection );
+        int  getArpGate( const MTSelected& Selection ); // percent of the step, 5..100 (-1: no such track)
         int addLiveMidiNote( const int Program, const int Note, const int Velocity );
         int stopLiveMidiNote( const int Program, const int Note );
 

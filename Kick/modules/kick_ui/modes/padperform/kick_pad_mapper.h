@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <map>
 #include <string>
@@ -345,4 +346,92 @@ namespace kick_ui::padmap
         }
         return std::max( 0, std::min( kMaxNote, bankOffset + ( slot >= 16 ? 15 : slot ) ) );
     }
+
+    // PP-24: the 16 notes of the shown bank, readable lock-free from the hardware reader thread. Pad Perform publishes its layout
+    // here whenever it changes; the touch strip's Notes mode (kick_hardware_bridge.h, `case kNotes`) plays noteForSlot(slot, raw note)
+    // instead of the raw bank offset + slot, so the strip follows the Root / Scale / Mode set on the Pad Perform screen.
+    class StripNotes
+    {
+    public:
+        static StripNotes& instance()
+        {
+            static StripNotes s;
+            return s;
+        }
+
+        void publish( const Layout& l, int bankOffset )
+        {
+            for( int i = 0; i < 16; ++i )
+            {
+                const int idx = bankOffset + i;
+                notes_[(size_t)i].store( ( idx >= 0 && idx < kPads && l[(size_t)idx].note >= 0 ) ? l[(size_t)idx].note : -1 );
+            }
+            valid_.store( true );
+        }
+
+        void invalidate() { valid_.store( false ); }
+
+        // Strip slot 0..15 -> note; `fallback` when nothing is published or the slot has no note.
+        int noteForSlot( int slot, int fallback ) const
+        {
+            if( ! valid_.load() || slot < 0 || slot > 15 ) return fallback;
+            const int n = notes_[(size_t)slot].load();
+            return n >= 0 ? n : fallback;
+        }
+
+    private:
+        std::array<std::atomic<int>, 16> notes_{};
+        std::atomic<bool>                valid_{ false };
+    };
+
+    // PP-22: the notes that each held hardware pad (0..15 of its bank) is sounding right now, readable lock-free from the hardware
+    // reader thread. The pad aftertouch the bridge reports per pad (`on_pad_aftertouch`) must go to THESE notes (transposed by scale /
+    // root / chord / 16 LEVELS), not to bank offset + pad as a raw note. Pad Perform sets / clears them on press / release; the bridge
+    // asks soundingFor( pad, out ) and falls back to the raw note when it returns 0.
+    class SoundingPads
+    {
+    public:
+        static constexpr int kMaxPerPad = 8;
+
+        static SoundingPads& instance()
+        {
+            static SoundingPads s;
+            return s;
+        }
+
+        void set( int pad, const std::vector<int>& notes )
+        {
+            if( pad < 0 || pad > 15 ) return;
+            const int n = std::min( (int)notes.size(), kMaxPerPad );
+            for( int i = 0; i < kMaxPerPad; ++i )
+                notes_[(size_t)( pad * kMaxPerPad + i )].store( i < n ? notes[(size_t)i] : -1 );
+        }
+
+        void clear( int pad ) { set( pad, {} ); }
+        void clearAll()
+        {
+            for( int p = 0; p < 16; ++p ) clear( p );
+        }
+
+        // Fills out[0..kMaxPerPad) and returns how many notes the pad sounds (0 = none held through Pad Perform).
+        int soundingFor( int pad, int* out ) const
+        {
+            if( pad < 0 || pad > 15 ) return 0;
+            int n = 0;
+            for( int i = 0; i < kMaxPerPad; ++i )
+            {
+                const int v = notes_[(size_t)( pad * kMaxPerPad + i )].load();
+                if( v < 0 ) break;
+                out[n++] = v;
+            }
+            return n;
+        }
+
+    private:
+        SoundingPads()
+        {
+            for( auto& a : notes_ ) a.store( -1 );
+        }
+        std::array<std::atomic<int>, 16 * kMaxPerPad> notes_;
+    };
 }
