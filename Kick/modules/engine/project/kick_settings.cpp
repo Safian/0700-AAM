@@ -19,6 +19,9 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+#include "../../hardware/source/kick_PlatformServices.h"
+#include "../../hardware/source/kick_I2c.h"
+
 namespace mt
 {
     KickSettings& getSettings()
@@ -54,6 +57,22 @@ namespace mt
         auto settingsFile = getAppDirs( MTPrefs ).getChildFile( __settingsFileName );
         loadOrCreate( settingsFile );
 
+        // Apply CV calibration and start notes at boot from loaded preferences
+        std::array<uint16_t, 6> calib = { 0 };
+        for( int i = 0; i < 4; ++i )
+            calib[i + 1] = static_cast<uint16_t>( cvclib.getOffset( i ) );
+        calib[5] = 4095;
+        CV::getCVInterface().applyCalibration( calib );
+
+        for( int i = 0; i < CV::MaxCVPorts; ++i )
+            CV::getCVInterface().setChannelNoteMap( i, cv.getNoteStart( i ) );
+
+        // Apply hardware settings to platform services
+        auto& ps = PlatformServices::getInstance();
+        ps.setBrightness( hardware.brightness() );
+        juce::String tz = hardware.timezone();
+        ps.setTimeZone( tz );
+
         // Enable auto-save for settings file.
         setAutoSave( true );
     }
@@ -64,6 +83,26 @@ namespace mt
         hardware.makeDefaults();
         eth.makeDefaults();
         cv.makeDefaults();
+        midiControl.makeDefaults();
+        wifi.makeDefaults();
+        browser.makeDefaults();
+        cvclib.makeDefaults();
+        metronome.makeDefaults();
+
+        // Ensure autoSave stays true on defaults
+        projects.isAutoSave = true;
+
+        // Re-apply defaults to running hardware
+        auto& ps = PlatformServices::getInstance();
+        ps.setBrightness( hardware.brightness() );
+        juce::String tz = hardware.timezone();
+        ps.setTimeZone( tz );
+
+        std::array<uint16_t, 6> calib = { 0, 0, 0, 0, 0, 4095 };
+        CV::getCVInterface().applyCalibration( calib );
+
+        for( int i = 0; i < CV::MaxCVPorts; ++i )
+            CV::getCVInterface().setChannelNoteMap( i, 0 );
     }
 
     /// ///////////////////////////////////
@@ -89,7 +128,7 @@ namespace mt
         setupBase( VT, Undo );
 
         isAutoLoad.attachTo( vTree, IDs::Autoload, Undo, false );
-        isAutoSave.attachTo( vTree, IDs::Autosave, Undo, false );
+        isAutoSave.attachTo( vTree, IDs::Autosave, Undo, true );
 
         tempo.attachTo( vTree, IDs::TimeTempo, Undo, BPM::DEFAULT );
         bars.attachTo( vTree, IDs::TimeBars, Undo, BAR::DEFAULT );
@@ -258,7 +297,7 @@ namespace mt
         ipPortName.attachTo( vTree, IDs::MidiInputName, Undo, "" );
         opPortName.attachTo( vTree, IDs::MidiOutputName, Undo, "" );
     }
-    bool KickMidiControl::isValid() { return vTree.hasType( IDs::MIDICONTROL ); }
+    bool KickMidiControl::isValid() { return vTree.hasType( IDs::PREFMIDICONTROL ) || vTree.hasType( IDs::MIDICONTROL ); }
 
     /// ///////////////////////////////////
     ///    Ethernet .
@@ -272,6 +311,7 @@ namespace mt
         ipAddress.attachTo( vTree, IDs::ipAdd, Undo, "192.168.0.1" );
         subnetMask.attachTo( vTree, IDs::subnetMask, Undo, "255.255.255.0" );
         gateway.attachTo( vTree, IDs::gateway, Undo, "192.168.0.1" );
+        dns.attachTo( vTree, IDs::dns, Undo, "0.0.0.0" );
     }
     bool KickEthernet::isValid() { return vTree.hasType( IDs::ETHERNET ); }
 

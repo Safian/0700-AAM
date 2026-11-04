@@ -132,6 +132,7 @@ namespace mt
         AtomicString ipAddress;
         AtomicString subnetMask;
         AtomicString gateway;
+        AtomicString dns;
     };
 
     /// ///////////////////////////////////

@@ -39,13 +39,8 @@ namespace mt
 
         static WifiManager* getWifiInterface()
         {
-            static WifiManager* _wifiInterface;
-            if( NULL == _wifiInterface )
-            {
-                _wifiInterface = new WifiManager();
-            }
-
-            return _wifiInterface;
+            static WifiManager _wifiInterface;
+            return &_wifiInterface;
         }
 
     private:

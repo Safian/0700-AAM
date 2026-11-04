@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 MUSIC Tribe
+ * Copyright (c) 2021 MUSIC Tribe / Safian
  *
  * This file is part of Kick.
  *
@@ -22,6 +22,11 @@
 #pragma once
 
 #include <string>
+#include <array>
+#include <vector>
+#include <atomic>
+#include <cstdint>
+#include "kick_PlatformCommands.h"
 
 namespace mt
 {
@@ -49,11 +54,10 @@ namespace mt
     class CV
     {
     public:
-        CV() {}
-        ~CV() {}
+        CV();
+        ~CV() = default;
 
-        static const int       MaxCVPorts{ 8 };
-        std::map<uint8_t, int> channelNoteMap; // Map to store channel number and note range
+        static const int MaxCVPorts{ 8 };
 
         bool           setVoltage( uint8_t channel, uint8_t Note );
         bool           setCentVoltage( uint8_t channel, uint16_t centValue );
@@ -67,9 +71,10 @@ namespace mt
         bool           calibrateCV( uint8_t index, int step );
         bool           resetCalibCV( uint8_t index );
         bool           applyCalibration( const std::array<uint16_t, 6>& index );
-        bool           setChannelNoteMap( uint8_t note, int startNote );
-        inline uint8_t getChannelNoteMap( uint8_t channel );
-        static CV&     getCVInterface()
+        bool           setChannelNoteMap( uint8_t channel, int startNote );
+        uint8_t        getChannelNoteMap( uint8_t channel );
+
+        static CV& getCVInterface()
         {
             static CV _cvInterface;
             return _cvInterface;
@@ -79,11 +84,11 @@ namespace mt
         bool     initRead( uint8_t channel );
         uint16_t calculateValue( uint8_t note );
         int      toChannelmap( int port );
-        // std::map<int, int>       cmap{ { 1, 5 }, { 2, 6 }, { 3, 7 }, { 4, 8 }, { 5, 1 }, { 6, 2 }, { 7, 3 }, { 8, 4 } };
-        const std::array<int, 9> CVPortIndex = { -1, 4, 5, 6, 7, 0, 1, 2, 3 };
-        I2CDevice                i2c;
-        uint16_t                 claibValue[61];
-        uint16_t                 defaultCV[6] = { 0, 820, 1640, 2460, 3280, 4095 }; // default value for 1V,2V,3V,4V,5V=4095
-        uint16_t                 calibCV[6]   = { 0, 820, 1640, 2460, 3280, 4095 }; // default value for 1V,2V,3V,4V,5V=4095
+
+        I2CDevice                                i2c;
+        std::array<std::atomic<int>, MaxCVPorts> channelNoteMap;
+        uint16_t                                 claibValue[61];
+        uint16_t                                 defaultCV[6] = { 0, 820, 1640, 2460, 3280, 4095 };
+        uint16_t                                 calibCV[6]   = { 0, 820, 1640, 2460, 3280, 4095 };
     };
 }

@@ -1,4 +1,5 @@
 #include "kick_HardwareMode.h"
+#include "kick_PlatformServices.h"
 /*
  * Copyright (c) 2021 MUSIC Tribe
  *
@@ -88,74 +89,17 @@ namespace mt
 
     const std::vector<juce::String> WifiManager::scanWiFiNetworks()
     {
-        if (!hardwareEnabled()) return {};
-        juce::String                                      currentSSID;
-        juce::String                                      currentFrequency;
-        std::map<juce::String, std::vector<juce::String>> wifiNetworks;
-        std::vector<juce::String>                         scanResults;
-        std::vector<juce::String>                         _networks;
-        juce::String                                      command = "iwlist wlan0 scan";
-        juce::ChildProcess                                childProcess;
-
-        DBG( "-------------------------scanning-----------------------" );
-        if( childProcess.start( command ) )
-        {
-            juce::StringArray tempResults;
-            tempResults.addLines( childProcess.readAllProcessOutput() );
-            scanResults.assign( tempResults.begin(), tempResults.end() );
-            childProcess.waitForProcessToFinish( 10000 );
-        }
-
-        for( const auto& line : scanResults )
-        {
-            if( line.contains( "ESSID:" ) )
-            {
-                currentSSID = line.fromFirstOccurrenceOf( "ESSID:", false, true ).trim().unquoted();
-            }
-            else if( line.contains( "Frequency:" ) )
-            {
-                currentFrequency = line.fromFirstOccurrenceOf( "Frequency:", false, true ).upToFirstOccurrenceOf( " ", false, true ).trim();
-            }
-
-            if( !currentSSID.isEmpty() && !currentFrequency.isEmpty() )
-            {
-                wifiNetworks[currentSSID].push_back( currentFrequency );
-                currentSSID.clear();
-                currentFrequency.clear();
-            }
-        }
-
-        for( const auto& entry : wifiNetworks )
-        {
-            juce::StringArray frequencyArray;
-
-            // Manually add elements from the vector to the StringArray
-            for( const auto& freq : entry.second )
-            {
-                frequencyArray.add( freq );
-            }
-
-            _networks.push_back( entry.first );
-            DBG( "SSID: " + entry.first );
-            DBG( "Frequencies: " + frequencyArray.joinIntoString( ", " ) );
-            DBG( "-------------------------" );
-        }
-        displayWiFiNetworks( _networks );
-        return _networks;
+        return PlatformServices::getInstance().scanWiFiNetworks();
     }
 
     bool WifiManager::enableWiFi()
     {
-        juce::String command = "ip link set wlan0 up";
-        juce::String result  = executeCommand( command );
-        return result.isEmpty();
+        return PlatformServices::getInstance().enableWiFi();
     }
 
     bool WifiManager::disableWiFi()
     {
-        juce::String command = "ip link set wlan0 down";
-        juce::String result  = executeCommand( command );
-        return result.isEmpty();
+        return PlatformServices::getInstance().disableWiFi();
     }
 
     void WifiManager::displayWiFiNetworks( const std::vector<juce::String>& Networks )
@@ -168,42 +112,13 @@ namespace mt
 
     bool WifiManager::connectToWiFi( const juce::String& ssid, const juce::String& password, int priority )
     {
-        std::cout << "Network: connecting to wifi SSID: " << ssid << std::endl;
-        std::map<std::string, std::string> wifiMap = loadWifiCredentials();
-        std::string                        ssid1   = ssid.toStdString();
-        juce::String                       result  = "";
-
-#if defined( __linux__ ) || defined( __linux ) || defined( linux )
-        auto it = wifiMap.find( ssid1 );
-        if( it != wifiMap.end() )
-        {
-            std::string password1 = wifiMap[ssid1];
-            addSSID( ssid, juce::String( password1 ), priority );
-            std::cout << "SSID found in file. Using stored password." << std::endl;
-        }
-        else
-        {
-            addSSID( ssid, password, priority );
-            saveWifiCredential( ssid.toStdString(), password.toStdString() );
-        }
-
-        juce::String command = "killall -9 wpa_supplicant dhclient";
-        result               = executeCommand( command );
-        sleep( 1 );
-        command = "wpa_supplicant -B -i wlan0 -c /home/Kick/wpa_supplicant.conf";
-        result  = executeCommand( command );
-        sleep( 2 );
-        command = "dhclient wlan0";
-        result  = executeCommand( command );
-#endif
-        return result.isEmpty();
+        juce::ignoreUnused( priority );
+        return PlatformServices::getInstance().connectToWiFi( ssid, password );
     }
 
     bool WifiManager::disconnectWiFi()
     {
-        juce::String command = "killall -9 wpa_supplicant dhclient";
-        juce::String result  = executeCommand( command );
-        return result.isEmpty();
+        return PlatformServices::getInstance().disconnectWiFi();
     }
 
     void WifiManager::addSSID( const juce::String& ssid, const juce::String& password, int priority )

@@ -128,120 +128,158 @@ namespace mt
         return true;
     }
 
+    CV::CV()
+    {
+        for( int i = 0; i < MaxCVPorts; ++i )
+            channelNoteMap[i].store( 0 );
+
+        std::array<uint16_t, 61> table;
+        platform_cmd::computeCvCalibrationTable( platform_cmd::kDefaultCvCalibration, table );
+        for( int i = 0; i <= 60; ++i )
+            claibValue[i] = table[i];
+    }
+
+    inline int CV::toChannelmap( int port )
+    {
+        return platform_cmd::mapCvPortToDacChannel( port );
+    }
+
     bool CV::setCentVoltage( uint8_t channel, uint16_t centValue )
     {
-        bool retVal = false;
-        if( juce::isPositiveAndBelow( channel, MaxCVPorts ) )
-        {
-            auto startNote = (int)getChannelNoteMap( channel );
-            auto checkCent = (int)( centValue - ( startNote * 100 ) );
-            auto noteIndex = centValue / 100;
-            if( juce::isPositiveAndBelow( checkCent, 6000 ) )
-            {
-                uint16_t regValue = claibValue[noteIndex] + ( claibValue[noteIndex + 1] - claibValue[noteIndex] ) * std::fmod( centValue, 100 ) / 100;
-                uint8_t  buffer[3];
-                buffer[0] = ( 0x30 | ( toChannelmap( channel ) ) );
-                buffer[1] = ( regValue >> 4 ) & 0xFF;
-                buffer[2] = ( regValue << 4 ) & 0xF0;
+        int chIdx = ( channel >= 1 && channel <= MaxCVPorts ) ? ( channel - 1 ) : channel;
+        if( !juce::isPositiveAndBelow( chIdx, MaxCVPorts ) )
+            return false;
 
-                if( i2c.writeBytes( buffer, sizeof( buffer ) ) )
-                    retVal = true;
-                else
-                    DBG( "setVoltage Failed to set Voltage Channel->" << channel );
-            }
+        int dacCh = toChannelmap( chIdx );
+        if( dacCh < 0 )
+            return false;
+
+        bool retVal = false;
+        auto startNote = (int)getChannelNoteMap( chIdx );
+        auto checkCent = (int)( centValue - ( startNote * 100 ) );
+        auto noteIndex = centValue / 100;
+        if( juce::isPositiveAndBelow( checkCent, 6000 ) && noteIndex < 60 )
+        {
+            uint16_t regValue = claibValue[noteIndex] + ( claibValue[noteIndex + 1] - claibValue[noteIndex] ) * std::fmod( centValue, 100 ) / 100;
+            uint8_t  buffer[3];
+            buffer[0] = static_cast<uint8_t>( 0x30 | dacCh );
+            buffer[1] = ( regValue >> 4 ) & 0xFF;
+            buffer[2] = ( regValue << 4 ) & 0xF0;
+
+            if( i2c.writeBytes( buffer, sizeof( buffer ) ) )
+                retVal = true;
             else
-                setVoltageOff( channel );
+                DBG( "setVoltage Failed to set Voltage Channel->" << channel );
         }
+        else
+            setVoltageOff( channel );
         return retVal;
     }
 
     bool CV::setVoltage( uint8_t channel, uint8_t Note )
     {
-        bool retVal = false;
-        if( juce::isPositiveAndBelow( channel, MaxCVPorts ) )
-        {
-            auto startNote = (int)getChannelNoteMap( channel );
-            auto note      = (int)Note - startNote;
-            if( juce::isPositiveAndBelow( note, 61 ) )
-            {
-                uint8_t  buffer[3];
-                uint16_t regValue = claibValue[note];
-                buffer[0]         = ( 0x30 | ( toChannelmap( channel ) ) );
-                buffer[1]         = ( regValue >> 4 ) & 0xFF;
-                buffer[2]         = ( regValue << 4 ) & 0xF0;
+        int chIdx = ( channel >= 1 && channel <= MaxCVPorts ) ? ( channel - 1 ) : channel;
+        if( !juce::isPositiveAndBelow( chIdx, MaxCVPorts ) )
+            return false;
 
-                if( i2c.writeBytes( buffer, sizeof( buffer ) ) )
-                    retVal = true;
-                else
-                    DBG( "setVoltage Failed to set Voltage Channel->" << channel );
-            }
+        int dacCh = toChannelmap( chIdx );
+        if( dacCh < 0 )
+            return false;
+
+        bool retVal = false;
+        auto startNote = (int)getChannelNoteMap( chIdx );
+        auto note      = (int)Note - startNote;
+        if( juce::isPositiveAndBelow( note, 61 ) )
+        {
+            uint8_t  buffer[3];
+            uint16_t regValue = claibValue[note];
+            buffer[0]         = static_cast<uint8_t>( 0x30 | dacCh );
+            buffer[1]         = ( regValue >> 4 ) & 0xFF;
+            buffer[2]         = ( regValue << 4 ) & 0xF0;
+
+            if( i2c.writeBytes( buffer, sizeof( buffer ) ) )
+                retVal = true;
             else
-                setVoltageOff( channel );
+                DBG( "setVoltage Failed to set Voltage Channel->" << channel );
         }
+        else
+            setVoltageOff( channel );
         return retVal;
     }
 
     bool CV::setstepVoltage( uint8_t channel, uint16_t step )
     {
-        if( juce::isPositiveAndBelow( channel, MaxCVPorts ) )
-        {
-            uint8_t buffer[3];
-            // step 0 must write 0 V (velocity release / mod wheel at rest).
-            int bufVal = stepToDac( step );
-            buffer[0]  = ( 0x30 | ( toChannelmap( channel ) ) );
-            buffer[1]  = ( bufVal >> 4 ) & 0xFF;
-            buffer[2]  = ( bufVal << 4 ) & 0xF0;
+        int chIdx = ( channel >= 1 && channel <= MaxCVPorts ) ? ( channel - 1 ) : channel;
+        if( !juce::isPositiveAndBelow( chIdx, MaxCVPorts ) )
+            return false;
 
-            if( !i2c.writeBytes( buffer, sizeof( buffer ) ) )
-            {
-                DBG( "setVoltage Failed to set Voltage Channel->" << channel );
-                return false;
-            }
-            return true;
+        int dacCh = toChannelmap( chIdx );
+        if( dacCh < 0 )
+            return false;
+
+        uint8_t buffer[3];
+        // step 0 must write 0 V (velocity release / mod wheel at rest).
+        int bufVal = stepToDac( step );
+        buffer[0]  = static_cast<uint8_t>( 0x30 | dacCh );
+        buffer[1]  = ( bufVal >> 4 ) & 0xFF;
+        buffer[2]  = ( bufVal << 4 ) & 0xF0;
+
+        if( !i2c.writeBytes( buffer, sizeof( buffer ) ) )
+        {
+            DBG( "setVoltage Failed to set Voltage Channel->" << channel );
+            return false;
         }
-        return false;
+        return true;
     }
 
     bool CV::setVoltageOn( uint8_t channel )
     {
-        if( juce::isPositiveAndBelow( channel, MaxCVPorts ) )
+        int chIdx = ( channel >= 1 && channel <= MaxCVPorts ) ? ( channel - 1 ) : channel;
+        if( !juce::isPositiveAndBelow( chIdx, MaxCVPorts ) )
+            return false;
+
+        int dacCh = toChannelmap( chIdx );
+        if( dacCh < 0 )
+            return false;
+
+        uint8_t buffer[3];
+        buffer[0] = static_cast<uint8_t>( 0x30 | dacCh );
+        buffer[1] = 0xFF;
+        buffer[2] = 0xFF;
+        if( !i2c.writeBytes( buffer, sizeof( buffer ) ) )
         {
-            uint8_t buffer[3];
-            buffer[0] = ( 0x30 | ( toChannelmap( channel ) ) ); //beacuse cv channle start with 0
-            buffer[1] = 0xFF;
-            buffer[2] = 0xFF;
-            if( !i2c.writeBytes( buffer, sizeof( buffer ) ) )
-            {
-                DBG( "setVoltage Failed to set Voltage Channel->" << channel );
-                return false;
-            }
-            return true;
+            DBG( "setVoltage Failed to set Voltage Channel->" << channel );
+            return false;
         }
-        return false;
+        return true;
     }
 
     bool CV::setVoltageOff( uint8_t channel )
     {
-        if( juce::isPositiveAndBelow( channel, MaxCVPorts ) )
-        {
-            uint8_t buffer[3];
-            buffer[0] = ( 0x30 | ( toChannelmap( channel ) ) );
-            buffer[1] = 0x00;
-            buffer[2] = 0x00;
+        int chIdx = ( channel >= 1 && channel <= MaxCVPorts ) ? ( channel - 1 ) : channel;
+        if( !juce::isPositiveAndBelow( chIdx, MaxCVPorts ) )
+            return false;
 
-            if( !i2c.writeBytes( buffer, sizeof( buffer ) ) )
-            {
-                DBG( "setVoltage Failed to set Voltage Channel->" << channel );
-                return false;
-            }
-            return true;
+        int dacCh = toChannelmap( chIdx );
+        if( dacCh < 0 )
+            return false;
+
+        uint8_t buffer[3];
+        buffer[0] = static_cast<uint8_t>( 0x30 | dacCh );
+        buffer[1] = 0x00;
+        buffer[2] = 0x00;
+
+        if( !i2c.writeBytes( buffer, sizeof( buffer ) ) )
+        {
+            DBG( "setVoltage Failed to set Voltage Channel->" << channel );
+            return false;
         }
-        return false;
+        return true;
     }
 
     bool CV::calibrateCV( uint8_t index, int step )
     {
-        if( index < 5 && index > 0 ) //ui sending 1 to 4 1v,2v,3v,4v
+        if( index >= 1 && index <= 4 ) // ui sending 1 to 4: 1v,2v,3v,4v
         {
             uint16_t value = defaultCV[index] + step;
             writeAllChannelVoltage( value );
@@ -252,7 +290,7 @@ namespace mt
 
     bool CV::resetCalibCV( uint8_t index )
     {
-        if( index < 5 && index > 0 ) //ui sending 1 to 4 1v,2v,3v,4v
+        if( index >= 1 && index <= 4 ) // ui sending 1 to 4: 1v,2v,3v,4v
         {
             calibCV[index] = defaultCV[index];
             return true;
@@ -269,35 +307,32 @@ namespace mt
         calib[4]                      = defaultCV[4] + index[4];
         calib[5]                      = 4095;
 
-        // Apply calibration to the array
-        int array_index = 0;
-        for( int i = 0; i < 5; i++ )
-        {
-            // Calculate the step size between each pair of calibration values
-            float step_size = static_cast<float>( calib[i + 1] - calib[i] ) / 12.0f;
-
-            // Distribute calibration values between array indices
-            for( int j = 0; j < 12; j++ )
-            {
-                claibValue[array_index++] = calib[i] + static_cast<uint16_t>( step_size * j );
-            }
-        }
-        claibValue[60] = 4095;
+        std::array<uint16_t, 61> table;
+        platform_cmd::computeCvCalibrationTable( calib, table );
+        for( int i = 0; i <= 60; ++i )
+            claibValue[i] = table[i];
 
         return true; // Calibration applied successfully
     }
 
     bool CV::setChannelNoteMap( uint8_t channel, int startNote )
     {
-        uint8_t mappedchannel         = toChannelmap( channel );
-        channelNoteMap[mappedchannel] = startNote;
-        return true; // Indicate successful operation
+        int chIdx = ( channel >= 1 && channel <= MaxCVPorts ) ? ( channel - 1 ) : channel;
+        if( juce::isPositiveAndBelow( chIdx, MaxCVPorts ) )
+        {
+            channelNoteMap[chIdx].store( startNote );
+            return true;
+        }
+        return false;
     }
 
     // Function to get the note range for a given channel
-    inline uint8_t CV::getChannelNoteMap( uint8_t channel )
+    uint8_t CV::getChannelNoteMap( uint8_t channel )
     {
-        return channelNoteMap[channel];
+        int chIdx = ( channel >= 1 && channel <= MaxCVPorts ) ? ( channel - 1 ) : channel;
+        if( juce::isPositiveAndBelow( chIdx, MaxCVPorts ) )
+            return static_cast<uint8_t>( channelNoteMap[chIdx].load() );
+        return 0;
     }
 
     uint16_t CV::calculateValue( uint8_t note )
@@ -341,11 +376,6 @@ namespace mt
             return false;
         }
         return true;
-    }
-
-    inline int CV::toChannelmap( int port )
-    {
-        return juce::isPositiveAndBelow( port, 9 ) ? CVPortIndex[port] : -1;
     }
 
     bool CV::readVoltage( uint8_t channel, float& voltage )
