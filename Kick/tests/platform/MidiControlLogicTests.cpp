@@ -119,6 +119,54 @@ int main()
     trimTo( v, 10 );
     CHECK_EQ( v.size(), 4 );
 
+    // ---- MC-23: navigating buttons
+    CHECK( isNavigatingButton( "Step Seq" ) );
+    CHECK( isNavigatingButton( "Browser" ) );
+    CHECK( isNavigatingButton( "XYFX" ) );
+    CHECK( !isNavigatingButton( "Tap" ) );
+    CHECK( !isNavigatingButton( "Enter" ) );
+    CHECK( !isNavigatingButton( "-" ) );
+
+    // ---- MC-22: ControllerMap
+    ControllerMap ctrlMap;
+    CHECK( ctrlMap.getItems().size() >= 38 );
+    const auto* btn0 = ctrlMap.findItem( 0 );
+    CHECK( btn0 != nullptr && btn0->name == "Step Seq" && btn0->momentary );
+    const auto* ql0 = ctrlMap.findItem( kFirstQLink );
+    CHECK( ql0 != nullptr && ql0->name == "Q-Link 1" && ql0->isAbsolute );
+
+    // ---- MC-22: MidiLearnEngine
+    MidiLearnEngine engine;
+    CHECK_EQ( engine.numBindings(), 0 );
+
+    MidiLearnBinding b1;
+    b1.type = "cc";
+    b1.channel = 1;
+    b1.number = 7;
+    b1.target = "Track Volume";
+    b1.flip = false;
+    engine.addBinding( b1 );
+
+    MidiLearnBinding b2;
+    b2.type = "cc";
+    b2.channel = 2;
+    b2.number = 10;
+    b2.target = "Track Pan";
+    b2.flip = true;
+    engine.addBinding( b2 );
+
+    CHECK_EQ( engine.numBindings(), 2 );
+
+    auto res1 = engine.processIncoming( "cc", 1, 7, 127 );
+    CHECK( res1.matched && res1.target == "Track Volume" && std::fabs( res1.value - 1.0f ) < 1e-4f );
+
+    auto res2 = engine.processIncoming( "cc", 2, 10, 127 );
+    // flipped: 127 -> 0
+    CHECK( res2.matched && res2.target == "Track Pan" && std::fabs( res2.value - 0.0f ) < 1e-4f );
+
+    auto res3 = engine.processIncoming( "cc", 3, 7, 127 ); // unmapped channel
+    CHECK( !res3.matched );
+
     if( g_fail == 0 )
         std::printf( "MidiControlLogicTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;

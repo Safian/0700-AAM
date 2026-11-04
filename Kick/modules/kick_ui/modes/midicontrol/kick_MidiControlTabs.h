@@ -163,6 +163,7 @@ namespace kick_ui
         void                refresh();
         void                handleIncomingMidiMessage( juce::MidiInput* source, const juce::MidiMessage& message ) override;
         ui::KickImageButton add{ "Add", "Add_normal", "Add_normal", "Add_active" };
+        void                startMapping(); // MC-18: startup background mapping
         void                startLearning();
         void                stopMidiInput();
         void                ledUpdate( int ccNumber, int midiChannel );
@@ -386,6 +387,7 @@ namespace kick_ui
         MidiControlHardwareRight rightComp;
         juce::ValueTree          vTree{};
         juce::ValueTree          midiControl;
+        int                      lastRefreshedIndex{ -1 };
         std::map<juce::String, bool> toggleState;
         void                     sendPadMessage( const juce::ValueTree& cfg, int velocity127, int afterTouch, bool pressed );
         void                     saveData();
