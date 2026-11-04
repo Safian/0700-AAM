@@ -121,6 +121,7 @@ namespace kick_ui
         KnobGrid&     knob;
         BottomContent bottomControls;
         int           knobnum{ -1 }, indexNum{ -1 };
+        CustomButtons currentButton{ mix };
         void          setParameter( int knobnum, juce::String parameter );
     };
 

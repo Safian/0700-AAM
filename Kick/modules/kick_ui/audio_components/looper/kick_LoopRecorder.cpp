@@ -81,11 +81,26 @@ namespace kick_ui
         outGain.onValueChanged = [&]( double Gain ) { ae.setLooperGain( Gain ); };
         outPan.onValueChanged  = [&]( double Pan ) { ae.setLooperPan( Pan ); };
 
-        // Setup length.
+        // Setup length. A new length clears the loop (the engine reallocates): ask first when there is a recording.
         bars.onValueChanged = [&]( int Value ) {
-            stop();
-            setRecordingLength( Value );
-            setThumbnail();
+            if( looper_logic::needsClearConfirm( ae.isLooperEmpty(), shownBars, Value ) )
+            {
+                const int previous = shownBars;
+                bars.setValue( previous, juce::dontSendNotification ); // stays until the user confirms
+                auto* p = new ui::FilePopup( "Changing the length clears the recorded loop. Continue?" );
+                mt::utils::showDialog(
+                    "WARNING!", p, [this, p, Value]( int R ) {
+                        if( R == UI::APPLY )
+                        {
+                            bars.setValue( Value, juce::dontSendNotification );
+                            applyLength( Value );
+                        }
+                        delete p;
+                    },
+                    ui::layout::warningPopup );
+                return;
+            }
+            applyLength( Value );
         };
         // Direction
         reverseB.onClick = [&]() { ae.setLooperDirection( reverseB.getToggleState() ? mt::Recorder::REVERSE : mt::Recorder::FORWARD ); };
@@ -93,13 +108,21 @@ namespace kick_ui
         // Record Mode
         recordB.onClick = [&]() {
             if( recordB.getToggleState() ) record( false );
-            else ae.setLooperPlay();
-            recordingStarted( !recordB.getToggleState() );
+            else
+            {
+                ae.setLooperOverdub( false );
+                ae.setLooperPlay();
+            }
         };
-        // Overdub Mode
+        // Overdub Mode: leaving it also leaves the overdub flag (it used to stay set for good: every later REC became an
+        // overdub, the REC LED showed the overdub colour and sequence recording stayed disarmed).
         replaceB.onClick = [&]() {
             if( replaceB.getToggleState() ) record( true );
-            else ae.setLooperPlay();
+            else
+            {
+                ae.setLooperOverdub( false );
+                ae.setLooperPlay();
+            }
         };
         // Play Mode
         playB.onClick = [&]() { ae.setLooperPlay(); };
@@ -108,7 +131,6 @@ namespace kick_ui
         stopB.onClick = [&]() {
             if( !stopB.getToggleState() ) stop();
             else ae.setLooperPlay();
-            recordingStarted( !stopB.getToggleState() );
         };
     }
 
@@ -126,13 +148,14 @@ namespace kick_ui
         ae.looperPlayback();
     }
 
-    void LoopRecorder::stop()
+    void LoopRecorder::stop( bool PauseSequence )
     {
         recordB.setToggleState( false, juce::dontSendNotification );
         stopB.setToggleState( false, juce::dontSendNotification );
-        if( syncB.getToggleState() )
+        if( PauseSequence && syncB.getToggleState() )
             ae.setSequencePause();
         ae.looperStop();
+        ae.setLooperOverdub( false );
     }
 
     void LoopRecorder::record( bool Overdub )
@@ -141,10 +164,9 @@ namespace kick_ui
         // current position, so the sequence must not be restarted under it (phase would split).
         const bool wasRecording = ae.isLooperRecording();
 
-        if( Overdub )
-            ae.setLooperOverdub( true );
-        else
-            ae.setLooperRecord( true );
+        // One start only: looperStart() below begins the recording (a second setLooperRecord(true) made the undo
+        // snapshot twice, the second time of the already started take). REC replaces, OVERDUB adds.
+        ae.setLooperOverdub( Overdub );
 
         stopB.setToggleState( true, juce::dontSendNotification );
         auto sync = syncB.getToggleState();
@@ -157,6 +179,7 @@ namespace kick_ui
         }
 
         ae.setLooperDirection( mt::Recorder::FORWARD );
+        reverseB.setToggleState( false, juce::dontSendNotification ); // recording always runs forward: the button shows it
         ae.looperStart( false, sync );
     }
 
@@ -180,13 +203,24 @@ namespace kick_ui
             auto value = contracts::DclContractsHelper::getKnobValue( hwMsg );
             if( knob != contracts::DeviceControlContracts::EN_KNOB_CENTER )
             {
+                // Key 61 has Q-Link 1..4: threshold, monitor level, output gain, output pan. The threshold goes to the
+                // engine too (options.knobRotated() only moved the slider display).
                 switch( knob )
                 {
-                    case contracts::DeviceControlContracts::EN_KNOB_3:
-                        options.knobRotated( value );
+                    case contracts::DeviceControlContracts::EN_KNOB_1:
+                    {
+                        const float db = juce::jlimit( (float)DB::MIN, (float)DB::MAX, ae.getLooperThresholdDB() + (float)value );
+                        ae.setLooperThresholdDB( db );
+                        options.setGain( db );
                         break;
+                    }
+                    case contracts::DeviceControlContracts::EN_KNOB_2:
+                        options.setMonitorLevelNormalized( juce::jlimit( 0.0, 1.0, options.getMonitorLevelNormalized() + value * 0.01 ), juce::sendNotification );
+                        break;
+                    case contracts::DeviceControlContracts::EN_KNOB_3: outGain.knobRotated( mt::mixlogic::qlinkDelta( value, outGain.getIncrement() ) ); break;
+                    case contracts::DeviceControlContracts::EN_KNOB_4: outPan.knobRotated( mt::mixlogic::qlinkDelta( value, outPan.getIncrement() ) ); break;
+                    default: options.knobCommand( knob, value ); break; // 5: input mode (not on the Key 61)
                 }
-                options.knobCommand( knob, value );
             }
         }
     }
@@ -211,16 +245,43 @@ namespace kick_ui
         ae.looperSave( FilePath );
     }
 
+    // Looper-level undo: the engine keeps one snapshot (before the last REC / OVERDUB); a second press redoes.
+    void LoopRecorder::undoRecording()
+    {
+        stop();
+        ae.looperUndo();
+        wav.clearCache();
+        setThumbnail();
+        ph.reDraw();
+    }
+
+    // The tempo manager of the selected sequence, asked each time (the cached raw pointer outlived sequence / project changes).
+    mt::MTTempoMgr* LoopRecorder::currentTempo()
+    {
+        tempoMgr = ae.getTempoMgr( ae.getSelectedSequence() );
+        return tempoMgr;
+    }
+
+    // 0 = unknown (no tempo): the caller leaves the loop alone.
     double LoopRecorder::getRecordingLength( int Bars )
     {
-        auto timeInSeconds = tempoMgr ? tempoMgr->getSecondsUpto( Bars ) : 1;
-        return timeInSeconds;
+        auto* tempo = currentTempo();
+        return looper_logic::loopSeconds( tempo != nullptr, tempo ? tempo->getSecondsUpto( Bars ) : 0.0 );
     }
 
     void LoopRecorder::setRecordingLength( int Bars )
     {
-        auto timeInSeconds = tempoMgr ? tempoMgr->getSecondsUpto( Bars ) : 1;
-        ae.setLooperLength( timeInSeconds );
+        const auto timeInSeconds = getRecordingLength( Bars );
+        if( timeInSeconds > 0.0 )
+            ae.setLooperLength( timeInSeconds );
+    }
+
+    void LoopRecorder::applyLength( int Bars )
+    {
+        stop();
+        setRecordingLength( Bars );
+        shownBars = Bars;
+        setThumbnail();
     }
 
     void LoopRecorder::getDisplayText( juce::String& markerText, int bar, int beat, int tick, int numDigits )
@@ -368,20 +429,27 @@ namespace kick_ui
     {
         // Update play button state.
         reverseB.setEnabled( ae.isLooperPlay() );
-        playB.setToggleState( ae.isLooperReverse(), juce::dontSendNotification );
+        reverseB.setToggleState( ae.isLooperReverse(), juce::dontSendNotification );
         // Update toggle states...
         playB.setToggleState( ae.isLooperPlay(), juce::dontSendNotification );
         recordB.setToggleState( stopB.getToggleState() ? ae.isLooperRecording() : false, juce::dontSendNotification );
         replaceB.setToggleState( ae.isLooperOverdubbing(), juce::dontSendNotification );
         stopB.setEnabled( !ae.isLooperEmpty() );
 
+        // Export / Clear follow the engine (a loop recorded with the hardware REC counts too).
+        const bool exportable = looper_logic::canExportOrClear( ae.isLooperEmpty(), ae.isLooperRecording() );
+        if( exportable != lastExportable )
+        {
+            lastExportable = exportable;
+            recordingStarted( exportable );
+        }
+
         // Update level meters...
         {
             auto values = ae.getLooperInputMeter();
+            // the meter of the engine always has two entries (left, right)
             if( 2 <= values.size() )
                 options.signalStrengthChanged( { values[0].rms, values[1].rms, values[0].peak, values[1].peak } );
-            else if( 1 <= values.size() )
-                options.signalStrengthChanged( { values[0].rms, -100.f, values[1].rms, -100.f } );
             else
                 options.signalStrengthChanged( {} );
         }
@@ -433,16 +501,22 @@ namespace kick_ui
             outGain.setValue( ae.getLooperGain(), juce::dontSendNotification );
             outPan.setValue( ae.getLooperPan(), juce::dontSendNotification );
 
-            auto numBars = bars.getValue();
-            if( !juce::approximatelyEqual<double>( getRecordingLength( numBars ), ae.getLooperLength() ) )
+            // Compared in whole frames, and never when the tempo is unknown: a float / double mismatch used to clear the
+            // loop at every visit (100 BPM, 4 bars).
+            auto       numBars = bars.getValue();
+            const auto wanted  = getRecordingLength( numBars );
+            if( wanted > 0.0 && !looper_logic::sameLoopLength( wanted, ae.getLooperLength(), ae.getLooperSampleRate() ) )
                 setRecordingLength( numBars );
+            shownBars = numBars;
 
+            lastExportable = !lastExportable; // force the Export / Clear state to be sent
             startTimerHz( 30 );
         }
         else
         {
             stopTimer();
-            stop();
+            // Leaving the screen stops the looper but does not pause a sequence the user may have started elsewhere.
+            stop( false );
         }
         // Enable or Disable looper backend.
         ae.setLooperEnable( visible );

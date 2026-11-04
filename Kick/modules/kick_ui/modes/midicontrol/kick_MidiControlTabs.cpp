@@ -1,5 +1,18 @@
 namespace kick_ui
 {
+    namespace
+    {
+        // Version of the Hardware tab tree layout / defaults. Raise it when a default changes meaning.
+        constexpr int kMidiControlSchema = 2;
+
+        // Controls whose function is not wired are hidden instead of looking operational (one place to switch them on):
+        //  - Light Led: the bridge drops the LED packets of the UI (kick_hardware_bridge.h), so Never / Midi Input / Local do nothing;
+        //  - Touch Sense / Note of a Q-Link: the bridge does not pass the Q-Link touch (T11);
+        //  - Pad Aftertouch: the bridge does not send aftertouch packets (kSendPadAftertouchPackets = false).
+        constexpr bool kLedOptionsWired  = false;
+        constexpr bool kTouchSenseWired  = false;
+        constexpr bool kAftertouchWired  = false;
+    }
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////// MidiControlHardware-right1 ///////////////////////////////////////
@@ -27,6 +40,8 @@ namespace kick_ui
         typeOptions.setValueColour( ui::Theme::textColour( 1 ) );
         midiChannelValue.showTitle( false );
         ccNumberValue.showTitle( false );
+        lightLed.setVisible( kLedOptionsWired );
+        lightLedOptions.setVisible( kLedOptionsWired );
     }
 
     void MidiControlHardwareButtons::resized()
@@ -72,6 +87,13 @@ namespace kick_ui
         lowRangeValue.showTitle( false );
         highRangeValue.showTitle( false );
         note1.showTitle( false );
+        lightLed.setVisible( kLedOptionsWired );
+        lightLedOptions.setVisible( kLedOptionsWired );
+        touchSenceLabel.setVisible( kTouchSenseWired );
+        touchSenceOptions.setVisible( kTouchSenseWired );
+        noteLabel.setVisible( kTouchSenseWired );
+        note1.setVisible( kTouchSenseWired );
+        note2.setVisible( kTouchSenseWired );
     }
     void MidiControlHardwareQlink::resized()
     {
@@ -122,6 +144,10 @@ namespace kick_ui
         afterTouchBox.setListOptions( { "Off", "Channel", "Poly" } );
         midiBox.showTitle( false );
         noteBox1.showTitle( false );
+        led.setVisible( kLedOptionsWired );
+        ledBox.setVisible( kLedOptionsWired );
+        afterTouchLabel.setVisible( kAftertouchWired );
+        afterTouchBox.setVisible( kAftertouchWired );
     }
     void MidiControlPadOptions::resized()
     {
@@ -212,10 +238,10 @@ namespace kick_ui
         option1List.setBackGroundColours( ui::Theme::textColour( 4 ), ui::Theme::backgroundColour() );
         bank.setBackGroundColours( ui::Theme::textColour( 4 ), ui::Theme::backgroundColour() );
 
-        std::vector<juce::String> options = {
-            "Step Seq", "Next Seq", "Track Mute", "Sample Edit", "Program Edit", "Browser", "Tap", "Enter", "-", "+ ", "Erase", "Track Mix", "TC", "PAD Mute", "Copy", "Pad Mixer", "sampler", "XYFX", "Q-Link 1", "Q-Link 2", "Q-Link 3", "Q-Link 4",
-            "Pad 1", "Pad 2", "Pad 3", "Pad 4", "Pad 5", "Pad 6", "Pad 7", "Pad 8", "Pad 9", "Pad 10", "Pad 11", "Pad 12", "Pad 13", "Pad 14", "Pad 15", "Pad 16", "XYFXX-Axis", "XYFXY-Axis"
-        };
+        // One table for the list (kick_MidiControlLogic.h); the order of controlEnums in kick_MidiControl.h is the same.
+        std::vector<juce::String> options;
+        for( const auto& n : midictl::controlListNames() )
+            options.emplace_back( n );
 
         option1List.setListOptions( options );
 
@@ -263,9 +289,16 @@ namespace kick_ui
 
         vTree       = mt::getSettings().midiControl.vTree;
         midiControl = vTree;
+        outputPort  = vTree.getProperty( "HwOutputPort", "None" ).toString();
 
         //Hardware
+        // The saved assignment survives a restart: the defaults below are rebuilt, then the saved values are merged on top
+        // (MC-01; it used to delete every saved CONTROL / BANK node). A tree written by an older build (no schema number)
+        // is not merged: its defaults carried wrong CC numbers and missing pad notes.
+        const bool      savedIsCurrent = (int)midiControl.getProperty( "Schema", 1 ) >= kMidiControlSchema;
+        juce::ValueTree saved          = savedIsCurrent ? midiControl.createCopy() : juce::ValueTree();
         midiControl.removeAllChildren( nullptr );
+        midiControl.setProperty( "Schema", kMidiControlSchema, nullptr );
         juce::ValueTree stepControl( "CONTROL" );
         stepControl.setProperty( "PadParameters", "Step Seq", nullptr );
         stepControl.setProperty( "ButtonLed", "Never", nullptr );
@@ -314,14 +347,6 @@ namespace kick_ui
         browseControl.setProperty( "Type", "Toggle", nullptr );
         midiControl.appendChild( browseControl, nullptr );
 
-        juce::ValueTree undoControl( "CONTROL" );
-        undoControl.setProperty( "PadParameters", "Undo", nullptr );
-        undoControl.setProperty( "ButtonLed", "Never", nullptr );
-        undoControl.setProperty( "MIDIChannel", "1", nullptr );
-        undoControl.setProperty( "CCNumber", "8", nullptr );
-        undoControl.setProperty( "Type", "Toggle", nullptr );
-        midiControl.appendChild( undoControl, nullptr );
-
         juce::ValueTree tapControl( "CONTROL" );
         tapControl.setProperty( "PadParameters", "Tap", nullptr );
         tapControl.setProperty( "ButtonLed", "Never", nullptr );
@@ -338,13 +363,21 @@ namespace kick_ui
         enterControl.setProperty( "Type", "Toggle", nullptr );
         midiControl.appendChild( enterControl, nullptr );
 
-        juce::ValueTree signControl( "CONTROL" );
-        signControl.setProperty( "PadParameters", "-/+", nullptr );
-        signControl.setProperty( "ButtonLed", "Never", nullptr );
-        signControl.setProperty( "MIDIChannel", "1", nullptr );
-        signControl.setProperty( "CCNumber", "11", nullptr );
-        signControl.setProperty( "Type", "Toggle", nullptr );
-        midiControl.appendChild( signControl, nullptr );
+        juce::ValueTree minusControl( "CONTROL" );
+        minusControl.setProperty( "PadParameters", "-", nullptr );
+        minusControl.setProperty( "ButtonLed", "Never", nullptr );
+        minusControl.setProperty( "MIDIChannel", "1", nullptr );
+        minusControl.setProperty( "CCNumber", "11", nullptr );
+        minusControl.setProperty( "Type", "Toggle", nullptr );
+        midiControl.appendChild( minusControl, nullptr );
+
+        juce::ValueTree plusControl( "CONTROL" );
+        plusControl.setProperty( "PadParameters", "+", nullptr );
+        plusControl.setProperty( "ButtonLed", "Never", nullptr );
+        plusControl.setProperty( "MIDIChannel", "1", nullptr );
+        plusControl.setProperty( "CCNumber", "26", nullptr );
+        plusControl.setProperty( "Type", "Toggle", nullptr );
+        midiControl.appendChild( plusControl, nullptr );
 
         juce::ValueTree eraseControl( "CONTROL" );
         eraseControl.setProperty( "PadParameters", "Erase", nullptr );
@@ -374,7 +407,7 @@ namespace kick_ui
         padmuteControl.setProperty( "PadParameters", "PAD Mute", nullptr );
         padmuteControl.setProperty( "ButtonLed", "Never", nullptr );
         padmuteControl.setProperty( "MIDIChannel", "1", nullptr );
-        padmuteControl.setProperty( "CCNumber", "14", nullptr );
+        padmuteControl.setProperty( "CCNumber", "15", nullptr );
         padmuteControl.setProperty( "Type", "Toggle", nullptr );
         midiControl.appendChild( padmuteControl, nullptr );
 
@@ -546,7 +579,7 @@ namespace kick_ui
         pad7Control.setProperty( "Bank", "A", nullptr );
         pad7Control.setProperty( "SetAll", "0", nullptr );
         pad7Control.setProperty( "PadLed", "Local", nullptr );
-        pad1Control.setProperty( "PadNo", "1", nullptr );
+        pad7Control.setProperty( "PadNo", "1", nullptr );
         pad7Control.setProperty( "PadMIDIChannel", "1", nullptr );
         pad7Control.setProperty( "NoteNumber", "6", nullptr );
         pad7Control.setProperty( "NoteValue", "F#-2", nullptr );
@@ -559,8 +592,7 @@ namespace kick_ui
         pad8Control.setProperty( "Bank", "A", nullptr );
         pad8Control.setProperty( "SetAll", "0", nullptr );
         pad8Control.setProperty( "PadLed", "Local", nullptr );
-        pad1Control.setProperty( "PadNo", "1", nullptr );
-        pad1Control.setProperty( "PadNo", "1", nullptr );
+        pad8Control.setProperty( "PadNo", "1", nullptr );
         pad8Control.setProperty( "PadMIDIChannel", "1", nullptr );
         pad8Control.setProperty( "NoteNumber", "7", nullptr );
         pad8Control.setProperty( "NoteValue", "G-2", nullptr );
@@ -599,10 +631,10 @@ namespace kick_ui
         pad11Control.setProperty( "Bank", "A", nullptr );
         pad11Control.setProperty( "SetAll", "0", nullptr );
         pad11Control.setProperty( "PadLed", "Local", nullptr );
-        pad1Control.setProperty( "PadNo", "1", nullptr );
+        pad11Control.setProperty( "PadNo", "1", nullptr );
         pad11Control.setProperty( "PadMIDIChannel", "1", nullptr );
-        pad1Control.setProperty( "NoteNumber", "0", nullptr );
-        pad1Control.setProperty( "NoteValue", "C-2", nullptr );
+        pad11Control.setProperty( "NoteNumber", "10", nullptr );
+        pad11Control.setProperty( "NoteValue", "A#-2", nullptr );
         pad11Control.setProperty( "Velocity", "Off", nullptr );
         pad11Control.setProperty( "Aftertouch", "Off", nullptr );
         midiControl.appendChild( pad11Control, nullptr );
@@ -625,6 +657,7 @@ namespace kick_ui
         pad13Control.setProperty( "Bank", "A", nullptr );
         pad13Control.setProperty( "SetAll", "0", nullptr );
         pad13Control.setProperty( "PadLed", "Local", nullptr );
+        pad13Control.setProperty( "PadNo", "1", nullptr );
         pad13Control.setProperty( "PadMIDIChannel", "1", nullptr );
         pad13Control.setProperty( "NoteNumber", "12", nullptr );
         pad13Control.setProperty( "NoteValue", "C-1", nullptr );
@@ -686,6 +719,34 @@ namespace kick_ui
         xyfxControl.setProperty( "HighRangeY", "127", nullptr );
         midiControl.appendChild( xyfxControl, nullptr );
 
+        if( saved.isValid() )
+        {
+            for( int i = 0; i < saved.getNumChildren(); ++i )
+            {
+                auto s = saved.getChild( i );
+                if( s.hasType( "BANK" ) )
+                {
+                    midiControl.appendChild( s.createCopy(), nullptr ); // per-bank pad settings
+                    continue;
+                }
+                auto name = s.getProperty( "PadParameters" ).toString();
+                for( int j = 0; j < midiControl.getNumChildren(); ++j )
+                {
+                    auto d = midiControl.getChild( j );
+                    if( d.hasType( "CONTROL" ) && d.getProperty( "PadParameters" ).toString() == name )
+                    {
+                        for( int k = 0; k < s.getNumProperties(); ++k )
+                        {
+                            auto key = s.getPropertyName( k );
+                            if( d.hasProperty( key ) )
+                                d.setProperty( key, s.getProperty( key ), nullptr );
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         leftComp.option1List.onSelectionChanged = [&]( int index, const juce::String& ) {
             leftComp.setPadOptionsVisible( false );
             bool bankSel{ false };
@@ -697,7 +758,7 @@ namespace kick_ui
             {
                 rightComp.setCurentComponent( 1 );
             }
-            else if( index >= 22 && index <= 37 ) // pad screens
+            else if( index >= midictl::kFirstPad && index < midictl::kXAxis ) // pad screens
             {
                 leftComp.setPadOptionsVisible( true );
                 rightComp.setCurentComponent( 3 );
@@ -710,7 +771,7 @@ namespace kick_ui
                     loadBankSettings( leftComp.bank.getSelected() );
                 }
             }
-            else if( index == 37 || index == 38 ) // xyfx
+            else if( index >= midictl::kXAxis ) // xyfx axes (38, 39)
             {
                 rightComp.setCurentComponent( 2 );
             }
@@ -810,22 +871,6 @@ namespace kick_ui
         rightComp.xy.highRang2.onValueChanged = [&]( int value ) { saveData(); };
         rightComp.xy.mute1.onClick            = [&]() { saveData(); };
         rightComp.xy.mute2.onClick            = [&]() { saveData(); };
-    }
-
-    void MidiControlHardware::knobCommand( int knob, int value )
-    {
-        knobRotated = true;
-        switch( knob )
-        {
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1:
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_2:
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_3:
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_4:
-                juce::String name = "Q-Link " + juce::String( knob );
-                leftComp.option1List.setSelected( name );
-                break;
-        }
-        updateValue( knob, value );
     }
 
     void MidiControlHardware::saveData()
@@ -1328,186 +1373,111 @@ namespace kick_ui
                 rightComp.pad.midiBox.setValue( midiControl.getChild( id ).getProperty( "PadMIDIChannel" ).toString().getIntValue(), juce::dontSendNotification );
                 rightComp.pad.noteBox1.setValue( midiControl.getChild( id ).getProperty( "NoteNumber" ).toString().getIntValue(), juce::dontSendNotification );
                 rightComp.pad.noteBox2.setSelected( midiControl.getChild( id ).getProperty( "NoteValue" ).toString().getIntValue(), juce::dontSendNotification );
-                rightComp.pad.on.setToggleState( midiControl.getChild( id ).getProperty( "Velocity" ), juce::dontSendNotification );
+                rightComp.pad.on.setToggleState( midiControl.getChild( id ).getProperty( "Velocity" ).toString() == "On", juce::dontSendNotification );
             }
         }
     }
 
-    void MidiControlHardware::handleCommand( CPktMgr::HWMsg_t& f_HWMsg )
+    // A front-panel message of a known control (ControlName = its list entry, "" = not a mappable control: nothing is sent).
+    // The control comes from the hardware message, not from the row selected in the list (that selection followed the
+    // hardware and made every unknown message, Shift for one, repeat the last selected control: MC-B2).
+    void MidiControlHardware::handleCommand( CPktMgr::HWMsg_t& f_HWMsg, const juce::String& ControlName )
     {
-        float padVelocity   = contracts::DclContractsHelper::getPadVelocity( f_HWMsg );
-        int   padAfterTouch = contracts::DclContractsHelper::getPadAftertouch( f_HWMsg );
-        int   padNumber     = contracts::DclContractsHelper::getPadNumber( f_HWMsg );
-        int   buttonState   = contracts::DclContractsHelper::getButtonState( f_HWMsg );
-
-        midimessages( Knob, knobValue, padVelocity, padAfterTouch, buttonState );
+        if( ControlName.isEmpty() )
+            return;
 
         if( contracts::DclContractsHelper::isKnobMessage( f_HWMsg ) )
         {
-            auto knob  = contracts::DclContractsHelper::getKnobCode( f_HWMsg );
-            auto value = contracts::DclContractsHelper::getKnobValue( f_HWMsg );
+            const auto knob = contracts::DclContractsHelper::getKnobCode( f_HWMsg );
             if( knob != contracts::DeviceControlContracts::EN_KNOB_CENTER )
+                updateValue( knob, contracts::DclContractsHelper::getKnobValue( f_HWMsg ) );
+            return;
+        }
+
+        const bool pressed = contracts::DclContractsHelper::getButtonState( f_HWMsg ) == contracts::DeviceControlContracts::BTN_PRESSED;
+        midimessages( ControlName, contracts::DclContractsHelper::getPadVelocity( f_HWMsg ), contracts::DclContractsHelper::getPadAftertouch( f_HWMsg ), pressed );
+    }
+
+    void MidiControlHardware::sendPadMessage( const juce::ValueTree& Cfg, int Velocity127, int AfterTouch, bool Pressed )
+    {
+        const int  channel    = juce::jlimit( 1, 16, (int)Cfg.getProperty( "PadMIDIChannel" ) );
+        const int  note       = juce::jlimit( 0, 127, (int)Cfg.getProperty( "NoteNumber" ) );
+        const bool velocityOn = Cfg.getProperty( "Velocity" ).toString() == "On";
+        const auto aftertouch = Cfg.getProperty( "Aftertouch" ).toString();
+
+        if( Pressed )
+        {
+            auto msg = juce::MidiMessage::noteOn( channel, note, midictl::padVelocity( velocityOn, (float)Velocity127 / 127.0f ) );
+            sendMidiMassages( msg );
+        }
+        else
+        {
+            auto msg = juce::MidiMessage::noteOff( channel, note, 0.0f );
+            sendMidiMassages( msg );
+        }
+
+        // Aftertouch only with a real value from the pad (the bridge does not send aftertouch packets yet; no random value).
+        if( Pressed && AfterTouch > 0 )
+        {
+            if( aftertouch == "Poly" )
             {
-                knobCommand( knob, value );
-                setKnobValue( value );
+                auto msg = juce::MidiMessage::aftertouchChange( channel, note, AfterTouch );
+                sendMidiMassages( msg );
+            }
+            else if( aftertouch == "Channel" )
+            {
+                auto msg = juce::MidiMessage::channelPressureChange( channel, AfterTouch );
+                sendMidiMassages( msg );
             }
         }
     }
 
-    void MidiControlHardware::midimessages( int knob, int knobvalue, float padVelocity, int padAfterTouch, int buttonState )
+    void MidiControlHardware::midimessages( const juce::String& ControlName, int padVelocity, int padAfterTouch, bool pressed )
     {
-        if( knobRotated )
-        {
-            knobRotated = false;
-            return;
-        }
-        bool controlProcessed = false;
-        Knob                  = knob;
-        juce::Random random;
-        int          randomValue = random.nextInt( 128 );
-
         for( auto id = 0; id < midiControl.getNumChildren(); ++id )
         {
-            auto              child = midiControl.getChild( id );
-            juce::MidiMessage ccMessage;
-            juce::MidiMessage noteOnMessage;
-            juce::MidiMessage noteOffMessage;
-            juce::MidiMessage aftertouchMessage;
-            juce::MidiMessage channelPressureMessage;
+            auto child = midiControl.getChild( id );
+            if( !child.hasType( "CONTROL" ) || child.getProperty( "PadParameters" ).toString() != ControlName )
+                continue;
 
-            if( child.hasProperty( "CCNumber" ) && child.hasProperty( "MIDIChannel" ) && child.getPropertyAsValue( "PadParameters", nullptr ) == leftComp.option1List.getSelected() )
-            {
-                auto midiChannel = static_cast<int>( child.getProperty( "MIDIChannel" ) );
-                auto ccNumber    = static_cast<int>( child.getProperty( "CCNumber" ) );
-                auto buttonType  = child.getProperty( "Type" ).toString();
-
-                if( buttonType == "Momentary" )
+            if( child.hasProperty( "CCNumber" ) && child.hasProperty( "MIDIChannel" ) )
+            { // front-panel button
+                const int  channel   = juce::jlimit( 1, 16, (int)child.getProperty( "MIDIChannel" ) );
+                const int  ccNumber  = juce::jlimit( 0, 127, (int)child.getProperty( "CCNumber" ) );
+                const bool momentary = child.getProperty( "Type" ).toString() == "Momentary";
+                bool&      toggled   = toggleState[ControlName]; // Toggle: the press flips the state, the release sends nothing
+                const auto out       = midictl::buttonCc( momentary, pressed, toggled );
+                if( out.send )
                 {
-                    ccMessage = juce::MidiMessage::controllerEvent( midiChannel, ccNumber, ( buttonState == 1 ) ? 127 : 0 );
-                    sendMidiMassages( ccMessage );
+                    auto msg = juce::MidiMessage::controllerEvent( channel, ccNumber, out.value );
+                    sendMidiMassages( msg );
                 }
-                else if( buttonType == "Toggle" )
-                {
-                    ccMessage = juce::MidiMessage::controllerEvent( midiChannel, ccNumber, ( buttonState == 1 ) ? 127 : 0 );
-                    sendMidiMassages( ccMessage );
-                }
+                return;
             }
-            else if( child.hasProperty( "QlinkCCNumber" ) && child.hasProperty( "QlinkMIDIChannel" ) && child.getPropertyAsValue( "PadParameters", nullptr ) == leftComp.option1List.getSelected() )
-            {
-                int  midiChannel = static_cast<int>( child.getProperty( "QlinkMIDIChannel" ) );
-                int  ccNumber    = static_cast<int>( child.getProperty( "QlinkCCNumber" ) );
-                int  note        = static_cast<int>( child.getProperty( "Note" ) );
-                auto mode        = child.getProperty( "Mode" ).toString();
-                auto touchSense  = child.getProperty( "TouchSense" ).toString();
 
-                if( mode == "Absolute" && touchSense == "Off" )
+            if( child.hasProperty( "PadMIDIChannel" ) )
+            { // pad: the settings of the bank in use, unless "Set All" says every bank uses the pad's own
+                juce::ValueTree cfg = child;
+                if( (int)child.getProperty( "SetAll" ) != 1 )
                 {
-                    ccMessage = juce::MidiMessage::controllerEvent( midiChannel, ccNumber, knobvalue );
-                    sendMidiMassages( ccMessage );
-                }
-                else if( mode == "Relative" && touchSense == "Off" )
-                {
-                    ccMessage = juce::MidiMessage::controllerEvent( midiChannel, ccNumber, 127 );
-                    sendMidiMassages( ccMessage );
-                }
-                else if( mode == "Absolute" && touchSense == "On" )
-                {
-                    ccMessage = juce::MidiMessage::controllerEvent( midiChannel, ccNumber, knobvalue );
-                    sendMidiMassages( ccMessage );
-
-                    noteOnMessage = juce::MidiMessage::noteOn( midiChannel, note, ( padVelocity < 0.0f ? 0.0f : ( padVelocity > 1.0f ? 1.0f : padVelocity ) ) );
-                    sendMidiMassages( noteOnMessage );
-
-                    noteOffMessage = juce::MidiMessage::noteOff( midiChannel, note, 0.0f );
-                    sendMidiMassages( noteOffMessage );
-                }
-                else if( mode == "Relative" && touchSense == "On" )
-                {
-                    ccMessage = juce::MidiMessage::controllerEvent( midiChannel, ccNumber, 127 );
-                    sendMidiMassages( ccMessage );
-
-                    noteOnMessage = juce::MidiMessage::noteOn( midiChannel, note, ( padVelocity < 0.0f ? 0.0f : ( padVelocity > 1.0f ? 1.0f : padVelocity ) ) );
-                    sendMidiMassages( noteOnMessage );
-
-                    noteOffMessage = juce::MidiMessage::noteOff( midiChannel, note, 0.0f );
-                    sendMidiMassages( noteOffMessage );
-                }
-            }
-            else if( child.hasType( "CONTROL" ) || child.hasType( "BANK" ) )
-            {
-                if( child.hasProperty( "PadMIDIChannel" ) && ( (int)child.getProperty( "SetAll" ) == 1 ) && child.getPropertyAsValue( "PadParameters", nullptr ) == leftComp.option1List.getSelected() )
-                {
-                    controlProcessed  = true;
-                    auto& midiChannel = child.getProperty( "PadMIDIChannel" );
-                    auto& padNote     = child.getProperty( "NoteNumber" );
-                    auto  velocity    = child.getProperty( "Velocity" ).toString();
-                    auto  aftertouch  = child.getProperty( "Aftertouch" ).toString();
-
-                    float velocityValue = ( velocity == "On" ) ? static_cast<float>( padVelocity ) / 127.0f : ( padVelocity < 0.0f ? 0.0f : ( padVelocity > 1.0f ? 1.0f : padVelocity ) );
-                    if( buttonState == 1 )
+                    const auto bank = leftComp.bank.getSelected();
+                    for( int b = 0; b < midiControl.getNumChildren(); ++b )
                     {
-                        noteOnMessage = juce::MidiMessage::noteOn( midiChannel, padNote, velocityValue );
-                        sendMidiMassages( noteOnMessage );
-                    }
-                    else
-                    {
-                        noteOffMessage = juce::MidiMessage::noteOff( midiChannel, padNote, 0.0f );
-                        sendMidiMassages( noteOffMessage );
-                    }
-
-                    if( aftertouch == "Poly" )
-                    {
-                        aftertouchMessage = juce::MidiMessage::aftertouchChange( midiChannel, padNote, padAfterTouch );
-                        sendMidiMassages( aftertouchMessage );
-                    }
-                    else if( aftertouch == "Channel" )
-                    {
-                        channelPressureMessage = juce::MidiMessage::channelPressureChange( midiChannel, randomValue );
-                        sendMidiMassages( channelPressureMessage );
-                    }
-                    break;
-                }
-                else
-                {
-                    if( child.hasType( "BANK" ) )
-                    {
-                        for( auto j = 0; j < child.getNumChildren(); ++j )
+                        auto bankTree = midiControl.getChild( b );
+                        if( !bankTree.hasType( "BANK" ) )
+                            continue;
+                        for( int j = 0; j < bankTree.getNumChildren(); ++j )
                         {
-                            auto childVTree = child.getChild( j );
-                            if( childVTree.hasProperty( "PadParameters" ) && childVTree.getProperty( "PadParameters" ) == leftComp.option1List.getSelected() && childVTree.getProperty( "Bank" ).toString() == leftComp.bank.getSelected() )
-                            {
-                                auto& midiChannel = childVTree.getProperty( "PadMIDIChannel" );
-                                auto& padNote     = childVTree.getProperty( "NoteNumber" );
-                                auto  velocity    = childVTree.getProperty( "Velocity" ).toString();
-                                auto  aftertouch  = childVTree.getProperty( "Aftertouch" ).toString();
-
-                                float velocityValue = ( velocity == "On" ) ? static_cast<float>( padVelocity ) / 127.0f : ( padVelocity < 0.0f ? 0.0f : ( padVelocity > 1.0f ? 1.0f : padVelocity ) );
-                                if( buttonState == 1 )
-                                {
-                                    noteOnMessage = juce::MidiMessage::noteOn( midiChannel, padNote, velocityValue );
-                                    sendMidiMassages( noteOnMessage );
-                                }
-                                else
-                                {
-                                    noteOffMessage = juce::MidiMessage::noteOff( midiChannel, padNote, 0.0f );
-                                    sendMidiMassages( noteOffMessage );
-                                }
-
-                                if( aftertouch == "Poly" )
-                                {
-                                    aftertouchMessage = juce::MidiMessage::aftertouchChange( midiChannel, padNote, padAfterTouch );
-                                    sendMidiMassages( aftertouchMessage );
-                                }
-                                else if( aftertouch == "Channel" )
-                                {
-                                    channelPressureMessage = juce::MidiMessage::channelPressureChange( midiChannel, randomValue );
-                                    sendMidiMassages( channelPressureMessage );
-                                }
-                            }
+                            auto candidate = bankTree.getChild( j );
+                            if( candidate.getProperty( "PadParameters" ).toString() == ControlName && candidate.getProperty( "Bank" ).toString() == bank )
+                                cfg = candidate;
                         }
                     }
                 }
+                sendPadMessage( cfg, padVelocity, padAfterTouch, pressed );
+                return;
             }
+            return;
         }
     }
 
@@ -1541,27 +1511,36 @@ namespace kick_ui
         }
     }
 
+    // Q-Link 1..4 turned by Value ticks. Absolute: a running value inside Low..High; Relative: the two's complement tick count.
     void MidiControlHardware::updateValue( int knob, int value )
     {
         auto name = juce::String( "Q-Link " ) + juce::String( knob );
         for( auto id = 0; id < midiControl.getNumChildren(); ++id )
         {
             auto child = midiControl.getChild( id );
+            if( !( child.hasProperty( "QlinkCCNumber" ) && child.hasProperty( "QlinkMIDIChannel" ) && child.getProperty( "PadParameters" ).toString() == name ) )
+                continue;
 
-            juce::MidiMessage ccMessage;
-            juce::String      mOn;
-            if( child.hasProperty( "QlinkCCNumber" ) && child.hasProperty( "QlinkMIDIChannel" ) && child.getPropertyAsValue( "PadParameters", nullptr ).toString() == name )
+            const int  channel  = juce::jlimit( 1, 16, (int)child.getProperty( "QlinkMIDIChannel" ) );
+            const int  cc       = juce::jlimit( 0, 127, (int)child.getProperty( "QlinkCCNumber" ) );
+            const int  low      = (int)child.getProperty( "LowRange" );
+            const int  high     = (int)child.getProperty( "HighRange" );
+            const int  ticks    = kick_ui::knob_logic::acceleratedCount( value );
+            const bool absolute = child.getProperty( "Mode" ).toString() == "Absolute";
+
+            int out = 0;
+            if( absolute )
             {
-                auto& midiChannel  = child.getProperty( "QlinkMIDIChannel" );
-                auto& ccNumber     = child.getProperty( "QlinkCCNumber" );
-                int   currentValue = child.hasProperty( "ValueByte" ) ? (int)child.getProperty( "ValueByte" ) : (int)child.getProperty( "LowRange" );
-                int   newValue     = currentValue + value;
-                newValue           = juce::jlimit( (int)child.getProperty( "LowRange" ), (int)child.getProperty( "HighRange" ), newValue );
-                child.setProperty( "ValueByte", newValue, nullptr );
-                ccMessage = juce::MidiMessage::controllerEvent( midiChannel, ccNumber, newValue );
-                mOn       = ccMessage.getDescription();
-                sendMidiMassages( ccMessage );
+                const int current = child.hasProperty( "ValueByte" ) ? (int)child.getProperty( "ValueByte" ) : low;
+                out               = midictl::absoluteCc( current, ticks, low, high );
+                child.setProperty( "ValueByte", out, nullptr );
             }
+            else
+                out = midictl::relativeCc( ticks );
+
+            auto msg = juce::MidiMessage::controllerEvent( channel, cc, out );
+            sendMidiMassages( msg );
+            return;
         }
     }
 
@@ -1624,6 +1603,8 @@ namespace kick_ui
         bool isMute2Active = vTree.getProperty( "Mute2" ).toString() == "Active";
         rightComp.mute2.setToggleState( isMute2Active, juce::dontSendNotification );
 
+        filterX.reset();
+        filterY.reset();
         leftComp.onValueChanged = [&]( float xaxis, float yaxis ) {
             midiMessages( xaxis, yaxis );
         };
@@ -1646,50 +1627,25 @@ namespace kick_ui
             refresh();
         }
     }
+    // The XY node (vTree) holds channel / CC / range / mute of both axes. An axis whose "mute" is switched on sends
+    // nothing (nothing is built for it: a default constructed MidiMessage is an empty SysEx), and an axis sends only when
+    // its value changed, so a drag is at most 127 messages per axis instead of two per mouse move.
     void MidiControlXY::midiMessages( float xaxis, float yaxis )
     {
-        juce::MidiMessage ccMessagex;
-        juce::MidiMessage ccMessagey;
+        if( !vTree.isValid() || !onAxisMessage )
+            return;
 
-        for( auto id = 0; id < mt::getSettings().midiControl.vTree.getNumChildren(); ++id )
-        {
-            auto child = mt::getSettings().midiControl.vTree.getChild( id );
-
-            bool  isMute1Active = vTree.getProperty( "Mute1" ).toString() == "Default";
-            bool  isMute2Active = vTree.getProperty( "Mute2" ).toString() == "Default";
-            auto& midiChannelx  = child.getProperty( "MIDIChannelX" );
-            auto& ccNumberx     = child.getProperty( "CCNumberX" );
-            int   highrangex    = child.getProperty( "HighRangeX" );
-            int   lowRangex     = child.getProperty( "LowRangeX" );
-            auto& midiChannely  = child.getProperty( "MIDIChannelY" );
-            auto& ccNumbery     = child.getProperty( "CCNumberY" );
-            int   highrangey    = child.getProperty( "HighRangeY" );
-            int   lowRangey     = child.getProperty( "LowRangeY" );
-
-            int mappedValuex = xaxis * ( highrangex - lowRangex ) + lowRangex;
-            int mappedValuey = yaxis * ( highrangey - lowRangey ) + lowRangey;
-
-            if( isMute1Active && isMute2Active )
-            {
-                if( child.hasProperty( "MIDIChannelX" ) && child.hasProperty( "CCNumberX" ) )
-                {
-                    ccMessagex = juce::MidiMessage::controllerEvent( midiChannelx, ccNumberx, mappedValuex );
-                    ccMessagey = juce::MidiMessage::controllerEvent( midiChannely, ccNumbery, mappedValuey );
-                }
-            }
-            else if( !isMute1Active && isMute2Active )
-            {
-                if( child.hasProperty( "MIDIChannelX" ) && child.hasProperty( "CCNumberX" ) )
-                    ccMessagex = juce::MidiMessage::controllerEvent( midiChannely, ccNumbery, mappedValuey );
-            }
-            else if( isMute1Active && !isMute2Active )
-            {
-                if( child.hasProperty( "MIDIChannelX" ) && child.hasProperty( "CCNumberX" ) )
-                    ccMessagey = juce::MidiMessage::controllerEvent( midiChannelx, ccNumberx, mappedValuex );
-            }
-        }
-        if( onGridCoordinateChanged )
-            onGridCoordinateChanged( ccMessagex, ccMessagey );
+        auto axis = [this]( const char* mute, const char* channel, const char* cc, const char* low, const char* high, float value, midictl::AxisFilter& filter ) {
+            if( vTree.getProperty( mute ).toString() == "Active" ) // muted axis
+                return;
+            const int mapped = midictl::scaleAxis( value, (int)vTree.getProperty( low ), (int)vTree.getProperty( high ) );
+            if( !filter.changed( mapped ) )
+                return;
+            auto msg = juce::MidiMessage::controllerEvent( juce::jlimit( 1, 16, (int)vTree.getProperty( channel ) ), juce::jlimit( 0, 127, (int)vTree.getProperty( cc ) ), mapped );
+            onAxisMessage( msg );
+        };
+        axis( "Mute1", "MIDIChannelX", "CCNumberX", "LowRangeX", "HighRangeX", xaxis, filterX );
+        axis( "Mute2", "MIDIChannelY", "CCNumberY", "LowRangeY", "HighRangeY", yaxis, filterY );
     }
 
     void MidiControlXY::resized()
@@ -1867,11 +1823,8 @@ namespace kick_ui
         };
 
         add.onClick = [&]() {
-            if( numRows == 0 )
-                midilearn.removeAllChildren( &ae.getUndoManager() );
             leftComp.setleftOptionsVisible( true );
             midComp.setTargetVisible( true );
-            numRows += 1;
 
             juce::ValueTree childTree{ "MIDIDATA" };
             childTree.setProperty( "Source", "None", nullptr );
@@ -1887,7 +1840,9 @@ namespace kick_ui
             childTree.setProperty( "CC", "None", nullptr );
             childTree.setProperty( "Control", "None", nullptr );
             childTree.setProperty( "Controller", "None", nullptr );
-            midilearn.appendChild( childTree, nullptr );
+            childTree.setProperty( "Number", "None", nullptr );
+            midilearn.appendChild( childTree, &ae.getUndoManager() );
+            numRows = midilearn.getNumChildren();
 
             midComp.setTypeVisible( false );
             rightComp.table->refresh();
@@ -1901,9 +1856,8 @@ namespace kick_ui
                 "WARNING!", p, [&, p]( int R ) {
                     if( R == UI::APPLY )
                     {
-                           numRows = 0;
-                          midilearn.removeAllChildren( &ae.getUndoManager() );
-                         rightComp.table->refresh();
+                    midilearn.removeAllChildren( &ae.getUndoManager() );
+                    rebuildTable();
                     }
                    delete p; }, ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
         };
@@ -1912,17 +1866,21 @@ namespace kick_ui
             if( childTree.isValid() )
             {
                 childTree.setProperty( "Type", "None", nullptr );
-                childTree.setProperty( "CH", "0", nullptr );
-                childTree.setProperty( "Data", "0", nullptr );
-                childTree.setProperty( "CC", "0", nullptr );
+                childTree.setProperty( "CH", "None", nullptr );
+                childTree.setProperty( "Data", "None", nullptr );
+                childTree.setProperty( "CC", "None", nullptr );
+                childTree.setProperty( "Number", "None", nullptr );
             }
             saveData( rightComp.table->getSelectedRow() );
         };
         leftComp.del.onClick = [&]() {
-            midilearn.removeChild( rightComp.table->getSelectedRow(), &ae.getUndoManager() );
-            numRows = numRows - 1;
-            rightComp.table->selectRow( rightComp.table->getSelectedRow() - 1 );
-            rightComp.table->refresh();
+            const int row = rightComp.table->getSelectedRow();
+            if( row < 0 || row >= midilearn.getNumChildren() )
+                return;
+            midilearn.removeChild( row, &ae.getUndoManager() );
+            rebuildTable();
+            if( midilearn.getNumChildren() > 0 )
+                rightComp.table->selectRow( juce::jmin( row, midilearn.getNumChildren() - 1 ) );
         };
 
         leftComp.pgm.onSelectionChanged = [&]( int index, const juce::String& value ) {
@@ -2172,7 +2130,7 @@ namespace kick_ui
                     {
                         midComp.setTypeVisible( true );
                         auto targetValue = childTree.getProperty( "Target" ).toString();
-                        midComp.typeList.setListOptions( { "Volume", "Pan", "Mute", "solo" } );
+                        midComp.typeList.setListOptions( { "Volume", "Mute", "solo" } ); // Track Pan has no engine call
                         targetValue = targetValue == "Off" ? "Volume" : targetValue;
                         midComp.typeList.setSelected( targetValue );
                     }
@@ -2222,14 +2180,14 @@ namespace kick_ui
                         if( isPad )
                         {
                             auto targetValue = childTree.getProperty( "Target" ).toString();
-                            midComp.typeList.setListOptions( { "Polyphony", "Glide All", "Bend Range", "Doubling", "Doubling Detune", "Glide Time", "Osc 1 Octave", "Osc 1 Fine", "Osc 1 Shape", "Osc 1 F_Envtoshape", "Osc 1 Quard", "Quard_Detune", "Sub Osc Shape", "Osc 2 Octave", "Osc 2 Micro Detune", "Osc 2 Shape", "Osc 2 F_EnvtoShape", "Osc 2 Sync", "Osc 2 EQ Gain", " Osc 2 EQ Freq", "Osc 2 EQ Keytrack", "Osc 2 EQDrive", "Osc 1 Level", "Osc 2 Level", "Sub Osc Level", "Ring  ModLevel", "Mixer Drive", "LPF Cutoff", "LPF Reso", " LPF Slop", "LPF Saturation", "LPF Env", "LPF Keytrack", "Filter Attack", "Filter Decay", "Filter Sustain", "Filter Release", "Filter Release", "Filter Hold", "Amp Attack", "Amp Decay", "Amp Sustain", "Amp Release", "Amp Hold", "Env 3 StartLevel", "Env 3 StartTime", "Env 3 Slop Hold", "Env 3 Slop Release", " Env 3 Destination", "Lfo To Pitch", " Lfo To Filter", " Lfo To Amp ", "Lfo To PAN", "Lfo Wave", "Lfo Rate", "Layer 1 Semi", "Layer 1 PAN", "Layer 1 Fine", "Layer 1 Level", "Layer 2 Semi", "Layer 2 PAN", "Layer 2 Fine", "Layer 2 Level", "Layer 3 Semi", "Layer 3 PAN", "Layer 3 Fine", "Layer 3 Level", "Layer 4 Semi", "Layer 1 PAN", "Layer 4 Fine", "Layer 4 Level" } );
-                            targetValue = targetValue == "Off" ? "Polyphony" : targetValue;
+                            midComp.typeList.setListOptions( { "Filter Attack", "Filter Decay", "Filter Sustain", "Filter Hold", "Amp Attack", "Amp Decay", "Amp Sustain", "Amp Hold", "Lfo To Pitch", "Lfo To Filter", "Lfo To Amp", "Lfo To PAN", "Layer 1 Semi", "Layer 1 PAN", "Layer 1 Fine", "Layer 1 Level", "Layer 2 Semi", "Layer 2 PAN", "Layer 2 Fine", "Layer 2 Level", "Layer 3 Semi", "Layer 3 PAN", "Layer 3 Fine", "Layer 3 Level", "Layer 4 Semi", "Layer 4 PAN", "Layer 4 Fine", "Layer 4 Level" } );
+                            targetValue = targetValue == "Off" ? "Filter Attack" : targetValue;
                             midComp.typeList.setSelected( targetValue );
                         }
                         else
                         {
                             auto targetValue = childTree.getProperty( "Target" ).toString();
-                            midComp.typeList.setListOptions( { " Global SemiTune", " Global FineTune" } );
+                            midComp.typeList.setListOptions( { "Global SemiTune", "Global FineTune" } );
                             targetValue = targetValue == "Off" ? "Global SemiTune" : targetValue;
                             midComp.typeList.setSelected( targetValue );
                         }
@@ -2244,7 +2202,7 @@ namespace kick_ui
                     else if( type == mt::MTProgramType::Keygroup )
                     {
                         auto targetValueKey = childTree.getProperty( "Target" ).toString();
-                        midComp.typeList.setListOptions( { "Program Polyphony", "Global SemiTune", "Global FineTune", "Portamento Time", "PortLegato", "PortQuantize" } );
+                        midComp.typeList.setListOptions( { "Program Polyphony", "Global SemiTune", "Global FineTune" } );
                         targetValueKey = targetValueKey == "Off" ? "Program Polyphony" : targetValueKey;
                         midComp.typeList.setSelected( targetValueKey );
                     }
@@ -2256,14 +2214,14 @@ namespace kick_ui
                         if( isPad )
                         {
                             auto targetValueClip = childTree.getProperty( "Target" ).toString();
-                            midComp.typeList.setListOptions( { "SemiTune", "FineTune", "Reverse", "Wrap", "Fade" } );
+                            midComp.typeList.setListOptions( { "SemiTune", "FineTune" } );
                             targetValueClip = targetValueClip == "Off" ? "SemiTune" : targetValueClip;
                             midComp.typeList.setSelected( targetValueClip );
                         }
                         else
                         {
                             auto targetValue = childTree.getProperty( "Target" ).toString();
-                            midComp.typeList.setListOptions( { " Global SemiTune", " Global FineTune" } );
+                            midComp.typeList.setListOptions( { "Global SemiTune", "Global FineTune" } );
                             targetValue = targetValue == "Off" ? "Global SemiTune" : targetValue;
                             midComp.typeList.setSelected( targetValue );
                         }
@@ -2290,42 +2248,49 @@ namespace kick_ui
                 {
                     juce::String type = midComp.typeList.getSelectedValue();
                     childTree.setProperty( "Target", type, nullptr );
+                    childTree.setProperty( "TargetIndex", index, nullptr ); // CC position for MIDI / CV programs
                     saveData( rightComp.table->getSelectedRow() );
                 }
                 else if( ( leftComp.sourceList.getSelected() == "Audio Track" ) && ( midComp.targetList.getSelected() == "Mixer" ) )
                 {
                     juce::String type = midComp.typeList.getSelectedValue();
                     childTree.setProperty( "Target", type, nullptr );
+                    childTree.setProperty( "TargetIndex", index, nullptr ); // CC position for MIDI / CV programs
                     saveData( rightComp.table->getSelectedRow() );
                 }
                 else if( ( leftComp.sourceList.getSelected() == "Program" ) && ( midComp.targetList.getSelected() == "Mixer" ) )
                 {
                     juce::String type = midComp.typeList.getSelectedValue();
                     childTree.setProperty( "Target", type, nullptr );
+                    childTree.setProperty( "TargetIndex", index, nullptr ); // CC position for MIDI / CV programs
                     saveData( rightComp.table->getSelectedRow() );
                 }
                 else if( ( leftComp.sourceList.getSelected() == "Program" ) && ( midComp.targetList.getSelected() == "Program" ) )
                 {
                     juce::String type = midComp.typeList.getSelectedValue();
                     childTree.setProperty( "Target", type, nullptr );
+                    childTree.setProperty( "TargetIndex", index, nullptr ); // CC position for MIDI / CV programs
                     saveData( rightComp.table->getSelectedRow() );
                 }
                 else if( ( leftComp.sourceList.getSelected() == "Return" ) && ( midComp.targetList.getSelected() == "Mixer" ) )
                 {
                     juce::String type = midComp.typeList.getSelectedValue();
                     childTree.setProperty( "Target", type, nullptr );
+                    childTree.setProperty( "TargetIndex", index, nullptr ); // CC position for MIDI / CV programs
                     saveData( rightComp.table->getSelectedRow() );
                 }
                 else if( ( leftComp.sourceList.getSelected() == "Submix" ) && ( midComp.targetList.getSelected() == "Mixer" ) )
                 {
                     juce::String type = midComp.typeList.getSelectedValue();
                     childTree.setProperty( "Target", type, nullptr );
+                    childTree.setProperty( "TargetIndex", index, nullptr ); // CC position for MIDI / CV programs
                     saveData( rightComp.table->getSelectedRow() );
                 }
                 else if( ( leftComp.sourceList.getSelected() == "Main" ) && ( midComp.targetList.getSelected() == "Mixer" ) )
                 {
                     juce::String type = midComp.typeList.getSelectedValue();
                     childTree.setProperty( "Target", type, nullptr );
+                    childTree.setProperty( "TargetIndex", index, nullptr ); // CC position for MIDI / CV programs
                     saveData( rightComp.table->getSelectedRow() );
                 }
             }
@@ -2412,363 +2377,297 @@ namespace kick_ui
     }
     void MidiControlMidiLearn::startLearning()
     {
-        auto midiInputs = juce::MidiInput::getAvailableDevices();
-        for( const auto& input : midiInputs )
+        // Every available MIDI input is opened (it used to be the first device only).
+        if( activeInputs.empty() )
         {
-            DBG( "Available MIDI input: " << input.name );
-        }
-
-        if( !midiInputs.isEmpty() )
-        {
-            midiInput = juce::MidiInput::openDevice( midiInputs[0].identifier, this );
-
-            if( midiInput )
+            for( const auto& device : juce::MidiInput::getAvailableDevices() )
             {
-                midiInput->start();
-                activeMidiInput  = std::move( midiInput );
-                isLearning       = true;
-                isMappingEnabled = true;
+                if( auto input = juce::MidiInput::openDevice( device.identifier, this ) )
+                {
+                    input->start();
+                    activeInputs.push_back( std::move( input ) );
+                }
             }
         }
+        isLearning       = !activeInputs.empty();
+        isMappingEnabled = !activeInputs.empty();
+        if( activeInputs.empty() )
+            kick_log( "MidiLearn", "no MIDI input device" );
     }
+
+    // "Enable Mapping" off: stop learning, the learned rows keep working while the inputs stay open.
     void MidiControlMidiLearn::stopMidiInput()
     {
-        if( activeMidiInput )
-        {
-            DBG( "Stopping MIDI input..." );
-            activeMidiInput->stop();
-            isLearning = false;
-            activeMidiInput->start();
-        }
+        isLearning = false;
     }
 
     MidiControlMidiLearn ::~MidiControlMidiLearn()
     {
+        cancelPendingUpdate();
+        midilearn.removeListener( this );
+        for( auto& input : activeInputs )
+            input->stop(); // before the callback target goes away
+        activeInputs.clear();
     }
+
+    // Runs on the MIDI input thread: nothing here touches the project, the UI or the engine. The message is copied to the
+    // message thread (the callAsync lambdas used to capture locals by reference and the buffer was never drained).
     void MidiControlMidiLearn::handleIncomingMidiMessage( juce::MidiInput* source, const juce::MidiMessage& message )
     {
-        messageBuffer.push_back( { message, juce::Time::getCurrentTime() } );
-        if( isLearning )
-        {
-            processBufferedMessages();
-        }
-        else if( isMappingEnabled )
-        {
-            parameterMapping( message );
-        }
+        // MIDI clock, active sensing, transport and time code arrive continuously and are never learned or mapped.
+        if( message.isMidiClock() || message.isActiveSense() || message.isMidiStart() || message.isMidiStop() || message.isMidiContinue() || message.isQuarterFrame() || message.isSongPositionPointer() )
+            return;
+
+        juce::String                                          port = source ? source->getName() : juce::String();
+        juce::Component::SafePointer<MidiControlMidiLearn> safe( this );
+        juce::MessageManager::callAsync( [safe, message, port]() {
+            if( safe != nullptr )
+                safe->processMessage( message, port );
+        } );
     }
-    void MidiControlMidiLearn::processBufferedMessages()
+
+    void MidiControlMidiLearn::processMessage( const juce::MidiMessage& message, const juce::String& port )
     {
-        while( !messageBuffer.empty() )
+        if( onMessageReceived )
+            onMessageReceived( message, port );
+        if( isLearning )
+            learnMessage( message );
+        if( isMappingEnabled )
+            parameterMapping( message );
+    }
+
+    namespace
+    {
+        // What a MIDI message is for the Learn table: type text, number and a 0..127 value. False for messages that are not learnable.
+        bool learnableOf( const juce::MidiMessage& m, std::string& type, int& number, int& value )
         {
-            const auto&              messageData = messageBuffer.front();
-            const juce::MidiMessage& message     = messageData.message;
-
-            childTree = midilearn.getChild( rightComp.table->getSelectedRow() );
-            MidiRightData data;
-
-            if( message.isNoteOn() )
+            if( m.isController() )
             {
-                int channel    = message.getChannel();
-                int noteNumber = message.getNoteNumber();
-                int velocity   = message.getVelocity();
-                data.channel   = channel;
-                data.data      = velocity;
-                data.type      = "Note";
-                childTree.setProperty( "CH", channel, nullptr );
-                childTree.setProperty( "Data", velocity, nullptr );
-                childTree.setProperty( "Type", "Note", nullptr );
-
-                saveData( rightComp.table->getSelectedRow() );
-                //parameterMapping( message );
+                type = "cc"; number = m.getControllerNumber(); value = m.getControllerValue();
+                return true;
             }
-            else if( message.isNoteOff() )
+            if( m.isNoteOn() )
             {
-                int channel    = message.getChannel();
-                int noteNumber = message.getNoteNumber();
-                int velocity   = message.getVelocity();
-                data.channel   = channel;
-                data.data      = velocity;
-                data.type      = "Note";
-                childTree.setProperty( "CH", channel, nullptr );
-                childTree.setProperty( "Data", velocity, nullptr );
-                childTree.setProperty( "Type", "Note", nullptr );
-                saveData( rightComp.table->getSelectedRow() );
-                //parameterMapping( message );
+                type = "Note"; number = m.getNoteNumber(); value = m.getVelocity();
+                return true;
             }
-            else if( message.isController() )
+            if( m.isNoteOff( true ) )
             {
-                int channel          = message.getChannel();
-                int controllerNumber = message.getControllerNumber();
-                int controllerValue  = message.getControllerValue();
-                data.channel         = channel;
-                data.data            = controllerValue;
-                data.type            = "cc";
-                childTree.setProperty( "CH", channel, nullptr );
-                childTree.setProperty( "Data", controllerValue, nullptr );
-                childTree.setProperty( "Type", "cc", nullptr );
-                childTree.setProperty( "CC", controllerNumber, nullptr );
-                parameterMapping( message );
-                saveData( rightComp.table->getSelectedRow() );
-                ledUpdate( controllerNumber, channel );
+                type = "Note"; number = m.getNoteNumber(); value = 0;
+                return true;
             }
+            if( m.isProgramChange() )
+            {
+                type = "ProgramChange"; number = m.getProgramChangeNumber(); value = 127;
+                return true;
+            }
+            if( m.isPitchWheel() )
+            {
+                type = "PitchBend"; number = 0; value = juce::jlimit( 0, 127, m.getPitchWheelValue() >> 7 );
+                return true;
+            }
+            return false;
+        }
 
-            messageBuffer.erase( messageBuffer.begin() );
+        int numberOrMinusOne( const juce::var& v )
+        {
+            auto t = v.toString();
+            return ( t.isNotEmpty() && t.containsOnly( "0123456789" ) ) ? t.getIntValue() : -1;
         }
     }
+
+    // Learning: the message is written into the selected table row (type, channel, number, value).
+    void MidiControlMidiLearn::learnMessage( const juce::MidiMessage& message )
+    {
+        const int selected = rightComp.table->getSelectedRow();
+        auto      row      = midilearn.getChild( selected );
+        if( !row.isValid() )
+            return;
+
+        std::string type;
+        int         number = 0, value = 0;
+        if( !learnableOf( message, type, number, value ) )
+            return;
+
+        row.setProperty( "CH", message.getChannel(), nullptr );
+        row.setProperty( "Data", value, nullptr );
+        row.setProperty( "Type", juce::String( type ), nullptr );
+        row.setProperty( "Number", number, nullptr );
+        if( type == "cc" )
+            row.setProperty( "CC", number, nullptr ); // kept for projects written before "Number" existed
+        saveData( selected );
+        if( type == "cc" )
+            ledUpdate( number, message.getChannel() );
+    }
+
+    // Applies one message to every learned row that matches its type, channel and number (a row used to run for the
+    // selected table row with any controller). Flip, switch edges and value ranges are part of applyRow.
     void MidiControlMidiLearn::parameterMapping( const juce::MidiMessage& message )
     {
-        int   ccValue   = message.getControllerValue();
-        int   seqNum    = ae.getSelectedSequence();
-        auto  trackData = ae.getTrackData( seqNum, ae.getSelectedTrack() );
-        auto& trackName = leftComp.track.getSelected();
+        std::string type;
+        int         number = 0, value = 0;
+        if( !learnableOf( message, type, number, value ) )
+            return;
 
-        auto* program = ae.getProgram( leftComp.pgm.getSelectedValue() );
-
-        int          trackNum  = leftComp.track.getSelectedIndex();
-        int          pgmNumber = leftComp.pgm.getSelectedIndex();
-        juce::String pgmName   = leftComp.pgm.getSelectedValue();
-        juce::String value     = midComp.typeList.getSelectedValue();
-        int          ccIndex   = midComp.typeList.getSelectedIndex();
-        juce::String trck      = leftComp.track.getSelectedValue();
-        busNo                  = leftComp.ret.getSelectedIndex();
-        busNos                 = leftComp.sub.getSelectedIndex();
-
-        busNameReturn = busMgr.getReturnsBusName( busNo );
-        busNameSubmix = busMgr.getSubmixBusName( busNos );
-
-        auto trackMute  = ae.getTrackMute( seqNum, trackNum );
-        auto trackSolo  = ae.getTrackSolo( seqNum, trackNum );
-        auto trackLevel = ae.getTrackLevel( seqNum, trackNum );
-
-        int selectedRow = rightComp.table->getSelectedRow();
-
-        bool isSetAll  = midilearn.getChild( selectedRow ).getProperty( "SetAll" );
-        auto selPadNum = midilearn.getChild( selectedRow ).getProperty( "Pad" );
-        int  actualPad = static_cast<int>( selPadNum ) - 1;
-        int  selBank   = midilearn.getChild( selectedRow ).getProperty( "Bank" );
-        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && ( leftComp.sourceList.getSelected() == "MIDI Track" || leftComp.sourceList.getSelected() == "Audio Track" ) )
+        for( int i = 0; i < midilearn.getNumChildren(); ++i )
         {
-            auto trkName = trackData ? trackData->name.get() : "";
-            if( trackName == trkName )
+            auto row = midilearn.getChild( i );
+            midictl::LearnRow lr;
+            lr.type    = row.getProperty( "Type" ).toString().toStdString();
+            lr.channel = numberOrMinusOne( row.getProperty( "CH" ) );
+            lr.number  = row.hasProperty( "Number" ) ? numberOrMinusOne( row.getProperty( "Number" ) ) : numberOrMinusOne( row.getProperty( "CC" ) );
+            if( midictl::learnMatches( lr, type, message.getChannel(), number ) )
+                applyRow( row, midictl::flipped( value, row.getProperty( "Flip" ).toString() == "Enable" ) );
+        }
+    }
+
+    // The target is read from the row itself (kind, source name, target text) and resolved by name at the moment the
+    // message arrives, so it does not depend on what the editor currently shows.
+    void MidiControlMidiLearn::applyRow( const juce::ValueTree& row, int cc )
+    {
+        const auto control    = row.getProperty( "Control" ).toString();
+        const auto controller = row.getProperty( "Controller" ).toString();
+        const auto source     = row.getProperty( "Source" ).toString();
+        const auto target     = row.getProperty( "Target" ).toString().trim();
+        if( target.isEmpty() || target == "Off" )
+            return;
+
+        const bool on     = midictl::switchFromCc( cc );
+        const int  seqNum = ae.getSelectedSequence();
+
+        auto bankOf = [&]() {
+            const auto b = row.getProperty( "Bank" ).toString();
+            return b.length() == 1 ? juce::jlimit( 0, 7, (int)( b[0] - 'A' ) ) : 0;
+        };
+
+        if( control == "MIDI Track" || control == "Audio Track" )
+        {
+            const int track = ae.getTrackIndexByName( seqNum, source );
+            if( track < 0 )
+                return;
+            if( target == "Mute" ) ae.setTrackMute( seqNum, track, on );
+            else if( target == "solo" || target == "Solo" ) ae.setTrackSolo( seqNum, track, on );
+            else if( target == "Volume" ) ae.setTrackLevel( seqNum, track, cc );
+            // Track Pan has no engine call at the interface level: not offered in the list.
+            return;
+        }
+
+        if( control == "Program" )
+        {
+            auto* program = ae.getProgram( source );
+            if( program == nullptr )
+                return;
+
+            if( controller == "Mixer" )
             {
-                juce::MessageManager::callAsync( [&]() {
-                    if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Mute" )
-                        ae.setTrackMute( seqNum, trackNum, ( trackMute ) ? false : true );
-                    if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "solo" )
-                        ae.setTrackSolo( seqNum, trackNum, ( trackSolo ) ? false : true );
-                    if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Volume" )
-                        ae.setTrackLevel( seqNum, trackNum, ccValue );
-                } );
+                if( target == "Volume" ) program->setLevel( cc );
+                else if( target == "Mute" ) program->setMute( on );
+                else if( target == "solo" || target == "Solo" ) program->setSolo( on );
+                else if( target == "Pan" ) program->setPan( midictl::ccToPan( cc ) );
+                else if( target.startsWith( "Send " ) )
+                {
+                    const int send = target.substring( 5 ).getIntValue() - 1;
+                    if( send >= 0 && send < 4 )
+                        program->setSendGain( send, midictl::ccToGain( cc ) );
+                }
+                return;
             }
-        }
-        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && leftComp.sourceList.getSelected() == "Program" && midilearn.getChild( selectedRow ).getProperty( "Controller" ) == "Mixer" )
-        {
-            juce::MessageManager::callAsync( [&]() {
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Volume" )
-                    program->setLevel( ccValue );
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Mute" )
-                {
-                    auto state       = ae.getProgram( pgmName );
-                    bool toggleState = state ? state->mute.get() : false;
-                    program->setMute( toggleState ? false : true );
-                }
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "solo" )
-                {
-                    auto state       = ae.getProgram( pgmName );
-                    bool toggleState = state ? state->solo.get() : false;
-                    program->setSolo( toggleState ? false : true );
-                }
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Pan" )
-                    program->setPan( ccValue );
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Send 1" )
-                    program->setSendGain( 0, ccValue );
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Send 2" )
-                    program->setSendGain( 1, ccValue );
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Send 3" )
-                    program->setSendGain( 2, ccValue );
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Send 4" )
-                    program->setSendGain( 3, ccValue );
-            } );
-        }
-        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && leftComp.sourceList.getSelected() == "Program" && midilearn.getChild( selectedRow ).getProperty( "Controller" ) == "Program" )
-        {
-            auto  selected        = leftComp.pgm.getSelectedValue();
-            auto* selectedProgram = ae.getProgram( selected );
-            auto  type            = ( selectedProgram != nullptr ) ? selectedProgram->getType() : mt::MTProgramType::Unknown;
+
+            if( controller != "Program" )
+                return;
+
+            const auto type = program->getType();
+            const bool isPad = (int)row.getProperty( "SetAll" ) == 1;
+            const int  pad   = bankOf() * 16 + juce::jlimit( 1, 16, (int)row.getProperty( "Pad" ) ) - 1;
+
             if( type == mt::MTProgramType::Drum )
             {
-                pDrum = dynamic_cast<mt::MTDrumProgram*>( ae.getProgram( pgmNumber ) );
-                juce::MessageManager::callAsync( [&, actualPad, ccValue]() {
-                    if( isSetAll && midilearn.getChild( selectedRow ).hasProperty( "CC" ) )
+                auto* drum = dynamic_cast<mt::MTDrumProgram*>( program );
+                if( drum == nullptr )
+                    return;
+                if( isPad )
+                {
+                    using Env = mt::EnvelopeType;
+                    const auto filter = toEnum<Env>( 1 );
+                    const auto amp    = toEnum<Env>( 0 );
+                    if( target == "Filter Attack" ) drum->setEnvelopeAttack( pad, filter, cc );
+                    else if( target == "Filter Decay" ) drum->setEnvelopeDecay( pad, filter, cc );
+                    else if( target == "Filter Sustain" ) drum->setEnvelopeSustain( pad, filter, cc );
+                    else if( target == "Filter Hold" ) drum->setEnvelopeHold( pad, filter, cc );
+                    else if( target == "Amp Attack" ) drum->setEnvelopeAttack( pad, amp, cc );
+                    else if( target == "Amp Decay" ) drum->setEnvelopeDecay( pad, amp, cc );
+                    else if( target == "Amp Sustain" ) drum->setEnvelopeSustain( pad, amp, cc );
+                    else if( target == "Amp Hold" ) drum->setEnvelopeHold( pad, amp, cc );
+                    else if( target == "Lfo To Pitch" ) drum->setLFOPitch( pad, cc );
+                    else if( target == "Lfo To Filter" ) drum->setLFOFilter( pad, cc );
+                    else if( target == "Lfo To Amp" ) drum->setLFOLevel( pad, cc );
+                    else if( target == "Lfo To PAN" ) drum->setLFOPan( pad, cc );
+                    else if( target.startsWith( "Layer " ) )
                     {
-                        if( value == "Filter Attack" )
-                            pDrum->setEnvelopeAttack( actualPad, toEnum<mt::EnvelopeType>( 1 ), ccValue );
-                        else if( value == "Filter Decay" )
-                            pDrum->setEnvelopeDecay( actualPad, toEnum<mt::EnvelopeType>( 1 ), ccValue );
-                        else if( value == "Filter Sustain" )
-                            pDrum->getEnvelopeSustain( actualPad, toEnum<mt::EnvelopeType>( 1 ) );
-                        else if( value == "Filter Hold" )
-                            pDrum->setEnvelopeHold( actualPad, toEnum<mt::EnvelopeType>( 1 ), ccValue );
-                        else if( value == "Amp Attack" )
-                            pDrum->setEnvelopeAttack( actualPad, toEnum<mt::EnvelopeType>( 0 ), ccValue );
-                        else if( value == "Amp Decay" )
-                            pDrum->setEnvelopeDecay( actualPad, toEnum<mt::EnvelopeType>( 0 ), ccValue );
-                        else if( value == "Amp Sustain" )
-                            pDrum->getEnvelopeSustain( actualPad, toEnum<mt::EnvelopeType>( 0 ) );
-                        else if( value == "Amp Hold" )
-                            pDrum->setEnvelopeHold( actualPad, toEnum<mt::EnvelopeType>( 0 ), ccValue );
-                        else if( value == "Lfo To Pitch" )
-                            pDrum->setLFOPitch( actualPad, ccValue );
-                        else if( value == " Lfo To Filter" )
-                            pDrum->setLFOFilter( actualPad, ccValue );
-                        else if( value == " Lfo To Amp " )
-                            pDrum->setLFOLevel( actualPad, ccValue );
-                        else if( value == "Lfo To PAN" )
-                            pDrum->setLFOPan( actualPad, ccValue );
-                        else if( value.contains( "Layer" ) )
+                        const int layer = target.substring( 6, 7 ).getIntValue() - 1;
+                        const auto what = target.substring( 8 );
+                        if( layer >= 0 && layer < 4 )
                         {
-                            for( int i = 1; i <= 4; ++i )
-                            {
-                                juce::String layerPrefix = "Layer " + juce::String( i ) + " ";
-                                if( value == layerPrefix + "Level" )
-                                {
-                                    pDrum->setLayerGain( actualPad, i - 1, ccValue );
-                                    break;
-                                }
-                                else if( value == layerPrefix + "PAN" )
-                                {
-                                    pDrum->setLayerPan( actualPad, i - 1, ccValue );
-                                    break;
-                                }
-                                else if( value == layerPrefix + "Semi" )
-                                {
-                                    pDrum->setLayerSemi( actualPad, i - 1, ccValue );
-                                    break;
-                                }
-                                else if( value == layerPrefix + "Fine" )
-                                {
-                                    pDrum->setLayerFine( actualPad, i - 1, ccValue );
-                                    break;
-                                }
-                            }
+                            if( what == "Level" ) drum->setLayerGain( pad, layer, cc );
+                            else if( what == "PAN" ) drum->setLayerPan( pad, layer, cc );
+                            else if( what == "Semi" ) drum->setLayerSemi( pad, layer, cc );
+                            else if( what == "Fine" ) drum->setLayerFine( pad, layer, cc );
                         }
                     }
-                    else
-                    {
-                        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == " Global SemiTune" )
-                            pDrum->setSemi( ccValue );
-                        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == " Global FineTune" )
-                            pDrum->setFine( ccValue );
-                    }
-                } );
+                }
+                else if( target == "Global SemiTune" ) drum->setSemi( midictl::ccToRange( cc, SEMI::MIN, SEMI::MAX ) );
+                else if( target == "Global FineTune" ) drum->setFine( midictl::ccToRange( cc, FINE::MIN, FINE::MAX ) );
             }
-            if( type == mt::MTProgramType::Midi )
+            else if( type == mt::MTProgramType::Midi || type == mt::MTProgramType::Cv )
             {
-                auto vt = ae.getProgramVT( pgmNumber );
-
-                juce::Identifier property( "CC" + std::to_string( ccIndex ) );
+                if( !row.hasProperty( "TargetIndex" ) )
+                    return; // a row saved before the position was kept: pick the target again
+                auto vt = program->getState();
+                juce::Identifier property( ( type == mt::MTProgramType::Midi ? "CC" : "CV" ) + juce::String( (int)row.getProperty( "TargetIndex" ) ) );
                 if( vt.hasProperty( property ) )
-                {
-                    vt.setProperty( property, ccValue, nullptr );
-                }
+                    vt.setProperty( property, cc, nullptr );
             }
-            if( type == mt::MTProgramType::Cv )
+            else if( type == mt::MTProgramType::Clip )
             {
-                auto             vt = ae.getProgramVT( pgmNumber );
-                juce::Identifier property( "CV" + std::to_string( ccIndex ) );
-                if( vt.hasProperty( property ) )
+                if( isPad )
                 {
-                    vt.setProperty( property, ccValue, nullptr );
-                }
-            }
-            if( type == mt::MTProgramType::Clip )
-            {
-                juce::MessageManager::callAsync( [&, selectedRow, value, ccValue, isSetAll, selBank, selPadNum]() {
-                    if( isSetAll )
+                    if( auto* clip = dynamic_cast<mt::MTClipProgram*>( program ) )
                     {
-                        int actualPad = static_cast<int>( selPadNum ) - 1;
-                        pClip         = dynamic_cast<mt::MTClipProgram*>( ae.getProgram( pgmNumber ) );
-                        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "SemiTune" )
-                            pClip->setNoteSemi( actualPad, ccValue );
-                        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "FineTune" )
-                            pClip->setNoteFine( actualPad, ccValue );
-                        //if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Reverse" )
-                        //    pClip->setNoteReverse( actualPad, pClip->getClipNoteData( actualPad ).reverse ? false : true );
-                        //if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Fade" )
-                        //    pClip->setNoteFade( actualPad, pClip->getClipNoteData( actualPad ).fade ? false : true );
-                        //if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Wrap" )
-                        //    pClip->setNoteFade( actualPad, pClip->getClipNoteData( actualPad ).warp ? false : true );
+                        if( target == "SemiTune" ) clip->setNoteSemi( pad, midictl::ccToRange( cc, SEMI::MIN, SEMI::MAX ) );
+                        else if( target == "FineTune" ) clip->setNoteFine( pad, midictl::ccToRange( cc, FINE::MIN, FINE::MAX ) );
                     }
-                    else
-                    {
-                        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == " Global SemiTune" )
-                            selectedProgram->setSemi( ccValue );
-                        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == " Global FineTune" )
-                            selectedProgram->setFine( ccValue );
-                    }
-                } );
+                }
+                else if( target == "Global SemiTune" ) program->setSemi( midictl::ccToRange( cc, SEMI::MIN, SEMI::MAX ) );
+                else if( target == "Global FineTune" ) program->setFine( midictl::ccToRange( cc, FINE::MIN, FINE::MAX ) );
             }
-        }
-        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && leftComp.sourceList.getSelected() == "Return" )
-        {
-            juce::MessageManager::callAsync( [&]() {
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Pan" )
-                    busMgr.setBusPan( busNameReturn, ccValue );
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Volume" )
-                    busMgr.setBusGain( busNameReturn, ccValue );
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Mute" )
-                {
-                    auto state = busMgr.isBusMuted( busNameReturn );
-                    busMgr.setBusMute( busNameReturn, state ? false : true ); //mute state
-                }
-            } );
-        }
-        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && leftComp.sourceList.getSelected() == "Submix" )
-        {
-            juce::MessageManager::callAsync( [&]() {
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Pan" )
-                    busMgr.setBusPan( busNameSubmix, ccValue );
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Mute" )
-                {
-                    auto state = busMgr.isBusMuted( busNameSubmix );
-                    busMgr.setBusMute( busNameSubmix, ccValue ); //mute state
-                }
-                if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Solo" )
-                {
-                    auto state = busMgr.isBusSolo( busNameSubmix );
-                    busMgr.setBusSolo( busNameSubmix, ccValue ); //mute state
-                }
-            } );
-        }
-        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && leftComp.sourceList.getSelected() == "Main" )
-        {
-            juce::String              list = leftComp.main.getSelectedValue();
-            std::vector<juce::String> busNames;
-            auto&                     outBusNames = busMgr.getOutputBusNames();
-
-            for( auto& n : outBusNames )
-                busNames.push_back( n );
-
-            for( const auto& busName : busNames )
-
+            else if( type == mt::MTProgramType::Keygroup )
             {
-                if( busName == list )
-                {
-                    juce::MessageManager::callAsync( [&]() {
-                        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Volume" )
-                            busMgr.setBusGain( busName, ccValue );
-                        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Pan" )
-                            busMgr.setBusPan( busName, ccValue );
-                        if( midilearn.getChild( selectedRow ).hasProperty( "CC" ) && value == "Mute" )
-                        {
-                            auto state = busMgr.isBusSolo( busName );
-                            busMgr.setBusMute( busName, ccValue ); // mute state
-                        }
-                    } );
-                }
+                if( target == "Program Polyphony" ) program->setPolyphony( midictl::ccToRange( cc, POLYPHONY::MIN, POLYPHONY::MAX ) );
+                else if( target == "Global SemiTune" ) program->setSemi( midictl::ccToRange( cc, SEMI::MIN, SEMI::MAX ) );
+                else if( target == "Global FineTune" ) program->setFine( midictl::ccToRange( cc, FINE::MIN, FINE::MAX ) );
             }
+            return;
         }
+
+        // Buses: Return n / Submix n / the output buses are resolved by name now.
+        juce::String bus;
+        if( control == "Return" ) bus = busMgr.getReturnsBusName( (uint32_t)juce::jmax( 0, source.getTrailingIntValue() - 1 ) );
+        else if( control == "Submix" ) bus = busMgr.getSubmixBusName( (uint32_t)juce::jmax( 0, source.getTrailingIntValue() - 1 ) );
+        else if( control == "Main" )
+        {
+            for( const auto& name : busMgr.getOutputBusNames() )
+                if( source == juce::String( name ) )
+                    bus = source;
+        }
+        else
+            return;
+        if( bus.isEmpty() )
+            return;
+
+        if( target == "Volume" ) busMgr.setBusGain( bus, (float)midictl::ccToGain( cc ) );
+        else if( target == "Pan" ) busMgr.setBusPan( bus, (float)midictl::ccToPan( cc ) );
+        else if( target == "Mute" ) busMgr.setBusMute( bus, on );
+        else if( ( target == "solo" || target == "Solo" ) && control == "Submix" ) busMgr.setBusSolo( bus, on );
     }
 
     void MidiControlMidiLearn::populateMaps()
@@ -3028,8 +2927,25 @@ namespace kick_ui
 
     void MidiControlMidiLearn::visibilityChanged()
     {
+        // Not on hiding, and the table is rebuilt from the project tree (saved rows used to be invisible after loading, the
+        // first Add then wiped them, and the rows of the previous project stayed after a project change).
+        if( !isVisible() )
+            return;
+        midilearn.removeListener( this );
         projectVTree = ae.getValueTree();
-        midilearn    = projectVTree.getOrCreateChildWithName( mt::IDs::MIDILEARN, &ae.getUndoManager() );
+        midilearn    = projectVTree.getOrCreateChildWithName( mt::IDs::MIDILEARN, nullptr );
+        midilearn.addListener( this ); // undo / project changes rebuild the table
+        rebuildTable();
+    }
+
+    // The table (and its row count) always comes from the MIDILEARN tree.
+    void MidiControlMidiLearn::rebuildTable()
+    {
+        numRows = midilearn.getNumChildren();
+        rightComp.midiRightDataStruct.clear();
+        for( int i = 0; i < numRows; ++i )
+            saveData( i );
+        rightComp.table->refresh();
     }
 
     MidiLearnTableEntry::MidiLearnTableEntry()
