@@ -22,7 +22,7 @@
 namespace kick_ui
 {
 
-    ClipProgramTab::ClipProgramTab( int& SelectedPad, const std::shared_ptr<mt::MTClipProgram>& PClip )
+    ClipProgramTab::ClipProgramTab( int& SelectedPad, mt::MTClipProgram* const& PClip )
         : selectedPad( SelectedPad ), pClip( PClip )
     {
         pads.setPadButtonSpacer( 9 );
@@ -35,15 +35,15 @@ namespace kick_ui
         mt::utils::addAndMakeVisible( this, semi, fine, launchQuantize, pads );
 
         semi.onValueChanged = [&]( double Value ) {
-            auto p = pClip.get();
+            auto p = pClip;
             if( p ) p->semi = ( (int)Value );
         };
         fine.onValueChanged = [&]( double Value ) {
-            auto p = pClip.get();
+            auto p = pClip;
             if( p ) p->fine = ( (int)Value );
         };
         launchQuantize.onSelectionChanged = [&]( int Index, const juce::String& ) {
-            auto p = pClip.get();
+            auto p = pClip;
             if( p ) p->launchQuantize = mt::Kick::QuantizeMultipler[Index];
         };
 
@@ -96,13 +96,13 @@ namespace kick_ui
         //pads.setBorderColor( ui::Theme::selectionColour( 1 ), 2.5f, juce::dontSendNotification );
 
         auto semiHandler   = [&]() {
-            auto p = pClip.get();
+            auto p = pClip;
             if( p ) semi.setValue( (double)p->semi.get(), juce::dontSendNotification ); };
         auto fineHandler   = [&]() {
-            auto p = pClip.get();
+            auto p = pClip;
             if( p ) fine.setValue( (double)p->fine.get(), juce::dontSendNotification ); };
         auto launchHandler = [&]() {
-            auto p = pClip.get();
+            auto p = pClip;
             if( p )
             {
                 auto q   = p->launchQuantize.get();
@@ -118,7 +118,7 @@ namespace kick_ui
         };
 
         scope.reset();
-        if( auto p = pClip.get() )
+        if( auto p = pClip )
         {
             // Setup scope tracker.
             scope = std::make_shared<mt::Kick::ScopeTracker>();

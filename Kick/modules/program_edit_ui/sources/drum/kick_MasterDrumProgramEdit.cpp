@@ -69,7 +69,7 @@ namespace kick_ui
         masterPan.setDoubleClickReturnValue( true, 0.f, 0 );
         masterSemi.setDoubleClickReturnValue( true, 0, 0 );
         masterFine.setDoubleClickReturnValue( true, 0, 0 );
-        masterPoly.setDoubleClickReturnValue( true, 8, 0 );
+        masterPoly.setDoubleClickReturnValue( true, POLYPHONY::DEFAULT, 0 );
 
         padLevel.setDoubleClickReturnValue( true, 127, 0 );
         padPan.setDoubleClickReturnValue( true, 0.f, 0 );

@@ -26,7 +26,7 @@ namespace kick_ui
     class ClipProgramTab : public juce::Component
     {
     public:
-        explicit ClipProgramTab( int& SelectedPad, const std::shared_ptr<mt::MTClipProgram>& PClip );
+        explicit ClipProgramTab( int& SelectedPad, mt::MTClipProgram* const& PClip );
         ~ClipProgramTab() = default;
 
         void refresh();
@@ -40,7 +40,7 @@ namespace kick_ui
     private:
         int&                                      selectedPad;
         mt::MTAudioInterface&                     ae{ mt::getAudioInterface() };
-        const std::shared_ptr<mt::MTClipProgram>& pClip;
+        mt::MTClipProgram* const& pClip;
 
         ui::KickSemiSlider              semi;
         ui::KickFineSlider              fine;

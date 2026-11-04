@@ -22,7 +22,7 @@
 namespace kick_ui
 {
 
-    ClipPadTab::ClipPadTab( int& SelectedPad, const std::shared_ptr<mt::MTClipProgram>& PClip )
+    ClipPadTab::ClipPadTab( int& SelectedPad, mt::MTClipProgram* const& PClip )
         : selectedPad( SelectedPad ), pClip( PClip )
     {
         mt::utils::addAndMakeVisible( this, nameLabel, start, end, semi, fine, muteGroup, wrap, reverse, fade, wav );
@@ -48,7 +48,7 @@ namespace kick_ui
         fine.setRange( FINE::MIN, FINE::MAX, FINE::STEP );
 
         start.onValueChanged = [&]( juce::int64 Value ) {
-            if( auto p = pClip.get() )
+            if( auto p = pClip )
             {
                 if( end.getValue() >= Value )
                 {
@@ -61,7 +61,7 @@ namespace kick_ui
         };
 
         end.onValueChanged = [&]( juce::int64 Value ) {
-            if( auto p = pClip.get() )
+            if( auto p = pClip )
             {
                 if( start.getValue() <= Value )
                 {
@@ -74,25 +74,25 @@ namespace kick_ui
         };
 
         semi.onValueChanged = [&]( juce::int64 Value ) {
-            if( auto p = pClip.get() )
+            if( auto p = pClip )
                 if( auto pSrc = p->getLayerSourceSlice( selectedPad, 0 ) )
                     pSrc->semi = Value;
         };
 
         fine.onValueChanged = [&]( juce::int64 Value ) {
-            if( auto p = pClip.get() )
+            if( auto p = pClip )
                 if( auto pSrc = p->getLayerSourceSlice( selectedPad, 0 ) )
                     pSrc->fine = Value;
         };
 
         reverse.onClick = [&]() {
-            if( auto p = pClip.get() )
+            if( auto p = pClip )
                 if( auto pSrc = p->getLayerSourceSlice( selectedPad, 0 ) )
                     pSrc->isReversed = reverse.getToggleState();
         };
 
         fade.onClick = [&]() {
-            if( auto p = pClip.get() )
+            if( auto p = pClip )
             {
                 if( auto pSrc = p->getLayerSourceSlice( selectedPad, 0 ) )
                     pSrc->isCrossFade = fade.getToggleState();
@@ -100,14 +100,15 @@ namespace kick_ui
         };
 
         wrap.onClick = [&]() {
-            if( auto p = pClip.get() )
+            if( auto p = pClip )
                 if( auto pSrc = p->getLayerSourceSlice( selectedPad, 0 ) )
                     pSrc->isWarp = wrap.getToggleState();
         };
 
         muteGroup.onSelectionChanged = [&]( int Value, const juce::String& ) {
-            if( auto p = pClip.get() )
-                p->getClip( selectedPad )->muteGroup = Value - 1;
+            if( auto p = pClip )
+                if( auto clipData = p->getClip( selectedPad ) )
+                    clipData->muteGroup = Value - 1; // list: Off, 1..32 -> -1..32
         };
 
         ui::themeChanged.connect( [&]() {
@@ -129,7 +130,7 @@ namespace kick_ui
 
     void ClipPadTab::refresh()
     {
-        auto p = pClip.get();
+        auto p = pClip;
         if( !p )
             return;
 
@@ -139,11 +140,16 @@ namespace kick_ui
 
             wav.setSource( pSlice ? pSlice->getSourceBuffer() : EMPTY::SampleBuffer, pSlice ? pSlice->getSourceSampleRate() : 0 );
             {
-                auto min = pSlice ? pSlice->getStart() : 0;
-                auto max = pSlice ? pSlice->getEnd() : 1;
-                start.setValueBounds( min, max, min );
-                end.setValueBounds( min, max, max );
-                //end.setValue( endValue == -1 ? ( pSlice->getSource() ? max : 0 ) : endValue, juce::dontSendNotification );
+                // Range = the whole source, value = the slice's own start / end (the range used to be the current start / end,
+                // so a narrowed slice could never be widened again).
+                const int len = pSlice ? (int)pSlice->getSourceLength() : 0;
+                const int lo  = pSlice ? pSlice->getStart() : 0;
+                const int rawEnd = pSlice ? pSlice->getEnd() : 1;
+                const int hi     = rawEnd < 0 ? len : rawEnd; // -1 = the whole source
+                start.setValueBounds( 0, juce::jmax( len, hi, 1 ), 0 );
+                end.setValueBounds( 0, juce::jmax( len, hi, 1 ), juce::jmax( len, hi, 1 ) );
+                start.setValue( lo, juce::dontSendNotification );
+                end.setValue( hi, juce::dontSendNotification );
             }
 
             mt::utils::setEnabled( pSlice, start, end, semi, fine, muteGroup, wrap, reverse, fade );
@@ -154,7 +160,8 @@ namespace kick_ui
             wrap.setToggleState( pSlice ? pSlice->isWarp() : false, juce::dontSendNotification );
             fade.setToggleState( pSlice ? pSlice->isCrossFade() : false, juce::dontSendNotification );
 
-            muteGroup.setSelected( (int)( clipData ? (int)clipData->muteGroup.get() : MUTEGROUP::DEFAULT ), juce::dontSendNotification );
+            muteGroup.setSelected( (int)( clipData ? (int)clipData->muteGroup.get() : MUTEGROUP::DEFAULT ) + 1, juce::dontSendNotification ); // Off = -1 is index 0
+            nameLabel.setText( "Pad " + juce::String( selectedPad + 1 ) + ( pSlice ? "  " + juce::File( pSlice->sourceFile.get() ).getFileNameWithoutExtension() : juce::String() ), juce::dontSendNotification );
         }
     }
 

@@ -1,5 +1,8 @@
 namespace kick_ui
 {
+    // KEY TRACK has no model property and no engine behaviour (the button never had a handler): hidden, not a dead control.
+    static constexpr bool kKeyTrackVisible = false;
+
     KeyGroupMaster::KeyGroupMaster( std::vector<int>& Keys, mt::MTKeygroupProgram*& pKeyGroup )
         : ui::KickGrid( 4, 4 ), keys( Keys ), pKeygroup( pKeyGroup )
     {
@@ -13,8 +16,13 @@ namespace kick_ui
         addComponent( insertsButton, 1, 1 );
         addComponent( outListBox, 1, 2 );
 
-        addComponent( keyTrack, 2, 1 );
+        if( kKeyTrackVisible )
+            addComponent( keyTrack, 2, 1 );
         addComponent( muteGroup, 2, 2 );
+        addComponent( zoneLow, 2, 0 );
+        addComponent( zoneHigh, 2, 3 );
+        zoneLow.setColours( ui::Theme::textColour( 2 ), ui::Theme::textColour( 1 ) );
+        zoneHigh.setColours( ui::Theme::textColour( 2 ), ui::Theme::textColour( 1 ) );
 
         addComponent( layerPlay, 3, 0 );
         addComponent( samplePlay, 3, 1 );
@@ -36,7 +44,7 @@ namespace kick_ui
 
         levelSlider.setRange( MIDI::MIN, MIDI::MAX, MIDI::STEP );
         panSlider.setRange( PAN::MIN, PAN::MAX, PAN::STEP );
-        semiSlider.setRange( SEMI::MIN, SEMI::MAX, SEMI::DEFAULT );
+        semiSlider.setRange( SEMI::MIN, SEMI::MAX, SEMI::STEP );
         fineSlider.setRange( FINE::MIN, FINE::MAX, FINE::STEP );
 
         insertsButton.onClick = [&]() {
@@ -49,24 +57,25 @@ namespace kick_ui
                 pKeygroup->setPolyphony( Index );
         };
 
-        levelSlider.onValueChanged = [&]( juce::int64 Value ) {
+        // The rotaries deliver double: an int64 lambda truncated the pan to -1 / 0 / +1.
+        levelSlider.onValueChanged = [&]( double Value ) {
             if( pKeygroup )
-                pKeygroup->setLevel( Value );
+                pKeygroup->setLevel( (int)std::lround( Value ) );
         };
 
-        panSlider.onValueChanged = [&]( juce::int64 Value ) {
+        panSlider.onValueChanged = [&]( double Value ) {
             if( pKeygroup )
                 pKeygroup->setPan( Value );
         };
 
-        semiSlider.onValueChanged = [&]( juce::int64 Value ) {
+        semiSlider.onValueChanged = [&]( double Value ) {
             if( pKeygroup )
-                pKeygroup->setSemi( Value );
+                pKeygroup->setSemi( (int)std::lround( Value ) );
         };
 
-        fineSlider.onValueChanged = [&]( juce::int64 Value ) {
+        fineSlider.onValueChanged = [&]( double Value ) {
             if( pKeygroup )
-                pKeygroup->setFine( Value );
+                pKeygroup->setFine( (int)std::lround( Value ) );
         };
 
         layerPlay.onSelectionChanged = [&]( const int Index, const juce::String& Value ) {
@@ -77,6 +86,24 @@ namespace kick_ui
         samplePlay.onSelectionChanged = [&]( const int Index, const juce::String& Value ) {
             if( pKeygroup )
                 pKeygroup->setNoteSamplePlay( keys[0], toEnum<mt::SamplePlayType>( Index ) );
+        };
+
+        zoneLow.onValueChanged = [&]( int Value ) {
+            if( ! pKeygroup || keys.empty() ) return;
+            if( auto* k = pKeygroup->getKeysClip( keys[0] ) )
+            {
+                if( Value <= zoneHigh.getValue() ) k->minNote = Value;
+                else zoneLow.setValue( zoneHigh.getValue(), juce::dontSendNotification );
+            }
+        };
+
+        zoneHigh.onValueChanged = [&]( int Value ) {
+            if( ! pKeygroup || keys.empty() ) return;
+            if( auto* k = pKeygroup->getKeysClip( keys[0] ) )
+            {
+                if( Value >= zoneLow.getValue() ) k->maxNote = Value;
+                else zoneHigh.setValue( zoneLow.getValue(), juce::dontSendNotification );
+            }
         };
 
         muteGroup.onValueChanged = [&]( int Index ) {
@@ -134,6 +161,10 @@ namespace kick_ui
         if( pKeygroup && keys.size() )
         {
             muteGroup.setValue( pKeygroup->getNoteMuteGroup( keys[0] ), juce::dontSendNotification );
+            auto* zoneKey = pKeygroup->getKeysClip( keys[0] );
+            mt::utils::setEnabled( zoneKey != nullptr, zoneLow, zoneHigh ); // no sample on this key: no zone
+            zoneLow.setValue( zoneKey ? (int)zoneKey->minNote.get() : 0, juce::dontSendNotification );
+            zoneHigh.setValue( zoneKey ? (int)zoneKey->maxNote.get() : 127, juce::dontSendNotification );
             samplePlay.setSelected( (int)pKeygroup->getNoteSamplePlay( keys[0] ), juce::dontSendNotification );
             layerPlay.setSelected( (int)pKeygroup->getNoteLayerPlay( keys[0] ), juce::dontSendNotification );
             outListBox.setSelected( pKeygroup->getOutput(), juce::dontSendNotification );

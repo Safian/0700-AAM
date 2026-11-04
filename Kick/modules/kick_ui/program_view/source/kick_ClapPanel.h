@@ -42,4 +42,7 @@ inline void openClapInstrument(mt::MTIProgram* program) {
         dialog.launchAsync();
     }
 }
+
+// HW EDIT on a Plugin program (Program Edit screen) opens the same panel as the Program tab's EDIT button.
+inline const bool programEditPluginOpenerRegistered = ( ProgramEdit::pluginOpener() = [](mt::MTIProgram* program) { openClapInstrument(program); }, true );
 } // namespace kick_ui

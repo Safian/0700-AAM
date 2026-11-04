@@ -87,8 +87,7 @@ namespace kick_ui
 
     void ClipProgramEdit::refresh()
     {
-        if( pClip.get() != pIProg )
-            pClip.reset( dynamic_cast<mt::MTClipProgram*>( pIProg ) );
+        pClip = dynamic_cast<mt::MTClipProgram*>( pIProg );
 
         programTab.refresh();
         padTab.refresh();
