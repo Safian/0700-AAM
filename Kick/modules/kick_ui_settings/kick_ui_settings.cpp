@@ -39,6 +39,7 @@
 #include "source/kick_ui_settings_info.cpp"
 #include "source/kick_ui_settings_midi_sync.cpp"
 #include "source/kick_ui_settings_wifi.cpp"
+#include "source/kick_ui_settings_plugins.cpp"
 
 namespace kick_ui
 {
@@ -95,6 +96,7 @@ namespace kick_ui
         pViews.emplace_back( std::make_unique<SettingsCV>() );
         pViews.emplace_back( std::make_unique<SettingsEthernet>() );
         pViews.emplace_back( std::make_unique<SettingsWifi>() );
+        pViews.emplace_back( std::make_unique<SettingsPlugins>() );
 
         // Add selector buttons...
         auto idx = 0;
