@@ -120,6 +120,37 @@ inline juce::String runKickProgramEditSmoke() {
     if (!midiProg || (int)midiProg->getState().getProperty("CC7", -1) != 77) return fail("CC7 slider did not write the program property (B4)");
     say("MIDI CC binding ok");
 
+    // Pad Perform: hardware pads, Q-Link 1-4 (Scale, Root, Octave, Chord / Mode), 16 LEVELS toggle and hide (note-off for everything).
+    api.setSelectedProgram(kg);
+    kick_ui::signals::sigScreenClose(kick_ui::Screen::MenuPadPerform);
+    auto* pp = dynamic_cast<kick_ui::PadPerform*>(kick_ui::KickHome::Instance().findScreen(kick_ui::Screen::MenuPadPerform));
+    if (!pp) return fail("Pad Perform screen was not created");
+    pp->setBounds(0, 0, 1024, 600);
+    pp->setVisible(false);
+    pp->setVisible(true);
+    {
+        CPktMgr::HWMsg_t pad;
+        pad.pktType = CPktMgr::EN_PKT_TYPE_PAD;
+        pad.pktCmd  = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
+        pad.data    = { 0, (int)contracts::DeviceControlContracts::BTN_PRESSED, 100, 0 };
+        pp->handleCommand(pad);
+        for (int k = 1; k <= 4; ++k) {
+            CPktMgr::HWMsg_t ql;
+            ql.pktType = CPktMgr::EN_PKT_TYPE_KNOBS;
+            ql.pktCmd  = contracts::DeviceControlContracts::KnobCmd::EN_KNOB_QLINK;
+            ql.data    = { k, (int)contracts::DeviceControlContracts::KnobDirection::EN_KNOB_CLOCKWISE, 1 };
+            pp->handleCommand(ql); // while the pad is held: the note-off must still find its notes
+        }
+        pad.data[1] = (int)contracts::DeviceControlContracts::BTN_RELEASED;
+        pp->handleCommand(pad);
+        pp->toggleSixteenLevels();
+        pad.data = { 5, (int)contracts::DeviceControlContracts::BTN_PRESSED, 100, 0 };
+        pp->handleCommand(pad);
+        pp->toggleSixteenLevels();
+        pp->setVisible(false); // hiding releases every held note
+    }
+    say("Pad Perform pads / Q-Link / 16 LEVELS ok");
+
     if (!api.closeProject()) return fail("Cannot close project");
     std::cout << "PASS: Program Edit switches Clip programs safely, opens every type, Q-Link moves the page, MIDI CC sliders write the program\n";
     return {};
