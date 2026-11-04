@@ -68,6 +68,8 @@ namespace kick_ui
         ui::KickLabel padOnLabel{ "Pad On" };
         ui::KickLabel assignedPadLabel{ "ASSIGNED PAD" };
 
+        void stepColour( int Delta );
+
         ui::KickColorButton                             padButtons[18];
         ui::KickColorButton*                            selectedColor;
         contracts::DeviceControlContracts::PadColourIds selectedColourId = contracts::DeviceControlContracts::PadColourIds::PadColourTrans;
@@ -129,6 +131,7 @@ namespace kick_ui
 
         void resized();
         void refresh();
+        void refreshPad( int Id );
         void sendColourModeToHardware( int noteOff, int noteOn );
         void setPadOffModeSelection( int selection );
         void setPadOnModeSelection( int selection );

@@ -203,6 +203,7 @@ namespace mt
         int                       setProgramColourMode( int Program, PadColorMode Mode );
         int                       setProgramEmptyPadColorMode( int Program, EmptyPadColorMode Mode );
         int                       setProgramPadColour( int Program, int Colour, int Pad );
+        int                       resetProgramPadColours( int Program ); // default colours of the program type
         std::vector<juce::String> getProgramNames( MTProgramCategory ct = MTProgramCategory::Unused );
         int                       renameProgram( int Program, const juce::String& NewName );
         int                       getProgramIndexByName( const juce::String& ProgramName );
@@ -642,6 +643,7 @@ namespace mt
         std::vector<juce::String> getSongsList();
         void                      createSong( const juce::String& Name );
         void                      deleteSong( const juce::String& Name );
+        void                      renameSong( const juce::String& OldName, const juce::String& NewName );
         MTSongInfo                getSongInfo( const juce::String& SongName );
         void                      addSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex );
         void                      editSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex );

@@ -21,6 +21,14 @@
 
 namespace kick_ui
 {
+    // The pure mapping (kick_PadColorLogic.h) uses the same numbers as the engine's enums.
+    static_assert( pad_color_logic::Off == mt::OFF && pad_color_logic::OffVelocity == mt::OFF_VELOCITY && pad_color_logic::OffFull == mt::OFF_FULL, "pad colour mode numbering" );
+    static_assert( pad_color_logic::DimOff == mt::DIM_OFF && pad_color_logic::DimVelocity == mt::DIM_VELOCITY && pad_color_logic::DimFull == mt::DIM_FULL, "pad colour mode numbering" );
+    static_assert( pad_color_logic::OffDimOff == mt::OFF_DIM_OFF && pad_color_logic::OffDimVelocity == mt::OFF_DIM_VELOCITY && pad_color_logic::OffDimFull == mt::OFF_DIM_FULL, "pad colour mode numbering" );
+    static_assert( pad_color_logic::kPadOffDim == PAD_OFF_DIM && pad_color_logic::kPadOffOff == PAD_OFF_OFF, "pad off numbering" );
+    static_assert( pad_color_logic::kOnVelocity == PAD_ON_VELOCITY && pad_color_logic::kOnFull == PAD_ON_FULL && pad_color_logic::kOnOff == PAD_ON_OFF, "pad on numbering" );
+    static_assert( pad_color_logic::kPadOffDim == mt::PAD_DIM_STATE && pad_color_logic::kPadOffOff == mt::PAD_OFF_STATE, "pad off state numbering" );
+
     KickPadColorMode::KickPadColorMode()
         : kick_ui::IScreen( kick_ui::Screen::MenuColorEdit )
     {
@@ -101,9 +109,14 @@ namespace kick_ui
             header.setIcon( "Icon_ColourEdit" );
         } );
 
+        // Back to the default colours of the program type (Drum / Clip / other), one undo step.
         right.defaultBtn.onClick = [&]() {
-            ae.setProgramPadColour( ae.getSelectedProgram(), 3, -1 );
+            {
+                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Default pad colours" );
+                ae.resetProgramPadColours( ae.getSelectedProgram() );
+            }
             refresh();
+            refreshLEDs();
             right.defaultBtn.setToggleState( false, juce::dontSendNotification );
         };
     }
@@ -127,117 +140,32 @@ namespace kick_ui
     }
     void KickPadColorMode::sendColourModeToHardware( int padOff, int padOn )
     {
-        mt::PadColorMode padColorMode = mt::PadColorMode::INVALID;
-        if( padOff == mt::PadModeState::PAD_OFF_STATE )
-        {
-            switch( padOn )
-            {
-                case 0: padColorMode = mt::PadColorMode::OFF_VELOCITY; break;
-                case 1: padColorMode = mt::PadColorMode::OFF_FULL; break;
-                case 2: padColorMode = mt::PadColorMode::OFF; break;
-            }
-        }
-
-        else if( padOff == mt::PadModeState::PAD_DIM_STATE )
-        {
-            //check empty pad off or dim if dim process below or write one more switch
-
-            if( left.emptyPadMode.getToggleState() )
-            {
-                switch( padOn )
-                {
-                    case 0: padColorMode = mt::PadColorMode::DIM_VELOCITY; break;
-                    case 1: padColorMode = mt::PadColorMode::DIM_FULL; break;
-                    case 2: padColorMode = mt::PadColorMode::DIM_OFF; break;
-                }
-            }
-            else //empty pads off
-            {
-                switch( padOn )
-                {
-                    case 0: padColorMode = mt::PadColorMode::OFF_DIM_VELOCITY; break;
-                    case 1: padColorMode = mt::PadColorMode::OFF_DIM_FULL; break;
-                    case 2: padColorMode = mt::PadColorMode::OFF_DIM_OFF; break;
-                }
-            }
-        }
+        // Always one of the nine real modes (it used to send INVALID for an unexpected selection).
+        const auto padColorMode = (mt::PadColorMode)pad_color_logic::encode( padOff, padOn, left.emptyPadMode.getToggleState() );
         contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
                                                      setPadColorModeMessage( padColorMode ) );
         ae.setProgramColourMode( ae.getSelectedProgram(), padColorMode );
     }
 
-    int KickPadColorMode::getPadOffColourMode( mt::PadColorMode mode )
+    int KickPadColorMode::getPadOffColourMode( mt::PadColorMode mode ) { return pad_color_logic::decodePadOff( mode ); }
+    int KickPadColorMode::getPadOnColourMode( mt::PadColorMode mode ) { return pad_color_logic::decodePadOn( mode ); }
+    bool KickPadColorMode::getEmptyColourMode( mt::PadColorMode mode ) { return pad_color_logic::decodeEmptyDim( mode ); }
+
+    // One pad's border: the cheap update after a single pad was coloured.
+    void KickPadColorMode::refreshPad( int Id )
     {
-        switch( mode )
-        {
-            case mt::PadColorMode::OFF:
-            case mt::PadColorMode::OFF_VELOCITY:
-            case mt::PadColorMode::OFF_FULL:
-                return PAD_OFF_STATE::PAD_OFF_OFF;
-
-            case mt::PadColorMode::DIM_OFF:
-            case mt::PadColorMode::DIM_VELOCITY:
-            case mt::PadColorMode::DIM_FULL:
-            case mt::PadColorMode::OFF_DIM_OFF:
-            case mt::PadColorMode::OFF_DIM_VELOCITY:
-            case mt::PadColorMode::OFF_DIM_FULL:
-                return PAD_OFF_STATE::PAD_OFF_DIM;
-            default: return PAD_OFF_STATE::PAD_OFF_OFF;
-        }
-    }
-
-    int KickPadColorMode::getPadOnColourMode( mt::PadColorMode mode )
-    {
-        switch( mode )
-        {
-            case mt::PadColorMode::OFF:
-            case mt::PadColorMode::DIM_OFF:
-            case mt::PadColorMode::OFF_DIM_OFF:
-                return PAD_ON_STATE::PAD_ON_OFF;
-
-            case mt::PadColorMode::OFF_VELOCITY:
-            case mt::PadColorMode::DIM_VELOCITY:
-            case mt::PadColorMode::OFF_DIM_VELOCITY:
-                return PAD_ON_STATE::PAD_ON_VELOCITY;
-
-            case mt::PadColorMode::OFF_FULL:
-            case mt::PadColorMode::DIM_FULL:
-            case mt::PadColorMode::OFF_DIM_FULL:
-                return PAD_ON_STATE::PAD_ON_FULL;
-            default: return PAD_ON_STATE::PAD_ON_OFF;
-        }
-    }
-
-    bool KickPadColorMode::getEmptyColourMode( mt::PadColorMode mode )
-    {
-        switch( mode )
-        {
-            case mt::PadColorMode::OFF:
-            case mt::PadColorMode::OFF_VELOCITY:
-            case mt::PadColorMode::OFF_FULL:
-            case mt::PadColorMode::OFF_DIM_OFF:
-            case mt::PadColorMode::OFF_DIM_VELOCITY:
-            case mt::PadColorMode::OFF_DIM_FULL:
-                return OFF;
-
-            case mt::PadColorMode::DIM_OFF:
-            case mt::PadColorMode::DIM_VELOCITY:
-            case mt::PadColorMode::DIM_FULL:
-                return DIM;
-            default: return OFF;
-        }
+        auto progData = ae.getSelectedProgramData();
+        if( juce::isPositiveAndBelow( Id, 128 ) )
+            right.pads->setBorderColor( Id, ui::Theme::padButtonColour( progData ? progData->padColour[Id].get() : 0 ), 2.0f, juce::dontSendNotification );
     }
 
     void KickPadColorMode::refresh()
     {
         right.pads->clearAllPadData();
 
-        auto progData = ae.getSelectedProgramData();
         right.pads->setActive( -1, true );
         for( auto i = 0; i < 128; i++ )
-        {
-            right.pads->setBorderColor( i, ui::Theme::padButtonColour( progData ? progData->padColour[i].get() : 0 ), 2.0f, juce::dontSendNotification );
-        }
+            refreshPad( i );
 
         samples.clear();
         ae.getProgramSamples( ae.getSelectedProgram(), samples );
@@ -291,32 +219,21 @@ namespace kick_ui
     {
         if( left.selectedColor )
         {
+            // One undo step for the touch / the pad press (All Pads rewrites 128 pads).
+            mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), left.padType.getToggleState() ? "Colour all pads" : "Pad colour" );
             if( !left.padType.getToggleState() )
             {
                 ae.setProgramPadColour( ae.getSelectedProgram(), left.selectedColourId, Id );
-                int pad  = mt::utils::getPadIndexInBank( Id );
-                int bank = mt::utils::getBankIndex( Id );
-                int data = 0;
-                data     = (juce::int8)left.selectedColourId;
-                DBG( "Pad Colour - ButtonClicked" );
-                contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                             setPadDataMessage( contracts::DeviceControlContracts::PadSequence::EN_PAD1 + pad,
-                                                                                contracts::DeviceControlContracts::PadButtonState::StateOn,
-                                                                                data ) );
-
-                right.pads->setBorderColor( pad, juce::Colour( left.selectedColourId ), 2.0f, juce::dontSendNotification );
+                refreshPad( Id );
             }
             else
             {
-                contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                             setAllPadDataColourInfoMessage(
-                                                                 contracts::DeviceControlContracts::PadButtonState::StateOn,
-                                                                 static_cast<juce::int8>( left.selectedColourId ) ) );
-
                 ae.setProgramPadColour( ae.getSelectedProgram(), left.selectedColourId, -1 );
+                refresh();
             }
 
-            refresh();
+            // The hardware pads follow through the supported colour path (programme colours), at once.
+            refreshLEDs();
         }
     }
 
@@ -339,11 +256,13 @@ namespace kick_ui
         hdrComp.setBoundsRelative( .225f, 0.0299f, .195f, 0.0824f );
         left.setBoundsRelative( 0.009f, 0.161f, 0.3346f, 0.8239f );
         right.setBoundsRelative( 0.359f, 0.17f, 0.63f, 0.816f );
-        warningLabel.setBounds( getLocalBounds().removeFromTop( 300 ).withTrimmedTop( 200 ).removeFromLeft( 800 ).withTrimmedLeft( 400 ) );
-        auto bankBounds = getLocalBounds().removeFromLeft( 804 ).withTrimmedLeft( 604 ).removeFromTop( 76 ).withTrimmedTop( 16 ).withTrimmedBottom( 16 );
-        leftNav.setBounds( bankBounds.removeFromLeft( 44 ) );
-        bankLabel.setBounds( bankBounds.removeFromLeft( 112 ) );
-        rightNav.setBounds( bankBounds.removeFromLeft( 44 ) );
+        // Proportional to the 1024 x 600 design size, so other layouts (mobile T layout) scale too.
+        const auto sx = getWidth() / 1024.0f, sy = getHeight() / 600.0f;
+        auto       scaled = [sx, sy]( int X, int Y, int W, int H ) { return juce::Rectangle<int>( juce::roundToInt( X * sx ), juce::roundToInt( Y * sy ), juce::roundToInt( W * sx ), juce::roundToInt( H * sy ) ); };
+        warningLabel.setBounds( scaled( 400, 200, 400, 100 ) );
+        leftNav.setBounds( scaled( 604, 16, 44, 44 ) );
+        bankLabel.setBounds( scaled( 648, 16, 112, 44 ) );
+        rightNav.setBounds( scaled( 760, 16, 44, 44 ) );
     }
 
     void KickPadColorMode::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
@@ -358,7 +277,20 @@ namespace kick_ui
                 case contracts::DeviceControlContracts::EN_PLAY: ae.setSequencePlay( aeSel.sequence, false, true ); break;
                 case contracts::DeviceControlContracts::EN_PLAYSTART: ae.setSequencePlay( aeSel.sequence, true, true ); break;
                 case contracts::DeviceControlContracts::EN_STOP: ae.setSequencePause(); break;
+                // +/- step the bank (as the on-screen arrows do).
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS: rightNav.onClick(); break;
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS: leftNav.onClick(); break;
                 default: break;
+            }
+        }
+        else if( contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )
+        {
+            // The Data Dial steps through the 18 colours.
+            if( contracts::DclContractsHelper::getKnobCode( f_HwMsg ) == contracts::DeviceControlContracts::EN_KNOB_CENTER )
+            {
+                const auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
+                if( value != 0 )
+                    left.stepColour( value );
             }
         }
         else if( contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) )
@@ -367,23 +299,22 @@ namespace kick_ui
             auto             padNo    = contracts::DclContractsHelper::getPadNumber( f_HwMsg );
             auto             padState = contracts::DclContractsHelper::getPadState( f_HwMsg );
             auto             velocity = contracts::DclContractsHelper::getPadVelocity( f_HwMsg );
-            std::vector<int> pads;
 
             padNo += bankOffset;
-            pads.push_back( padNo );
 
-            for( auto& it : pads )
+            // The pad plays its note (audition) and takes the selected colour: press the pad you want to colour.
+            juce::MidiMessage Msg;
+            if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
             {
-                juce::MidiMessage Msg;
-
-                if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
-                    Msg = juce::MidiMessage::noteOn( 1, it, (juce::uint8)velocity );
-                else if( padState == contracts::DeviceControlContracts::BTN_RELEASED )
-                    Msg = juce::MidiMessage::noteOff( 1, it );
-
-                ae.addLiveMidiMsg( ae.getSelected(), Msg );
+                Msg = juce::MidiMessage::noteOn( 1, padNo, (juce::uint8)velocity );
+                buttonClicked( padNo );
             }
-            pads.clear();
+            else if( padState == contracts::DeviceControlContracts::BTN_RELEASED )
+                Msg = juce::MidiMessage::noteOff( 1, padNo );
+            else
+                return; // no other state carries a note: never send an empty message
+
+            ae.addLiveMidiMsg( ae.getSelected(), Msg );
         }
     }
 
@@ -408,7 +339,11 @@ namespace kick_ui
             left.padOff.setCurrentSelection( padOffSel );
             left.padOn.setCurrentSelection( padOnSel );
             left.emptyPadMode.setToggleState( getEmptyColourMode( progData ? progData->colourMode.get() : mt::OFF ), juce::dontSendNotification );
-            ae.setProgramEmptyPadColorMode( ae.getSelectedProgram(), left.emptyPadMode.getToggleState() ? mt::EmptyPadColorMode::Dim : mt::EmptyPadColorMode::Off );
+            // Keep the stored empty-pad setting consistent with the colour mode; written only when it differs
+            // (showing the screen must not change the project otherwise).
+            const auto wantedEmpty = left.emptyPadMode.getToggleState() ? mt::EmptyPadColorMode::Dim : mt::EmptyPadColorMode::Off;
+            if( progData && progData->emptyPadColourMode.get() != wantedEmpty )
+                ae.setProgramEmptyPadColorMode( ae.getSelectedProgram(), wantedEmpty );
         }
         if( !ae.getNumPrograms() && visible )
         {
@@ -472,6 +407,14 @@ namespace kick_ui
 
         ui::themeChanged.connect( [&]() {
         } );
+    }
+
+    // Data Dial: select the previous / next colour of the palette.
+    void KickColorEditorLeftPanel::stepColour( int Delta )
+    {
+        const auto next = pad_color_logic::stepColour( (int)selectedColourId, Delta, 18 );
+        padButtons[next].setToggleState( true, juce::dontSendNotification ); // radio group: the other colours switch off
+        buttonClicked( &padButtons[next] );                                  // take it as the selected colour
     }
 
     void KickColorEditorLeftPanel::resized()
