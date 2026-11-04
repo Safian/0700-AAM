@@ -71,7 +71,7 @@ namespace mt
             }
         }
 
-        trackNameChanged.connect( [&]( MTTrack* T ) { updateTrackList(); } );
+        trackNameConn = trackNameChanged.connect( [&]( MTTrack* T ) { updateTrackList(); } ); // scoped: see ~MTSequence
         updateTrackList();
 
         getBPM();
@@ -212,6 +212,84 @@ namespace mt
         return -1;
     }
 
+    MTSequence::TimeGrid MTSequence::captureTimeGrid()
+    {
+        TimeGrid g;
+        g.ticksPerBar  = getSequenceTempoSettings( 0 ).getTicksPerBar();
+        g.length       = getLength();
+        g.loopStart    = loopStart.get();
+        g.loopEnd      = loopEnd.get();
+        g.loopStartSet = !loopStart.isUsingDefault();
+        g.loopEndSet   = !loopEnd.isUsingDefault();
+        for( const auto& it : tracks )
+            g.trackLengths.push_back( it->isUsingSeqLength() ? -1 : (int)static_cast<MTITrackData&>( *it ).length.get() );
+        return g;
+    }
+
+    void MTSequence::remapTimeGrid( const TimeGrid& Old )
+    {
+        const long long newTpb = getSequenceTempoSettings( 0 ).getTicksPerBar();
+        if( newTpb != Old.ticksPerBar && Old.ticksPerBar > 0 )
+        {
+            // The properties are written straight into the tree (not through the CachedValue setters): every CachedValue
+            // write opens its own undo transaction, and the whole time signature change must undo as ONE step.
+            const int newLen = timesig::remapBars( Old.length, Old.ticksPerBar, newTpb, BAR::MIN, BAR::MAX );
+            vTree.setProperty( IDs::length, newLen, undoManager );
+
+            if( Old.loopStartSet || Old.loopEndSet )
+            {
+                const auto loop = timesig::remapLoop( Old.loopStart, Old.loopEnd, Old.length, newLen, Old.ticksPerBar, newTpb );
+                if( Old.loopStartSet ) vTree.setProperty( IDs::loopStart, loop.start, undoManager );
+                if( Old.loopEndSet ) vTree.setProperty( IDs::loopEnd, loop.end, undoManager );
+            }
+            if( !Old.loopEndSet && newLen < Old.loopEnd ) // the default loop end must not lie beyond the sequence (as setLength does)
+                vTree.setProperty( IDs::loopEnd, newLen, undoManager );
+
+            for( size_t i = 0; i < tracks.size() && i < Old.trackLengths.size(); ++i )
+                if( Old.trackLengths[i] > 0 )
+                    tracks[i]->getVT().setProperty( IDs::length, juce::jmin( newLen, timesig::remapBars( Old.trackLengths[i], Old.ticksPerBar, newTpb, BAR::MIN, BAR::MAX ) ), undoManager );
+        }
+        refreshTimeGrid();
+    }
+
+    int MTSequence::setOwnTimeSignature( int Numerator, int Denominator )
+    {
+        if( !timesig::isValid( Numerator, Denominator ) )
+            return -1;
+        const bool master = isUsingMasterBPM();
+        if( ( master ? manager.getNumTempoSettings() : getNumTempoSettings() ) != 1 )
+            return -2;
+
+        if( undoManager ) undoManager->beginNewTransaction( "Time Signature" );
+        const auto old = captureTimeGrid();
+        // raw tree writes: one undo transaction (see remapTimeGrid)
+        auto tempo = master ? manager.getTempoState( 0 ) : getTempoState( 0 );
+        tempo.setProperty( IDs::num, Numerator, undoManager );
+        tempo.setProperty( IDs::den, Denominator, undoManager );
+        remapTimeGrid( old );
+        kick_log( "info", "[INFO] [SEQ] Time signature of '%s' set to %d/%d (%s): %d -> %d bars\n", getName().toRawUTF8(), Numerator, Denominator,
+                  master ? "global" : "own", old.length, getLength() );
+        return 0;
+    }
+
+    void MTSequence::refreshTimeGrid()
+    {
+        lengthChangeHandler();
+        {
+            const juce::ScopedLock sl( lock );
+            for( const auto& it : tracks )
+                it->refreshLength();
+        }
+        const int bar = juce::jlimit<int>( 0, juce::jmax<int>( 0, getLength() - 1 ), sequencePlayhead.bnb.bar );
+        const auto& ts          = getSequenceTempoSettings( (unsigned int)bar );
+        const bool  gridChanged = ( (unsigned int)ts.getTicksPerBar() != ticksPerBar.load() ) || ( (unsigned int)ts.getTicksPerBeat() != ticksPerBeat.load() );
+        initializeTickDataFromTempoSettings( ts );
+        // Playing: the bar / beat counters (metronome, clock grid) still run on the old grid. Re-seek to the same tick:
+        // the tick thread applies it at the start of its next onTick and re-derives the phase from the new grid.
+        if( gridChanged && isPlaying )
+            seekToTick( getSeekTick() );
+    }
+
     unsigned int MTSequence::getLengthInTicks() { return getTicksUpto( getLength() ); }
 
     const double MTSequence::getLengthInSeconds()
@@ -288,6 +366,7 @@ namespace mt
         if( getTrack( TrkName ) || ( tracks.size() >= MAX_TRACKS ) )
             return -1;
 
+        if( undoManager ) undoManager->beginNewTransaction( "Create track" ); // one undo step per create / delete
         juce::ValueTree vt = createVTree( IDs::TRACK,
                                           IDs::name, TrkName );
         vTree.appendChild( vt, undoManager );
@@ -319,6 +398,13 @@ namespace mt
 
     int MTSequence::deleteTrack( int Index )
     {
+        if( juce::isPositiveAndBelow( Index, tracks.size() ) && undoManager )
+            undoManager->beginNewTransaction( "Delete track" );
+        return removeTrackAt( Index );
+    }
+
+    int MTSequence::removeTrackAt( int Index )
+    {
         if( juce::isPositiveAndBelow( Index, tracks.size() ) )
         {
             const juce::ScopedLock sl( lock );
@@ -336,10 +422,40 @@ namespace mt
         return deleteTrack( getTrackIndex( TrkName ) );
     }
 
+    bool MTSequence::reconcileTracksWithTree()
+    {
+        auto tracksVT   = vTree.getChildWithName( IDs::TRACKS );
+        auto targetTree = tracksVT.isValid() ? tracksVT : vTree;
+
+        std::vector<juce::ValueTree> nodes;
+        for( auto it : targetTree )
+            if( it.hasType( IDs::TRACK ) )
+                nodes.push_back( it );
+
+        bool changed = false;
+        {
+            const juce::ScopedLock sl( lock );
+            changed = treesync::reconcile(
+                tracks, nodes,
+                []( MTTrack& T, const juce::ValueTree& N ) { return T.getVT() == N; },
+                [&]( const juce::ValueTree& N ) -> std::unique_ptr<MTTrack> {
+                    juce::ValueTree vt = N;
+                    return std::make_unique<MTTrack>( manager, *this, undoManager, vt );
+                },
+                []( MTTrack& ) {} );
+        }
+        if( changed )
+        {
+            selectedTrack = juce::jlimit<int>( tracks.empty() ? -1 : 0, (int)tracks.size() - 1, selectedTrack );
+            updateTrackList();
+        }
+        return changed;
+    }
+
     void MTSequence::deleteAllTracks()
     {
         while( 0 < getNumTracks() )
-            deleteTrack( 0 );
+            removeTrackAt( 0 ); // the caller owns the undo transaction (Clear sequence is one step)
     }
 
     int MTSequence::getTrackIndex( const juce::String& TrkName )

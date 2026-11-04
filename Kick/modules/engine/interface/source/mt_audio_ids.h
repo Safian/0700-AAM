@@ -210,6 +210,7 @@ namespace mt
         DECLARE_ID( CVStartNote )
 
         DECLARE_ID( MIDIPort )
+        DECLARE_ID( monitor ) // track Monitor: 0 Off, 1 In, 2 Auto (mt::trackmonitor)
         DECLARE_ID( BankLSB )
         DECLARE_ID( BankMSB )
         DECLARE_ID( ProgCH )

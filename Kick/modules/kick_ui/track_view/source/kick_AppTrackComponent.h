@@ -80,9 +80,13 @@ private:
     bool muteData{ false };
     bool muteDueToSoloData{ false };
 
+    void monitorValueHandler();
+    void paintOverChildren( juce::Graphics& g ) override;
     void resized() override;
     void handleAsyncUpdate() override;
     void visibilityChanged() override;
+
+    int monitorMode{ mt::trackmonitor::Default }; // mirror of the track's Monitor setting, for painting
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( AppTrackDisplay )

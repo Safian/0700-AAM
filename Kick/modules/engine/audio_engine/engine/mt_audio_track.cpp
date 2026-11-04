@@ -67,7 +67,8 @@ namespace mt
         */
 
         // Setup handler for program being deleted
-        programBeingDeleted.connect( [this]( MTIProgram* MTIProg ) {
+        // (scoped: a destroyed track - e.g. after an undo of its creation - must not stay connected to the static signal)
+        programDeletedConn = programBeingDeleted.connect( [this]( MTIProgram* MTIProg ) {
             if( program.load() == MTIProg )
             {
                 setProgram( nullptr );
@@ -760,7 +761,15 @@ namespace mt
         }
     }
 
-    int MTTrack::processIncomingMidiMessage( const juce::MidiMessage& Msg )
+    bool MTTrack::isInputMonitored( const juce::MidiMessage& Msg ) const noexcept
+    {
+        const auto* raw = Msg.getRawData();
+        const int   n   = Msg.getRawDataSize();
+        return trackmonitor::passes( getMonitor(), recArmed.load( std::memory_order_relaxed ), isPlaying.load(),
+                                         n > 0 ? raw[0] : 0, n > 1 ? raw[1] : 0, n > 2 ? raw[2] : 0 );
+    }
+
+    int MTTrack::processIncomingMidiMessage( const juce::MidiMessage& Msg, bool Monitored )
     {
         if( Msg.isNoteOnOrOff() ) // RECALL buffer: raw (pre-transpose) note, no allocation, even if the track is muted
         {
@@ -789,6 +798,8 @@ namespace mt
                 }
             }
         }
+        if( !Monitored ) // Monitor Off / Auto: captured above, but not handed to the program
+            return 0;
         if( Msg.isNoteOnOrOff() && arpFilterLive( Msg ) ) // arpeggiator takes the note; its output is emitted by onTick
             return 0;
         if( Msg.isPitchWheel() ) // G12: remember a moved live bend so stop() centres only then
@@ -960,7 +971,7 @@ namespace mt
     int MTTrack::processIncomingMidiMessage( const MTMidiMessage& Msg )
     {
         if( isMidiInAllowed( Msg.source->getName(), Msg.message.getChannel() ) )
-            return processIncomingMidiMessage( Msg.message );
+            return processIncomingMidiMessage( Msg.message, isInputMonitored( Msg.message ) );
         return -1;
     }
 

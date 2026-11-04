@@ -101,6 +101,7 @@ namespace mt
         inline juce::String getBank() const { return bank; };
 
         void performUndo();
+        void syncEngineWithTree();
         void performRedo();
 
         // Automation mode (automation::Mode: 0 Off, 1 Read, 2 Write), global. Readable from any thread (tick thread
