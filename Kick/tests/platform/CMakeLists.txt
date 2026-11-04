@@ -274,6 +274,16 @@ add_executable(kick-platform-command-tests PlatformCommandTests.cpp)
 add_test(NAME kick-platform-command COMMAND kick-platform-command-tests)
 set_tests_properties(kick-platform-command PROPERTIES TIMEOUT 10)
 
+# MPC hidden top-level window: reallyContains() is false, contains() true (why KeyboardComponent::xyToNote uses contains()).
+add_executable(kick-hidden-window-hit-tests HiddenWindowHitTestTests.cpp)
+target_link_libraries(kick-hidden-window-hit-tests PRIVATE juce::juce_gui_basics)
+target_compile_definitions(kick-hidden-window-hit-tests PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
+if(APPLE)
+    target_link_libraries(kick-hidden-window-hit-tests PRIVATE "-framework Carbon")
+endif()
+add_test(NAME kick-hidden-window-hit COMMAND kick-hidden-window-hit-tests)
+set_tests_properties(kick-hidden-window-hit PROPERTIES TIMEOUT 10)
+
 # Touch piano pure logic (W3-A): multi-finger state machine, glissando note-offs, velocity modes, bend mapping, sustain held notes; JUCE-free, header only.
 add_executable(kick-piano-logic-tests PianoLogicTests.cpp)
 add_test(NAME kick-piano-logic COMMAND kick-piano-logic-tests)

@@ -718,7 +718,11 @@ namespace ui
 
     int KeyboardComponent::xyToNote( juce::Point<float> pos, float& mousePositionVelocity )
     {
-        if( !reallyContains( pos.toInt(), false ) )
+        // Own bounds test, NOT reallyContains() / contains(): both walk up to the top-level window (reallyContains() through
+        // its getComponentAt(), which is nullptr for an invisible window; contains() through the window's peer). That is the
+        // MPC (hidden window, touches delivered straight to mouseDown/Drag/Up): every key lookup failed and no note ever
+        // sounded. The event was already delivered to this component, so its local bounds are all that is needed.
+        if( !getLocalBounds().toFloat().contains( pos ) )
             return -1;
 
         auto p = pos;
