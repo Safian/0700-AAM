@@ -40,6 +40,22 @@ int main()
     CHECK( !needsClearConfirm( true, 4, 8 ) );
     CHECK( !needsClearConfirm( false, 4, 4 ) );
 
+    // ---- LO-09: Sequence time signature and beats calculation
+    CHECK( calculateTotalBeats( 4, 4 ) == 16 );
+    CHECK( calculateTotalBeats( 2, 3 ) == 6 );
+    CHECK( calculateTotalBeats( 4, 6 ) == 24 );
+    CHECK( calculateTotalBeats( 0, 4 ) == 4 ); // clamped to >= 1
+
+    CHECK( std::fabs( calculateBeatWidth( 800.0f, 16 ) - 50.0f ) < 1e-4f );
+    CHECK( calculateBeatWidth( 0.0f, 16 ) == 0.0f );
+    CHECK( calculateBeatWidth( 800.0f, 0 ) == 0.0f );
+
+    // Safe PPQ resolution (no ARM zero-division crash)
+    CHECK( safePpqResolution( 4 ) == 480 );
+    CHECK( safePpqResolution( 2 ) == 960 );
+    CHECK( safePpqResolution( 0 ) == 960 );
+    CHECK( safePpqResolution( -1 ) == 960 );
+
     if( g_fail == 0 )
         std::printf( "LooperLogicTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;
