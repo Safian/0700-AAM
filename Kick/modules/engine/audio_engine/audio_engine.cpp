@@ -34,6 +34,8 @@
 // Module internal include files...
 
 // Module source files...
+#include "engine/mt_clap_effect.cpp"
+#include "engine/mt_airwindopedia.cpp"
 #include "engine/mt_audio_interface.cpp"
 #include "engine/mt_audio_inserts_types.cpp"
 #include "engine/mt_audio_interface_types.cpp"

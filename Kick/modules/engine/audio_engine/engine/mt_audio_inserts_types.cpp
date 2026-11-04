@@ -19,6 +19,8 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+#include "mt_clap_effect.h"
+
 namespace mt
 {
 
@@ -33,24 +35,61 @@ namespace mt
             vt.setProperty( IDs::bypass, synth->isAllEffectsBypassed(), um );
             std::vector<float> vals;
 
-            for( auto i = 0; i < numIns; ++i )
+            for( size_t i = 0; i < numIns; ++i )
             {
-                synth->serializeEffect( i, vals );
-                auto state = VectorToJuceVar<float>( vals );
+                auto* obj = synth->getEffectObject( static_cast<unsigned int>( i ) );
+                auto* clap = dynamic_cast<ClapEffect*>( obj );
 
-                auto childVT = vt.getChild( i );
-                if( childVT.isValid() )
+                auto childVT = vt.getChild( static_cast<int>( i ) );
+                if( !childVT.isValid() )
                 {
-                    childVT.setProperty( IDs::name, juce::String( insNames[i] ), um );
-                    childVT.setProperty( IDs::state, state, um );
+                    childVT = createVTree( IDs::Insert, IDs::name, juce::String( insNames[i] ) );
+                    vt.addChild( childVT, static_cast<int>( i ), um );
                 }
                 else
                 {
-                    auto insVT = createVTree( IDs::Insert,
-                                              IDs::name, juce::String( insNames[i] ),
-                                              IDs::state, state );
-                    vt.addChild( insVT, i, um );
+                    childVT.setProperty( IDs::name, juce::String( insNames[i] ), um );
                 }
+
+                if( clap != nullptr )
+                {
+                    childVT.setProperty( "isClap", true, um );
+                    childVT.setProperty( "pluginId", juce::String( clap->getPluginId() ), um );
+                    childVT.setProperty( "version", juce::String( clap->getPluginVersion() ), um );
+                    childVT.setProperty( "path", juce::String( clap->getPluginPath() ), um );
+                    childVT.setProperty( "missing", clap->isMissing(), um );
+
+                    std::vector<uint8_t> blob;
+                    clap->saveState( blob );
+                    if( !blob.empty() )
+                    {
+                        juce::MemoryBlock mb( blob.data(), blob.size() );
+                        childVT.setProperty( "stateBlob", mb.toBase64Encoding(), um );
+                    }
+                    else
+                    {
+                        childVT.removeProperty( "stateBlob", um );
+                    }
+                }
+                else
+                {
+                    childVT.setProperty( "isClap", false, um );
+                    childVT.removeProperty( "pluginId", um );
+                    childVT.removeProperty( "version", um );
+                    childVT.removeProperty( "path", um );
+                    childVT.removeProperty( "missing", um );
+                    childVT.removeProperty( "stateBlob", um );
+
+                    synth->serializeEffect( static_cast<unsigned int>( i ), vals );
+                    auto state = VectorToJuceVar<float>( vals );
+                    childVT.setProperty( IDs::state, state, um );
+                }
+            }
+
+            // Remove any excess children in ValueTree
+            while( vt.getNumChildren() > static_cast<int>( numIns ) )
+            {
+                vt.removeChild( vt.getNumChildren() - 1, um );
             }
         }
     }
@@ -69,11 +108,37 @@ namespace mt
                 if( insVT.isValid() )
                 {
                     auto name  = insVT.getProperty( IDs::name, "" ).toString();
-                    auto state = insVT.getProperty( IDs::state );
-                    auto vals  = JuceVarToVector<float>( state );
+                    bool isClap = insVT.getProperty( "isClap", false );
+                    auto pluginId = insVT.getProperty( "pluginId", "" ).toString();
 
-                    synth->addEffect( name.toStdString(), i );
-                    synth->deserializeEffect( i, vals );
+                    if( isClap || pluginId.isNotEmpty() )
+                    {
+                        auto version = insVT.getProperty( "version", "" ).toString();
+                        auto path = insVT.getProperty( "path", "" ).toString();
+                        auto stateStr = insVT.getProperty( "stateBlob", "" ).toString();
+                        juce::MemoryBlock mb;
+                        if( stateStr.isNotEmpty() )
+                            mb.fromBase64Encoding( stateStr );
+                        std::vector<uint8_t> stateBytes( mb.getSize() );
+                        if( !stateBytes.empty() )
+                            std::memcpy( stateBytes.data(), mb.getData(), stateBytes.size() );
+
+                        auto clapObj = std::make_unique<ClapEffect>();
+                        bool loaded = clapObj->loadPluginById( pluginId.toStdString(), path.toStdString(), 48000.0, 512, stateBytes );
+                        if( !loaded )
+                        {
+                            clapObj->markMissing( pluginId.toStdString(), name.toStdString(), version.toStdString(), path.toStdString(), stateBytes );
+                        }
+                        synth->addEffect( std::move( clapObj ), static_cast<unsigned int>( i ) );
+                    }
+                    else
+                    {
+                        auto state = insVT.getProperty( IDs::state );
+                        auto vals  = JuceVarToVector<float>( state );
+
+                        synth->addEffect( name.toStdString(), static_cast<unsigned int>( i ) );
+                        synth->deserializeEffect( static_cast<unsigned int>( i ), vals );
+                    }
                 }
             }
         }
@@ -90,6 +155,32 @@ namespace mt
         for( const auto& it : insParams )
         {
             Info.params.emplace_back( MTInsertsParamInfo{ juce::String( it.name ), juce::String( it.unit ), juce::String( it.displayValue ), it.value } );
+        }
+
+        auto* obj = synth->getEffectObject( Position );
+        if( auto* clap = dynamic_cast<ClapEffect*>( obj ) )
+        {
+            Info.isClap = true;
+            Info.pluginId = juce::String( clap->getPluginId() );
+            Info.version = juce::String( clap->getPluginVersion() );
+            Info.path = juce::String( clap->getPluginPath() );
+            Info.latency = clap->getLatency();
+            Info.tail = clap->getTail();
+            Info.missing = clap->isMissing();
+            Info.statusMessage = juce::String( clap->getStatusMessage() );
+            Info.supportsGui = clap->getHost().supportsGui();
+        }
+        else
+        {
+            Info.isClap = false;
+            Info.pluginId = "";
+            Info.version = "";
+            Info.path = "";
+            Info.latency = 0;
+            Info.tail = 0;
+            Info.missing = false;
+            Info.statusMessage = "";
+            Info.supportsGui = false;
         }
     }
 
@@ -296,5 +387,44 @@ namespace mt
             insertsSerialize( state, pImpl->synth ); // Also, save effects latest state to value tree.
             getInserts();
         }
+    }
+
+    int MTIInsertsInterface::swapInserts( unsigned int fromPosition, unsigned int toPosition )
+    {
+        int retVal = -1;
+        if( pImpl->synth )
+        {
+            retVal = pImpl->synth->swapEffects( fromPosition, toPosition );
+            if( retVal == 0 )
+            {
+                insertsSerialize( state, pImpl->synth );
+                getInserts();
+            }
+        }
+        return retVal;
+    }
+
+    int MTIInsertsInterface::moveInsert( unsigned int fromPosition, unsigned int toPosition )
+    {
+        int retVal = -1;
+        if( pImpl->synth )
+        {
+            retVal = pImpl->synth->moveEffect( fromPosition, toPosition );
+            if( retVal == 0 )
+            {
+                insertsSerialize( state, pImpl->synth );
+                getInserts();
+            }
+        }
+        return retVal;
+    }
+
+    ClapEffect* MTIInsertsInterface::getClapEffect( unsigned int Position )
+    {
+        if( pImpl->synth )
+        {
+            return dynamic_cast<ClapEffect*>( pImpl->synth->getEffectObject( Position ) );
+        }
+        return nullptr;
     }
 }
