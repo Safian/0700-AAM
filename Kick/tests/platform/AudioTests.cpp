@@ -3,6 +3,7 @@
 #include <AudIO_juce/DeviceBlocks.h>
 #include "../../clap_host/tests/AllocationGuard.h"
 #include <iostream>
+#include <thread>
 #if defined(__linux__) || defined(__APPLE__)
  #include <csignal>
  #include <sys/resource.h>
@@ -105,6 +106,7 @@ int main() {
         check(looper.isPreviewing() && block.getOutputBuffer(0)[0] == .125f && block.getOutputBuffer(1)[479] == -.25f, "loop preview preserves both endpoints across wrap");
         looper.setOverdub(true); looper.start();
         forbidAllocation = true; looper.process(block); forbidAllocation = false;
+        check(block.getOutputBuffer(0)[0] == .125f && block.getOutputBuffer(1)[479] == -.25f, "LO-01: loop overdub outputs previous cycle");
         looper.stopRecording(); check(looper.getAudioBuffer().getSample(0, 0) == .25f, "loop overdub retains the previous cycle");
         looper.undo(); check(looper.getAudioBuffer().getSample(0, 0) == .125f, "loop undo restores previous cycle");
         looper.redo(); check(looper.getAudioBuffer().getSample(0, 0) == .25f, "loop redo restores overdub");
@@ -112,6 +114,111 @@ int main() {
         const double& position = looper.getProgress(); looper.start();
         forbidAllocation = true; looper.process(block); forbidAllocation = false;
         check(waitFor([&] { return std::abs(position - .5) < 1e-9; }), "retained looper progress reference updates on the message thread");
+    }
+    {
+        // LO-04: Gain and pan are applied ONLY on playback, not baked into recording
+        recorder.reset();
+        recorder.setLength(.01);
+        recorder.setGain(.5f);
+        recorder.setPan(0.0f);
+        fill(1.0f, 1.0f);
+        recorder.startRecording();
+        render();
+        check(recorder.getAudioBuffer().getSample(0, 0) == 1.0f, "LO-04: clean input recorded, gain not baked in");
+        recorder.startPreview();
+        render();
+        check(block.getOutputBuffer(0)[0] == 0.5f, "LO-04: gain applied once on preview playback");
+        recorder.setGain(1.0f);
+    }
+    {
+        // LO-11: One-shot recording automatically switches from recording to preview on loop wrap
+        mt::Looper looper(engine);
+        looper.prepareToPlay(48000, frames);
+        looper.setLength(.01);
+        looper.setOneShotRecord(true);
+        fill(.3f, -.3f);
+        looper.start();
+        check(looper.isRecording() && !looper.isPreviewing(), "one-shot looper starts recording");
+        forbidAllocation = true; looper.process(block); forbidAllocation = false;
+        check(!looper.isRecording() && looper.isPreviewing(), "LO-11: one-shot record transitions to playback at loop wrap");
+    }
+    {
+        // Problem (4) & SA-20: Stress test concurrent getAudioBuffer() + process()
+        // Verify process() never drops blocks, total processed frames is exactly continuous
+        mt::SampleRecorder stressRecorder(engine);
+        stressRecorder.prepareToPlay(48000, frames);
+        stressRecorder.setLength(1.0); // 1.0s = 48000 frames
+        fill(.1f, .2f);
+        stressRecorder.startRecording();
+
+        std::atomic<bool> stopStress{false};
+        std::atomic<int> snapshotCount{0};
+        std::thread uiThread([&] {
+            while (!stopStress.load()) {
+                auto& buf = stressRecorder.getAudioBuffer();
+                (void)buf.getNumSamples();
+                snapshotCount.fetch_add(1);
+            }
+        });
+
+        constexpr int numBlocks = 100;
+        for (int i = 0; i < numBlocks; ++i) {
+            stressRecorder.process(block);
+        }
+        stopStress.store(true);
+        uiThread.join();
+
+        check(snapshotCount.load() > 0, "concurrent UI snapshots executed during processing");
+        check(stressRecorder.getProcessedFrames() == numBlocks * frames, "continuous position: zero dropped blocks under snapshot load");
+        check(stressRecorder.getAudioBuffer().getNumSamples() == numBlocks * frames, "audio buffer valid frames matches processed frames exactly");
+    }
+    {
+        // SA-02: Sample-accurate marker FIFO
+        mt::SampleRecorder markRec(engine);
+        markRec.prepareToPlay(48000, frames);
+        markRec.setLength(1.0);
+        fill(.2f, .2f);
+        markRec.startRecording();
+        markRec.process(block); // 480 frames processed
+
+        markRec.pushMarker(5); // stamps at exactly frame 480
+        auto markers = markRec.getMarkers();
+        check(markers.size() == 1, "marker pushed");
+        check(markers[0].id == 5, "marker pad id");
+        check(markers[0].frame == 480, "marker stamped with exact audio engine frame");
+        check(std::abs(markers[0].seconds - 480.0 / 48000.0) < 1e-9, "marker exact seconds");
+    }
+    {
+        // SA-07: Lock-free waveform peak cache
+        mt::SampleRecorder peakRec(engine);
+        peakRec.prepareToPlay(48000, frames);
+        peakRec.setLength(1.0);
+        fill(-.7f, .85f);
+        peakRec.startRecording();
+        peakRec.process(block); // 480 frames
+        check(peakRec.getPeakCount() >= 1, "peak cache generated blocks");
+        auto peaks = peakRec.getWaveformPeaks(100);
+        check(!peaks.empty(), "retrieved waveform peaks");
+        check(peaks[0].minSample <= -.65f && peaks[0].maxSample >= .80f, "peaks match signal amplitudes");
+    }
+    {
+        // LO-07: Looper save exports beat-accurate integer cycle / bar length
+        mt::Looper looper(engine);
+        looper.prepareToPlay(48000, frames);
+        looper.setLength(.02); // 960 frames
+        looper.setBars(2);     // 2 bars of 480 frames each
+        fill(.1f, .2f);
+        looper.start();
+        // Render 1 block (480 frames = 1 bar out of 2)
+        looper.process(block);
+        const auto loopFile = juce::File::getSpecialLocation(juce::File::tempDirectory).getNonexistentChildFile("kick-loop-export", ".wav", false);
+        looper.save(loopFile.getFullPathName());
+        check(looper.lastError().isEmpty(), "looper save transaction");
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatReader> loopReader(wav.createReaderFor(loopFile.createInputStream().release(), true));
+        check(loopReader && loopReader->lengthInSamples == 480, "LO-07: loop save aligned to integer bar frames");
+        loopReader.reset();
+        loopFile.deleteFile();
     }
     mt::ADSR envelope; envelope.setSampleRate(48000); envelope.setParameters(48, 0, 48, 48, 64); envelope.gate(true);
     double peak = 0; for (int i = 0; i < 200; ++i) { const auto value = envelope(); check(std::isfinite(value), "finite envelope"); peak = std::max(peak, value); }
