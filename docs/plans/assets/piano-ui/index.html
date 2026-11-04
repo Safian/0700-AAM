@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kick Piano - UI mockup index</title>
+<link rel="stylesheet" href="style.css">
+<style>
+ .hub{max-width:1240px;margin:0 auto;padding:32px 24px 48px;color:#ddd}
+ .hub h1{margin:0 0 4px;font-size:26px;letter-spacing:.14em} .hub h1 b{color:#ffb608}
+ .hub p{color:#b2b2b2;max-width:70ch;margin:4px 0 24px}
+ .hub h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#9a9a9a;margin:32px 0 12px}
+ .grid{display:flex;flex-wrap:wrap;gap:24px}
+ .ic{position:relative;display:block;width:400px;color:inherit;border:1px solid #2a2a2a;border-radius:8px;background:#1a1a1a;overflow:hidden;transition:border-color .12s,transform .12s}
+ .ic:hover,.ic:focus-within{border-color:#ffb608;transform:translateY(-2px)}
+ .stretched{color:inherit;text-decoration:none;outline:none} .stretched::after{content:"";position:absolute;inset:0}
+ .ic:focus-within{box-shadow:0 0 0 2px #00aaee}
+ .thumb{position:relative;overflow:hidden;background:#0c0c0d}
+ .thumb iframe{border:0;transform-origin:0 0;pointer-events:none;display:block}
+ .cap{padding:10px 12px;display:flex;flex-direction:column;gap:2px} .cap span{color:#9a9a9a;font-size:12px}
+ .sw{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
+ .sw li{width:104px;font-size:11px;color:#b2b2b2} .sw i{display:block;height:32px;border-radius:4px;border:1px solid #000;margin-bottom:4px} .sw b{display:block;color:#ddd}
+ .spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;font-size:13px;color:#b2b2b2}
+ .spec div{padding:12px;border:1px solid #2a2a2a;border-radius:6px;background:#1a1a1a}
+ .spec code{color:#ffb608}
+ .states{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+</style>
+</head>
+<body>
+<div class="hub">
+<h1>KICK<b> PIANO</b></h1>
+<p>Static design mockup of a piano CLAP plugin UI (working title). No audio engine. Click a card to open the variant; all variants are keyboard navigable (Tab, arrows, Esc). Thumbnails are live iframes.</p>
+<div class="grid"><div class="ic"><div class="thumb" style="width:400px;height:250px"><iframe src="main-dark.html?embed" title="Main view - dark (preview)" tabindex="-1" loading="lazy" style="width:960px;height:600px;transform:scale(0.4167)"></iframe></div><div class="cap"><a class="stretched" href="main-dark.html"><b>Main view - dark</b></a><span>960 x 600 default, 640-1280 responsive</span></div></div><div class="ic"><div class="thumb" style="width:400px;height:250px"><iframe src="main-light.html?embed" title="Main view - light (loading) (preview)" tabindex="-1" loading="lazy" style="width:960px;height:600px;transform:scale(0.4167)"></iframe></div><div class="cap"><a class="stretched" href="main-light.html"><b>Main view - light (loading)</b></a><span>Same layout, light theme, sample set still loading</span></div></div><div class="ic"><div class="thumb" style="width:400px;height:250px"><iframe src="compact.html?embed" title="Compact 640 x 400 (preview)" tabindex="-1" loading="lazy" style="width:640px;height:400px;transform:scale(0.6250)"></iframe></div><div class="cap"><a class="stretched" href="compact.html"><b>Compact 640 x 400</b></a><span>Tabbed sections, shortened keyboard</span></div></div><div class="ic"><div class="thumb" style="width:400px;height:250px"><iframe src="loading.html?embed" title="First launch / download (preview)" tabindex="-1" loading="lazy" style="width:960px;height:600px;transform:scale(0.4167)"></iframe></div><div class="cap"><a class="stretched" href="loading.html"><b>First launch / download</b></a><span>Sample download: downloading / paused / error</span></div></div><div class="ic"><div class="thumb" style="width:400px;height:250px"><iframe src="about.html?embed" title="About / credits (preview)" tabindex="-1" loading="lazy" style="width:960px;height:600px;transform:scale(0.4167)"></iframe></div><div class="cap"><a class="stretched" href="about.html"><b>About / credits</b></a><span>Licence, sample attribution, version</span></div></div></div>
+<h2>Palette (from Kick theme.xml, extended)</h2>
+<ul class="sw"><li><i style="background:#121212"></i><b>bg-0</b><span>#121212</span></li><li><i style="background:#1d1d1d"></i><b>bg-1</b><span>#1d1d1d</span></li><li><i style="background:#2a2a2a"></i><b>panel</b><span>#2a2a2a</span></li><li><i style="background:#171717"></i><b>well</b><span>#171717</span></li><li><i style="background:#3a3a3a"></i><b>cap</b><span>#3a3a3a</span></li><li><i style="background:#ffb608"></i><b>accent</b><span>#ffb608</span></li><li><i style="background:#00aaee"></i><b>info</b><span>#00aaee</span></li><li><i style="background:#0fe389"></i><b>ok</b><span>#0fe389</span></li><li><i style="background:#ff4a3d"></i><b>error</b><span>#ff4a3d</span></li><li><i style="background:#3daeff"></i><b>vel 1</b><span>#3daeff</span></li><li><i style="background:#1fd3a0"></i><b>vel 2</b><span>#1fd3a0</span></li><li><i style="background:#ffd02a"></i><b>vel 3</b><span>#ffd02a</span></li><li><i style="background:#ff8a1a"></i><b>vel 4</b><span>#ff8a1a</span></li><li><i style="background:#ff3b30"></i><b>vel 5</b><span>#ff3b30</span></li></ul>
+<h2>Type and spacing</h2>
+<div class="spec">
+ <div><b>Sans</b>: Myriad Pro (Kick theme font) then system UI fonts. Labels 10-11 px caps +0.08em, body 12-14 px, values mono 11-13 px.</div>
+ <div><b>Grid</b>: 4 px base; panel padding 8/12, gap 8 (12 at &ge;1100 px). Controls 28-32 px high, knob 40-62 px.</div>
+ <div><b>Accent rule</b>: amber = value / active / selected; cyan = bipolar value, MIDI, focus; red only for clip/error.</div>
+</div>
+<h2>Control states</h2>
+<div class="plugin" data-theme="dark" style="--pw:100%;aspect-ratio:auto;display:block;padding:16px;container-type:normal">
+<div class="states">
+ <span class="lab">Button</span><button class="btn" type="button">Normal</button><button class="btn" type="button" style="border-color:var(--accent);color:var(--accent-txt)">Hover</button><button class="btn on" type="button">Active</button><button class="btn" type="button" style="outline:2px solid var(--info);outline-offset:2px">Focus</button><button class="btn" type="button" disabled>Disabled</button><button class="btn primary" type="button">Primary</button>
+ <span class="lab" style="margin-left:16px">Toggle</span><button class="tog" type="button" aria-pressed="false"><span class="led"></span>Off</button><button class="tog" type="button" aria-pressed="true"><span class="led"></span>On</button><button class="tog" type="button" aria-pressed="false" aria-disabled="true"><span class="led"></span>Disabled</button>
+ <span class="lab" style="margin-left:16px">Knob</span><div class="ctl knob" role="slider" tabindex="0" aria-label="Normal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="60" aria-valuetext="60" data-v="0.6" data-def="0.6" data-min="0" data-max="100" data-unit="" data-dec="0"><div class="dial"><svg viewBox="0 0 48 48" aria-hidden="true"><path class="k-track" pathLength="100" d="M9.86 38.14A20 20 0 1 1 38.14 38.14"/><path class="k-val" pathLength="100" d="M9.86 38.14A20 20 0 1 1 38.14 38.14" style="stroke-dasharray:60.00 200"/></svg><div class="cap"><i class="ptr" style="--rot:27.0deg"></i></div></div><span class="val">60</span><span class="lab">Normal</span></div><div class="ctl knob bip" role="slider" tabindex="0" aria-label="Bipolar" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="50" aria-valuetext="+50%" data-v="0.75" data-def="0.75" data-min="-100" data-max="100" data-unit="%" data-dec="0" data-sign="1"><div class="dial"><svg viewBox="0 0 48 48" aria-hidden="true"><path class="k-track" pathLength="100" d="M9.86 38.14A20 20 0 1 1 38.14 38.14"/><path class="k-val" pathLength="100" d="M9.86 38.14A20 20 0 1 1 38.14 38.14" style="stroke-dasharray:25.00 200;stroke-dashoffset:-50.00"/></svg><div class="cap"><i class="ptr" style="--rot:67.5deg"></i></div></div><span class="val">+50%</span><span class="lab">Bipolar</span></div><div class="ctl knob" role="slider" tabindex="0" aria-label="Disabled" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40" aria-valuetext="40" data-v="0.4" data-def="0.4" data-min="0" data-max="100" data-unit="" data-dec="0" aria-disabled="true"><div class="dial"><svg viewBox="0 0 48 48" aria-hidden="true"><path class="k-track" pathLength="100" d="M9.86 38.14A20 20 0 1 1 38.14 38.14"/><path class="k-val" pathLength="100" d="M9.86 38.14A20 20 0 1 1 38.14 38.14" style="stroke-dasharray:40.00 200"/></svg><div class="cap"><i class="ptr" style="--rot:-27.0deg"></i></div></div><span class="val">40</span><span class="lab">Disabled</span></div>
+</div></div>
+</div>
+<script src="ui.js" defer></script>
+</body>
+</html>
