@@ -148,7 +148,14 @@ juce::File getAppDirs( DirType T )
     else if( T == MTLog )
         return makeDir( resolveLinuxPath( "/data/logs", "/home/Kick/logs" ) );
     else if( T == MTPrefs )
+    {
+        // /data is the writable partition of the device; the fallback is on the read-only root file system, where the
+        // preferences, menu layout and insert presets could never be saved (MPC, 2026-11-04: no /data/prefs, brightness 0, empty settings).
+        const juce::File data( "/data" );
+        if( data.isDirectory() )
+            return makeDir( data.getChildFile( "prefs" ) );
         return makeDir( resolveLinuxPath( "/data/prefs", "/home/Kick/prefs" ) );
+    }
 #endif
 
     return juce::File::getSpecialLocation( juce::File::tempDirectory );
