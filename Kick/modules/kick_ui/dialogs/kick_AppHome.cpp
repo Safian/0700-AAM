@@ -545,6 +545,11 @@ namespace kick_ui
                         case contracts::DeviceControlContracts::EN_PROG_EDIT: signals::sigScreenClose( Screen::MenuProgramEdit ); break;
                         case contracts::DeviceControlContracts::EN_MIDI_CONTROL: signals::sigScreenClose( Screen::MenuMidiControl ); break;
                         case contracts::DeviceControlContracts::EN_NOTES: signals::sigScreenClose( Screen::MenuPadPerform ); break;
+                        case contracts::DeviceControlContracts::EN_16LEVELS:
+                            // 16 LEVEL: Pad Perform with the last pad on all 16 pads; pressed again it toggles the mode off.
+                            if( getCurrentScreen() != Screen::MenuPadPerform ) signals::sigScreenClose( Screen::MenuPadPerform );
+                            if( auto* pp = dynamic_cast<PadPerform*>( findScreen( Screen::MenuPadPerform ) ) ) pp->toggleSixteenLevels();
+                            break;
                         case contracts::DeviceControlContracts::EN_TC:
                             if( getCurrentScreen() != Screen::MenuListEdit ) signals::sigScreenClose( Screen::MenuListEdit ); // TC dialog lives in List Edit
                             break;

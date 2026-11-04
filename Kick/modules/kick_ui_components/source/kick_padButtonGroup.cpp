@@ -59,8 +59,40 @@ namespace ui
             };
             pads[i]->onDoubleClicked       = [&]( KickPadButton* Pad, int ID ) { if( OnDoubleClicked ) OnDoubleClicked(ID); };
             pads[i]->onKnobClickedCallback = [&, i]() {if(onKnobClicked) onKnobClicked(i); };
+
+            touchRelay[(size_t)i].owner = this;
+            touchRelay[(size_t)i].index = i;
+            pads[i]->addMouseListener( &touchRelay[(size_t)i], true );
         }
         onBankChanged();
+    }
+
+    KickPadButtonGroupComponent::~KickPadButtonGroupComponent()
+    {
+        for( auto& p : pads )
+            for( auto& r : touchRelay )
+                if( p ) p->removeMouseListener( &r );
+        padHardwareConnection.disconnect();
+    }
+
+    static int fingerOf( const juce::MouseEvent& e )
+    {
+        return TouchSlot::inBridge() ? TouchSlot::state().slot : e.source.getIndex();
+    }
+
+    void KickPadButtonGroupComponent::PadTouchRelay::mouseDown( const juce::MouseEvent& e )
+    {
+        if( ! owner || ! owner->onPadTouchDown || ! juce::isPositiveAndBelow( index, _NUM_PADS_IN_COMPONENT ) ) return;
+        auto* pad = owner->pads[(size_t)index].get();
+        if( ! pad || pad->getHeight() <= 0 ) return;
+        const float y = e.getEventRelativeTo( pad ).position.y / (float)pad->getHeight();
+        owner->onPadTouchDown( owner->bankOffset + index, fingerOf( e ), juce::jlimit( 0.0f, 1.0f, y ) );
+    }
+
+    void KickPadButtonGroupComponent::PadTouchRelay::mouseUp( const juce::MouseEvent& e )
+    {
+        if( ! owner || ! owner->onPadTouchUp ) return;
+        owner->onPadTouchUp( owner->bankOffset + index, fingerOf( e ) );
     }
 
     KickListBox& KickPadButtonGroupComponent::getBankComponent() { return bank; }
@@ -368,6 +400,14 @@ namespace ui
             }
             refreshPad( i );
         }
+    }
+
+    void KickPadButtonGroupComponent::setPadHighlight( int Index, bool On, juce::Colour highlightedColour )
+    {
+        if( ! juce::isPositiveAndBelow( Index, _NUM_PADS ) ) return;
+        padData[(size_t)Index].flags.highlight = On;
+        if( On ) padData[(size_t)Index].flags.highlightColour = highlightedColour;
+        refreshPad( Index );
     }
 
     int KickPadButtonGroupComponent::getHighlightedPad()
