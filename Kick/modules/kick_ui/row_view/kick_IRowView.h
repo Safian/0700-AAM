@@ -34,6 +34,15 @@ namespace kick_ui
         virtual void setupProvider() = 0;
         virtual void meterUpdate(){};
 
+        // CM-14: Returns true if row is currently visible inside the viewport.
+        bool isRowVisible( int row )
+        {
+            const auto va = getTableViewPort().getViewArea();
+            if( va.isEmpty() )
+                return true;
+            return va.intersects( getRowBounds( row ) );
+        }
+
         // Q-Link 1..4 (1-based knob codes) act on the selected row. Views override it.
         virtual void knobCommand( int /*knob*/, int /*value*/ ){};
 
