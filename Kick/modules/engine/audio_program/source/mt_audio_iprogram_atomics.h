@@ -115,7 +115,7 @@ namespace mt
             a.attachTo( Tree, IDs::attack, Undo, 0.f );
             h.attachTo( Tree, IDs::hold, Undo, 0.f );
             d.attachTo( Tree, IDs::decay, Undo, 0.f );
-            s.attachTo( Tree, IDs::sustain, Undo, 127.f );
+            s.attachTo( Tree, IDs::sustain, Undo, 0.f ); // = the clip model's default (MTI*Envelope)
             r.attachTo( Tree, IDs::release, Undo, 0.f );
         }
 
@@ -206,6 +206,20 @@ namespace mt
         MTIAtomicAmplitudeEnvelope amp;
         MTIAtomicFilterEnvelope    filter;
         MTIAtomicPitchEnvelope     pitch;
+    };
+
+    /// The voice-side (atomic) view of one drum clip's LFO / envelope / filter properties (PE-02, PE-21). The clip owns it and creates
+    /// it on the message thread, so a voice only takes a pointer at note-on: no ValueTree listener is added or removed on the audio
+    /// thread. In the clip tree LFO / PITCHENV / FILTERENV / AMPENV are direct children of the CLIP node.
+    struct MTDrumVoiceParams
+    {
+        explicit MTDrumVoiceParams( const juce::ValueTree& ClipTree )
+            : lfo( ClipTree.getChildWithName( IDs::LFO ) ), env( ClipTree )
+        {
+        }
+
+        MTIAtomicLFO       lfo;
+        MTIAtomicEnvelopes env;
     };
 
 } // namespace MT

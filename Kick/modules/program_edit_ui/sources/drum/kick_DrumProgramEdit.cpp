@@ -21,13 +21,6 @@
 
 namespace kick_ui
 {
-    // The Envelopes and LFO pages write the program model, but the drum voice never reads them: DrumVoice::attachToAndReset is
-    // the only place that binds its LFO / envelope atomics to the model and nothing calls it (plus the model / atomics use
-    // different ids, and the pitch / filter / LFO sections are disabled by default with no switch in the UI). A page that
-    // saves values into the project and changes nothing in the sound misleads, so both are hidden until the voice is bound
-    // (needs an MPC listening test: see docs/plans/screens/program-edit.md PE-02). true brings the two buttons back.
-    static constexpr bool kDrumEnginePagesVisible = true;
-
     DrumProgramEdit::DrumProgramEdit()
         : ProgEditInterface( mt::MTProgramType::Drum )
     {
@@ -37,17 +30,16 @@ namespace kick_ui
         comps.emplace_back( std::make_unique<DPLayerMix>( pads, pDrum ) );
         comps.emplace_back( std::make_unique<DPEnvelopes>( pads, pDrum ) );
         comps.emplace_back( std::make_unique<DPLfoModulation>( pads, pDrum ) );
+        comps.emplace_back( std::make_unique<DPFilter>( pads, pDrum ) );
 
         for( auto& it : comps )
             mt::utils::addChildComponents( this, it.get() );
 
-        mt::utils::addAndMakeVisible( this, mainButton, samplesButton, layerMixButton );
-        if( kDrumEnginePagesVisible )
-            mt::utils::addAndMakeVisible( this, lfoButton, envelopesButton );
-        mt::utils::addListener( this, mainButton, samplesButton, lfoButton, layerMixButton, envelopesButton );
-        mt::utils::setRadioGroupID( (int)RadioGroupId::DrumProgram, mainButton, samplesButton, lfoButton, layerMixButton, envelopesButton );
-        mt::utils::setValueColour( ui::Theme::textColour( 1 ), mainButton, samplesButton, layerMixButton, envelopesButton, lfoButton );
-        mt::utils::setValueFontHeight( 18, mainButton, samplesButton, layerMixButton, envelopesButton, lfoButton );
+        mt::utils::addAndMakeVisible( this, mainButton, samplesButton, layerMixButton, lfoButton, envelopesButton, filterButton );
+        mt::utils::addListener( this, mainButton, samplesButton, lfoButton, layerMixButton, envelopesButton, filterButton );
+        mt::utils::setRadioGroupID( (int)RadioGroupId::DrumProgram, mainButton, samplesButton, lfoButton, layerMixButton, envelopesButton, filterButton );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), mainButton, samplesButton, layerMixButton, envelopesButton, lfoButton, filterButton );
+        mt::utils::setValueFontHeight( 18, mainButton, samplesButton, layerMixButton, envelopesButton, lfoButton, filterButton );
 
         // Set default.
         pads.push_back( 0 );
@@ -59,6 +51,7 @@ namespace kick_ui
             layerMixButton.setToggleButtonText( "Layer Mix", "Layer Mix" );
             envelopesButton.setToggleButtonText( "Envelopes", "Envelopes" );
             lfoButton.setToggleButtonText( "LFO", "LFO" );
+            filterButton.setToggleButtonText( "Filter", "Filter" );
         } );
     }
 
@@ -78,14 +71,14 @@ namespace kick_ui
     {
         auto b = getLocalBounds();
 
-        mainButton.setBoundsRelative( .0099f, .022f, .1896f, .096f );
-        samplesButton.setBoundsRelative( .2078f, .022f, .1896f, .096f );
-        layerMixButton.setBoundsRelative( .4051f, .022f, .1896f, .096f );
-        if( kDrumEnginePagesVisible )
-        {
-            envelopesButton.setBoundsRelative( .6028f, .022f, .1896f, .096f );
-            lfoButton.setBoundsRelative( .8004f, .022f, .1896f, .096f );
-        }
+        // Six page buttons across the top.
+        const float w = .1588f, step = .1642f;
+        mainButton.setBoundsRelative( .0099f, .022f, w, .096f );
+        samplesButton.setBoundsRelative( .0099f + step, .022f, w, .096f );
+        layerMixButton.setBoundsRelative( .0099f + 2 * step, .022f, w, .096f );
+        envelopesButton.setBoundsRelative( .0099f + 3 * step, .022f, w, .096f );
+        lfoButton.setBoundsRelative( .0099f + 4 * step, .022f, w, .096f );
+        filterButton.setBoundsRelative( .0099f + 5 * step, .022f, w, .096f );
 
         for( auto& it : comps )
             it->setBoundsRelative( .0097f, .139f, .982f, .842f );
@@ -117,6 +110,11 @@ namespace kick_ui
         else if( button == &lfoButton )
         {
             tIndex    = 4;
+            isDefault = true;
+        }
+        else if( button == &filterButton )
+        {
+            tIndex    = 5;
             isDefault = true;
         }
         for( auto& comp : comps )

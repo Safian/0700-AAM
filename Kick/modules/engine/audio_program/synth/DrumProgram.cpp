@@ -36,10 +36,7 @@ namespace mt
         // Pre-reseve Memory...
         for( auto i = 0; i < getPolyphony(); ++i )
         {
-            auto voice = std::make_unique<DrumVoice>( master );
-            if( pDrum )
-                voice->attachToAndReset( pDrum->getState(), nullptr );
-            voices.emplace_back( std::move( voice ) );
+            voices.emplace_back( std::make_unique<DrumVoice>( master ) );
         }
         ISynthObject::addVoices( voices );
     }
@@ -57,12 +54,6 @@ namespace mt
         noteOffAll();
         pDrum = dynamic_cast<MTDrumProgram*>( PDrum );
         setBypass( ( pDrum == nullptr ) );
-        if( pDrum )
-        {
-            for( auto& v : voices )
-                if( auto dv = dynamic_cast<DrumVoice*>( v.get() ) )
-                    dv->attachToAndReset( pDrum->getState(), nullptr );
-        }
     }
 
     void DrumProgram::noteOn( int Note, int Velocity )
@@ -111,7 +102,7 @@ namespace mt
                     // Start playback.
                     if( auto voice = dynamic_cast<DrumVoice*>( getFreeVoice( Note, notePoly ) ) )
                     {
-                        voice->attachToAndReset( pNote->vTree, nullptr );
+                        voice->bindParams( pNote->voiceParams ); // the clip's LFO / envelope / filter atomics (PE-02, PE-21)
                         voice->setPadGains( pNote->gL.load(), pNote->gR.load() );
                         voice->setSlice( soundSlice );
                         voice->noteOn( Note, Velocity );
