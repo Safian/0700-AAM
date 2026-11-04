@@ -83,22 +83,23 @@ int main()
         CHECK( std::string( tileDef<S>( kCommandKickUpdate ).name ) == "Kick Update" );
         CHECK( tileDef<S>( -1 ).screen == S::Invalid && tileDef<S>( kMenuItemCount ).screen == S::Invalid );
         CHECK( itemNeedsProject<S>( kCommandSave ) );
-        CHECK( !itemNeedsProject<S>( kCommandResources ) && !itemNeedsProject<S>( kCommandKickUpdate ) );
+        CHECK( !itemNeedsProject<S>( kCommandResources ) && !itemNeedsProject<S>( kCommandKickUpdate ) && !itemNeedsProject<S>( kCommandFavorites ) );
+        CHECK( std::string( tileDef<S>( kCommandFavorites ).name ) == "Favorites" );
         CHECK( !itemNeedsProject<S>( 0 ) && itemNeedsProject<S>( 1 ) && itemNeedsProject<S>( 16 ) );
     }
 
     // MenuLayout: pages, move, swap, reset, lenient (de)serialisation.
     {
         MenuLayout l;
-        CHECK( l.itemCount() == kMenuItemCount && l.pageCount() == 2 && l.pageItems( 0 ) == 16 && l.pageItems( 1 ) == 4 && l.pageItems( 2 ) == 0 );
-        CHECK( l.isDefault() && l.itemAt( 0 ) == 0 && l.itemAt( 19 ) == 19 && l.itemAt( 20 ) == -1 && l.itemAt( -1 ) == -1 );
+        CHECK( l.itemCount() == kMenuItemCount && l.pageCount() == 2 && l.pageItems( 0 ) == 16 && l.pageItems( 1 ) == kMenuItemCount - 16 && l.pageItems( 2 ) == 0 );
+        CHECK( l.isDefault() && l.itemAt( 0 ) == 0 && l.itemAt( kMenuItemCount - 1 ) == kMenuItemCount - 1 && l.itemAt( kMenuItemCount ) == -1 && l.itemAt( -1 ) == -1 );
         CHECK( MenuLayout::pageOfPosition( 15 ) == 0 && MenuLayout::pageOfPosition( 16 ) == 1 && MenuLayout::slotOfPosition( 17 ) == 1 );
         CHECK( MenuLayout( 16 ).pageCount() == 1 && MenuLayout( 17 ).pageCount() == 2 && MenuLayout( 0 ).pageCount() == 1 );
 
         CHECK( l.move( 0, 3 ) && l.itemAt( 3 ) == 0 && l.itemAt( 0 ) == 1 && l.itemAt( 2 ) == 3 && l.positionOf( 0 ) == 3 );
         CHECK( !l.isDefault() );
-        CHECK( l.move( 3, 3 ) && !l.move( -1, 2 ) && !l.move( 2, 20 ) );
-        CHECK( l.swapPositions( 0, 19 ) && l.itemAt( 0 ) == 19 && l.itemAt( 19 ) == 1 && !l.swapPositions( 0, 20 ) );
+        CHECK( l.move( 3, 3 ) && !l.move( -1, 2 ) && !l.move( 2, kMenuItemCount ) );
+        CHECK( l.swapPositions( 0, kMenuItemCount - 1 ) && l.itemAt( 0 ) == kMenuItemCount - 1 && l.itemAt( kMenuItemCount - 1 ) == 1 && !l.swapPositions( 0, kMenuItemCount ) );
         {   // still a permutation
             std::set<int> seen;
             for( int i = 0; i < l.itemCount(); ++i ) seen.insert( l.itemAt( i ) );
@@ -108,16 +109,16 @@ int main()
         MenuLayout        r;
         CHECK( r.deserialize( saved ) && r.serialize() == saved );
         l.reset();
-        CHECK( l.isDefault() && l.serialize() == "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19" );
+        CHECK( l.isDefault() && l.serialize() == "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20" );
 
         // Damaged text never loses an item: repeats, out-of-range ids and junk are dropped, missing ones appended in order.
         MenuLayout d;
         CHECK( d.deserialize( "5,5,x,99,-1,2,,3" ) );
-        CHECK( d.serialize() == "5,2,3,0,1,4,6,7,8,9,10,11,12,13,14,15,16,17,18,19" );
+        CHECK( d.serialize() == "5,2,3,0,1,4,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20" );
         CHECK( !d.deserialize( "" ) && d.isDefault() );
         CHECK( !d.deserialize( "junk,;;" ) && d.isDefault() );
         // An older file with fewer items gets the newer ones at the end.
-        CHECK( d.deserialize( "1,0" ) && d.itemAt( 0 ) == 1 && d.itemAt( 1 ) == 0 && d.itemAt( 2 ) == 2 && d.itemAt( 19 ) == 19 );
+        CHECK( d.deserialize( "1,0" ) && d.itemAt( 0 ) == 1 && d.itemAt( 1 ) == 0 && d.itemAt( 2 ) == 2 && d.itemAt( kMenuItemCount - 1 ) == kMenuItemCount - 1 );
     }
 
     // Project gate.

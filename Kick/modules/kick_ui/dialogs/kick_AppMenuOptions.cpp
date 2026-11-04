@@ -190,6 +190,8 @@ namespace kick_ui
 
     void AppMenuOptions::announce( int slot )
     {
+        if( !isVisible() ) // building the tiles at start-up is not a message
+            return;
         const int item = layout_.itemAt( page_ * Layout::kPageSize + slot );
         if( item < 0 )
             return;
@@ -309,6 +311,10 @@ namespace kick_ui
             }
             case ui::menu_logic::kCommandResources: KickModeHeader::showSystemResources(); return;
             case ui::menu_logic::kCommandKickUpdate: signals::sigScreenOpen( Screen::KickUpdate ); return;
+            case ui::menu_logic::kCommandFavorites:
+                signals::sigBrowserShowFavourites(); // the browser reads the request when it shows
+                signals::sigScreenOpen( Screen::MenuFileBrowser );
+                return;
             default: break;
         }
         const auto target = ui::menu_logic::tileScreen<Screen>( item );

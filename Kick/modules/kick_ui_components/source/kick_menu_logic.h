@@ -42,7 +42,8 @@ namespace ui::menu_logic
     constexpr int kCommandSave       = 17;
     constexpr int kCommandResources  = 18;
     constexpr int kCommandKickUpdate = 19;
-    constexpr int kMenuItemCount     = 20;
+    constexpr int kCommandFavorites  = 20; // the browser, on its next assigned favourite (the SOUNDS button's second press does the same)
+    constexpr int kMenuItemCount     = 21;
 
     // The mode registry: ONE table of every menu item (name = the id of the button, icon = the theme image name or "" for a
     // text tile, label = the readable name shown in the status bar while the dial moves over it, screen = what it opens).
@@ -81,6 +82,7 @@ namespace ui::menu_logic
             { "Save", "", "Save the project", S::Invalid },
             { "Resources", "", "System Resources", S::Invalid },
             { "Kick Update", "", "Kick Update", S::Invalid },
+            { "Favorites", "", "Favorites (Browser)", S::Invalid },
         };
         static const TileDef<S> none{ "", "", "", S::Invalid };
         return item >= 0 && item < kMenuItemCount ? table[item] : none;
