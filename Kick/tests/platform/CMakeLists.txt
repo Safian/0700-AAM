@@ -159,6 +159,11 @@ if(TARGET Kick)
     add_test(NAME kick-menu-tiles-smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ProjectsBrowserSmoke.py"
         $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}" menutiles)
     set_tests_properties(kick-menu-tiles-smoke PROPERTIES TIMEOUT 110)
+    # Dialogs: Metronome / Time Signature / BBT / STP / Tempo / System Resources open and close (hardware close) three times
+    # with a theme reload after each round; screenshots of each dialog.
+    add_test(NAME kick-dialogs-smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ProjectsBrowserSmoke.py"
+        $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}" dialogs)
+    set_tests_properties(kick-dialogs-smoke PROPERTIES TIMEOUT 110)
 endif()
 # Timing correct (note quantize) logic; JUCE-free, header only.
 add_executable(kick-timing-correct-tests TimingCorrectTests.cpp)
@@ -396,6 +401,28 @@ set_tests_properties(kick-sample-editor-actions PROPERTIES TIMEOUT 10)
 add_executable(kick-menu-logic-tests MenuLogicTests.cpp)
 add_test(NAME kick-menu-logic COMMAND kick-menu-logic-tests)
 set_tests_properties(kick-menu-logic PROPERTIES TIMEOUT 10)
+
+# ASoundCache (Purge Unused semantics) with the real module; JUCE audio formats only (writes small WAV files to a temp folder).
+if(TARGET audio_file_manager)
+    add_executable(kick-sound-cache-tests SoundCacheTests.cpp)
+    target_link_libraries(kick-sound-cache-tests PRIVATE audio_file_manager juce::juce_audio_formats juce::juce_audio_basics juce::juce_dsp)
+    target_include_directories(kick-sound-cache-tests PRIVATE "${CMAKE_BINARY_DIR}/apps/kick") # the generated config.h of the app
+    target_compile_definitions(kick-sound-cache-tests PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1)
+    add_test(NAME kick-sound-cache COMMAND kick-sound-cache-tests)
+    set_tests_properties(kick-sound-cache PROPERTIES TIMEOUT 30)
+endif()
+
+add_executable(kick-recent-list-tests RecentListTests.cpp)
+add_test(NAME kick-recent-list COMMAND kick-recent-list-tests)
+set_tests_properties(kick-recent-list PROPERTIES TIMEOUT 10)
+
+add_executable(kick-undo-watch-tests UndoWatchTests.cpp)
+add_test(NAME kick-undo-watch COMMAND kick-undo-watch-tests)
+set_tests_properties(kick-undo-watch PROPERTIES TIMEOUT 10)
+
+add_executable(kick-statusbar-logic-tests StatusbarLogicTests.cpp)
+add_test(NAME kick-statusbar-logic COMMAND kick-statusbar-logic-tests)
+set_tests_properties(kick-statusbar-logic PROPERTIES TIMEOUT 10)
 
 add_executable(kick-menu-assets-tests MenuAssetTests.cpp)
 add_test(NAME kick-menu-assets COMMAND kick-menu-assets-tests
