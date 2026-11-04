@@ -166,7 +166,7 @@ public:
             { "MenuPadPerform", Screen::MenuPadPerform }, { "MenuPiano", Screen::MenuPiano }, { "MenuMidiControl", Screen::MenuMidiControl },
             { "MenuFileBrowser", Screen::MenuFileBrowser }, { "MenuNextSequence", Screen::MenuNextSequence },
             { "MenuSong", Screen::MenuSong }, { "MenuColorEdit", Screen::MenuColorEdit },
-            { "RecentProject", Screen::RecentProject }, { "SystemResources", Screen::SystemResources },
+            { "RecentProject", Screen::RecentProject },
         };
 
         if( index >= names.size() || w == nullptr || w->getContentComponent() == nullptr )
@@ -187,7 +187,15 @@ public:
                 ss->showGridView( name.equalsIgnoreCase( "HomeSequencerGrid" ) );
         }
 
-        if( screen == Screen::Invalid )
+        // "SystemResources" is a dialog, not a screen: open it over the current screen.
+        const bool resourcesDialog = name.equalsIgnoreCase( "SystemResources" );
+        if( resourcesDialog )
+        {
+            kick_ui::KickModeHeader::showSystemResources();
+            screen = Screen::Invalid;
+        }
+
+        if( screen == Screen::Invalid && !resourcesDialog )
         {
             std::cerr << "smoke: unknown screen '" << name << "'" << std::endl;
             setApplicationReturnValue( 2 );
@@ -195,8 +203,9 @@ public:
             return;
         }
 
-        kick_ui::signals::sigScreenClose( screen );
-        juce::Timer::callAfterDelay( 1200, [this, names, dir, index, name] {
+        if( !resourcesDialog )
+            kick_ui::signals::sigScreenClose( screen );
+        juce::Timer::callAfterDelay( 1200, [this, names, dir, index, name, resourcesDialog] {
             // KICK_SMOKE_QLINK="1:1,2:-1,3:1" injects Q-Link turns (knob 1..4 : signed ticks) through the same
             // dispatch path as the MPC bridge (on_encoder_turn), after the screen opened and before the snapshot.
             const auto qlinks = juce::SystemStats::getEnvironmentVariable( "KICK_SMOKE_QLINK", {} );
@@ -217,7 +226,9 @@ public:
             }
             if( auto* content = w != nullptr ? w->getContentComponent() : nullptr )
             {
-                auto                  image = content->createComponentSnapshot( content->getLocalBounds() );
+                // The dialog is a popup window the content snapshot does not contain: photograph the dialog itself.
+                juce::Component* shot  = resourcesDialog ? static_cast<juce::Component*>( &kick_ui::KSystemResources::Instance() ) : content;
+                auto             image = shot->createComponentSnapshot( shot->getLocalBounds() );
                 auto                   shotFile = dir.getChildFile( name + ".png" );
                 shotFile.deleteFile(); // FileOutputStream appends to an existing file
                 juce::FileOutputStream output{ shotFile };

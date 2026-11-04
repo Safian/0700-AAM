@@ -85,7 +85,6 @@ namespace ui::menu_logic
             case S::MenuFileBrowser:
             case S::SWUpdateView:
             case S::SWUpdateWindow:
-            case S::SystemResources:
             case S::Temp: return false;
             default: return true;
         }

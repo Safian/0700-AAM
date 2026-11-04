@@ -338,3 +338,8 @@ set_tests_properties(kick-sample-editor-actions PROPERTIES TIMEOUT 10)
 add_executable(kick-menu-logic-tests MenuLogicTests.cpp)
 add_test(NAME kick-menu-logic COMMAND kick-menu-logic-tests)
 set_tests_properties(kick-menu-logic PROPERTIES TIMEOUT 10)
+
+# System-resource helpers (CPU delta, MemAvailable, mount table, statvfs); JUCE-free, header only.
+add_executable(kick-sysinfo-tests SysInfoTests.cpp)
+add_test(NAME kick-sysinfo COMMAND kick-sysinfo-tests)
+set_tests_properties(kick-sysinfo PROPERTIES TIMEOUT 10)
