@@ -23,6 +23,7 @@ namespace kick_ui
         ui::KickTextEditor   searchBox{ "" };
         ui::KickToggleButton favToggle{ "★ FAV" };
         ui::KickList         insertCategories{ "CATEGORY" };
+        std::vector<juce::String> categoryKeys; // registration keys, parallel to the readable list
         ui::KickList         insertList{ "INSERTS", {}, 0, 2 };
         ui::KickLabel        docTitle{ "DESCRIPTION" };
         juce::TextEditor     docEditor;
@@ -107,6 +108,7 @@ namespace kick_ui
         ui::KickToggleButton allEnable{ "All Enable" };
         ui::KickButton       copyChain{ "COPY" };
         ui::KickButton       pasteChain{ "PASTE" };
+        ui::KickToggleButton postFaderBtn{ "PRE-FADER" };
     };
 
     class Inserts
