@@ -659,6 +659,7 @@ namespace mt
         void                      renameSong( const juce::String& OldName, const juce::String& NewName );
         MTSongInfo                getSongInfo( const juce::String& SongName );
         void                      addSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex );
+        int                       appendSongSteps( const juce::String& SongName, std::vector<MTSongStepInfo>& Steps, bool CreateSong = false ); // one undo step
         void                      editSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex );
         void                      deleteSongStep( const juce::String& SongName, int AtIndex );
         void                      deleteAllSongSteps( const juce::String& SongName );
@@ -666,6 +667,7 @@ namespace mt
         void                      playSong( const juce::String& SongName, int SequenceIndexToPlay );
         void                      resumeSong();
         void                      stopSong();
+        void                      skipSongStep( bool AtNextBar ); // song playing: next step now (Sudden) or at the next bar (Next)
 
         // Next Sequence
         void playSequence( int Sequence );

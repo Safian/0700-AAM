@@ -102,6 +102,9 @@ namespace mt
 
         MTSongInfo getSongInfo( const juce::String& SongName );
         void       addSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex = -1 );
+        // Appends all steps as ONE undo step (Next Sequence "copy to song"); CreateSong: a missing song is created in the same
+        // step. Returns the number of steps added.
+        int        appendSongSteps( const juce::String& SongName, std::vector<MTSongStepInfo>& Steps, bool CreateSong = false );
         void       editSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex = -1 );
         void       deleteSongStep( const juce::String& SongName, int AtIndex );
         void       deleteAllSongSteps( const juce::String& SongName );

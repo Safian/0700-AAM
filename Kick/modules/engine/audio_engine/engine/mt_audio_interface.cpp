@@ -2300,6 +2300,7 @@ namespace mt
     void       MTAudioInterface::renameSong( const juce::String& OldName, const juce::String& NewName ) { manager->renameSong( OldName, NewName ); }
     MTSongInfo MTAudioInterface::getSongInfo( const juce::String& SongName ) { return manager->getSongInfo( SongName ); }
     void       MTAudioInterface::addSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex ) { manager->addSongStep( SongName, Step, AtIndex ); }
+    int        MTAudioInterface::appendSongSteps( const juce::String& SongName, std::vector<MTSongStepInfo>& Steps, bool CreateSong ) { return manager->appendSongSteps( SongName, Steps, CreateSong ); }
     void       MTAudioInterface::editSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex ) { manager->editSongStep( SongName, Step, AtIndex ); }
     void       MTAudioInterface::deleteSongStep( const juce::String& SongName, int AtIndex ) { manager->deleteSongStep( SongName, AtIndex ); }
     void       MTAudioInterface::deleteAllSongSteps( const juce::String& SongName ) { manager->deleteAllSongSteps( SongName ); }
@@ -2307,6 +2308,7 @@ namespace mt
     void       MTAudioInterface::playSong( const juce::String& SongName, int SequenceIndexToPlay ) { manager->playSong( SongName, SequenceIndexToPlay ); }
     void       MTAudioInterface::resumeSong() { manager->resumeSong(); }
     void       MTAudioInterface::stopSong() { manager->stopSong(); }
+    void       MTAudioInterface::skipSongStep( bool AtNextBar ) { manager->skipSongStep( AtNextBar ); }
 
     void MTAudioInterface::playSequence( int Sequence ) { manager->playSequence( Sequence ); }
     void MTAudioInterface::stopSequence() { manager->stopSequence(); }
