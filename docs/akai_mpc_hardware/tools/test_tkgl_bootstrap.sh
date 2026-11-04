@@ -65,6 +65,12 @@ assert_file_not_exists() {
     fi
 }
 
+# expect <ok text> <failure text> <command...>: pass when the command succeeds.
+expect() {
+    ex_ok="$1"; ex_bad="$2"; shift 2
+    if "$@"; then pass "$ex_ok"; else fail "$ex_bad"; fi
+}
+
 echo "=========================================================="
 echo " Kick Akai MPC Pendrive Packaging & Bootstrap Test Suite "
 echo "=========================================================="
@@ -179,6 +185,17 @@ if [ -d "$TKGL_DIR/demos" ]; then
 else
     fail "Demos folder missing from package"
 fi
+
+# --changelog stores the release notes next to VERSION (shown by the Kick Update screen)
+printf 'Fixes the MPC Menu.\nAdds rollback.\n' > "$TEST_TMP/notes.txt"
+"$TOOLS_DIR/make_pendrive_package.sh" --binary "$MOCK_BIN" --version "0.1.1-notes" --git-commit "notes123" --out-dir "$TEST_TMP/dist_notes" --changelog "$TEST_TMP/notes.txt" --allow-dummy-binary > /dev/null
+mkdir -p "$TEST_TMP/unpacked_notes"
+unzip -q "$TEST_TMP/dist_notes/kick-mpc-key61-0.1.1-notes.zip" -d "$TEST_TMP/unpacked_notes"
+assert_file_exists "$TEST_TMP/unpacked_notes/tkgl_bootstrap_[ProjectData]/CHANGELOG"
+expect "CHANGELOG content is the given file" "CHANGELOG content differs" cmp -s "$TEST_TMP/notes.txt" "$TEST_TMP/unpacked_notes/tkgl_bootstrap_[ProjectData]/CHANGELOG"
+STATUS=0
+"$TOOLS_DIR/make_pendrive_package.sh" --binary "$MOCK_BIN" --version "0.1.2" --git-commit "x" --out-dir "$TEST_TMP/dist_nonotes" --changelog "$TEST_TMP/missing.txt" --allow-dummy-binary > /dev/null 2>&1 || STATUS=$?
+expect "a missing --changelog file is an error" "a missing --changelog file was accepted" test "$STATUS" -ne 0
 
 # Verify VERSION file contents
 if grep -q "VERSION=0.1.0-test" "$TKGL_DIR/VERSION" && grep -q "KICK_SHA256=" "$TKGL_DIR/VERSION"; then
@@ -480,12 +497,6 @@ sha_of() {
     else
         shasum -a 256 "$1" | awk '{print $1}'
     fi
-}
-
-# expect <ok text> <failure text> <command...>: pass when the command succeeds.
-expect() {
-    ex_ok="$1"; ex_bad="$2"; shift 2
-    if "$@"; then pass "$ex_ok"; else fail "$ex_bad"; fi
 }
 
 # make_pkg <dir> <label> [nosha]: tkgl layout in <dir> with bin/Kick printing "label" and VERSION=<label>.
