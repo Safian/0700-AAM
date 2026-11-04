@@ -1,6 +1,4 @@
 
-#include "kick_PadMixerDrumProgram.h"
-#include "kick_PadMixerKeygroupProgram.h"
 
 namespace kick_ui
 {
@@ -13,7 +11,13 @@ namespace kick_ui
     {
         addMouseListener( this, true );
         setInterceptsMouseClicks( true, true );
-        mt::utils::addAndMakeVisible( this, solo, mute, levelSlider, panSlider, nameLabel, padName );
+        mt::utils::addAndMakeVisible( this, solo, mute, levelSlider, panSlider, nameLabel, padName, assign );
+        assign.setValueFontHeight( 14 );
+        assign.setValueColour( ui::Theme::textColour( 1 ) );
+        assign.onClick = [&]() {
+            if( pData )
+                onAssign( pData->KeyNote );
+        };
 
         nameLabel.setValueBackgroundColour( ui::Theme::backgroundColour( 13 ) );
         padName.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
@@ -32,7 +36,8 @@ namespace kick_ui
 
         levelSlider.setRange( GAIN::MIN, GAIN::MAX, GAIN::STEP );
         panSlider.setRange( PAN::MIN, PAN::MAX, PAN::STEP );
-        levelSlider.setPostFix( " db" );
+        // The level is a linear gain 0..1: show it as dB (one decimal), never as a raw float with a fake unit.
+        levelSlider.textFromValueFunction = []( double Gain ) { return juce::String( mt::mixlogic::formatGainDb( Gain ) ); };
         panSlider.setCentered( true );
 
         solo.onClick = [&]() {
@@ -116,25 +121,21 @@ namespace kick_ui
 
     void PadMixerDisplay::linkRotated( int ID, int Value )
     {
+        // Q-Link 1 = Level, 2 = Pan, 3 = Mute, 4 = Solo of the selected pad. One tick = one increment of the
+        // control (same as the Data Dial); the switches follow the direction (right = on, left = off) and go
+        // through onClick, so the engine is told (setNoteMute / setNoteSolo).
+        auto setSwitch = [Value]( ui::KickImageButton& Button ) {
+            const bool target = mt::mixlogic::toggleFromDelta( Button.getToggleState(), Value );
+            if( target != Button.getToggleState() )
+                Button.setToggleState( target, juce::sendNotification );
+        };
         switch( ID )
         {
-            case 0: levelSlider.knobRotated( Value ); break;
-            case 1: panSlider.knobRotated( Value ); break;
-            case 2:
-                mute.setToggleState( Value > 0, juce::dontSendNotification );
-                solo.setToggleState( Value <= 0, juce::dontSendNotification );
-                break;
-        }
-    }
-
-    juce::Rectangle<int> PadMixerDisplay::getElementBounds( int state )
-    {
-        switch( state )
-        {
-            case 0: return levelSlider.getBounds(); break;
-            case 1: return panSlider.getBounds(); break;
-            case 2: return mute.getBounds(); break;
-            default: return levelSlider.getBounds(); break;
+            case 0: levelSlider.knobRotated( mt::mixlogic::qlinkDelta( Value, levelSlider.getIncrement() ) ); break;
+            case 1: panSlider.knobRotated( mt::mixlogic::qlinkDelta( Value, panSlider.getIncrement() ) ); break;
+            case 2: setSwitch( mute ); break;
+            case 3: setSwitch( solo ); break;
+            default: break;
         }
     }
 
@@ -149,6 +150,7 @@ namespace kick_ui
         panSlider.setBoundsRelative( isPadEnabled ? .5592f : .7758f, .0934f, isPadEnabled ? .3517f : .0689f, .8411f );
         solo.setBoundsRelative( isPadEnabled ? .9337f : .8793f, .0654f, isPadEnabled ? .0592f : .1034f, .4112f );
         mute.setBoundsRelative( isPadEnabled ? .9337f : .8793f, .514f, isPadEnabled ? .0592f : .1034f, .4112f );
+        assign.setBoundsRelative( isPadEnabled ? .0098f : .0172f, .72f, isPadEnabled ? .1581f : .2758f, .2f );
     }
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -182,6 +184,21 @@ namespace kick_ui
             auto& ae = mt::getAudioInterface();
             if( Sel != ae.getSelectedProgram() )
                 ae.setSelectedProgram( Sel );
+
+            // The pads play the selected track: make sure that track uses the shown program.
+            auto* shown = ae.getProgram( Sel );
+            auto  seq   = ae.getSelectedSequence();
+            if( shown && ae.getProgramForTrack( seq, ae.getSelectedTrack() ) != shown )
+            {
+                for( auto t = 0; t < ae.getNumTracks( seq ); ++t )
+                {
+                    if( ae.getProgramForTrack( seq, t ) == shown )
+                    {
+                        ae.setSelectedTrack( t );
+                        break;
+                    }
+                }
+            }
 
             padContent.programChanged();
         };
@@ -248,6 +265,8 @@ namespace kick_ui
                     Msg = juce::MidiMessage::noteOn( 1, it, (juce::uint8)velocity );
                 else if( padState == contracts::DeviceControlContracts::BTN_RELEASED )
                     Msg = juce::MidiMessage::noteOff( 1, it );
+                else
+                    continue; // neither press nor release (e.g. aftertouch): no empty MIDI message into the engine
 
                 ae.addLiveMidiMsg( ae.getSelected(), Msg );
             }
@@ -265,6 +284,9 @@ namespace kick_ui
                 case contracts::DeviceControlContracts::EN_STOP: ae.setSequencePause(); break;
             }
         }
+        if( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) && contracts::DclContractsHelper::getButtonState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED
+            && contracts::DclContractsHelper::getButtonCode( f_HwMsg ) == contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER )
+            padContent.openAssignForSelected(); // Data Dial push: Sample Assign for the selected pad
         padContent.handleCommand( f_HwMsg );
     }
 
@@ -343,6 +365,7 @@ namespace kick_ui
                     comp->setData( pProg, &padData[idx] );
                     comp->onDataChanged     = [&]( int Idx ) { refreshPadData( Idx ); };
                     comp->onSoloMuteChanged = [&]() { refreshSoloMute(); };
+                    comp->onAssign          = [&]( int Note ) { pads->OnDoubleClicked( Note ); };
                 }
                 return comp;
             }
@@ -351,8 +374,19 @@ namespace kick_ui
 
         provider.onRowSelected = [&]( int Row ) {
             auto& comps = tableView->getRowComponents();
-            auto  key   = dynamic_cast<PadMixerDisplay*>( comps[Row] )->getKeyNote();
-            bankIndex   = key / 16;
+            if( !juce::isPositiveAndBelow( Row, comps.size() ) )
+                return;
+            auto* display = dynamic_cast<PadMixerDisplay*>( comps[Row] );
+            if( display == nullptr )
+                return;
+            auto key    = display->getKeyNote();
+            bankIndex   = juce::jlimit( 0, 7, key / 16 );
+            selectedPad = key;
+            // One bank state: the engine bank follows the row, otherwise the physical pads (and the Strip Pad Level)
+            // would still play the previous bank while the grid shows the new one.
+            const auto bankName = juce::String::charToString( (juce::juce_wchar)( 'A' + bankIndex ) );
+            if( ae.getBank() != bankName )
+                ae.setBank( bankName );
             pads->setBank( bankIndex );
             refreshPadData();
         };
@@ -361,7 +395,7 @@ namespace kick_ui
             selectedPad = Index;
 
             auto rowIndex = rows.indexOf( selectedPad );
-            if( 0 <= rowIndex )
+            if( 0 <= rowIndex && rowIndex != tableView->getSelectedRow() )
             {
                 tableView->selectRow( rowIndex );
             }
@@ -403,6 +437,16 @@ namespace kick_ui
                 updateView();
             }
         } );
+    }
+
+    void PadMixerContent::openAssignForSelected()
+    {
+        auto& comps = tableView->getRowComponents();
+        auto  row   = mt::mixlogic::qlinkRow( tableView->getSelectedRow(), comps.size() );
+        if( row < 0 || pProg == nullptr )
+            return;
+        if( auto* display = dynamic_cast<PadMixerDisplay*>( comps[row] ) )
+            pads->OnDoubleClicked( display->getKeyNote() );
     }
 
     void PadMixerContent::setPadEnable( bool Enable )
@@ -506,8 +550,8 @@ namespace kick_ui
     void PadMixerContent::refreshPadData( int Pad )
     {
         pads->setHeaderText( Pad, padData[Pad].padName, juce::dontSendNotification );
-        pads->setRow1Text( Pad, juce::String( padData[Pad].pan ), juce::dontSendNotification );
-        pads->setRow2Text( Pad, juce::String( padData[Pad].level ) + " db", juce::dontSendNotification );
+        pads->setRow1Text( Pad, juce::String( mt::mixlogic::formatPan( padData[Pad].pan ) ), juce::dontSendNotification );
+        pads->setRow2Text( Pad, juce::String( mt::mixlogic::formatGainDb( padData[Pad].level ) ), juce::dontSendNotification );
         pads->setMute( Pad, padData[Pad].mute, juce::dontSendNotification );
         pads->setSolo( Pad, padData[Pad].solo, juce::dontSendNotification );
 
@@ -526,16 +570,10 @@ namespace kick_ui
 
     void PadMixerContent::meterUpdate()
     {
+        // The engine has no per-pad meter (only the program output meter), so the pad meters are not shown
+        // (see KickPadButton, kPerPadMeterAvailable) instead of showing the program signal on every pad.
         if( pProg )
-        {
             syncLevels();
-            auto outMeter = pProg->readOutMeter(); // TODO - Need to call different API for Pad
-            for( auto sample : sampleList )
-            {
-                if( sample->keyNote.get() >= ae.getBankOffset() && sample->keyNote.get() <= ( ae.getBankOffset() + 15 ) )
-                    pads->updateLevelMeter( (int)sample->keyNote.get() % 16, outMeter[0].rms, outMeter[1].rms, outMeter[0].peak, outMeter[0].peak );
-            }
-        }
     }
 
     void PadMixerContent::syncLevels()
@@ -627,62 +665,31 @@ namespace kick_ui
 
     void PadMixerContent::knobCommand( int knob, int value )
     {
-        auto& rowComp       = tableView->getRowComponents();
-        auto  totalRows     = tableView->getNumRows();
-        auto  comp1         = dynamic_cast<PadMixerDisplay*>( rowComp[0] );
-        auto  elementBounds = comp1->getElementBounds( ( knob - 1 ) % 4 + 1 );
-        auto  rowList       = tableView->getRowNumbers( 4, ( ( knob - 1 ) / 4 ) + 1, elementBounds.getX(), elementBounds.getWidth(), 50 );
+        // Q-Link 1..4 act on the selected pad row (Level, Pan, Mute, Solo). Not applicable program / empty list: nothing.
+        if( knob < contracts::DeviceControlContracts::EN_KNOB_1 || knob > contracts::DeviceControlContracts::EN_KNOB_4 )
+            return;
+        if( pProg == nullptr || !tableView->isVisible() )
+            return;
 
-        std::vector<PadMixerDisplay*> entry;
+        auto& rowComp = tableView->getRowComponents();
+        auto  row     = mt::mixlogic::qlinkRow( tableView->getSelectedRow(), rowComp.size() );
+        if( row < 0 )
+            return;
 
-        for( auto i = 0; i < rowList.size(); i++ )
-        {
-            int rowIndex = rowList[i] - 1;
-            if( rowIndex < totalRows )
-            {
-                auto comp = dynamic_cast<PadMixerDisplay*>( rowComp[rowIndex] );
-                entry.push_back( comp );
-            }
-        }
-
-        switch( knob )
-        {
-            case contracts::DeviceControlContracts::EN_KNOB_1:
-            case contracts::DeviceControlContracts::EN_KNOB_2:
-            case contracts::DeviceControlContracts::EN_KNOB_3:
-            case contracts::DeviceControlContracts::EN_KNOB_4:
-                if( entry.size() >= 1 && entry[0] ) entry[0]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_1 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_5:
-            case contracts::DeviceControlContracts::EN_KNOB_6:
-            case contracts::DeviceControlContracts::EN_KNOB_7:
-            case contracts::DeviceControlContracts::EN_KNOB_8:
-                if( entry.size() >= 2 && entry[1] ) entry[1]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_5 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_9:
-            case contracts::DeviceControlContracts::EN_KNOB_10:
-            case contracts::DeviceControlContracts::EN_KNOB_11:
-            case contracts::DeviceControlContracts::EN_KNOB_12:
-                if( entry.size() >= 3 && entry[2] ) entry[2]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_9 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_13:
-            case contracts::DeviceControlContracts::EN_KNOB_14:
-            case contracts::DeviceControlContracts::EN_KNOB_15:
-            case contracts::DeviceControlContracts::EN_KNOB_16:
-                if( entry.size() >= 4 && entry[3] ) entry[3]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_13 ), value );
-                break;
-        }
+        if( auto* display = dynamic_cast<PadMixerDisplay*>( rowComp[row] ) )
+            display->linkRotated( knob - contracts::DeviceControlContracts::EN_KNOB_1, value );
     }
 
     void PadMixerContent::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
     {
         if( contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) )
         {
-            auto padNo = ae.getBankOffset() + contracts::DclContractsHelper::getPadNumber( f_HwMsg );
-            pads->setSelected( padNo, juce::sendNotification );
+            // Select on press only: the release would select the same pad a second time.
+            if( contracts::DclContractsHelper::getPadState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED )
+            {
+                auto padNo = ae.getBankOffset() + contracts::DclContractsHelper::getPadNumber( f_HwMsg );
+                pads->setSelected( padNo, juce::sendNotification );
+            }
         }
         else if( contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )
         {
@@ -690,6 +697,8 @@ namespace kick_ui
             auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
             if( knob != contracts::DeviceControlContracts::EN_KNOB_CENTER )
                 knobCommand( knob, value );
+            else if( tableView->isVisible() && tableView->getNumRows() > 0 )
+                tableView->knobRotated( value ); // no touched control: the Data Dial walks the pad rows
         }
     }
 }

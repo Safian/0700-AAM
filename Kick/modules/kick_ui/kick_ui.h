@@ -117,8 +117,6 @@
     #include "modes/kick_padMute.h"
     #include "modes/kick_nextSequence.h"
     #include "modes/kick_song.h"
-    #include "modes/mixers/kick_MixerTabView.h"
-    #include "modes/mixers/kick_MixerHandlerInterface.h"
     #include "modes/mixers/kick_PadMixer.h"
     #include "modes/knobedit/kick_KnobGrid.h"
     #include "modes/knobedit/kick_KnobTabs.h"
