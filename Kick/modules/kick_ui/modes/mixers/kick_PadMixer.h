@@ -82,6 +82,7 @@ namespace kick_ui
         bool mutedDueToNoteSolo{ false };
         int  keyNote{ -1 };
         void resized() override;
+        void mouseDoubleClick( const juce::MouseEvent& event ) override;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( PadMixerDisplay )
     };

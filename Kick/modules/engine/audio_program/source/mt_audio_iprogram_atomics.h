@@ -74,6 +74,7 @@ namespace mt
         void               resetPitchBend() { bendRatio.store( 1.f, std::memory_order_relaxed ); }
         std::atomic<float> gainL;
         std::atomic<float> gainR;
+        std::atomic<bool>  padMeterEnabled{ false };
         AudIO::PannerFloat panner;
     };
 
