@@ -2,6 +2,7 @@
 
 #include "../Includes/AudioDataTypes.h"
 #include "../Includes/AudioObject.h"
+#include "../Dsp/TouchFx.h"
 
 #include <string>
 #include <array>
@@ -54,6 +55,9 @@ namespace AudIO
         void serializeEffect( unsigned int Position, std::vector<float>& Values );
         void deserializeEffect( unsigned int Position, const std::vector<float>& Values );
 
+        // The Touch FX slot of this chain (the XY screen): runs after the four inserts, independent of their bypass.
+        inline TouchFx& touchFx() { return _touchFx; }
+
         // For hosts that run the inserts from outside (a bus runs them as a chain insert, see DawBus.cpp).
         inline void prepareInserts( uint32_t Samplerate, uint32_t Blocksize ) { prepareToPlay( Samplerate, Blocksize ); }
         inline void processInserts( Buffer<float>& Buffer ) { process( Buffer ); }
@@ -86,6 +90,7 @@ namespace AudIO
         mutable std::atomic<uint32_t>          _epoch{ 0 };
         void                                   waitForAudio() const;
 
+        TouchFx                                _touchFx;
         std::atomic<bool>                      _bypassAll{ false };
         uint32_t                               _rate{ 0 };  // set in prepareToPlay, used for effects created later
         uint32_t                               _block{ 0 };

@@ -305,6 +305,7 @@ namespace AudIO
     {
         _rate  = Samplerate;
         _block = Blocksize;
+        _touchFx.prepare( Samplerate, static_cast<int>( Blocksize ) );
         // Run loop to prepare all inserts...
         for( auto& it : _inserts )
             if( it.pObj.get() )
@@ -321,20 +322,25 @@ namespace AudIO
             std::atomic<uint32_t>& e;
         } scope( _epoch );
 
-        if( _bypassAll.load() )
-            return;
         // Defensive: never run effects on an empty or unprepared block (processReplacing(sampleFrames=0), HW test error 7), nor on
         // a block larger than the one the effects were prepared for (they would read / write past their buffers).
         if( 0 == _block || 0 == Buffer.getBlockSize() || Buffer.getBlockSize() > _block )
             return;
 
         // Run loop to process all inserts...
-        for( auto& it : _inserts )
+        if( !_bypassAll.load() )
         {
-            if( it.bypassed.load() )
-                continue;
-            if( auto* obj = it.live.load( std::memory_order_acquire ) )
-                obj->process( Buffer );
+            for( auto& it : _inserts )
+            {
+                if( it.bypassed.load() )
+                    continue;
+                if( auto* obj = it.live.load( std::memory_order_acquire ) )
+                    obj->process( Buffer );
+            }
         }
+
+        // Touch FX last (a no-op, bit exact, while it is closed)
+        if( const auto channels = Buffer.getNumOutputChannels(); channels > 0 && Buffer.getOutputs() )
+            _touchFx.process( Buffer.getOutputs(), static_cast<int>( channels ), static_cast<int>( Buffer.getBlockSize() ) );
     }
 };
