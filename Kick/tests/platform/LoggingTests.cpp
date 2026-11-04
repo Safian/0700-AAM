@@ -59,9 +59,9 @@ int main()
         check( kick_logger::is_category_enabled( "warn" ), "default: warn enabled" );
         check( kick_logger::is_category_enabled( "proj" ), "default: proj enabled" );
         check( !kick_logger::is_category_enabled( "touch" ), "default: touch disabled" );
-        check( !kick_logger::is_category_enabled( "cmd" ), "default: cmd disabled" );
+        check( kick_logger::is_category_enabled( "cmd" ), "default: cmd enabled" );
         check( !kick_logger::is_category_enabled( "dial" ), "default: dial disabled" );
-        check( !kick_logger::is_category_enabled( "bridge" ), "default: bridge disabled" );
+        check( kick_logger::is_category_enabled( "bridge" ), "default: bridge enabled" );
         check( !kick_logger::is_category_enabled( "frame" ), "default: frame disabled" );
 
         // Custom categories: touch, cmd, bridge, proj
