@@ -476,3 +476,19 @@ add_executable(kick-transport-router-tests TransportRouterTests.cpp)
 add_test(NAME kick-transport-router COMMAND kick-transport-router-tests)
 set_tests_properties(kick-transport-router PROPERTIES TIMEOUT 10)
 
+# Keybed processor: transpose, channel, velocity curves, scale filter, routing, pedals (PP-21, PP-21a-e, PP-30b)
+add_executable(kick-keybed-processor-tests KeybedProcessorTests.cpp)
+add_test(NAME kick-keybed-processor COMMAND kick-keybed-processor-tests)
+set_tests_properties(kick-keybed-processor PROPERTIES TIMEOUT 10)
+
+# Drum voice DSP: ADSR bypass vs decay, LFO modulation, amplitude modulation formula (PE-02, PE-21)
+add_executable(kick-drum-voice-dsp-tests DrumVoiceDspTests.cpp ../../../AudIO/AudIO/Dsp/lfo.cpp)
+target_include_directories(kick-drum-voice-dsp-tests PRIVATE
+    ../../..
+    ../../../AudIO/AudIO/Dsp
+    ../../../AudIO/AudIO/Includes
+)
+add_test(NAME kick-drum-voice-dsp COMMAND kick-drum-voice-dsp-tests)
+set_tests_properties(kick-drum-voice-dsp PROPERTIES TIMEOUT 10)
+
+

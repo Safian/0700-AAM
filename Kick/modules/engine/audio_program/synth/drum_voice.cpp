@@ -27,8 +27,11 @@ namespace mt
 {
     void DrumVoice::attachToAndReset( const juce::ValueTree& Tree, juce::UndoManager* Undo )
     {
-        pLfo.attachTo( Tree.getChildWithName( IDs::LFO ) );
-        pEnv.attachTo( Tree.getChildWithName( IDs::ENVELOPE ) );
+        if( !Tree.isValid() ) return;
+        auto lfoTree = Tree.getChildWithName( IDs::LFO );
+        pLfo.attachTo( lfoTree.isValid() ? lfoTree : Tree );
+        auto envTree = Tree.getChildWithName( IDs::ENVELOPE );
+        pEnv.attachTo( envTree.isValid() ? envTree : Tree );
     }
 
     void DrumVoice::noteOn( int Number, int Velocity )
@@ -51,6 +54,10 @@ namespace mt
         updateAmplitudeEnvelope( sampleLength );
         updateFilterEnvelope( sampleLength );
         updatePitchEnvelope( sampleLength );
+
+        ampEnv.setEnabled( pEnv.amp.isEnabled() );
+        filtEnv.setEnabled( pEnv.filter.isEnabled() );
+        pitchEnv.setEnabled( pEnv.pitch.isEnabled() );
 
         // Setup filter.
         updateFilter();
@@ -77,6 +84,15 @@ namespace mt
 
     void DrumVoice::updateLFO()
     {
+        if( !pLfo.isEnabled() )
+        {
+            lfoToAmp    = 0.0;
+            lfoToPan    = 0.0;
+            lfoToPitch  = 0.0;
+            lfoToFilter = 0.0;
+            return;
+        }
+
         lfo.setType( toEnum<LFOType>( (int)pLfo.type() ) );
         lfo.setFrequency( pLfo.freq() );
 

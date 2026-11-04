@@ -216,7 +216,8 @@ namespace mt
     MTIPitchEnvelope::MTIPitchEnvelope( const juce::ValueTree& VT, juce::UndoManager* UM )
     {
         assert( VT.hasType( IDs::PITCHENV ) );
-        pitchtype.referTo( VT, IDs::TYPE, UM, ADSRType::Type_AD );
+        pitchIsEnabled.referTo( VT, IDs::isEnabled, UM, false );
+        pitchtype.referTo( VT, IDs::type, UM, ADSRType::Type_AD );
         pitchAttack.referTo( VT, IDs::attack, UM, 0 );
         pitchDecay.referTo( VT, IDs::decay, UM, 0 );
         pitchDepth.referTo( VT, IDs::depth, UM, 0 );
@@ -231,7 +232,11 @@ namespace mt
     {
         assert( VT.hasType( IDs::FILTERENV ) );
 
-        filtertype.referTo( VT, IDs::TYPE, UM, ADSRType::Type_AD );
+        filterIsEnabled.referTo( VT, IDs::isEnabled, UM, false );
+        filtertype.referTo( VT, IDs::type, UM, ADSRType::Type_AD );
+        filterFilterType.referTo( VT, IDs::filterType, UM, 0 );
+        filterCutoff.referTo( VT, IDs::freq, UM, 20000 );
+        filterResonance.referTo( VT, IDs::resonance, UM, 10 );
         filterAttack.referTo( VT, IDs::attack, UM, 0 );
         filterDecay.referTo( VT, IDs::decay, UM, 0 );
         filterDepth.referTo( VT, IDs::depth, UM, 0 );
@@ -246,7 +251,8 @@ namespace mt
     {
         assert( VT.hasType( IDs::AMPENV ) );
 
-        amptype.referTo( VT, IDs::TYPE, UM, ADSRType::Type_AD );
+        ampIsEnabled.referTo( VT, IDs::isEnabled, UM, false );
+        amptype.referTo( VT, IDs::type, UM, ADSRType::Type_AD );
         ampAttack.referTo( VT, IDs::attack, UM, 0 );
         ampDecay.referTo( VT, IDs::decay, UM, 0 );
         ampDepth.referTo( VT, IDs::depth, UM, 0 );

@@ -36,6 +36,7 @@ namespace mt
 
         virtual juce::ValueTree getNoteVT( int Note );
         MTICommonDrumKeys*      getCommonData( int Note );
+        MTICommonDrumKeys*      getOrCreateCommonData( int Note );
 
         //Envelopes
         //setters
@@ -52,8 +53,13 @@ namespace mt
         int      getEnvelopeDecay( int Note, EnvelopeType EnvType );
         int      getEnvelopeSustain( int Note, EnvelopeType EnvType );
         int      getEnvelopeDepth( int Note, EnvelopeType EnvType );
+        void     setEnvEnabled( int Note, EnvelopeType EnvType, bool Enabled );
+        bool     isEnvEnabled( int Note, EnvelopeType EnvType );
+
         //LFO
         //Setters
+        void setLFOEnabled( int Note, bool Enabled );
+        bool isLFOEnabled( int Note );
         void setLFOType( int, int );
         void setLFOFrequency( int, double );
         void setLFOPitch( int, int );
@@ -67,6 +73,14 @@ namespace mt
         int    getLFOFilter( int Note );
         int    getLFOLevel( int Note );
         double getLFOPan( int Note );
+
+        // Filter (PE-21)
+        void setFilterType( int Note, int Type );
+        int  getFilterType( int Note );
+        void setFilterCutoff( int Note, int Cutoff );
+        int  getFilterCutoff( int Note );
+        void setFilterResonance( int Note, int Resonance );
+        int  getFilterResonance( int Note );
 
         virtual SamplePlayType getNoteSamplePlay( int Note ) override { return SamplePlayType::ONE_SHOT; }
 

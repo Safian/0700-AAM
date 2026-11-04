@@ -198,6 +198,39 @@ namespace kick_ui
         layer[0].setToggleState( true, juce::dontSendNotification );
     }
 
+    void KeyGroupSampleTab1::buttonClicked( juce::Button* B )
+    {
+        if( auto* tb = dynamic_cast<ui::KickToggleButton*>( B ) )
+        {
+            auto sel = tb->getID();
+            if( sel == selectedLayer )
+                openSamplePicker( sel );
+        }
+    }
+
+    void KeyGroupSampleTab1::openSamplePicker( int layerIdx )
+    {
+        if( ! pKeygroup || keys.empty() ) return;
+        auto& ae = mt::getAudioInterface();
+        auto files = ae.getAssetNames( mt::AssetTypes::Samples );
+        files.insert( files.begin(), "Clear Assignment" );
+        fileList.setContent( files, -1 );
+        fileList.show( "Assign Key Layer " + juce::String( layerIdx + 1 ), [this, layerIdx]( int R ) {
+            if( R != UI::CANCEL && R >= 0 )
+            {
+                auto& ae = mt::getAudioInterface();
+                if( R == 0 )
+                    ae.clearSampleLayerInProgram( ae.getSelectedProgram(), keys[0], layerIdx );
+                else
+                {
+                    auto sample = ae.getAsset( mt::AssetTypes::Samples, R - 1 );
+                    ae.addSampleToProgram( ae.getSelectedProgram(), keys[0], sample, 0, layerIdx );
+                }
+                refresh();
+            }
+        } );
+    }
+
     void KeyGroupSampleTab1::buttonStateChanged( juce::Button* B )
     {
         if( B->getToggleState() )

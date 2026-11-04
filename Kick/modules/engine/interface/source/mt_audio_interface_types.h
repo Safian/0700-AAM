@@ -409,6 +409,7 @@ namespace mt
 
     struct MTIPitchEnvelope
     {
+        CachedValue<bool>     pitchIsEnabled;
         CachedValue<ADSRType> pitchtype;
         CachedValue<int>      pitchAttack;
         CachedValue<int>      pitchDecay;
@@ -421,7 +422,11 @@ namespace mt
 
     struct MTIFilterEnvelope
     {
+        CachedValue<bool>     filterIsEnabled;
         CachedValue<ADSRType> filtertype;
+        CachedValue<int>      filterFilterType;
+        CachedValue<int>      filterCutoff;
+        CachedValue<int>      filterResonance;
         CachedValue<int>      filterAttack;
         CachedValue<int>      filterDecay;
         CachedValue<int>      filterDepth;
@@ -433,6 +438,7 @@ namespace mt
 
     struct MTIAmpEnvelope
     {
+        CachedValue<bool>     ampIsEnabled;
         CachedValue<ADSRType> amptype;
         CachedValue<int>      ampAttack;
         CachedValue<int>      ampDecay;

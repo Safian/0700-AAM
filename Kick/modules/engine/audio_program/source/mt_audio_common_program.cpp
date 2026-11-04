@@ -47,6 +47,11 @@ namespace mt
         return dynamic_cast<MTICommonDrumKeys*>( getSample( Note ) );
     }
 
+    MTICommonDrumKeys* MTCommonProgram::getOrCreateCommonData( int Note )
+    {
+        return dynamic_cast<MTICommonDrumKeys*>( getOrCreate( Note ) );
+    }
+
     juce::ValueTree MTCommonProgram::createSample( int Note, const juce::String& Source, int Layer )
     {
         if( auto p = getOrCreate( Note ) )
@@ -63,37 +68,37 @@ namespace mt
     // LFO
     void MTCommonProgram::setLFOType( int Note, int Type )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
             p->lfoType = Type;
     }
 
     void MTCommonProgram::setLFOFrequency( int Note, double Value )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
             p->lfoFrequency = Value;
     }
 
     void MTCommonProgram::setLFOPitch( int Note, int Value )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
             p->lfoPitch = Value;
     }
 
     void MTCommonProgram::setLFOFilter( int Note, int Value )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
             p->lfoFilter = Value;
     }
 
     void MTCommonProgram::setLFOLevel( int Note, int Value )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
             p->lfoLevel = Value;
     }
 
     void MTCommonProgram::setLFOPan( int Note, double Value )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
             p->lfoPan = Value;
     }
 
@@ -135,7 +140,7 @@ namespace mt
 
     void MTCommonProgram::setEnvType( int Note, ADSRType Type, EnvelopeType EnvType )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
         {
             switch( EnvType )
             {
@@ -149,7 +154,7 @@ namespace mt
 
     void MTCommonProgram::setEnvelopeAttack( int Note, EnvelopeType EnvType, int Value )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
         {
             switch( EnvType )
             {
@@ -163,7 +168,7 @@ namespace mt
 
     void MTCommonProgram::setEnvelopeHold( int Note, EnvelopeType EnvType, int Value )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
         {
             switch( EnvType )
             {
@@ -177,7 +182,7 @@ namespace mt
 
     void MTCommonProgram::setEnvelopeDecay( int Note, EnvelopeType EnvType, int Value )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
         {
             switch( EnvType )
             {
@@ -191,7 +196,7 @@ namespace mt
 
     void MTCommonProgram::setEnvelopeSustain( int Note, EnvelopeType EnvType, int Value )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
         {
             switch( EnvType )
             {
@@ -205,7 +210,7 @@ namespace mt
 
     void MTCommonProgram::setEnvelopeDepth( int Note, EnvelopeType EnvType, int Value )
     {
-        if( auto p = getCommonData( Note ) )
+        if( auto p = getOrCreateCommonData( Note ) )
         {
             switch( EnvType )
             {
@@ -305,5 +310,82 @@ namespace mt
             }
         }
         return 0;
+    }
+
+    void MTCommonProgram::setEnvEnabled( int Note, EnvelopeType EnvType, bool Enabled )
+    {
+        if( auto p = getOrCreateCommonData( Note ) )
+        {
+            switch( EnvType )
+            {
+                case EnvelopeType::AMPLITUDE: p->ampIsEnabled = Enabled; break;
+                case EnvelopeType::FILTER: p->filterIsEnabled = Enabled; break;
+                case EnvelopeType::PITCH: p->pitchIsEnabled = Enabled; break;
+                default: break;
+            }
+        }
+    }
+
+    bool MTCommonProgram::isEnvEnabled( int Note, EnvelopeType EnvType )
+    {
+        if( auto p = getCommonData( Note ) )
+        {
+            switch( EnvType )
+            {
+                case EnvelopeType::AMPLITUDE: return p->ampIsEnabled.get();
+                case EnvelopeType::FILTER: return p->filterIsEnabled.get();
+                case EnvelopeType::PITCH: return p->pitchIsEnabled.get();
+                default: break;
+            }
+        }
+        return false;
+    }
+
+    void MTCommonProgram::setLFOEnabled( int Note, bool Enabled )
+    {
+        if( auto p = getOrCreateCommonData( Note ) )
+            p->lfoIsEnabled = Enabled;
+    }
+
+    bool MTCommonProgram::isLFOEnabled( int Note )
+    {
+        auto p = getCommonData( Note );
+        return p ? p->lfoIsEnabled.get() : false;
+    }
+
+    void MTCommonProgram::setFilterType( int Note, int Type )
+    {
+        if( auto p = getOrCreateCommonData( Note ) )
+            p->filterFilterType = Type;
+    }
+
+    int MTCommonProgram::getFilterType( int Note )
+    {
+        auto p = getCommonData( Note );
+        return p ? p->filterFilterType.get() : 0;
+    }
+
+    void MTCommonProgram::setFilterCutoff( int Note, int Cutoff )
+    {
+        if( auto p = getOrCreateCommonData( Note ) )
+            p->filterCutoff = Cutoff;
+    }
+
+    int MTCommonProgram::getFilterCutoff( int Note )
+    {
+        auto p = getCommonData( Note );
+        return p ? p->filterCutoff.get() : 20000;
+    }
+
+    void MTCommonProgram::setFilterResonance( int Note, int Resonance )
+    {
+        if( auto p = getOrCreateCommonData( Note ) )
+            p->filterResonance = Resonance;
+    }
+
+    int MTCommonProgram::getFilterResonance( int Note )
+    {
+        auto p = getCommonData( Note );
+        return p ? p->filterResonance.get() : 10;
     }
 }

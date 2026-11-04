@@ -34,9 +34,15 @@ namespace kick_ui
             const auto padNo    = contracts::DclContractsHelper::getPadNumber( f_HwMsg );
             const auto padState = contracts::DclContractsHelper::getPadState( f_HwMsg );
             const auto velocity = contracts::DclContractsHelper::getPadVelocity( f_HwMsg );
+            const auto pressure = contracts::DclContractsHelper::getPadAftertouch( f_HwMsg );
 
             if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
-                content.hardwarePad( padNo, true, velocity );
+            {
+                if( content.isPadHeld( padNo ) && pressure > 0 )
+                    content.padAftertouch( padNo, pressure );
+                else
+                    content.hardwarePad( padNo, true, velocity );
+            }
             else if( padState == contracts::DeviceControlContracts::BTN_RELEASED )
                 content.hardwarePad( padNo, false, 0 );
         }
@@ -65,14 +71,44 @@ namespace kick_ui
     PadPerformContent::PadPerformContent()
         : pads( std::make_unique<ui::KickPadButtonGroupComponent>( ui::KickPadButton::PadButtonType::with1Row ) )
     {
-        mt::utils::addChildComponents( this, rootNote, scale, startOn, octave, bankInc, bankDec, bank, chromaticBtn, notesBtn, chordsBtn, progressionBtn, levelBtn, levelParamBtn, heldLabel, chord, scale_octave, pads.get() );
+        mt::utils::addChildComponents( this, rootNote, scale, startOn, octave, bankInc, bankDec, bank, chromaticBtn, notesBtn, chordsBtn, progressionBtn, levelBtn, levelParamBtn, heldLabel, chord, scale_octave, pads.get(), arpBtn, latchBtn, arpMode, arpRate, arpOctaves, arpGate );
         mt::utils::setRadioGroupID( (int)kick_ui::RadioGroupId::Padperform, chromaticBtn, notesBtn, chordsBtn, progressionBtn );
-        mt::utils::setTitleColour( ui::Theme::textColour( 1 ), chord, startOn );
-        mt::utils::setValueColour( ui::Theme::textColour( 1 ), chromaticBtn, notesBtn, chordsBtn, progressionBtn, levelBtn, levelParamBtn, bank );
-        mt::utils::setValueFontHeight( 18, chromaticBtn, notesBtn, chordsBtn, progressionBtn, levelBtn, levelParamBtn, bank );
-        mt::utils::setTitleFontHeight( 16, scale, rootNote, octave, chord, startOn );
-        mt::utils::setValueFontHeight( 20, scale, rootNote, octave, chord, startOn );
-        mt::utils::setJustificationType( juce::Justification::centred, scale, rootNote, octave, chord, startOn );
+        mt::utils::setTitleColour( ui::Theme::textColour( 1 ), chord, startOn, arpMode, arpRate );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), chromaticBtn, notesBtn, chordsBtn, progressionBtn, levelBtn, levelParamBtn, bank, arpBtn, latchBtn );
+        mt::utils::setValueFontHeight( 18, chromaticBtn, notesBtn, chordsBtn, progressionBtn, levelBtn, levelParamBtn, bank, arpBtn, latchBtn );
+        mt::utils::setTitleFontHeight( 16, scale, rootNote, octave, chord, startOn, arpMode, arpRate );
+        mt::utils::setValueFontHeight( 20, scale, rootNote, octave, chord, startOn, arpMode, arpRate );
+        mt::utils::setJustificationType( juce::Justification::centred, scale, rootNote, octave, chord, startOn, arpMode, arpRate );
+        arpOctaves.setColours( ui::Theme::textColour( 2 ), ui::Theme::textColour( 1 ) );
+        arpGate.setColours( ui::Theme::textColour( 2 ), ui::Theme::textColour( 1 ) );
+
+        arpBtn.onClick = [this] {
+            const bool on = arpBtn.getToggleState();
+            ae.setArpEnabled( ae.getSelected(), on );
+            refreshData();
+        };
+
+        latchBtn.onClick = [this] {
+            const bool on = latchBtn.getToggleState();
+            ae.setArpLatch( ae.getSelected(), on );
+            refreshData();
+        };
+
+        arpMode.onSelectionChanged = [this]( int idx, const juce::String& ) {
+            ae.setArpMode( ae.getSelected(), idx );
+        };
+
+        arpRate.onSelectionChanged = [this]( int idx, const juce::String& ) {
+            ae.setArpRate( ae.getSelected(), idx );
+        };
+
+        arpOctaves.onValueChanged = [this]( int val ) {
+            ae.setArpOctaves( ae.getSelected(), val );
+        };
+
+        arpGate.onValueChanged = [this]( int val ) {
+            ae.setArpGate( ae.getSelected(), val );
+        };
 
         heldLabel.setInterceptsMouseClicks( false, false );
         heldLabel.setValueColour( ui::Theme::textColour( 1 ) );
@@ -213,6 +249,14 @@ namespace kick_ui
         chord.setBoundsRelative( .02f, .532f, .315f, .14f );
         startOn.setBoundsRelative( .02f, .695f, .315f, .14f );
 
+        arpBtn.setBoundsRelative( .02f, .845f, .15f, .058f );
+        latchBtn.setBoundsRelative( .18f, .845f, .155f, .058f );
+
+        arpMode.setBoundsRelative( .02f, .532f, .15f, .14f );
+        arpRate.setBoundsRelative( .18f, .532f, .155f, .14f );
+        arpOctaves.setBoundsRelative( .02f, .695f, .15f, .14f );
+        arpGate.setBoundsRelative( .18f, .695f, .155f, .14f );
+
         // Right Side...
         pads->setBoundsRelative( .358f, .02f, .63f, .87f );
 
@@ -232,6 +276,7 @@ namespace kick_ui
     void PadPerformContent::knobCommand( int knob, int value )
     {
         const bool chordsShown = padmap::normaliseMode( selectedType ) == padmap::Chords || padmap::normaliseMode( selectedType ) == padmap::Progression;
+        const bool arpActive   = arpBtn.getToggleState();
         switch( knob )
         {
             case contracts::DeviceControlContracts::EN_KNOB_1: scale.knobRotated( value ); break;
@@ -241,9 +286,21 @@ namespace kick_ui
                 if( chordsShown ) chord.knobRotated( value );
                 else stepMode( value > 0 ? 1 : -1 );
                 break;
-            case contracts::DeviceControlContracts::EN_KNOB_5: chord.knobRotated( value ); break;
-            case contracts::DeviceControlContracts::EN_KNOB_6: startOn.knobRotated( value ); break;
-            case contracts::DeviceControlContracts::EN_KNOB_7: stepMode( value > 0 ? 1 : -1 ); break;
+            case contracts::DeviceControlContracts::EN_KNOB_5:
+                if( arpActive ) arpMode.knobRotated( value );
+                else chord.knobRotated( value );
+                break;
+            case contracts::DeviceControlContracts::EN_KNOB_6:
+                if( arpActive ) arpRate.knobRotated( value );
+                else startOn.knobRotated( value );
+                break;
+            case contracts::DeviceControlContracts::EN_KNOB_7:
+                if( arpActive ) arpOctaves.setValue( juce::jlimit( 1, 4, arpOctaves.getValue() + ( value > 0 ? 1 : -1 ) ) );
+                else stepMode( value > 0 ? 1 : -1 );
+                break;
+            case contracts::DeviceControlContracts::EN_KNOB_8:
+                if( arpActive ) arpGate.setValue( juce::jlimit( 5, 100, arpGate.getValue() + value ) );
+                break;
             default: break;
         }
     }
@@ -359,7 +416,19 @@ namespace kick_ui
         layout_ = padmap::layout( cur_ );
 
         const bool chordsShown = cur_.mode == padmap::Chords || cur_.mode == padmap::Progression;
-        chord.setVisible( chordsShown && isVisible() );
+        const bool arpActive   = ae.isArpEnabled( ae.getSelected() );
+        arpBtn.setToggleState( arpActive, juce::dontSendNotification );
+        latchBtn.setToggleState( ae.isArpLatch( ae.getSelected() ), juce::dontSendNotification );
+        arpMode.setSelected( ae.getArpMode( ae.getSelected() ), juce::dontSendNotification );
+        arpRate.setSelected( ae.getArpRate( ae.getSelected() ), juce::dontSendNotification );
+        arpOctaves.setValue( ae.getArpOctaves( ae.getSelected() ), juce::dontSendNotification );
+
+        chord.setVisible( chordsShown && ! arpActive && isVisible() );
+        startOn.setVisible( ! ( arpActive && ! chordsShown ) && isVisible() );
+        arpMode.setVisible( arpActive && ! chordsShown && isVisible() );
+        arpRate.setVisible( arpActive && ! chordsShown && isVisible() );
+        arpOctaves.setVisible( arpActive && ! chordsShown && isVisible() );
+        arpGate.setVisible( arpActive && ! chordsShown && isVisible() );
 
         pads->refreshAllPads();
         pads->clearAllPadData();
@@ -408,7 +477,13 @@ namespace kick_ui
             {
                 const auto& pad = layout_[(size_t)slot];
                 mark            = pad.mark;
-                if( pad.note >= 0 && pad.note < (int)names.size() ) text = names[(size_t)pad.note];
+                if( pad.note >= 0 && pad.note < (int)names.size() )
+                {
+                    text = names[(size_t)pad.note];
+                    const int deg = padmap::scaleDegree( pad.note, cur_.rootPc, cur_.scale );
+                    if( deg > 0 && cur_.mode != padmap::Chromatic )
+                        text += " (" + juce::String( deg ) + ")";
+                }
             }
             const auto border = mark == padmap::Mark::Root   ? ui::Theme::highlightColour( 2 ) :
                                 mark == padmap::Mark::Active ? ui::Theme::highlightColour( 1 ) :
@@ -489,6 +564,24 @@ namespace kick_ui
         const int slot = juce::jlimit( 0, 127, ae.getBankOffset() + padNo );
         if( pressed ) padDown( slot, slot, velocity );
         else padUp( slot );
+    }
+
+    bool PadPerformContent::isPadHeld( int padNo ) const
+    {
+        const int slot = juce::jlimit( 0, 127, ae.getBankOffset() + padNo );
+        const auto* notes = held_.notesFor( slot );
+        return notes != nullptr && ! notes->empty();
+    }
+
+    void PadPerformContent::padAftertouch( int padNo, int pressure )
+    {
+        const int slot = juce::jlimit( 0, 127, ae.getBankOffset() + padNo );
+        const auto* notes = held_.notesFor( slot );
+        if( ! notes || notes->empty() ) return;
+        const auto it = keyTarget_.find( slot );
+        const mt::MTSelected target = ( it != keyTarget_.end() ) ? it->second : ae.getSelected();
+        for( int n : *notes )
+            ae.addLiveMidiMsg( target, juce::MidiMessage::aftertouchChange( 1, n, juce::jlimit( 0, 127, pressure ) ) );
     }
 
     void PadPerformContent::padDown( int key, int slot, int velocity )
@@ -578,6 +671,6 @@ namespace kick_ui
     void PadPerformContent::paint( juce::Graphics& g )
     {
         g.setColour( ui::Theme::backgroundColour( 1 ) );
-        g.fillRoundedRectangle( { 10.0f, 10.0f, 342.0f, 396.0f }, 5.0f );
+        g.fillRoundedRectangle( { 10.0f, 10.0f, 342.0f, 435.0f }, 5.0f );
     }
 }

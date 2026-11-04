@@ -54,6 +54,16 @@ inline juce::String runKickProgramEditSmoke() {
     auto* drumProg = dynamic_cast<mt::MTDrumProgram*>(api.getProgram(drum));
     if (!drumProg) return fail("no drum program");
     drumProg->setLevel(60);
+    // PE-02 / PE-21: Drum envelope, LFO, and filter controls write to the program model
+    drumProg->setEnvEnabled( 0, mt::EnvelopeType::AMPLITUDE, true );
+    if (!drumProg->isEnvEnabled( 0, mt::EnvelopeType::AMPLITUDE )) return fail("Drum amp env isEnabled failed");
+    drumProg->setLFOEnabled( 0, true );
+    if (!drumProg->isLFOEnabled( 0 )) return fail("Drum LFO isEnabled failed");
+    drumProg->setFilterType( 0, 2 );
+    if (drumProg->getFilterType( 0 ) != 2) return fail("Drum filterType failed");
+    drumProg->setFilterCutoff( 0, 850.0 );
+    if (std::abs(drumProg->getFilterCutoff( 0 ) - 850.0) > 1e-4) return fail("Drum filter cutoff failed");
+    say("Drum envelope / LFO / filter model bindings ok");
     pe->setVisible(false); // showing the screen refreshes the page from the program (the sliders follow the model)
     pe->setVisible(true);
     if (drumProg->getLevel() != 60) return fail("showing the page changed the program Level (page refresh must not write)");
@@ -149,6 +159,12 @@ inline juce::String runKickProgramEditSmoke() {
         pp->toggleSixteenLevels();
         pp->setVisible(false); // hiding releases every held note
     }
+    // PP-22 & PP-25: Pad aftertouch and Arpeggiator / Latch state
+    api.setArpEnabled(api.getSelected(), true);
+    if (!api.isArpEnabled(api.getSelected())) return fail("ARP enable failed");
+    api.setArpLatch(api.getSelected(), true);
+    if (!api.isArpLatch(api.getSelected())) return fail("ARP latch failed");
+    say("ARP / Latch ok");
     say("Pad Perform pads / Q-Link / 16 LEVELS ok");
 
     if (!api.closeProject()) return fail("Cannot close project");

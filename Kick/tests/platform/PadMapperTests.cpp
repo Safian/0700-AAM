@@ -171,6 +171,54 @@ static void testChordName()
     check( chordName( { 60, 64 }, false ).empty() && chordName( { 60, 61, 62 }, false ).empty(), "no name for two notes / clusters" );
 }
 
+static void testScalesSumTo12()
+{
+    // The three previously broken scales (sum was 9, 11, 10 instead of 12)
+    const std::vector<int> ancient = { 2, 2, 2, 1, 2, 3 }; // AncientChinese: 2+2+2+1+2+3 = 12
+    const std::vector<int> persian = { 1, 3, 1, 2, 1, 3, 1 }; // Persian: 1+3+1+2+1+3+1 = 12
+    const std::vector<int> indian1 = { 1, 2, 2, 3, 2, 2 }; // Indian1: 1+2+2+3+2+2 = 12
+
+    auto checkSum12 = []( const std::vector<int>& s, const char* name ) {
+        int sum = 0;
+        for( int step : s ) sum += step;
+        check( sum == 12, name );
+    };
+    checkSum12( ancient, "AncientChinese must sum to 12" );
+    checkSum12( persian, "Persian must sum to 12" );
+    checkSum12( indian1, "Indian1 must sum to 12" );
+}
+
+static void testScaleDegree()
+{
+    // C Major: C=1, D=2, E=3, F=4, G=5, A=6, B=7
+    check( scaleDegree( 60, 0, kMajor ) == 1, "C4 in C major is degree 1" );
+    check( scaleDegree( 62, 0, kMajor ) == 2, "D4 in C major is degree 2" );
+    check( scaleDegree( 64, 0, kMajor ) == 3, "E4 in C major is degree 3" );
+    check( scaleDegree( 65, 0, kMajor ) == 4, "F4 in C major is degree 4" );
+    check( scaleDegree( 67, 0, kMajor ) == 5, "G4 in C major is degree 5" );
+    check( scaleDegree( 69, 0, kMajor ) == 6, "A4 in C major is degree 6" );
+    check( scaleDegree( 71, 0, kMajor ) == 7, "B4 in C major is degree 7" );
+    check( scaleDegree( 72, 0, kMajor ) == 1, "C5 in C major is degree 1 (octave wrap)" );
+    check( scaleDegree( 61, 0, kMajor ) == 0, "C#4 in C major is non-diatonic (0)" );
+}
+
+static void testNotesForAndStrip()
+{
+    HeldNotes h;
+    h.press( 5, { 48, 52, 55 } );
+    auto* n = h.notesFor( 5 );
+    check( n != nullptr && *n == std::vector<int>( { 48, 52, 55 } ), "notesFor retrieves held notes for key" );
+    check( h.notesFor( 99 ) == nullptr, "notesFor returns null for unheld key" );
+
+    Params p = base( Notes );
+    p.octaveIdx = 3; // C1 = 36
+    auto l = layout( p );
+    // Strip pos 0 -> slot 0 -> 36 (C1)
+    check( noteForStrip( 0, l, 0 ) == 36, "strip at 0 plays pad 0 note" );
+    // Strip pos 8 -> slot 1 -> 38 (D1)
+    check( noteForStrip( 8, l, 0 ) == 38, "strip at slot 1 plays pad 1 note" );
+}
+
 int main()
 {
     testChromatic();
@@ -182,6 +230,9 @@ int main()
     testHeld();
     testLevels();
     testChordName();
+    testScalesSumTo12();
+    testScaleDegree();
+    testNotesForAndStrip();
     std::puts( "PadMapperTests: OK" );
     return 0;
 }

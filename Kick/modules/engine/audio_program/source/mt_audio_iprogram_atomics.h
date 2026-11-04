@@ -156,7 +156,7 @@ namespace mt
             auto Undo = nullptr;
             MTIAtomicADSR::attachTo( Tree );
             isEnabled.attachTo( Tree, IDs::isEnabled, Undo, 0.f );
-            type.attachTo( Tree, IDs::type, Undo, 0 );
+            type.attachTo( Tree, IDs::filterType, Undo, 0 );
             cutoff.attachTo( Tree, IDs::freq, Undo, 20000 );
             resonance.attachTo( Tree, IDs::resonance, Undo, 10 );
             depth.attachTo( Tree, IDs::depth, Undo, 0 );
