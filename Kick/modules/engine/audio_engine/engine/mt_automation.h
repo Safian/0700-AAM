@@ -54,6 +54,21 @@ namespace mt::automation
         return (double)c / kPanScale;
     }
 
+    constexpr int kNormScale = 1000;
+    inline int32_t normToValue( double Norm )
+    {
+        if( !( Norm == Norm ) )
+            return 0;
+        const double v = Norm * kNormScale;
+        const double c = v < 0.0 ? 0.0 : ( v > kNormScale ? kNormScale : v );
+        return (int32_t)( c + 0.5 );
+    }
+    inline double valueToNorm( int32_t Value )
+    {
+        const int c = Value < 0 ? 0 : ( Value > kNormScale ? kNormScale : Value );
+        return (double)c / kNormScale;
+    }
+
     // Persistence: a lane node stores its Param as `autoParam`. A node WITHOUT autoParam (projects saved before the
     // PAN lane existed) is a Level lane; unknown values are not a lane we understand (nullopt-like: returns -1).
     inline int paramFromStored( bool HasParam, int Stored )

@@ -1,3 +1,5 @@
+#include <engine/audio_engine/engine/mt_automation.h>
+
 namespace kick_ui
 {
     namespace
@@ -128,12 +130,12 @@ namespace kick_ui
     XyFxView::XyFxView()
         : kick_ui::IScreen( kick_ui::Screen::HomeXYView )
     {
-        mt::utils::addAndMakeVisible( this, setupScreen, latch, setup, xyFx, header, on_off, output, hdrComp );
+        mt::utils::addAndMakeVisible( this, setupScreen, latch, setup, xyFx, header, on_off, qlinkModeBadge, output, hdrComp );
         mt::utils::addListener( this, latch, setup );
         xyFx.setEnabled( false );
 
         hdrComp.setValueBackgroundColor( ui::Theme::backgroundColour( 3 ) );
-        header.showOptions( false, false ); // no gesture automation exists: the header icon did nothing
+        header.showOptions( true, false ); // XY-13: wired automation options
         header.onBackButtonPressed = [this]( bool ) { closeScreen( Screen::HomeListView ); };
         output.setJustificationType( juce::Justification::centredLeft );
         output.setTitleColour( ui::Theme::textColour( 1 ) );
@@ -141,6 +143,8 @@ namespace kick_ui
 
         mt::utils::setValueColour( ui::Theme::textColour( 1 ), latch, setup, on_off );
         mt::utils::setValueFontHeight( 18, latch, setup, on_off );
+        mt::utils::setValueColour( ui::Theme::textColour( 2 ), qlinkModeBadge );
+        mt::utils::setValueFontHeight( 12, qlinkModeBadge );
         output.setTitleFontHeight( 16 );
 
         const auto& p = xyfx::preset( setupScreen.getPreset() );
@@ -219,10 +223,11 @@ namespace kick_ui
     {
         auto& ae = mt::getAudioInterface();
         targets.clear();
-        targets.push_back( { "Track", true, {} } );
-        for( const auto& n : ae.getBusManager().getReturnBusNames() ) targets.push_back( { juce::String( n ), false, juce::String( n ) } );
-        for( const auto& n : ae.getBusManager().getSubmixBusNames() ) targets.push_back( { juce::String( n ), false, juce::String( n ) } );
-        for( const auto& n : ae.getBusManager().getOutputBusNames() ) targets.push_back( { juce::String( n ), false, juce::String( n ) } );
+        targets.push_back( { "Track", true, {}, false } );
+        targets.push_back( { "MIDI CC", false, {}, true } );
+        for( const auto& n : ae.getBusManager().getReturnBusNames() ) targets.push_back( { juce::String( n ), false, juce::String( n ), false } );
+        for( const auto& n : ae.getBusManager().getSubmixBusNames() ) targets.push_back( { juce::String( n ), false, juce::String( n ), false } );
+        for( const auto& n : ae.getBusManager().getOutputBusNames() ) targets.push_back( { juce::String( n ), false, juce::String( n ), false } );
 
         std::vector<juce::String> labels;
         for( const auto& t : targets ) labels.push_back( t.label );
@@ -241,6 +246,8 @@ namespace kick_ui
 
     mt::MTIInsertsInterface* XyFxView::interfaceFor( const Target& T )
     {
+        if( T.isMidiCc )
+            return nullptr;
         auto& ae = mt::getAudioInterface();
         if( T.isTrack )
         {
@@ -273,6 +280,31 @@ namespace kick_ui
         const auto* target = selectedTarget();
         if( target == nullptr )
             return;
+
+        // XY-13: Gesture automation writing
+        auto& ae = mt::getAudioInterface();
+        if( gate.open() && ae.getAutomationMode() == mt::automation::Write && ae.isSequencePlaying() )
+        {
+            const auto sel = ae.getSelected();
+            const int tick = ae.getSequenceSeekTick( sel.sequence );
+            ae.setAutomationEvent( sel, mt::automation::TouchX, -1, tick, mt::automation::normToValue( xyFx.getXCoordinate() ) );
+            ae.setAutomationEvent( sel, mt::automation::TouchY, -1, tick, mt::automation::normToValue( xyFx.getYCoordinate() ) );
+        }
+
+        // XY-14: Common XY engine for MIDI CC mode
+        if( target->isMidiCc )
+        {
+            if( gate.open() )
+            {
+                int ccX = juce::jlimit( 0, 127, static_cast<int>( xyFx.getXCoordinate() * 127.f ) );
+                int ccY = juce::jlimit( 0, 127, static_cast<int>( xyFx.getYCoordinate() * 127.f ) );
+                ae.sendMidiMessage( {}, juce::MidiMessage::controllerEvent( 1, 16, ccX ) );
+                ae.sendMidiMessage( {}, juce::MidiMessage::controllerEvent( 1, 17, ccY ) );
+            }
+            applied    = *target;
+            hasApplied = true;
+            return;
+        }
 
         // A destination change (or the selected track changing) moves the effect: the old one is closed first.
         if( hasApplied && ( applied.isTrack != target->isTrack || applied.bus != target->bus || target->isTrack ) )
@@ -351,6 +383,7 @@ namespace kick_ui
         auto b = getLocalBounds();
         header.setBounds( b.removeFromTop( ui::layout::header.getHeight() ) );
         on_off.setBoundsRelative( .8082f, .0299f, .0880f, .0823f );
+        qlinkModeBadge.setBoundsRelative( .6350f, .0299f, .1650f, .0823f );
         latch.setBoundsRelative( .0097f, .9213f, .1174f, .0636f );
         xyFx.setBoundsRelative( .0097f, .1610f, .9823f, .7391f );
         output.setBoundsRelative( .2250f, .0299f, .1956f, .0823f );
@@ -374,6 +407,9 @@ namespace kick_ui
         {
             rebuildTargets();
             loadState();
+            const int qmode = mt::getSettings().knobControl.getMode();
+            qlinkModeBadge.setText( qmode == 0 ? "Q-LINK: CUSTOM" : "Q-LINK: SCREEN", juce::dontSendNotification );
+            qlinkModeBadge.setValueColour( qmode == 0 ? ui::Theme::textColour( 3 ) : ui::Theme::textColour( 1 ) );
         }
         else
         {
@@ -401,6 +437,9 @@ namespace kick_ui
     void XyFxView::showSummary()
     {
         // Also with the Setup panel closed: the Q-Link used to change values nobody could see.
+        const int qmode = mt::getSettings().knobControl.getMode();
+        qlinkModeBadge.setText( qmode == 0 ? "Q-LINK: CUSTOM" : "Q-LINK: SCREEN", juce::dontSendNotification );
+        qlinkModeBadge.setValueColour( qmode == 0 ? ui::Theme::textColour( 3 ) : ui::Theme::textColour( 1 ) );
         AppStatusbar::Instance().setBoxInfo( setupScreen.summary() );
     }
 
