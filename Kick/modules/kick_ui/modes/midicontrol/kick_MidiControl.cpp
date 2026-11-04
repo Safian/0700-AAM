@@ -171,6 +171,10 @@ namespace kick_ui
             {
                 index = screenIndex( f_HWMsg.data[0] );
             }
+            else if( f_HWMsg.pktType == CPktMgr::EN_PKT_TYPE_SLIDER )
+            {
+                index = midictl::kTouchStrip;
+            }
 
             if( index >= 0 && index < (int)names.size() )
             {

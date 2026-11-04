@@ -76,8 +76,12 @@ namespace kick_ui
         static sigslot::signal<Screen, void*> onScreenData;
 
         // External requests (e.g. hardware Shift+button): emit before sigScreenClose() of the target screen.
-        static sigslot::signal<>    sigBrowserShowFavourites; // MenuFileBrowser: jump to the next assigned favourite slot
-        static sigslot::signal<int> sigMainModeSelectTab;     // HomeListView: 0 = Sequence, 1 = Track, 2 = Program
+        static sigslot::signal<>          sigBrowserShowFavourites; // MenuFileBrowser: jump to the next assigned favourite slot
+        static sigslot::signal<int>       sigMainModeSelectTab;     // HomeListView: 0 = Sequence, 1 = Track, 2 = Program
+        static sigslot::signal<int, bool> sigQLinkTouch;            // Q-Link knob 0..15 touched on/off (QL-11)
+        static sigslot::signal<float>     sigTouchFxStripPos;       // Touch strip Y normalized 0.0..1.0f (XY-11)
+        static sigslot::signal<bool>      sigTouchFxStripGate;      // Touch strip gate open/close (XY-11)
+        static sigslot::signal<>          sigTouchFxToggleSetup;    // Shift+TOUCH_FX: toggle Setup panel in XY (XY-12)
     };
 
     // Base class for all UI screens...

@@ -771,9 +771,13 @@ namespace kick_ui
                     loadBankSettings( leftComp.bank.getSelected() );
                 }
             }
-            else if( index >= midictl::kXAxis ) // xyfx axes (38, 39)
+            else if( index >= midictl::kXAxis && index <= midictl::kYAxis ) // xyfx axes (38, 39)
             {
                 rightComp.setCurentComponent( 2 );
+            }
+            else if( index == midictl::kTouchStrip ) // touch strip
+            {
+                rightComp.setCurentComponent( 1 );
             }
             if( !bankSel )
                 refresh();

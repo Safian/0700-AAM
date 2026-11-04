@@ -20,7 +20,7 @@ int main()
     // ---- control table: list size, unique names, unique default CC (TC and PAD Mute were both 14)
     auto names = controlListNames();
     CHECK_EQ( names.size(), kListSize );
-    CHECK_EQ( kListSize, 40 );
+    CHECK_EQ( kListSize, 41 );
     CHECK( std::set<std::string>( names.begin(), names.end() ).size() == names.size() );
     CHECK( names[0] == "Step Seq" );
     CHECK( names[8] == "-" );
@@ -29,12 +29,13 @@ int main()
     CHECK( names[kFirstPad] == "Pad 1" );
     CHECK( names[kXAxis] == "XYFXX-Axis" );
     CHECK( names[kYAxis] == "XYFXY-Axis" );
+    CHECK( names[kTouchStrip] == "Touch Strip" );
     std::set<int> ccs;
     for( const auto& b : buttons() ) ccs.insert( b.defaultCc );
     CHECK_EQ( ccs.size(), 18 );
     CHECK( !ccs.count( 20 ) && !ccs.count( 24 ) && !ccs.count( 25 ) ); // Q-Link 20..23, XY 24/25
 
-    // ---- panels: the XY rows reach the XY panel
+    // ---- panels: the XY rows reach the XY panel, touch strip reaches strip panel
     CHECK( panelOfIndex( 0 ) == ListPanel::Button );
     CHECK( panelOfIndex( 17 ) == ListPanel::Button );
     CHECK( panelOfIndex( 18 ) == ListPanel::QLink );
@@ -43,6 +44,7 @@ int main()
     CHECK( panelOfIndex( 37 ) == ListPanel::Pad );
     CHECK( panelOfIndex( 38 ) == ListPanel::Xy );
     CHECK( panelOfIndex( 39 ) == ListPanel::Xy );
+    CHECK( panelOfIndex( 40 ) == ListPanel::Strip );
 
     // ---- Q-Link CC
     CHECK_EQ( relativeCc( 1 ), 1 );
