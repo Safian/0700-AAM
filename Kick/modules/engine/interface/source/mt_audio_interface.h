@@ -221,6 +221,8 @@ namespace mt
         // Samples
         void                      addSampleToProgram( int Program, int KeyNote, const juce::String& Sample, int Slice = 0, int Layer = 0 );
         void                      removeSampleFromProgram( int Program, int KeyNote );
+        // Clears only one layer's source of the pad (undoable); the pad's other settings stay. Returns false if nothing was cleared.
+        bool                      clearSampleLayerInProgram( int Program, int KeyNote, int Layer );
         void                      removeSampleFromProgram( int Program, int KeyNote, const juce::String& Sample );
         int                       getNumProgramSamples( int Program );
         void                      getProgramSamples( int Program, std::vector<MTISample*>& Samples );
@@ -580,6 +582,7 @@ namespace mt
 
         void setupRecorder( double timeInSeconds, float Gain, float Pan = 0.f, bool Looping = false, bool Overdub = false );
         void setMonitorOn( bool Monitor );
+        void setRecorderMonitorGain( float Gain ); // Sampler monitor level, 0..1
         void setRecorderLoop( bool Looping );
         void setRecorderOverdub( bool Overdub );
         void setRecorderPan( float Pan );

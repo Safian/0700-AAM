@@ -69,6 +69,13 @@ namespace ui
             resized();
         }
 
+        // The Inserts panel only does something where the engine has an insert chain (Looper); hidden elsewhere.
+        void showInserts( bool Show )
+        {
+            bShowInserts = Show;
+            ieff.setVisible( bShowInserts && isVisible() );
+        }
+
         void showOutputs( bool Show )
         {
             bShowOuts = Show;
@@ -112,6 +119,7 @@ namespace ui
         double getMonitorLevelNormalized() const noexcept { return monitorSlider.getNormalized(); }
 
         void knobCommand( int knob, int value );
+        void monitorKnobRotated( double delta ) { monitorSlider.knobRotated( delta ); }
         void knobRotated( double deltaValue );
 
         void setInsertsList( std::vector<juce::String>& InsertsList );
@@ -124,6 +132,7 @@ namespace ui
         bool            bShowPan{ true };
         bool            bShowRec{ true };
         bool            bShowOuts{ true };
+        bool            bShowInserts{ true };
         KickListBox     inputList{ KickListBox::BoxType::withoutTitleBar, "", {} };
         KickListBox     outputList{ KickListBox::BoxType::withoutTitleBar, "", {} };
         KickPanRotary   panB;

@@ -38,7 +38,7 @@ namespace kick_ui
         ui::KickListBox      programs{ ui::KickListBox::withoutTitleBar, "", {} };
         ui::KickListBox      assignPad{ ui::KickListBox::withoutTitleBar, "", {} };
         ui::KickNoteSelector rootNote{ "Root Note" };
-        ui::KickListBox      createNewProgram{ ui::KickListBox::withoutTitleBar, "", { "Off", "With Non-Destructive Slices", "With Pad Parameters" } };
+        ui::KickListBox      createNewProgram{ ui::KickListBox::withoutTitleBar, "", { "Off", "Slices To Pads" } };
         ui::KickLabel        programLabel{ "PROGRAM" }, padLabel{ "ASSIGN PAD" }, rootNoteLabel{ "ROOT NOTE" }, createNewPgmLabel{ "CREATE NEW PROGRAM" };
 
         std::vector<juce::String> padData;

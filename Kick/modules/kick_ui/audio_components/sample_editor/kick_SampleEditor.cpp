@@ -118,8 +118,11 @@ namespace kick_ui
         };
 
         sampleProcessAction.connect( [this]( const int Index, std::list<juce::var>& Params ) {
-            if( sampleListBox.getSelected() != "None" )
-                seData.performAction( Index, Params );
+            if( sampleListBox.getSelected() == "None" )
+                return;
+            if( !seData.performAction( Index, Params ) )
+                ui::KickAlertWindow::showCancelAlert( ui::KickAlertWindow::KickAlertWindowType::Warning,
+                                                      "The operation could not be done and the sample is unchanged.\nOnly WAV samples can be edited.", "Sample Edit", []( int ) {} );
         } );
 
         processButton.onClick = [&]() {
@@ -325,6 +328,9 @@ namespace kick_ui
         cancel.onClick = [&]() {
             closeScreen();
         };
+        // Pitch Shift / Time Stretch / Bit Reduce have no DSP behind them (the DSP library is an owner decision): hidden, not shown dead.
+        mt::utils::makeHidden( pitchshift, timeStretch, bitReduce );
+
         discard.onClick     = [&]() { openProcessPopup( 0 ); };
         deletebtn.onClick   = [&]() { openProcessPopup( 1 ); };
         silence.onClick     = [&]() { openProcessPopup( 2 ); };
@@ -533,6 +539,30 @@ namespace kick_ui
             }
         };
         process.setSelected( index, juce::sendNotification );
+    }
+
+    std::list<juce::var>& ProcessSlice::getParams()
+    {
+        switch( selectedID )
+        {
+            case mt::MTSampleEditorAction::seActionExtract:
+            case mt::MTSampleEditorAction::seActionCopy:
+                params.clear();
+                params.push_back( sampleName.getText() );
+                break;
+            case mt::MTSampleEditorAction::seActionFadeIn:
+            case mt::MTSampleEditorAction::seActionFadeOut:
+                params.clear();
+                params.push_back( linear.getSelected() );
+                break;
+            case mt::MTSampleEditorAction::seActionStereoToMono:
+                params.clear();
+                params.push_back( left.getSelected() );
+                params.push_back( sampleName.getText() );
+                break;
+            default: break; // Gain / pitch use the rotary value pushed on change
+        }
+        return params;
     }
 
     void ProcessSlice::resized()

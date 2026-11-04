@@ -21,6 +21,7 @@
 
 #pragma once
 #include "kick_ui/dialogs/kick_AppStatusbar.h"
+#include "kick_sampler_logic.h"
 
 namespace kick_ui
 {
@@ -36,12 +37,6 @@ namespace kick_ui
             PADHOLD,
         };
 
-        enum PadButtonstate
-        {
-            PAD_PRESSED,
-            PAD_RELEASED,
-        };
-
         Sampler();
 
         bool canClose() override { return true; }
@@ -51,6 +46,7 @@ namespace kick_ui
 
         void handleCommand( CPktMgr::HWMsg_t& ) override;
 
+        // Name that does not collide in the file's folder ("name.wav" -> "name 1.wav"); returns the file NAME only.
         static juce::String getValidFileName( const std::string& );
 
     private:
@@ -85,18 +81,25 @@ namespace kick_ui
         bool                        isSliceRecorded{ false };
 
         void         recordModeChanged( SamplerRecorder::RecordMode newMode );
-        juce::String saveSample( const juce::String& sampleName );
+        // Local flag: the header Export button has no function yet (no export target chosen), so it is hidden, not shown dead.
+        static constexpr bool kShowExportButton{ false };
+
+        std::array<int, 16> padLeds{};
+        void                sendPadLeds();
+        void                discardRecordingWithConfirm();
+        void                showSaveError( const juce::String& message );
+        juce::File          getSamplesDir() const;
+        std::vector<double> lastMarkerSeconds; // markers of the last Slice save, for the Edit hand-over
 
         void paint( juce::Graphics& g );
         void resized() override;
         void visibilityChanged() override;
         void refreshPadsLED();
 
-        void         addSlicesToPads( const juce::String& );
+        void         addSlicesToPads( const juce::String&, double sampleRate, int totalFrames );
         juce::String saveAndLoadRecordedSample( const juce::String& fileName, int PadIndex, int SelProgram, int SliceSaveType );
+        bool         programAcceptsPadSamples( int program ) const;
         void         openSaveFilePopUp( bool isEditing = false );
-        void         addSlicesToSample( const juce::String& );
-        void         addSlicesToSample( int Program, const juce::String& SampleFile, bool IsSliceToPad );
         void         addAssetSlice( const juce::String& SampleFile, int LoopStart, int LoopEnd, int Index );
     };
 }

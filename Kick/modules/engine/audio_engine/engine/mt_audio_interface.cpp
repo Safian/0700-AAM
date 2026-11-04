@@ -408,6 +408,21 @@ namespace mt
         }
     }
 
+    bool MTAudioInterface::clearSampleLayerInProgram( int Program, int KeyNote, int Layer )
+    {
+        if( auto p = getProgram( Program ) )
+        {
+            if( auto l = p->getLayer( KeyNote, Layer ) )
+            {
+                if( l->source.get().isEmpty() )
+                    return false;
+                l->clearSource();
+                return true;
+            }
+        }
+        return false;
+    }
+
     void MTAudioInterface::removeSampleFromProgram( int Program, int KeyNote, const juce::String& Sample )
     {
         if( auto p = getProgram( Program ) )
@@ -2058,6 +2073,7 @@ namespace mt
     void MTAudioInterface::enableRecorder( bool Enable ) { manager->enableRecorder( Enable ); }
     void MTAudioInterface::setupRecorder( double timeInSeconds, float Gain, float Pan, bool Looping, bool Overdub ) { return manager->setupRecorder( timeInSeconds, Gain, Pan, Looping, Overdub ); }
     void MTAudioInterface::setMonitorOn( bool Monitor ) { manager->setMonitorOn( Monitor ); }
+    void MTAudioInterface::setRecorderMonitorGain( float Gain ) { manager->setMonitorGain( Gain ); }
     void MTAudioInterface::setRecorderLoop( bool Looping ) { manager->setRecorderLoop( Looping ); }
     void MTAudioInterface::setRecorderOverdub( bool Overdub ) { manager->setRecorderOverdub( Overdub ); }
     void MTAudioInterface::setRecorderPan( float Pan ) { manager->setRecorderPan( Pan ); }
