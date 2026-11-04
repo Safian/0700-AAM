@@ -46,6 +46,9 @@ namespace kick_ui
             }
         }
 
+        // Also report changes of the track's automation lanes (List Edit shows their breakpoints). Set before enabling.
+        void setWatchAutomation( bool Watch ) { watchAutomation = Watch; }
+
         // Re-bind to the (possibly different) selected track's note list.
         void rebind()
         {
@@ -54,22 +57,38 @@ namespace kick_ui
         }
 
     private:
+        // With automation the listener sits on the track's tree (it also hears the note list below it and the AUTOLANE
+        // children); otherwise on the note list only, as before.
+        juce::ValueTree listenTree() const { return watchAutomation && watched.isValid() && watched.getParent().isValid() ? watched.getParent() : watched; }
+
         void attach()
         {
             auto list = ae.isProjectLoaded() ? ae.getNoteList() : juce::ValueTree{};
-            if( list == watched )
+            if( list == watched && ( !watchAutomation || listening == listenTree() ) )
                 return;
             detach();
             watched = list;
-            if( watched.isValid() )
-                watched.addListener( this );
+            listening = listenTree();
+            if( listening.isValid() )
+                listening.addListener( this );
         }
 
         void detach()
         {
-            if( watched.isValid() )
-                watched.removeListener( this );
-            watched = juce::ValueTree{};
+            if( listening.isValid() )
+                listening.removeListener( this );
+            listening = juce::ValueTree{};
+            watched   = juce::ValueTree{};
+        }
+
+        // A change in the note list, or (when asked for) in an automation lane of the track.
+        bool relevant( const juce::ValueTree& T, const juce::Identifier* Property ) const
+        {
+            if( !watchAutomation )
+                return true;
+            if( watched.isValid() && ( T == watched || T.isAChildOf( watched ) ) )
+                return true;
+            return T.hasType( mt::IDs::AUTOLANE ) && ( Property == nullptr || *Property == mt::IDs::autoPoints || *Property == mt::IDs::autoProgram );
         }
 
         void handleAsyncUpdate() override
@@ -82,18 +101,36 @@ namespace kick_ui
         }
 
         // ValueTree::Listener (any thread)
-        void valueTreePropertyChanged( juce::ValueTree&, const juce::Identifier& ) override { triggerAsyncUpdate(); }
-        void valueTreeChildAdded( juce::ValueTree&, juce::ValueTree& ) override { triggerAsyncUpdate(); }
-        void valueTreeChildRemoved( juce::ValueTree&, juce::ValueTree&, int ) override { triggerAsyncUpdate(); }
-        void valueTreeChildOrderChanged( juce::ValueTree&, int, int ) override { triggerAsyncUpdate(); }
+        void valueTreePropertyChanged( juce::ValueTree& T, const juce::Identifier& P ) override
+        {
+            if( relevant( T, &P ) )
+                triggerAsyncUpdate();
+        }
+        void valueTreeChildAdded( juce::ValueTree& Parent, juce::ValueTree& Child ) override
+        {
+            if( relevant( Parent, nullptr ) || ( watchAutomation && Child.hasType( mt::IDs::AUTOLANE ) ) )
+                triggerAsyncUpdate();
+        }
+        void valueTreeChildRemoved( juce::ValueTree& Parent, juce::ValueTree& Child, int ) override
+        {
+            if( relevant( Parent, nullptr ) || ( watchAutomation && Child.hasType( mt::IDs::AUTOLANE ) ) )
+                triggerAsyncUpdate();
+        }
+        void valueTreeChildOrderChanged( juce::ValueTree& Parent, int, int ) override
+        {
+            if( relevant( Parent, nullptr ) )
+                triggerAsyncUpdate();
+        }
 
         // MTAudioInterfaceListener: another track / sequence became the selected one.
         void onTrackSelectionChange( const mt::MTSelected& ) override { triggerAsyncUpdate(); }
         void onSequenceSelectionChange( const mt::MTSelected& ) override { triggerAsyncUpdate(); }
 
         mt::MTAudioInterface& ae;
-        juce::ValueTree       watched;
+        juce::ValueTree       watched;   // the note list
+        juce::ValueTree       listening; // the tree the listener is registered on
         bool                  enabled{ false };
+        bool                  watchAutomation{ false };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( NoteListWatcher )
     };

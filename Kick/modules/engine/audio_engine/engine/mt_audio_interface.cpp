@@ -654,11 +654,42 @@ namespace mt
         return -1;
     }
 
+    // Every pad back to the default of the program type: the colours the user stored with Make Default, else the factory table.
     int MTAudioInterface::resetProgramPadColours( int Program )
     {
-        if( auto p = getProgram( Program ) )
-            return p->resetPadColors();
-        return -1;
+        auto* p = getProgram( Program );
+        auto* d = getProgramData( Program );
+        if( !p || !d )
+            return -1;
+        padcolour::Defaults user;
+        const bool          haveUser = loadUserPadDefaults( p->getType(), user );
+        const auto&         factory  = MTProgramType::Drum == p->getType() ? defaultDrumColours :
+                                       MTProgramType::Clip == p->getType() ? defaultClipColours :
+                                                                              defaultPadColours;
+        for( auto i = MIDI::MIN; i < MIDI::NUMERIC_MAX; ++i )
+        {
+            d->padColour[i].setDefault( padcolour::colourFor( haveUser ? &user : nullptr, factory, i ) );
+            d->padColour[i].resetToDefault();
+        }
+        return 0;
+    }
+
+    // The current colours and pad colour modes of the program become the defaults of every program of its type
+    // (new programs start with them; "reset" returns to them). Stored in the settings file.
+    int MTAudioInterface::makeProgramPadColoursDefault( int Program )
+    {
+        auto* p = getProgram( Program );
+        auto* d = getProgramData( Program );
+        if( !p || !d )
+            return -1;
+        padcolour::Defaults u;
+        for( auto i = MIDI::MIN; i < MIDI::NUMERIC_MAX; ++i )
+            u.colours[(size_t)i] = juce::jlimit( 0, padcolour::kMaxColourId, (int)d->padColour[i].get() );
+        const int mode = (int)d->colourMode.get();
+        u.mode         = ( mode < 0 || mode > 8 ) ? (int)PadColorMode::DIM_VELOCITY : mode;
+        u.empty        = juce::jlimit( 0, 2, (int)d->emptyPadColourMode.get() );
+        getSettings().padColours.set( padcolour::groupKey( padcolour::groupOfType( (int)p->getType() ) ), juce::String( padcolour::encode( u ) ) );
+        return 0;
     }
 
     std::vector<juce::String> MTAudioInterface::getProgramNames( MTProgramCategory cateogryType )
@@ -1864,6 +1895,31 @@ namespace mt
 
     void MTAudioInterface::clearAllAutomation() { manager->clearAutomation( 2 ); }
 
+    std::vector<MTAutomationEvent> MTAudioInterface::getAutomationEvents( const MTSelected& Selection )
+    {
+        std::vector<MTAutomationEvent> out;
+        auto                           t = manager->getTrack( Selection );
+        if( !t )
+            return out;
+        for( int param : { kAutomationLevel, kAutomationPan } )
+            for( auto& p : t->getLanePoints( param ) )
+                out.push_back( { param, (int)p.tick, (int)p.value } );
+        std::stable_sort( out.begin(), out.end(), []( const MTAutomationEvent& a, const MTAutomationEvent& b ) { return a.tick < b.tick; } );
+        return out;
+    }
+
+    int MTAudioInterface::setAutomationEvent( const MTSelected& Selection, int Param, int OldTick, int NewTick, int Value )
+    {
+        auto t = manager->getTrack( Selection );
+        return t && t->setLanePoint( Param, OldTick, NewTick, Value ) ? 0 : -1;
+    }
+
+    int MTAudioInterface::deleteAutomationEvent( const MTSelected& Selection, int Param, int Tick )
+    {
+        auto t = manager->getTrack( Selection );
+        return t && t->eraseLanePoint( Param, Tick ) ? 0 : -1;
+    }
+
     int MTAudioInterface::humanizeNotes( const MTSelected& Selection, const track::humanizeInfo& Info )
     {
         if( auto t = manager->getTrack( Selection ) )
@@ -2300,6 +2356,7 @@ namespace mt
     void       MTAudioInterface::renameSong( const juce::String& OldName, const juce::String& NewName ) { manager->renameSong( OldName, NewName ); }
     MTSongInfo MTAudioInterface::getSongInfo( const juce::String& SongName ) { return manager->getSongInfo( SongName ); }
     void       MTAudioInterface::addSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex ) { manager->addSongStep( SongName, Step, AtIndex ); }
+    int        MTAudioInterface::appendSongSteps( const juce::String& SongName, std::vector<MTSongStepInfo>& Steps, bool CreateSong ) { return manager->appendSongSteps( SongName, Steps, CreateSong ); }
     void       MTAudioInterface::editSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex ) { manager->editSongStep( SongName, Step, AtIndex ); }
     void       MTAudioInterface::deleteSongStep( const juce::String& SongName, int AtIndex ) { manager->deleteSongStep( SongName, AtIndex ); }
     void       MTAudioInterface::deleteAllSongSteps( const juce::String& SongName ) { manager->deleteAllSongSteps( SongName ); }
@@ -2307,6 +2364,7 @@ namespace mt
     void       MTAudioInterface::playSong( const juce::String& SongName, int SequenceIndexToPlay ) { manager->playSong( SongName, SequenceIndexToPlay ); }
     void       MTAudioInterface::resumeSong() { manager->resumeSong(); }
     void       MTAudioInterface::stopSong() { manager->stopSong(); }
+    void       MTAudioInterface::skipSongStep( bool AtNextBar ) { manager->skipSongStep( AtNextBar ); }
 
     void MTAudioInterface::playSequence( int Sequence ) { manager->playSequence( Sequence ); }
     void MTAudioInterface::stopSequence() { manager->stopSequence(); }

@@ -4,13 +4,13 @@ namespace kick_ui
 {
     StepSequencerControl::StepSequencerControl()
     {
-        mt::utils::addAndMakeVisible( this, leftNudgeButton, rightNudgeButton, nudgeText, clearbar, clearpad, padSelect, barLabel, padLabel, barMinus, barPlus, padMinus, padPlus );
+        mt::utils::addAndMakeVisible( this, leftNudgeButton, rightNudgeButton, nudgeText, clearbar, clearpad, padSelect, settingsBtn, barLabel, padLabel, barMinus, barPlus, padMinus, padPlus );
         nudgeText.setInterceptsMouseClicks( false, false );
 
         mt::utils::setValueBackgroundColour( ui::Theme::backgroundColour( 3 ), barLabel, padLabel, nudgeText );
-        mt::utils::setValueFontHeight( 18, barLabel, padLabel, clearpad, clearbar, padSelect, nudgeText );
+        mt::utils::setValueFontHeight( 18, barLabel, padLabel, clearpad, clearbar, padSelect, settingsBtn, nudgeText );
         mt::utils::setValueJustification( juce::Justification::centred, padLabel, barLabel, nudgeText );
-        mt::utils::setValueColour( ui::Theme::textColour( 1 ), barLabel, padLabel, clearpad, clearbar, padSelect, nudgeText );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), barLabel, padLabel, clearpad, clearbar, padSelect, settingsBtn, nudgeText );
 
         ui::themeChanged.connect( [&]() {
             leftNudgeButton.setImages( "Minus", "Minus_Active" );
@@ -22,6 +22,7 @@ namespace kick_ui
             clearpad.setToggleButtonText( "Clear Pad", "Clear Pad" );
             clearbar.setToggleButtonText( "Clear Bar", "Clear Bar" );
             padSelect.setToggleButtonText( "Pad Select", "Pad Select" );
+            settingsBtn.setToggleButtonText( "Settings", "Settings" );
         } );
         leftNudgeButton.toFront( true );
         rightNudgeButton.toFront( true );
@@ -31,6 +32,7 @@ namespace kick_ui
     {
         clearpad.setBoundsRelative( .0097f, .0185f, .1174f, .6296f );
         clearbar.setBoundsRelative( .1360f, .0185f, .1174f, .6296f );
+        settingsBtn.setBoundsRelative( .2547f, .0185f, .1174f, .6296f );
         padSelect.setBoundsRelative( .6203f, .0185f, .1174f, .6296f );
         leftNudgeButton.setBoundsRelative( .8747f, .0185f, .0332f, .6296f );
         nudgeText.setBoundsRelative( .8747f, .0f, .1174f, .6666f );

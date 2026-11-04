@@ -73,8 +73,51 @@ int main()
     q = queueNext( q, 1 ); CHECK_EQ( q.next, -1 );
 
     // hold / hidden
-    CHECK_EQ( holdOn( { 1, 4, true } ).next, -1 );
-    CHECK_EQ( holdOn( { 1, 4, false } ).next, 4 );
+    // Hold (manual: repeat the current sequence, pad presses only select, nothing is queued)
+    {
+        NextState a{ 1, 4, true };
+        a = setHold( a, true );
+        CHECK( a.hold ); CHECK_EQ( a.next, -1 ); CHECK_EQ( a.held, -1 ); // the queue is cancelled
+        a = pressPad( a, 6 );
+        CHECK_EQ( a.held, 6 ); CHECK_EQ( a.next, -1 );                     // selected, not queued
+        a = pressPad( a, 1 );
+        CHECK_EQ( a.held, -1 );                                            // the playing pad drops the selection
+        a = pressPad( a, 6 );
+        CHECK_EQ( switchTarget( a ), 6 );                                  // Next Bar / Sudden use the selection
+        auto b = afterSudden( a );
+        CHECK_EQ( b.playing, 6 ); CHECK_EQ( b.held, -1 ); CHECK_EQ( b.next, -1 ); CHECK( b.hold );
+        a = setHold( a, false );
+        CHECK( !a.hold ); CHECK_EQ( a.held, -1 ); CHECK_EQ( a.next, -1 );  // leaving Hold queues nothing
+        // without Hold a press queues and Sudden uses the queue
+        NextState n{ 1, -1, true };
+        n = pressPad( n, 3 );
+        CHECK_EQ( n.next, 3 ); CHECK_EQ( switchTarget( n ), 3 );
+        CHECK_EQ( afterSudden( n ).playing, 3 );
+        // stopped: pads are not handled here (the screen selects)
+        NextState st2{ 1, -1, false };
+        CHECK_EQ( pressPad( st2, 5 ).next, -1 );
+    }
+    // Clear deletes the selected sequence (not the playing one, not the last one)
+    {
+        CHECK_EQ( clearTarget( { 2, -1, false }, 5 ), 2 );          // stopped: the selected one
+        CHECK_EQ( clearTarget( { 2, 4, true }, 5 ), 4 );            // playing: the queued one
+        CHECK_EQ( clearTarget( { 2, -1, true }, 5 ), -1 );          // playing and nothing queued: the playing one is protected
+        CHECK_EQ( clearTarget( { 2, 2, true }, 5 ), -1 );
+        NextState hh{ 2, -1, true }; hh.hold = true; hh.held = 3;
+        CHECK_EQ( clearTarget( hh, 5 ), 3 );                         // Hold: the held selection
+        CHECK_EQ( clearTarget( { 0, -1, false }, 1 ), -1 );         // the last sequence stays
+        CHECK_EQ( clearTarget( { 9, -1, false }, 5 ), -1 );         // out of range
+        // indices after the delete
+        auto d = afterDelete( { 4, 6, true }, 2, 8 );
+        CHECK_EQ( d.playing, 3 ); CHECK_EQ( d.next, 5 );
+        d = afterDelete( { 2, -1, false }, 2, 8 );
+        CHECK_EQ( d.playing, 2 );                                    // the neighbour moved up
+        d = afterDelete( { 7, -1, false }, 7, 8 );
+        CHECK_EQ( d.playing, 6 );                                    // the last one deleted: the previous
+        d = afterDelete( { 1, 5, true }, 5, 8 );
+        CHECK_EQ( d.next, -1 ); CHECK_EQ( d.playing, 1 );
+        CHECK_EQ( copyToSongStepCount( 7 ), 7 ); CHECK_EQ( copyToSongStepCount( -1 ), 0 );
+    }
     auto h = hiddenWhileStopped( { 1, 4, false } );
     CHECK_EQ( h.playing, 4 ); CHECK_EQ( h.next, -1 );
     h = hiddenWhileStopped( { 1, 4, true } );
@@ -124,6 +167,28 @@ int main()
     CHECK( !sl::isMissingStep( 0 ) );
     CHECK( sl::unlockAfterSongEnd( true ) );
     CHECK( !sl::unlockAfterSongEnd( false ) );
+
+    // ---- Song: dial, record-armed entry, limits
+    CHECK_EQ( sl::stepSequenceAfterDial( 2, 1, 5 ), 3 );
+    CHECK_EQ( sl::stepSequenceAfterDial( 4, 5, 5 ), 4 );
+    CHECK_EQ( sl::stepSequenceAfterDial( 0, -3, 5 ), 0 );
+    CHECK_EQ( sl::stepSequenceAfterDial( -1, 1, 5 ), 0 );   // missing sequence: first
+    CHECK_EQ( sl::stepSequenceAfterDial( -1, -1, 5 ), 4 );  // missing sequence: last
+    CHECK_EQ( sl::stepSequenceAfterDial( 2, 1, 0 ), -1 );
+    CHECK_EQ( sl::stepRow( -1, 1, 4 ), 0 ); CHECK_EQ( sl::stepRow( -1, -1, 4 ), 3 );
+    CHECK_EQ( sl::stepRow( 3, 5, 4 ), 3 );  CHECK_EQ( sl::stepRow( 1, -9, 4 ), 0 ); CHECK_EQ( sl::stepRow( 0, 1, 0 ), -1 );
+    {
+        auto a = sl::planRecord( 0, -1, 3 );
+        CHECK( a.kind == sl::InsertPlan::Kind::Add ); CHECK_EQ( a.index, 0 );
+        a = sl::planRecord( 2, 3, 3 );
+        CHECK( a.kind == sl::InsertPlan::Kind::RepeatPlus1 ); CHECK_EQ( a.index, 1 ); // same pad again: one more repeat
+        a = sl::planRecord( 2, 3, 4 );
+        CHECK( a.kind == sl::InsertPlan::Kind::Add ); CHECK_EQ( a.index, 2 );          // always at the end
+    }
+    CHECK( sl::canCreateSong( 31 ) ); CHECK( !sl::canCreateSong( 32 ) );
+    CHECK( sl::canAddStep( 998 ) );   CHECK( !sl::canAddStep( 999 ) );
+    CHECK_EQ( sl::clampRepeat( 0 ), 1 ); CHECK_EQ( sl::clampRepeat( 5000 ), 999 );
+    CHECK( sl::canSkipStep( 0, 2 ) ); CHECK( !sl::canSkipStep( 1, 2 ) ); CHECK( !sl::canSkipStep( -1, 2 ) );
 
     if( g_fail == 0 )
         std::printf( "SequenceLogicTests: all passed\n" );

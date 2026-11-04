@@ -63,7 +63,7 @@ namespace kick_ui
 
         tableView.reset( new ui::KickTableView{ "Sequences", provider } );
 
-        mt::utils::addChildComponents( this, tableView.get(), pads.get(), nextBar, sudden, hold, clear, srNo, sequence, length, bpm );
+        mt::utils::addChildComponents( this, tableView.get(), pads.get(), nextBar, sudden, hold, clear, toSong, srNo, sequence, length, bpm );
 
         tableView->setRowSpacing( 1 );
         tableView->setRowHeight( 52 );
@@ -82,8 +82,8 @@ namespace kick_ui
 
         mt::utils::setValueBackgroundColour( ui::Theme::backgroundColour( 9 ), srNo, sequence, length, bpm );
         mt::utils::setValueJustification( juce::Justification::centred, srNo, sequence, length, bpm );
-        mt::utils::setValueColour( ui::Theme::textColour( 1 ), nextBar, sudden, clear, hold );
-        mt::utils::setValueFontHeight( 18, srNo, sequence, length, bpm, nextBar, sudden, clear, hold );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), nextBar, sudden, clear, hold, toSong );
+        mt::utils::setValueFontHeight( 18, srNo, sequence, length, bpm, nextBar, sudden, clear, hold, toSong );
 
         provider.numRows = [&]() {
             return ae.getNumSequences();
@@ -123,6 +123,7 @@ namespace kick_ui
                 auto bankIndex = Index / _NUM_PADS_IN_COMPONENT;
                 ae.setBank( pads->getBank( bankIndex ) );
             }
+            refreshClear();
         };
 
         pads->OnButtonClicked = [&]( int Id ) {
@@ -132,9 +133,14 @@ namespace kick_ui
                 auto endId   = startId + 16;
                 if( Id >= startId && Id < endId )
                 {
-                    selectSequence( Id );
-                    if( !hold.getToggleState() )
+                    if( hold.getToggleState() )
+                        holdSelect( Id ); // Hold: the pad is only selected, nothing is queued
+                    else
+                    {
+                        selectSequence( Id );
                         ae.setNextSequence( nextSequence );
+                    }
+                    refreshClear();
                 }
             }
             else
@@ -144,65 +150,67 @@ namespace kick_ui
         };
 
         hold.onClick = [&]() {
-            if( hold.getToggleState() && isPlaying )
+            const bool on   = hold.getToggleState();
+            const auto next = sequence_logic::setHold( state(), on );
+            if( on && nextSequence >= 0 && next.next < 0 )
             {
-                if( sequence_logic::holdOn( { playingSequence, nextSequence, true } ).next < 0 && nextSequence >= 0 )
-                {
-                    pads->removeBreathing( nextSequence );
-                    setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::PadColourOrange );
-                    nextSequence = -1;
-                }
-                ae.setNextSequence( -1 );
+                pads->removeBreathing( nextSequence );
+                setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::PadColourOrange );
+                nextSequence = -1;
             }
-            else
-            {
-                if( nextSequence >= 0 )
-                    ae.setNextSequence( nextSequence );
-            }
+            clearHeld();
+            if( on )
+                ae.setNextSequence( -1 ); // the current sequence repeats until Hold is released
+            refreshClear();
         };
 
+        // Sudden: switch to the selected sequence (the held selection under Hold, else the queued one) at once.
         sudden.onClick = [&]() {
-            if( !hold.getToggleState() )
+            const int target = isPlaying ? sequence_logic::switchTarget( state() ) : -1;
+            if( target >= 0 )
             {
-                if( nextSequence >= 0 )
-                {
-                    ae.playSequence( nextSequence );
-                    changePlayingPad( playingSequence, nextSequence );
-                }
+                const int old = playingSequence;
+                clearHeld();
+                ae.setNextSequence( -1 );
+                ae.playSequence( target );
+                changePlayingPad( old, target );
             }
             sudden.setToggleState( false, juce::dontSendNotification );
+            refreshClear();
         };
 
+        // Next Bar: switch to the selected sequence at the start of the next bar.
         nextBar.onClick = [&]() {
-            if( hold.getToggleState() )
-            {
-                if( nextSequence >= 0 )
-                {
-                    pads->removeBreathing( nextSequence );
-                    setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::PadColourOrange );
-                    nextSequence = -1;
-                    ae.setNextSequence( -1 );
-                }
-            }
             if( isPlaying )
             {
-                ae.setNextBarFlag( true );
-                nextBar.setToggleState( false, juce::dontSendNotification );
+                const int target = sequence_logic::switchTarget( state() );
+                if( target >= 0 )
+                {
+                    ae.setNextSequence( target );
+                    ae.setNextBarFlag( true );
+                }
             }
+            nextBar.setToggleState( false, juce::dontSendNotification );
         };
 
+        // Clear: delete the selected sequence from the playlist (not the one that is playing); asks first, UNDO brings it back.
         clear.onClick = [&]() {
-            if( nextSequence >= 0 )
-            {
-                ae.setNextSequence( -1 );
-                clearNextSequence();
-            }
             clear.setToggleState( false, juce::dontSendNotification );
+            deleteSelectedSequence();
+        };
+
+        toSong.onClick = [&]() {
+            toSong.setToggleState( false, juce::dontSendNotification );
+            copyToSong();
         };
 
         nextPlayConn = mt::signals::onNextSequencePlay.connect( [&]( int Sequence ) {
             juce::MessageManager::callAsync( [this, Sequence] {
+                // The switch happened: the engine's own queue must not replay it at the end of the sequence.
+                if( nextSequence == Sequence || nextSequence < 0 )
+                    ae.setNextSequence( -1 );
                 changePlayingPad( playingSequence, Sequence );
+                refreshClear();
             } );
         } );
 
@@ -212,17 +220,13 @@ namespace kick_ui
             juce::MessageManager::callAsync( [this] { syncTransport(); } );
         } );
 
-        nextSequence.onValueChanged = [&]( int value ) {
-            if( nextSequence == -1 )
-                clear.setEnabled( false );
-            else if( !clear.isEnabled() )
-                clear.setEnabled( true );
-        };
+        nextSequence.onValueChanged = [&]( int ) { refreshClear(); };
         themeConn = ui::themeChanged.connect( [&]() {
             nextBar.setToggleButtonText( "Next Bar", "Next Bar" );
             sudden.setToggleButtonText( "Sudden", "Sudden" );
             clear.setToggleButtonText( "Clear", "Clear" );
             hold.setToggleButtonText( "Hold", "Hold" );
+            toSong.setToggleButtonText( "Song", "Song" );
         } );
 
         bankConn = mt::signals::bankChanged.connect( [&]( int Index, juce::String Bank ) {
@@ -280,7 +284,7 @@ namespace kick_ui
                 //Don't do anything
             }
 
-            if( clear.isEnabled() )
+            if( nextSequence >= 0 )
             {
                 pads->setBorderColor( nextSequence, ui::Theme::outlineColour( 1 ), 1, juce::dontSendNotification ); //Orange
                 pads->removeBreathing( nextSequence );
@@ -293,7 +297,7 @@ namespace kick_ui
                 nextSequence    = -1;
             }
 
-            if( playingSequence != Index && !clear.isEnabled() )
+            if( playingSequence != Index && nextSequence < 0 )
             {
                 pads->setBorderColor( playingSequence, ui::Theme::outlineColour( 1 ), 1, juce::dontSendNotification ); //Orange
                 pads->removeBreathing( playingSequence );
@@ -316,6 +320,7 @@ namespace kick_ui
         pads->setBorderColor( NewPlayingPad, ui::Theme::selectionColour( 2 ), 1, juce::dontSendNotification ); //Green
         setPadBlinking( NewPlayingPad, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::padColourlightGreen1 );
 
+        clearHeld();
         playingSequence = NewPlayingPad; //updating the playing index
         nextSequence    = -1;
 
@@ -418,8 +423,116 @@ namespace kick_ui
         tableView->setInterceptsMouseClicks( !isPlaying, !isPlaying );
         tableView->selectRow( playingSequence, juce::dontSendNotification );
         ae.setSelectedSequence( playingSequence );
+        refreshClear();
         if( onPlayingChanged )
             onPlayingChanged( isPlaying );
+    }
+
+    sequence_logic::NextState KickNextSequenceContent::state() const
+    {
+        return { playingSequence, nextSequence, isPlaying, hold.getToggleState(), heldSequence };
+    }
+
+    // Hold is on and a pad is pressed: it is selected (border), not queued.
+    void KickNextSequenceContent::holdSelect( int Index )
+    {
+        const int before = heldSequence;
+        heldSequence     = sequence_logic::pressPad( state(), Index ).held;
+        if( before >= 0 && before != heldSequence )
+            pads->setBorderColor( before, ui::Theme::outlineColour( 1 ), 1, juce::dontSendNotification );
+        if( heldSequence >= 0 )
+            pads->setBorderColor( heldSequence, ui::Theme::selectionColour( 1 ), 2, juce::dontSendNotification );
+    }
+
+    void KickNextSequenceContent::clearHeld()
+    {
+        if( heldSequence >= 0 )
+            pads->setBorderColor( heldSequence, ui::Theme::outlineColour( 1 ), 1, juce::dontSendNotification );
+        heldSequence = -1;
+    }
+
+    // Clear (delete the selected sequence) and Song (copy the playlist) are only offered when they can act.
+    void KickNextSequenceContent::refreshClear()
+    {
+        const int num = ae.isProjectLoaded() ? ae.getNumSequences() : 0;
+        clear.setEnabled( sequence_logic::clearTarget( state(), num ) >= 0 );
+        toSong.setEnabled( !isPlaying && num > 0 );
+    }
+
+    void KickNextSequenceContent::deleteSelectedSequence()
+    {
+        const int target = sequence_logic::clearTarget( state(), ae.getNumSequences() );
+        if( target < 0 )
+            return;
+        auto* sd = ae.getSequenceData( target );
+        if( sd == nullptr )
+            return;
+        auto* p = new ui::FilePopup{ "Delete sequence \"" + sd->name.get() + "\" from the playlist?", false, false };
+        mt::utils::showOptions(
+            "WARNING!", p, [this, p, target]( int R ) {
+                if( R == UI::APPLY && juce::isPositiveAndBelow( target, ae.getNumSequences() ) )
+                {
+                    const int  before = ae.getNumSequences();
+                    const auto after  = sequence_logic::afterDelete( state(), target, before );
+                    if( nextSequence == target || heldSequence == target )
+                        ae.setNextSequence( -1 ); // the engine must not keep a queue pointing at a deleted sequence
+                    clearHeld();
+                    ae.deleteSequence( target );
+                    playingSequence = after.playing;
+                    nextSequence    = after.next;
+                    ae.setSelectedSequence( playingSequence );
+                    updateData();
+                    restoreData();
+                    AppStatusbar::Instance().offerUndo( "Sequence deleted", [this]() {
+                        ae.performUndo();
+                        updateData();
+                        restoreData();
+                    } );
+                }
+                delete p;
+            },
+            ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
+    }
+
+    // "Song" (stopped): append every sequence of the playlist as a step (repeat 1) to the chosen or a new song. One UNDO step.
+    void KickNextSequenceContent::copyToSong()
+    {
+        const int num = ae.getNumSequences();
+        if( isPlaying || num <= 0 )
+            return;
+        auto* dlg = new NextSequenceSongDialog( ae.getSongsList() );
+        mt::utils::showOptions( dlg->getName(), dlg, [this, dlg, num]( int R ) {
+            if( R == UI::APPLY )
+            {
+                juce::String name = dlg->getSong();
+                bool         create = name.isEmpty();
+                if( create )
+                {
+                    const auto existing = ae.getSongsList();
+                    for( int i = 1; i < 1000 && name.isEmpty(); ++i )
+                    {
+                        const auto candidate = "Song " + juce::String( i );
+                        bool       used      = false;
+                        for( auto& e : existing )
+                            used = used || e.equalsIgnoreCase( candidate );
+                        if( !used )
+                            name = candidate;
+                    }
+                }
+                std::vector<mt::MTSongStepInfo> steps;
+                for( int i = 0; i < sequence_logic::copyToSongStepCount( num ); ++i )
+                {
+                    mt::MTSongStepInfo step;
+                    step.seqNo       = i;
+                    step.repeatCount = 1;
+                    steps.push_back( step );
+                }
+                const int added = ae.appendSongSteps( name, steps, create );
+                mt::utils::showNotification( juce::String( added ) + " sequence(s) copied to song \"" + name + "\"" );
+                AppStatusbar::Instance().offerUndo( "Copied to song " + name, []() { mt::getAudioInterface().performUndo(); } );
+            }
+            delete dlg;
+        } );
     }
 
     void KickNextSequenceContent::onPlay( bool FromBeginning )
@@ -435,6 +548,7 @@ namespace kick_ui
         startPlaying( FromBeginning, true );
         nextBar.setEnabled( true );
         tableView->setInterceptsMouseClicks( false, false );
+        refreshClear();
         if( onPlayingChanged )
             onPlayingChanged( true );
     }
@@ -445,6 +559,8 @@ namespace kick_ui
         stopPlaying( true );
         nextBar.setEnabled( false );
         tableView->setInterceptsMouseClicks( true, true );
+        clearHeld();
+        refreshClear();
         if( onPlayingChanged )
             onPlayingChanged( false );
     }
@@ -464,6 +580,9 @@ namespace kick_ui
             stopPlaying( false );
         nextBar.setEnabled( isPlaying );
         tableView->setInterceptsMouseClicks( !isPlaying, !isPlaying );
+        if( !isPlaying )
+            clearHeld();
+        refreshClear();
         if( onPlayingChanged )
             onPlayingChanged( isPlaying );
     }
@@ -556,6 +675,7 @@ namespace kick_ui
         sudden.setBoundsRelative( .6282f, .9083f, .1174f, .0742f );
         hold.setBoundsRelative( .7495f, .9083f, .1174f, .0742f );
         clear.setBoundsRelative( .8708f, .9083f, .1174f, .0742f );
+        toSong.setBoundsRelative( .0097f, .9083f, .1174f, .0742f );
     }
 
     void KickNextSequenceContent::visibilityChanged()

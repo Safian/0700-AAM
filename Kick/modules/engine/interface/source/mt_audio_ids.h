@@ -312,6 +312,7 @@ namespace mt
         DECLARE_ID( CLIB3 )
 
         DECLARE_ID( METRONOME )
+        DECLARE_ID( PADCOLOURDEFAULTS ) // Color Edit "Make Default": the pad colours of a program type, one property per type
         DECLARE_ID( enable )
         DECLARE_ID( countIn )
         DECLARE_ID( rate )

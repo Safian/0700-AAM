@@ -90,9 +90,10 @@ namespace kick_ui
         pads->setHighlight( -1 );
         pads->setPadButtonSpacer( 4 );
 
-        mt::utils::setValueFontHeight( 18, insert, clr, del );
-        mt::utils::setValueColour( ui::Theme::textColour( 1 ), insert, clr, del );
-        mt::utils::addChildComponents( this, tableView, pads.get(), insert, clr, del );
+        mt::utils::setValueFontHeight( 18, insert, clr, del, rec, nextStep, suddenStep );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), insert, clr, del, rec, nextStep, suddenStep );
+        mt::utils::addChildComponents( this, tableView, pads.get(), insert, clr, del, rec, nextStep, suddenStep );
+        refreshButtons();
 
         mt::signals::bankChanged.connect( [&]( int index, juce::String bankName ) {
             if( kick_ui::KickHome::Instance().getCurrentScreen() == kick_ui::Screen::MenuSong )
@@ -135,6 +136,11 @@ namespace kick_ui
         };
 
         pads->OnButtonClicked = [this]( int Index ) {
+            if( !isPlaying && isRecArmed() )
+            {
+                recordPad( Index ); // song recording: the pad enters a step, nothing plays
+                return;
+            }
             if( !isPlaying )
             {
                 if( selectedPadSeq != Index )
@@ -161,10 +167,22 @@ namespace kick_ui
             }
         };
 
+        rec.onClick = [this]() {
+            if( isPlaying )
+                rec.setToggleState( false, juce::dontSendNotification );
+        };
+        nextStep.onClick   = [this]() { skipStep( true ); };
+        suddenStep.onClick = [this]() { skipStep( false ); };
+
         insert.onClick = [&]() {
             auto idx = pads->getSelected();
             if( idx >= 0 && idx < (int)seqList.size() )
             {
+                if( !song_logic::canAddStep( (int)info.steps.size() ) )
+                {
+                    mt::utils::showNotification( "A song holds up to 999 steps" );
+                    return;
+                }
                 mt::MTSongStepInfo _step;
                 _step.seqNo = idx;
 
@@ -203,7 +221,10 @@ namespace kick_ui
             juce::MessageManager::callAsync( [this, CurrentSeq, NextSeq, CurrentSeqIndex] {
                 setSequenceToPlay( CurrentSeq, NextSeq );
                 if( CurrentSeqIndex != -1 )
+                {
+                    currentStep = CurrentSeqIndex;
                     tableView.selectRow( CurrentSeqIndex );
+                }
             } );
         } );
 
@@ -253,6 +274,93 @@ namespace kick_ui
         return false;
     }
 
+    void KickSongContent::refreshButtons()
+    {
+        rec.setEnabled( !isPlaying );
+        nextStep.setEnabled( isPlaying );
+        suddenStep.setEnabled( isPlaying );
+    }
+
+    bool KickSongContent::isRecArmed() const
+    {
+        // The touch Rec button, or the sequence REC / OVERDUB armed on the hardware (the bridge hands those presses to the engine).
+        return rec.getToggleState() || ae.isSequenceRecArmed();
+    }
+
+    // Song recording: the pad's sequence becomes the last step, or raises the last step's repeat (same pad again).
+    bool KickSongContent::recordPad( int SequenceIndex )
+    {
+        if( songName.isEmpty() )
+        {
+            mt::utils::showNotification( "Create a song first" );
+            return false;
+        }
+        if( SequenceIndex < 0 || SequenceIndex >= (int)seqList.size() )
+            return false;
+        const int n       = (int)info.steps.size();
+        const int lastSeq = n > 0 ? info.steps[(size_t)n - 1].seqNo : -1;
+        const auto plan   = song_logic::planRecord( n, lastSeq, SequenceIndex );
+        if( plan.kind == song_logic::InsertPlan::Kind::Add && !song_logic::canAddStep( n ) )
+        {
+            mt::utils::showNotification( "A song holds up to 999 steps" );
+            return false;
+        }
+        if( plan.kind == song_logic::InsertPlan::Kind::RepeatPlus1 )
+        {
+            mt::MTSongStepInfo step = info.steps[(size_t)plan.index];
+            step.seqID.clear();
+            step.repeatCount = song_logic::clampRepeat( step.repeatCount + 1 );
+            ae.editSongStep( songName, step, plan.index );
+        }
+        else
+        {
+            mt::MTSongStepInfo step;
+            step.seqNo       = SequenceIndex;
+            step.repeatCount = 1;
+            ae.addSongStep( songName, step, plan.index );
+        }
+        updateSong( songName );
+        if( !info.steps.empty() )
+            tableView.selectRow( juce::jlimit( 0, (int)info.steps.size() - 1, plan.selectAfter ) );
+        return true;
+    }
+
+    void KickSongContent::dial( int Delta )
+    {
+        if( Delta == 0 || isPlaying || songName.isEmpty() )
+            return;
+        const int n   = (int)info.steps.size();
+        const int sel = tableView.getSelectedRowOrNone();
+        if( sel < 0 || sel >= n || contracts::DclContractsHelper::isShiftPressed() )
+        {
+            const int row = song_logic::stepRow( sel, Delta, n );
+            if( row >= 0 )
+                tableView.selectRow( row );
+            return;
+        }
+        const int newSeq = song_logic::stepSequenceAfterDial( info.steps[(size_t)sel].seqNo, Delta, ae.getNumSequences() );
+        if( newSeq < 0 || newSeq == info.steps[(size_t)sel].seqNo )
+            return;
+        mt::MTSongStepInfo step = info.steps[(size_t)sel];
+        step.seqID.clear(); // the sequence is given by its number
+        step.seqNo = newSeq;
+        ae.editSongStep( songName, step, sel );
+        updateSong( songName );
+        tableView.selectRow( sel );
+    }
+
+    void KickSongContent::skipStep( bool AtNextBar )
+    {
+        if( !isPlaying )
+            return;
+        if( !song_logic::canSkipStep( currentStep, (int)info.steps.size() ) )
+        {
+            mt::utils::showNotification( "This is the last step" );
+            return;
+        }
+        ae.skipSongStep( AtNextBar );
+    }
+
     // Returns true when the song is playing afterwards.
     bool KickSongContent::playOrResume( bool FromStart )
     {
@@ -271,15 +379,21 @@ namespace kick_ui
         isPlaying = true;
         tableView.setInterceptsMouseClicks( false, false );
         pads->clearAllBreathing();
-        ae.playSong( songName, juce::jmax( 0, tableView.getSelectedRowOrNone() ) );
+        rec.setToggleState( false, juce::dontSendNotification );
+        currentStep = juce::jmax( 0, tableView.getSelectedRowOrNone() );
+        ae.playSong( songName, currentStep );
         del.setEnabled( false );
+        refreshButtons();
         return true;
     }
 
     void KickSongContent::stopOrPause()
     {
-        isPlaying = false;
+        isPlaying   = false;
+        currentStep = -1;
+        rec.setToggleState( false, juce::dontSendNotification ); // STOP ends song recording too
         del.setEnabled( !isPlaying );
+        refreshButtons();
         tableView.setInterceptsMouseClicks( true, true );
         ae.stopSong();
         pads->resetBorderColor( selectedId );
@@ -297,8 +411,10 @@ namespace kick_ui
     {
         if( !song_logic::unlockAfterSongEnd( isPlaying ) )
             return;
-        isPlaying = false;
+        isPlaying   = false;
+        currentStep = -1;
         del.setEnabled( true );
+        refreshButtons();
         tableView.setInterceptsMouseClicks( true, true );
         pads->resetBorderColor( selectedId );
         pads->clearAllBreathing();
@@ -347,6 +463,9 @@ namespace kick_ui
         pads->setBoundsRelative( 0.55f, 0.f, 0.45f, 0.9f );
 
         clr.setBoundsRelative( 0.f, 0.91f, 0.1174f, 0.09f );
+        rec.setBoundsRelative( 0.13f, 0.91f, 0.1174f, 0.09f );
+        nextStep.setBoundsRelative( 0.26f, 0.91f, 0.1174f, 0.09f );
+        suddenStep.setBoundsRelative( 0.39f, 0.91f, 0.1174f, 0.09f );
 
         // No "Convert >SEQ" button: converting a song into one sequence needs an engine function that does not exist
         // (the song is a list of sequence steps played in order); the unlaid 0x0 stub was removed.
@@ -462,7 +581,12 @@ namespace kick_ui
         } );
 
         songListBox.onSelectionChanged = [&]( int Index, const juce::String& SongName ) {
-            if( SongName.equalsIgnoreCase( "create new song" ) )
+            if( SongName.equalsIgnoreCase( "create new song" ) && !song_logic::canCreateSong( (int)ae.getSongsList().size() ) )
+            {
+                mt::utils::showNotification( "A project holds up to 32 songs" );
+                triggerAsyncUpdate(); // back to the song that was shown
+            }
+            else if( SongName.equalsIgnoreCase( "create new song" ) )
                 askSongName( "CREATE NEW SONG", {}, [this]( const juce::String& N ) {
                     mt::getAudioInterface().createSong( N );
                     pendingSelect = N;
@@ -591,6 +715,20 @@ namespace kick_ui
             auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
             if( knob != contracts::DeviceControlContracts::EN_KNOB_CENTER )
                 knobCommand( knob, value );
+            else
+                content.dial( value ); // the dial changes the selected step's sequence
+        }
+        else if( ae.isProjectLoaded() && contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) )
+        {
+            // +/- and the cursor keys act on release (the bridge delivers them that way), like the dial.
+            switch( contracts::DclContractsHelper::getButtonCode( f_HwMsg ) )
+            {
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS:
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_CW: content.dial( 1 ); break;
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS:
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_CCW: content.dial( -1 ); break;
+                default: break;
+            }
         }
     }
 

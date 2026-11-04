@@ -65,6 +65,10 @@ namespace mt
         // raw clock ticks, so bar/tick seeks (MTAudioInterface::seek*) are rejected while this is set.
         bool isSongActive() const { return songActive.load(); }
 
+        // Song playback: leave the current step for the next one, at once (AtNextBar = false: "Sudden") or when the next bar
+        // starts ("Next"). No effect when no song is playing or the current step is the last one. Any thread.
+        void skipSongStep( bool AtNextBar );
+
         void playSequence( int Sequence );
         void stopSequence();
         void setNextSequence( int NextSequence );
@@ -105,6 +109,7 @@ namespace mt
         };
 
         std::atomic<bool>       songActive{ false };
+        std::atomic<int>        songSkip{ 0 }; // 0 none, 2 waiting for the next bar, 1 skip now (consumed by onTick)
         int                     stepIndex{ -1 };
         int                     lastSeqTicks{ 0 };
         int                     nextSequenceUpdateTicks{ -1 };

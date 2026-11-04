@@ -52,6 +52,7 @@ namespace mt
             cvclib.setup( getState().getOrCreateChildWithName( IDs::PREFCVCLIB, nullptr ), nullptr );
             metronome.setup( getState().getOrCreateChildWithName( IDs::METRONOME, nullptr ), nullptr );
             wifi.setup( getState().getOrCreateChildWithName( IDs::WIFI, nullptr ), nullptr );
+            padColours.setup( getState().getOrCreateChildWithName( IDs::PADCOLOURDEFAULTS, nullptr ), nullptr );
         };
 
         auto settingsFile = getAppDirs( MTPrefs ).getChildFile( __settingsFileName );
@@ -88,6 +89,7 @@ namespace mt
         browser.makeDefaults();
         cvclib.makeDefaults();
         metronome.makeDefaults();
+        padColours.makeDefaults();
 
         // Ensure autoSave stays true on defaults
         projects.isAutoSave = true;
@@ -104,6 +106,14 @@ namespace mt
         for( int i = 0; i < CV::MaxCVPorts; ++i )
             CV::getCVInterface().setChannelNoteMap( i, 0 );
     }
+
+    /// ///////////////////////////////////
+    ///    Pad colour defaults.
+    /// ///////////////////////////////////
+    void         KickPadColourDefaults::setup( juce::ValueTree VT, juce::UndoManager* Undo ) { setupBase( VT, Undo ); }
+    bool         KickPadColourDefaults::isValid() { return vTree.hasType( IDs::PADCOLOURDEFAULTS ); }
+    juce::String KickPadColourDefaults::get( const juce::String& Key ) { return vTree.isValid() && vTree.hasProperty( Key ) ? vTree.getProperty( Key ).toString() : juce::String(); }
+    void         KickPadColourDefaults::set( const juce::String& Key, const juce::String& Value ) { vTree.setProperty( Key, Value, nullptr ); }
 
     /// ///////////////////////////////////
     ///    Browser Favourite.

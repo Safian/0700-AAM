@@ -2,6 +2,63 @@
 
 Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül; az MPC-hez nem csatlakoztam), 2026-11-04, ág `claude/kick-plans`. A „KÉSZ” itt azt jelenti: van bekötött handler az engine-ig, nem azt, hogy hardveren igazolt. Három képernyő egy fájlban; a hibák és a TODO kódjai képernyőnként külön prefixet kapnak: **NS** = Next Sequence (`M/kick_ui/modes/kick_nextSequence.{h,cpp}`), **SG** = Song (`kick_song.{h,cpp}`), **CE** = Color Edit (`kick_PadColor.{h,cpp}`). Rövidítések: `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `MODES/` = `M/kick_ui/modes/`, `bridge` = `A/kick_hardware_bridge.h`. Prioritás: **P0** összeomlás / adatvesztés / biztonság, **P1** hibás vagy hiányzó alapfunkció, **P2** javítás / kényelem. Méret: S ≤ fél nap, M ≤ 2 nap, L > 2 nap.
 
+## Állapot (R-8, 2026-11-04 — a S-C és az R-8 kör után; ez a szakasz a mérvadó, az alábbi táblák a review idejét mutatják)
+
+S-C: NS-01..03, 06..09 (`dec5d617`, `d2d51ce2`), SG-01..08 (`10217009`), CE-01, 03..07 (`3f265a07`). R-8:
+
+| Tétel | Állapot |
+|---|---|
+| **NS-05** Hold | KÉSZ a kézikönyv szerint: a Hold bekapcsolva a jelenlegi sorozat ismétlődik (a motor sora törlődik), a pad-nyomás csak **kijelöl** (zöld szegély), nem állít sorba; Next Bar / Sudden a kijelölésre vált (Hold alatt a kijelölés, egyébként a sorban álló); Hold kikapcsolása: normál működés, a kijelölés nem kerül sorba (a régi viselkedés a kijelölést kikapcsoláskor sorba tette: a kézikönyv szerint a pad-nyomást „ideiglenesen figyelmen kívül hagyja”). Next Bar / Sudden nem indítja újra a játszó sorozatot, ha nincs kijelölés. Host-teszt: `SequenceLogicTests` (setHold, pressPad, switchTarget, afterSudden) |
+| NS Clear | A kézikönyv szerint a Clear a kijelölt sorozatot **törli a lejátszási listából**, csak ha az nem játszik (a régi Kick-viselkedés: a sorban álló eldobása, ez továbbra is elérhető: a játszó pad újra megnyomása). KÉSZ: kérdés (Igen / Nem), UNDO a státuszsávban, a játszó és az utolsó sorozat védett; az indexek igazítása host-tesztelt (`afterDelete`) |
+| NS „Song” gomb | KÉSZ (kézikönyv: Copy to Song, leállítva): a lista minden sorozata lépésként (ismétlés 1) a kiválasztott vagy egy új dalhoz **hozzáfűződik** (a kézikönyv nem mondja, hogy felülír-e: nem romboló), egy undo-lépés (`MTSongManager::appendSongSteps`) |
+| **NS-04** pad-LED irány | JAVASLAT (owner-döntés): **a híd tartson egy `PadLedState`-et** (16 pad: szín, állapot, villogás), amelyet a meglévő `SET_SINGLE_PAD` / `ALL_SINGLE_COLOUR` / `BLINKING` / `COLOR_MODE` parancsok írnak, a villogást a híd animálja; a `SET_COLOUR_STATE` marad az alapréteg. Ez egyszerre oldja NS-04, SG-10, CE-02, SS-07 és a többi `setPadDataMessage`-t használó képernyőt (AssignSample, Mute, Sampler); a képernyők nem változnak. Az alternatíva (a képernyők átállítása a 16 szín + állapot csomagra) villogás nélküli, és minden képernyőt érint. A híd az R-3 (agy) dolga, itt nem nyúltunk hozzá |
+| NSC-01 Akai-összevetés | alább |
+| **SG-09** Convert > Seq | NINCS motor-függvény (`songToSequence`): a dal lépések listája, a sorozat-lánc eseményekkel való egyesítése (sávonként a jegyzetek másolása eltolással, ütemmutató / tempó kezelés, „Track Status: Exclude / Include Muted Tracks”) a motor önálló munkája. A gomb nincs megjelenítve. Jelentve |
+| SG Export | owner-döntés (a kézikönyv: Audio Mixdown ablak — az audió-exportot az R-2 / a mixdown-tervek kezelik) |
+| CE (Color Edit) saját logika | KÉSZ: Shift + színgomb = minden pad ezt a színt kapja, Shift + pad (érintés vagy hardver) = a pad színét választja ki (kézikönyv), Make Default a kézikönyv szerint (tartós típus-alapérték) + Reset gomb (S-C Make Default jelentése), kérdéssel, UNDO a státuszsávban, All Pads UNDO-val. CE-02 / CE-08: a híd (R-3) |
+
+### Akai-összevetés, WP-B / WP-C (kézikönyv 316–317., 326–328., 336–337. o.) — NSC-01
+**Next Sequence**
+| Kézikönyv | Kick |
+|---|---|
+| Sorozat-lista (Sequence, Length, BPM), kijelölés érintéssel | KÉSZ |
+| Pad A01 = 1. sorozat; sárga = van sorozat, halvány sárga = üres; a kijelölt pad villogó zöld majd zöld | a képernyőn KÉSZ (szín-kiosztás eltér: narancs / zöld); a hardver pad-LED nem (NS-04) |
+| Lejátszás közben pad = a következő sorozat; ha nincs, a jelenlegi ismétlődik | KÉSZ |
+| Next Bar / Sudden (a kijelölt sorozatra) | KÉSZ (R-8: a kijelöltre, Hold alatt is) |
+| Clear (a kijelölt sorozat törlése a listából, ha nem játszik) | KÉSZ (R-8) |
+| Hold (a jelenlegi ismétlődik, a pad-nyomás kijelöl, nem sorba állít) | KÉSZ (R-8) |
+| Song (Copy to Song: leállítva, dal kiválasztása, Do It) | KÉSZ (R-8) |
+| Time Counter | a státuszsáv BBT-je |
+| Hardver gomb: Next Seq (Key 61: Shift + Next Seq = Song) | NINCS Key 61 gomb-hozzárendelés a hídban (R-3) |
+**Song**
+| Kézikönyv | Kick |
+|---|---|
+| 32 dal, 999 lépés, lépésenként 999 ismétlés | KÉSZ (R-8: korlátok és az ismétlés 999-ig) |
+| Song mező, billentyűzet-ikon = átnevezés | KÉSZ (Rename gomb) |
+| BPM mező + Seq/Gbl | NINCS (a dalnak nincs saját tempója a motorban); rejtett |
+| Lépés-lista: sorszám, sorozat, ismétlés, tempó, ütemek; **Hold (legkisebb érték) = végtelen ismétlés** | sorszám, sorozat, ismétlés, tempó, ütemek KÉSZ; a végtelen ismétlés **nincs** (a motor lejátszási sora véges lépésekre számol; motor-munka) |
+| Pad-bank gombok a sorozatokhoz | KÉSZ |
+| Lépés beszúrása: lépés kijelölése + Insert | KÉSZ |
+| Dal „felvétele” padokkal (Rec / Overdub élesít, pad = lépés, többszöri nyomás = több ismétlés, Stop vége) | KÉSZ (R-8: Rec kapcsoló, vagy a hardveres REC élesítve; a pad az utolsó lépésként illeszti be, ugyanaz a pad ismétlést növel; a lejátszás nem szól) |
+| A lépés sorozatának cseréje: sorozat-név érintés + Data Dial / +/- | KÉSZ (R-8: a kijelölt lépés sorozatát a Data Dial / +/- állítja; Shift vagy nincs kijelölés: a lépéseken lépked) |
+| Clear (minden lépés), Delete (lépés) | KÉSZ (S-C: UNDO) |
+| Next / Sudden (játszás közben a következő lépésre) | KÉSZ (R-8: `skipSongStep`, a tick / ütem szálon fogyasztva) |
+| Convert > Seq (To Sequence, Track Status) | NINCS motor-függvény (SG-09) |
+| Export = Audio Mixdown ablak | owner-döntés / mixdown |
+| Dalba lépni lejátszás közben nem lehet | a Song képernyő a lejátszás alatt zárolja a táblát (S-C); a belépés lejátszás alatt nincs tiltva (nem vizsgált) |
+**Pad Color**
+| Kézikönyv | Kick |
+|---|---|
+| Track mező, Bank mező | program-választó, bank (◀ ▶, A-D / Shift E-H) KÉSZ |
+| Alsó mező: pad fénymód: Off / Classic Velocity (pad-nyomásra velocity szín piros-sárga) / Fixed / Off->Velocity / Dim->Velocity / Bright->Velocity | A Kick: Pad Off (Dim / Off) x Pad On (Velocity / Full / Off) + Empty = 9 mód. Megfelelés: Off = Off/Off; Off->Velocity = Off/Velocity; Dim->Velocity = Dim/Velocity; Fixed ≈ Dim|Off / Full. **Nincs**: Classic Velocity (piros-sárga velocity skála) és Bright->Velocity (világos alapfény) — az MPC hardver pad-rétege, **NEM-KICK** (owner: később; a híd kezeli) |
+| Empty Pads: off / dim / normal | Empty: Dim / Off KÉSZ; a „normal” (üres pad ugyanúgy világít) NINCS (MPC-specifikus pad-réteg) |
+| Single Pad / All Pads; Shift + színgomb = minden pad | KÉSZ (R-8) |
+| 18 színgomb; Shift + pad = a pad színét választja | KÉSZ (R-8) |
+| Pad-nyomás (hardver) / érintés = a szín ráállítása | KÉSZ (S-C) |
+| Make Default = az aktuális színek lesznek a program-típus alapértékei (Do It / Cancel) | KÉSZ (R-8): a gomb a program aktuális színeit és pad-szín módjait **eltárolja** a program típus-csoportjának (Drum / Clip / egyéb) alapértékeként a beállítások fájlban (`KickSettings::padColours`, régi fájloknál magától létrejön), kérdez (Do It / Cancel); az új programok ezzel indulnak. Új **Reset** gomb: a program minden padja a típus alapértékére áll (az eltárolt Make Default, ennek híján a gyári szín), egy undo-lépés, kérdez, UNDO a státuszsávban (ez volt S-C-ben a „Make Default” jelentése). Host-teszt: `PadColourDefaultsTests`; smoke: új program / Reset az eltárolt értéket használja. A meglévő programok nem változnak Make Default-ra (csak Reset-re) |
+| Keygroup / plugin / MIDI / CV sávok **alapból a Pad Perform pad-szín kiosztását** használják; egyedi kiosztás a pad-terület megérintésével | JAVASLAT (owner-döntés): a Keygroup / MIDI programok alapszíne a Pad Perform színei: gyökér = piros, skála-hang = sötétsárga, a többi halvány (S-F: ugyanez a pad-LED logika); ma `defaultPadColours` = { Red } (csak az első pad piros, a többi 0 = sötétpiros). Ezt a `mt_audio_iprogram.h` tömbje cseréli, a program-típusonként |
+
+
 **Az Akai-összevetésről.** Az Akai útmutató erre a három módra vonatkozó fejezeteit (WP-B: Next Sequence, Song, Looper; WP-C: Pad Color) a `WALKTHROUGH_PLAN.md` szerint még **nem** dolgozta fel senki (a `walkthrough/` mappában csak WP-B.raw.json, WP-D, WP-G van, és a nyers JSON-ban nincs „Next Sequence” / „Song” / „Color” találat). Ezért ahol az Akai-viselkedésről szólok, az **NEM ELLENŐRIZHETŐ KÓDBÓL / DOKUMENTUMBÓL**; az első TODO ennek pótlása (NSC-01).
 
 ## 1. Áttekintés

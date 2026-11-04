@@ -259,8 +259,10 @@ namespace mt
         if( !playQueue.empty() )
         {
             if( nextSequenceUpdateTicks == -1 ) nextSequenceUpdateTicks = playQueue.size() ? playQueue.front().nextSeqUpdateTicks : -1;
-            if( playQueue.front().timeInTicks <= playTime )
+            const bool skipNow = songSkip.load() == 1;
+            if( playQueue.front().timeInTicks <= playTime || skipNow )
             {
+                songSkip.store( 0 );
                 ++stepIndex;
                 resetSong();
                 if( playQueue.front().isEnabled )
@@ -279,6 +281,7 @@ namespace mt
         }
         else
         {
+            songSkip.store( 0 ); // the last step has no next one
             if( songActive.load() && lastSeqTicks <= playTime ) // not in song mode: nothing to stop
             {
                 songActive = false;
@@ -347,8 +350,16 @@ namespace mt
             playingSequence->onBeat();
     }
 
+    void MTAudioTransportManager::skipSongStep( bool AtNextBar )
+    {
+        if( songActive.load() )
+            songSkip.store( AtNextBar ? 2 : 1 );
+    }
+
     void MTAudioTransportManager::onBar()
     {
+        if( songSkip.load() == 2 )
+            songSkip.store( 1 ); // "Next": the bar boundary is reached, onTick moves to the next step
         if( playingSequence )
         {
             if( _nextBar.isEnabled.load() )
@@ -389,6 +400,7 @@ namespace mt
             int  repeat{ 1 };
             while( !playQueue.empty() )
                 playQueue.pop();
+            songSkip.store( 0 );
             resetSong();
             for( auto& step : SongInfo.steps )
             {

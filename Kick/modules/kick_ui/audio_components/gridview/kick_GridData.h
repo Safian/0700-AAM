@@ -23,6 +23,14 @@
 
 namespace kick_ui
 {
+    // "Message + UNDO button" in the status bar for screens below the dialogs module (Step Sequencer). The status bar
+    // (kick_AppStatusbar) installs the handler; without one nothing is offered.
+    inline std::function<void( const juce::String&, std::function<void()> )>& undoOfferHandler()
+    {
+        static std::function<void( const juce::String&, std::function<void()> )> handler;
+        return handler;
+    }
+
     constexpr int numNotesInOctave{ 12 };
     constexpr int numNotesInSemiTone{ 1 };
 

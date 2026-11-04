@@ -81,23 +81,52 @@ inline juce::String runKickSequencersSmoke() {
     if (after != before) return fail("one undo did not restore all timing-corrected notes");
     say("timing correct = one undo step");
 
-    // ---- note list watcher (asynchronous: the result is printed after the message loop has run; this is not
-    //      a modal-loop build, so it cannot be pumped here)
+    // ---- SS-17: non-4/4 sequences accept and keep their time signature (the step counts of the Step Sequencer come from
+    //      the bar lengths of the grid: StepModelTests covers the step maths, a real 3/4 project is checked on the device)
     {
-        auto watcher = std::make_shared<kick_ui::NoteListWatcher>();
-        auto hits    = std::make_shared<int>(0);
-        watcher->onChanged = [hits]() { ++*hits; };
-        watcher->setEnabled(true);
-        api.addOrModifyNote(11, 0, 96, 100, 100, 1);
-        juce::Timer::callAfterDelay(300, [watcher, hits]() {
-            const int h1 = *hits;
-            std::cout << (h1 >= 1 ? "SEQUENCERS: note list watcher reported the added note\n" : "SEQUENCERS FAIL: note list watcher silent on add\n") << std::flush;
-            mt::getAudioInterface().addOrModifyNote(12, 0, 96, 100, 100, 1); // a second change (an undo here would revert the seeded notes)
-            juce::Timer::callAfterDelay(300, [watcher, hits, h1]() {
-                std::cout << (*hits > h1 ? "SEQUENCERS: note list watcher reported a second change\n" : "SEQUENCERS FAIL: note list watcher silent on a second change\n") << std::flush;
-                watcher->setEnabled(false);
-            });
-        });
+        api.createSequence("SeqTS");
+        const int seqTS = api.getNumSequences() - 1;
+        for (const auto& t : {std::pair<int, int>{3, 4}, {5, 4}, {6, 8}, {7, 8}, {2, 4}, {4, 4}}) {
+            if (api.setTimeSignature(seqTS, t.first, t.second) != 0) return fail("cannot set " + juce::String(t.first) + "/" + juce::String(t.second));
+            int num = 0, den = 0;
+            if (!api.getTimeSignature(seqTS, num, den) || num != t.first || den != t.second)
+                return fail("time signature " + juce::String(t.first) + "/" + juce::String(t.second) + " not kept: " + juce::String(num) + "/" + juce::String(den));
+        }
+        api.setSelectedSequence(seq);
+        say("non-4/4 time signatures (3/4, 5/4, 6/8, 7/8, 2/4) are accepted and kept");
+    }
+
+    // ---- automation breakpoints as list events: insert / move / delete are undo steps, sorted by tick, Level and Pan lanes
+    {
+        const int kL = mt::kAutomationLevel, kP = mt::kAutomationPan;
+        {
+            mt::ScopedUndoTransaction scope(um, "auto insert");
+            if (api.setAutomationEvent(sel, kL, -1, 96, 80) != 0) return fail("cannot insert a Level breakpoint");
+            api.setAutomationEvent(sel, kL, -1, 0, 40);
+            if (api.setAutomationEvent(sel, kP, -1, 192, -500) != 0) return fail("cannot insert a Pan breakpoint");
+        }
+        auto ev = api.getAutomationEvents(sel);
+        if (ev.size() != 3 || ev[0].tick != 0 || ev[0].value != 40 || ev[1].tick != 96 || ev[1].param != kL || ev[2].tick != 192 || ev[2].param != kP || ev[2].value != -500)
+            return fail("automation events are not the 3 inserted breakpoints in tick order");
+        {
+            mt::ScopedUndoTransaction scope(um, "auto move");
+            if (api.setAutomationEvent(sel, kL, 96, 288, 90) != 0) return fail("cannot move a breakpoint");
+        }
+        ev = api.getAutomationEvents(sel);
+        if (ev.size() != 3 || ev[1].param != kP || ev[2].tick != 288 || ev[2].value != 90) return fail("moved breakpoint is wrong");
+        {
+            mt::ScopedUndoTransaction scope(um, "auto delete");
+            if (api.deleteAutomationEvent(sel, kP, 192) != 0) return fail("cannot delete a breakpoint");
+        }
+        if (api.getAutomationEvents(sel).size() != 2) return fail("delete did not remove one breakpoint");
+        undo();
+        if (api.getAutomationEvents(sel).size() != 3) return fail("one undo did not bring the deleted breakpoint back");
+        undo();
+        ev = api.getAutomationEvents(sel);
+        if (ev.size() != 3 || ev[1].tick != 96) return fail("one undo did not undo the move");
+        undo();
+        if (!api.getAutomationEvents(sel).empty()) return fail("one undo did not remove the three inserted breakpoints");
+        say("automation breakpoints: insert / move / delete are single undo steps, lanes keep their order");
     }
 
     // ---- song: undo, missing sequence, rename, delete
@@ -105,6 +134,19 @@ inline juce::String runKickSequencersSmoke() {
     mt::MTSongStepInfo s0; s0.seqNo = seq;  api.addSongStep("SongA", s0, 0);
     mt::MTSongStepInfo s1; s1.seqNo = seq2; api.addSongStep("SongA", s1, 1);
     if (api.getSongInfo("SongA").steps.size() != 2) return fail("song steps not added");
+    // Copy to Song: the whole playlist (new song + steps) is ONE undo step
+    {
+        std::vector<mt::MTSongStepInfo> steps(2);
+        steps[0].seqNo = seq;
+        steps[1].seqNo = seq2;
+        if (api.appendSongSteps("CopySong", steps, true) != 2) return fail("copy to song added no steps");
+        if (!api.isSongExists("CopySong") || api.getSongInfo("CopySong").steps.size() != 2) return fail("copy to song did not create the song with 2 steps");
+        if (api.appendSongSteps("NoSuchSong", steps, false) != 0) return fail("copy to a missing song must add nothing");
+        undo();
+        if (api.isSongExists("CopySong")) return fail("one undo did not remove the copied song");
+        say("copy to song is one undo step");
+    }
+    api.skipSongStep(false); // no song playing: ignored
     undo();
     if (api.getSongInfo("SongA").steps.size() != 1) return fail("undo of a song step did not remove it");
     um.redo();
@@ -139,10 +181,62 @@ inline juce::String runKickSequencersSmoke() {
     if (pd->padColour[20].get() != def20 || pd->padColour[127].get() != mt::defaultDrumColours[127]) return fail("one undo did not revert colouring all pads");
     say("pad colour defaults ok");
 
+    // ---- Make Default (manual): the program's colours become the defaults of its type; new programs and Reset use them
+    {
+        auto& store = mt::getSettings().padColours;
+        const auto saved = store.get("drum"); // the stored value is restored at the end (the settings belong to the user)
+        api.setProgramPadColour(prog, 7, 20);
+        api.setProgramPadColour(prog, 9, 21);
+        if (api.makeProgramPadColoursDefault(prog) != 0) return fail("Make Default failed");
+        const int prog2 = api.createProgram(mt::MTProgramType::Drum, "SeqDrum2");
+        auto* pd2 = api.getProgramData(prog2);
+        if (!pd2 || pd2->padColour[20].get() != 7 || pd2->padColour[21].get() != 9) { store.set("drum", saved); return fail("a new drum program does not start with the stored default colours"); }
+        const int other = api.createProgram(mt::MTProgramType::Keygroup, "SeqKeys");
+        auto* pk = api.getProgramData(other);
+        if (!pk || pk->padColour[20].get() == 7) { store.set("drum", saved); return fail("the drum default leaked into a keygroup program"); }
+        api.setProgramPadColour(prog, 3, -1);
+        api.resetProgramPadColours(prog);
+        if (pd->padColour[20].get() != 7 || pd->padColour[21].get() != 9 || pd->padColour[0].get() != def0) { store.set("drum", saved); return fail("Reset did not return to the stored default"); }
+        store.set("drum", saved);
+        api.resetProgramPadColours(prog);
+        if (pd->padColour[20].get() != def20) return fail("Reset did not return to the factory colours without a stored default");
+        say("Make Default stores the type defaults, new programs and Reset use them");
+    }
+
     api.setSelectedSequence(seq);
     api.setSelectedTrack(trk);
     for (int i = 0; i < 8; ++i) api.addOrModifyNote(0, i * 96, 96, 40 + i * 12, 100, 1); // seeded content for the screenshots
     for (int i : {1, 3, 6}) api.addOrModifyNote(2, i * 96, 96, 110, 60, 2);
+    // KICK_SMOKE_SEQUENCERS_BIG=1: 3000 notes and 40 breakpoints on the selected track, so a MenuListEdit screenshot shows (and
+    // measures) the virtual list.
+    if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SEQUENCERS_BIG", {}).isNotEmpty()) {
+        api.setSequenceLength(seq, 100);
+        {
+            mt::ScopedUndoTransaction scope(um, "big");
+            for (int i = 0; i < 3000; ++i) api.addOrModifyNote(i % 16, i * 12, 10, 30 + i % 90, 100, 1);
+            for (int i = 0; i < 40; ++i) api.setAutomationEvent(sel, mt::kAutomationLevel, -1, i * 900, 20 + i * 2);
+        }
+        say("seeded 3000 notes and 40 breakpoints");
+    }
+    // ---- note list watcher (asynchronous: the result is printed after the message loop has run; this is not
+    //      a modal-loop build, so it cannot be pumped here)
+    {
+        auto watcher = std::make_shared<kick_ui::NoteListWatcher>();
+        auto hits    = std::make_shared<int>(0);
+        watcher->onChanged = [hits]() { ++*hits; };
+        watcher->setEnabled(true);
+        api.addOrModifyNote(11, 0, 96, 100, 100, 1);
+        juce::Timer::callAfterDelay(300, [watcher, hits]() {
+            const int h1 = *hits;
+            std::cout << (h1 >= 1 ? "SEQUENCERS: note list watcher reported the added note\n" : "SEQUENCERS FAIL: note list watcher silent on add\n") << std::flush;
+            mt::getAudioInterface().addOrModifyNote(12, 0, 96, 100, 100, 1); // a second change (an undo here would revert the seeded notes)
+            juce::Timer::callAfterDelay(300, [watcher, hits, h1]() {
+                std::cout << (*hits > h1 ? "SEQUENCERS: note list watcher reported a second change\n" : "SEQUENCERS FAIL: note list watcher silent on a second change\n") << std::flush;
+                watcher->setEnabled(false);
+            });
+        });
+    }
+
     std::cout << "PASS: sequencer screens engine checks\n";
     return {};
 }

@@ -804,6 +804,18 @@ namespace mt
     ///
     /// SONG INFORMATION
     ///
+    // One breakpoint of a track automation lane as a List Edit event. Param: 0 = track level (0..127), 1 = program pan
+    // (-1000..1000 = pan * 1000). Tick = position on the track timeline (like a note start).
+    struct MTAutomationEvent
+    {
+        int param{ 0 };
+        int tick{ 0 };
+        int value{ 0 };
+    };
+    constexpr int kAutomationLevel    = 0;
+    constexpr int kAutomationPan      = 1;
+    constexpr int kAutomationPanScale = 1000;
+
     struct MTSongStepInfo
     {
         juce::String seqID;
