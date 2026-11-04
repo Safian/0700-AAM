@@ -145,6 +145,35 @@ int main()
         fx.gate = false;
         inserts.touchFx().set( fx );
         CHECK( std::fabs( renderOnce( design ) - ( -0.25f ) ) < 1e-3f ); // released: back
+        design.removeFromBus( bus, nyq );
+    }
+
+    // ---- Pre-fader (default) vs Post-fader option
+    // Source = 0.25, Insert = +0.5, Bus Gain = 0.5
+    // Pre-fader: (0.25 + 0.5) * 0.5 = 0.375
+    // Post-fader: (0.25 * 0.5) + 0.5 = 0.625
+    {
+        inserts.removeAllEffects();
+        design.setBypass( false );
+        design.setParameter( bus, AudIO::BusOrChain::kParamGain, 0.5f );
+        CHECK( 0 == inserts.addEffect( std::make_unique<AddFx>( 0.5f ), 0 ) );
+
+        // Default: pre-fader
+        CHECK( std::fabs( design.getParameter( bus, AudIO::BusOrChain::kParamPostFader ) - 0.f ) < 1e-5f );
+        CHECK( std::fabs( renderOnce( design ) - 0.375f ) < 1e-4f );
+
+        // Selectable post-fader option
+        design.setParameter( bus, AudIO::BusOrChain::kParamPostFader, 1.0f );
+        CHECK( std::fabs( design.getParameter( bus, AudIO::BusOrChain::kParamPostFader ) - 1.f ) < 1e-5f );
+        CHECK( std::fabs( renderOnce( design ) - 0.625f ) < 1e-4f );
+
+        // Toggle back to pre-fader (default)
+        design.setParameter( bus, AudIO::BusOrChain::kParamPostFader, 0.0f );
+        CHECK( std::fabs( renderOnce( design ) - 0.375f ) < 1e-4f );
+
+        // Reset gain and remove effect
+        design.setParameter( bus, AudIO::BusOrChain::kParamGain, 1.0f );
+        inserts.removeAllEffects();
     }
 
     if( g_fail == 0 )

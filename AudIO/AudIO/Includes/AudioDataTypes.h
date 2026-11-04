@@ -30,6 +30,7 @@ namespace AudIO
         kParamDownMixToLeft,
         kParamDownMixToRight,
         kParamStereo,
+        kParamPostFader,
         kParamMax
     };
 

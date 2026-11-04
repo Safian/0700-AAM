@@ -201,6 +201,9 @@ namespace AudIO
                 m_downmixStereoToMono = ( value > 0.5f ) ? true : false;
                 m_downmixToLeft       = ( value > 0.5f ) ? false : true;
                 break;
+            case BusOrChain::kParamPostFader:
+                m_postFader = ( value > 0.5f );
+                break;
         }
     }
 
@@ -222,6 +225,8 @@ namespace AudIO
                 return m_downmixStereoToMono ? ( m_downmixToLeft ? 1.f : 0.f ) : 0.f;
             case BusOrChain::kParamDownMixToRight:
                 return m_downmixStereoToMono ? ( m_downmixToLeft ? 0.f : 1.f ) : 0.f;
+            case BusOrChain::kParamPostFader:
+                return m_postFader.load() ? 1.0f : 0.0f;
         }
         return 0.0f;
     }
@@ -269,23 +274,75 @@ namespace AudIO
             }
             else // !Muted
             {
-                if( _inserts.size() )
+                if( m_postFader.load() )
                 {
-                    for( auto& insert : _inserts )
-                        insert.process();
-                }
-                else
-                {
-                    Buffer.copyInputsToOutputs();
-                }
+                    // Post-fader option: apply bus gain and pan first, then process inserts
+                    if( m_downmixStereoToMono )
+                    {
+                        if( Buffer.getNumInputChannels() >= 2 )
+                        {
+                            auto l = Buffer.getInputBuffer( 0 );
+                            auto r = Buffer.getInputBuffer( 1 );
+                            auto dst = m_downmixToLeft ? l : r;
+                            auto clr = m_downmixToLeft ? r : l;
+                            for( uint32_t i = 0; i < Buffer.getBlockSize(); ++i )
+                            {
+                                dst[i] = ( 0.5f * ( l[i] + r[i] ) ) * chainGain;
+                                clr[i] = 0.f;
+                            }
+                        }
+                        else if( Buffer.getNumInputChannels() == 1 )
+                        {
+                            utils::multiply<float>( Buffer.getInputBuffer( 0 ), Buffer.getBlockSize(), chainGain );
+                        }
+                    }
+                    else
+                    {
+                        if( 2 == (int)Buffer.getNumInputChannels() )
+                        {
+                            Panner<float> panner( mPan );
+                            auto l = chainGain * panner.getLeft();
+                            auto r = chainGain * panner.getRight();
+                            utils::multiply<float>( Buffer.getInputBuffer( 0 ), Buffer.getBlockSize(), l );
+                            utils::multiply<float>( Buffer.getInputBuffer( 1 ), Buffer.getBlockSize(), r );
+                        }
+                        else if( Buffer.getNumInputChannels() == 1 )
+                        {
+                            utils::multiply<float>( Buffer.getInputBuffer( 0 ), Buffer.getBlockSize(), chainGain );
+                        }
+                    }
 
-                if( m_downmixStereoToMono )
-                {
-                    Buffer.stereoToMono( chainGain, m_downmixToLeft );
+                    if( _inserts.size() )
+                    {
+                        for( auto& insert : _inserts )
+                            insert.process();
+                    }
+                    else
+                    {
+                        Buffer.copyInputsToOutputs();
+                    }
                 }
                 else
                 {
-                    Buffer.applyGainAndPan( chainGain, mPan );
+                    // Pre-fader (default): process inserts first, then apply bus gain and pan
+                    if( _inserts.size() )
+                    {
+                        for( auto& insert : _inserts )
+                            insert.process();
+                    }
+                    else
+                    {
+                        Buffer.copyInputsToOutputs();
+                    }
+
+                    if( m_downmixStereoToMono )
+                    {
+                        Buffer.stereoToMono( chainGain, m_downmixToLeft );
+                    }
+                    else
+                    {
+                        Buffer.applyGainAndPan( chainGain, mPan );
+                    }
                 }
             } // !Muted
         } // !Bypass
