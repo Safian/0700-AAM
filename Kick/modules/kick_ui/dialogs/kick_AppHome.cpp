@@ -600,7 +600,10 @@ namespace kick_ui
                 return;
             }
 
-            if( contracts::DclContractsHelper::isNavigationMessage( f_HwMsg ) && ui::getComponentInFocus() && !contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) )
+            // Q-Link 1..16 belong to the screen, never to the touched control: a control drops them
+            // ("Nothing to be done for link knobs"), which made the Q-Link dead after any touch on the MPC.
+            const bool isQLinkMsg = contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) && contracts::DclContractsHelper::getKnobCode( f_HwMsg ) != contracts::DeviceControlContracts::KnobSequence::EN_KNOB_CENTER;
+            if( contracts::DclContractsHelper::isNavigationMessage( f_HwMsg ) && ui::getComponentInFocus() && !contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) && !isQLinkMsg )
             {
                 log += " is Navigation message";
                 juce::Logger::writeToLog( log );
