@@ -71,9 +71,11 @@ namespace kick_ui
     void SendsMixer::meterUpdate()
     {
         auto& comps = getRowComponents();
-        for( auto& it : comps )
+        for( int i = 0; i < comps.size(); ++i )
         {
-            if( auto r = dynamic_cast<SendsMixerDisplay*>( it ) )
+            if( !isRowVisible( i ) )
+                continue;
+            if( auto r = dynamic_cast<SendsMixerDisplay*>( comps[i] ) )
             {
                 r->meterUpdate();
             }

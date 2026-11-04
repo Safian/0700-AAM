@@ -87,9 +87,11 @@ namespace kick_ui
     void SubmixMixer::meterUpdate()
     {
         auto& comps = getRowComponents();
-        for( auto& it : comps )
+        for( int i = 0; i < comps.size(); ++i )
         {
-            if( auto r = dynamic_cast<SubmixMixerDisplay*>( it ) )
+            if( !isRowVisible( i ) )
+                continue;
+            if( auto r = dynamic_cast<SubmixMixerDisplay*>( comps[i] ) )
             {
                 r->meterUpdate();
             }
