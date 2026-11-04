@@ -18,6 +18,9 @@ namespace kick_ui
 
         // Hardware pad: padNo 0..15 inside the engine's current bank.
         void hardwarePad( int padNo, bool pressed, int velocity );
+        // PP-22: Pad aftertouch for sounding notes
+        bool isPadHeld( int padNo ) const;
+        void padAftertouch( int padNo, int pressure );
         // Every note that is still on goes off (screen hidden, panic).
         void releaseAllNotes();
 
@@ -61,6 +64,14 @@ namespace kick_ui
         ui::KickToggleButton levelBtn{ "Level16", "16 LEVELS", "16 LEVELS" };
         ui::KickToggleButton levelParamBtn{ "LevelParam", "Velocity", "Tune" };
         ui::KickLabel        heldLabel{ "" }; // note / chord name of the pads that are held
+
+        // PP-25: Arpeggiator / Latch controls
+        ui::KickToggleButton arpBtn{ "ARP", "ARP ON", "ARP OFF" };
+        ui::KickToggleButton latchBtn{ "LATCH", "LATCH ON", "LATCH OFF" };
+        ui::KickListBox      arpMode{ ui::KickListBox::BoxType::withTitleBar, "ARP MODE", { "Up", "Down", "UpDown", "Random" }, 0, 1 };
+        ui::KickListBox      arpRate{ ui::KickListBox::BoxType::withTitleBar, "ARP RATE", { "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T", "1/32T" }, 2, 2 };
+        ui::KickNumberT<int> arpOctaves{ "ARP OCT", 1, 4, 1 };
+        ui::KickNumberT<int> arpGate{ "ARP GATE %", 5, 100, 50 };
 
         mt::MTIPadPerformanceData* pPadPerform{ nullptr };
 

@@ -28,6 +28,14 @@ namespace kick_ui
         setRowTitles( { "SOURCE", "DESTINATION", "", "" } );
 
         addComponent( lfoType, 0, 0 );
+        lfoEnable.setTitle( "ENABLE" );
+        lfoEnable.setValueFontHeight( 16.f );
+        lfoEnable.setValueColour( ui::Theme::textColour( 1 ) );
+        addComponent( lfoEnable, 0, 1 );
+        lfoEnable.onClick = [&]() {
+            if( pDrum && pads.size() )
+                pDrum->setLFOEnabled( pads[0], lfoEnable.getToggleState() );
+        };
         addComponent( rate, 0, 2 );
         //addComponent( layer4, 1, 3 );
 
@@ -96,6 +104,7 @@ namespace kick_ui
     {
         if( pDrum && pads.size() )
         {
+            lfoEnable.setToggleState( pDrum->isLFOEnabled( pads[0] ), juce::dontSendNotification );
             lfoType.setSelected( pDrum->getLFOType( pads[0] ), juce::dontSendNotification );
             rate.setValue( pDrum->getLFOFrequency( pads[0] ), juce::dontSendNotification );
             pitch.setValue( pDrum->getLFOPitch( pads[0] ), juce::dontSendNotification );

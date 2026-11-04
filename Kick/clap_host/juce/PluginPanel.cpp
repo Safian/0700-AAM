@@ -57,7 +57,7 @@ PluginPanel::PluginPanel(std::shared_ptr<PluginSession> owner, bool automaticall
     pluginList.setTextWhenNothingSelected("Scan and choose an instrument");
     search.setTextToShowWhenEmpty("Filter parameters...", juce::Colours::grey);
     search.onTextChange = [this] { rebuildParameters(); };
-    parameterList.setRowHeight(54);
+    parameterList.setRowHeight(56);
     parameterList.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff15191e));
     errorsButton.setEnabled(false);
     errorsButton.onClick = [this] { juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Plugin scan errors", scanErrors); };
@@ -80,7 +80,13 @@ PluginPanel::PluginPanel(std::shared_ptr<PluginSession> owner, bool automaticall
     }
     auto extraPaths = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("KICK/clap-paths.txt");
     juce::StringArray lines; lines.addLines(extraPaths.loadFileAsString());
-    for (const auto& line : lines) if (line.isNotEmpty()) roots.emplace_back(line.toStdString());
+    for (const auto& line : lines) {
+        if (line.isNotEmpty()) {
+            std::filesystem::path p(line.toStdString());
+            if (std::find(roots.begin(), roots.end(), p) == roots.end())
+                roots.push_back(p);
+        }
+    }
     setSize(960, 540); rebuildParameters(); startTimerHz(10);
     if (automaticallyScan) scanPlugins();
 }
@@ -105,9 +111,16 @@ void PluginPanel::chooseFolder() {
                          [safe](const juce::FileChooser& selection) {
         if (!safe || selection.getResult() == juce::File{}) return;
         const auto path = selection.getResult().getFullPathName();
-        safe->roots.emplace_back(path.toStdString());
-        auto file = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("KICK/clap-paths.txt");
-        file.getParentDirectory().createDirectory(); file.appendText(path + "\n");
+        std::filesystem::path fsPath(path.toStdString());
+        if (std::find(safe->roots.begin(), safe->roots.end(), fsPath) == safe->roots.end()) {
+            safe->roots.push_back(fsPath);
+            auto file = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("KICK/clap-paths.txt");
+            file.getParentDirectory().createDirectory();
+            juce::StringArray existing;
+            existing.addLines(file.loadFileAsString());
+            if (!existing.contains(path))
+                file.appendText(path + "\n");
+        }
         safe->scanPlugins();
     });
 }
@@ -176,8 +189,8 @@ void PluginPanel::timerCallback() {
     auto& host = session->host();
     if (host.metadataRevision() != parameterRevision) rebuildParameters();
     const auto* viewport = parameterList.getViewport();
-    const auto first = viewport ? viewport->getViewPositionY() / 54 : 0;
-    const auto last = std::min(getNumRows(), first + parameterList.getHeight() / 54 + 2);
+    const auto first = viewport ? viewport->getViewPositionY() / 56 : 0;
+    const auto last = std::min(getNumRows(), first + parameterList.getHeight() / 56 + 2);
     for (int i = std::max(0, first); i < last; ++i)
         if (auto* row = dynamic_cast<ParameterRow*>(parameterList.getComponentForRowNumber(i))) row->refresh();
     const auto stats = host.statistics();
@@ -189,15 +202,15 @@ void PluginPanel::paint(juce::Graphics& g) { g.fillAll(juce::Colour(0xff15191e))
 void PluginPanel::resized() {
     auto bounds = getLocalBounds().reduced(12);
     title.setBounds(bounds.removeFromTop(30));
-    auto toolbar = bounds.removeFromTop(46);
-    scanButton.setBounds(toolbar.removeFromLeft(72).reduced(2)); folderButton.setBounds(toolbar.removeFromLeft(104).reduced(2));
-    errorsButton.setBounds(toolbar.removeFromLeft(96).reduced(2));
-    panicButton.setBounds(toolbar.removeFromRight(72).reduced(2)); removeButton.setBounds(toolbar.removeFromRight(82).reduced(2));
-    loadButton.setBounds(toolbar.removeFromRight(70).reduced(2)); pluginList.setBounds(toolbar.reduced(2));
-    auto macroRow = bounds.removeFromTop(44);
+    auto toolbar = bounds.removeFromTop(52);
+    scanButton.setBounds(toolbar.removeFromLeft(76).reduced(2)); folderButton.setBounds(toolbar.removeFromLeft(108).reduced(2));
+    errorsButton.setBounds(toolbar.removeFromLeft(100).reduced(2));
+    panicButton.setBounds(toolbar.removeFromRight(76).reduced(2)); removeButton.setBounds(toolbar.removeFromRight(86).reduced(2));
+    loadButton.setBounds(toolbar.removeFromRight(76).reduced(2)); pluginList.setBounds(toolbar.reduced(2));
+    auto macroRow = bounds.removeFromTop(48);
     const auto width = macroRow.getWidth() / 4;
-    for (auto& macro : macros) macro.setBounds(macroRow.removeFromLeft(width).reduced(3));
-    search.setBounds(bounds.removeFromTop(34).reduced(2));
+    for (auto& macro : macros) macro.setBounds(macroRow.removeFromLeft(width).reduced(2));
+    search.setBounds(bounds.removeFromTop(40).reduced(2));
     statusLabel.setBounds(bounds.removeFromBottom(36)); parameterList.setBounds(bounds);
 }
 } // namespace kick::clap

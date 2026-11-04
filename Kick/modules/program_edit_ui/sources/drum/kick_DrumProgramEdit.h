@@ -24,7 +24,7 @@
 namespace kick_ui
 {
 
-#define DRUM_NAV_BUTTONS ( 5 )
+#define DRUM_NAV_BUTTONS ( 6 )
 
     class DrumHeader : public juce::Component
 
@@ -73,6 +73,7 @@ namespace kick_ui
         ui::KickToggleButton layerMixButton{ "Layer Mix", "Layer Mix", "Layer Mix" };
         ui::KickToggleButton envelopesButton{ "Envelopes", "Envelopes", "Envelopes" };
         ui::KickToggleButton lfoButton{ "LFO", "LFO", "LFO" };
+        ui::KickToggleButton filterButton{ "Filter", "Filter", "Filter" };
 
         mt::MTDrumProgram*                            pDrum{ nullptr };
         std::vector<int>                              pads;

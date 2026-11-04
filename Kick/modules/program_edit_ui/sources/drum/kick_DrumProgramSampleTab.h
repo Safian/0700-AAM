@@ -40,14 +40,16 @@ namespace kick_ui
         void refreshPads();
 
     private:
-        void buttonClicked( juce::Button* ) override{};
+        void buttonClicked( juce::Button* ) override;
         void buttonStateChanged( juce::Button* ) override;
+        void openSamplePicker( int layerIdx );
 
     private:
         std::vector<int>&   pads;
         mt::MTDrumProgram*& pDrum;
 
         ui::WaveRenderer wav;
+        ui::KickList     fileList{ "Samples" };
         int              selectedLayer{ 0 };
 
         std::array<ui::KickToggleButton, 4> layer;

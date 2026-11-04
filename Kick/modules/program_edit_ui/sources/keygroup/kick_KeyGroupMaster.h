@@ -24,6 +24,7 @@ namespace kick_ui
         // Key zone of the selected key's sample (multi-sample keygroups: the key is played by the sample whose zone holds it; the root
         // is the sample's own key, the pad it is assigned to).
         ui::KickNumberT<int> zoneLow{ "ZONE LOW", 0, 127, 0 };
+        ui::KickNumberT<int> zoneRoot{ "ROOT NOTE", 0, 127, 60 };
         ui::KickNumberT<int> zoneHigh{ "ZONE HIGH", 0, 127, 127 };
 
         ui::KickToggleOptions layerPlay{ "LAYER PLAY", progedit::layerPlayOptions() };

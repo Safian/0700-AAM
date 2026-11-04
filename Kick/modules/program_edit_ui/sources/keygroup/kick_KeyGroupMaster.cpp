@@ -18,10 +18,13 @@ namespace kick_ui
 
         if( kKeyTrackVisible )
             addComponent( keyTrack, 2, 1 );
+        else
+            addComponent( zoneRoot, 2, 1 );
         addComponent( muteGroup, 2, 2 );
         addComponent( zoneLow, 2, 0 );
         addComponent( zoneHigh, 2, 3 );
         zoneLow.setColours( ui::Theme::textColour( 2 ), ui::Theme::textColour( 1 ) );
+        zoneRoot.setColours( ui::Theme::textColour( 2 ), ui::Theme::textColour( 1 ) );
         zoneHigh.setColours( ui::Theme::textColour( 2 ), ui::Theme::textColour( 1 ) );
 
         addComponent( layerPlay, 3, 0 );
@@ -97,6 +100,12 @@ namespace kick_ui
             }
         };
 
+        zoneRoot.onValueChanged = [&]( int Value ) {
+            if( ! pKeygroup || keys.empty() ) return;
+            if( auto* k = pKeygroup->getKeysClip( keys[0] ) )
+                k->keyNote = Value;
+        };
+
         zoneHigh.onValueChanged = [&]( int Value ) {
             if( ! pKeygroup || keys.empty() ) return;
             if( auto* k = pKeygroup->getKeysClip( keys[0] ) )
@@ -162,8 +171,9 @@ namespace kick_ui
         {
             muteGroup.setValue( pKeygroup->getNoteMuteGroup( keys[0] ), juce::dontSendNotification );
             auto* zoneKey = pKeygroup->getKeysClip( keys[0] );
-            mt::utils::setEnabled( zoneKey != nullptr, zoneLow, zoneHigh ); // no sample on this key: no zone
+            mt::utils::setEnabled( zoneKey != nullptr, zoneLow, zoneRoot, zoneHigh ); // no sample on this key: no zone
             zoneLow.setValue( zoneKey ? (int)zoneKey->minNote.get() : 0, juce::dontSendNotification );
+            zoneRoot.setValue( zoneKey ? (int)zoneKey->keyNote.get() : 60, juce::dontSendNotification );
             zoneHigh.setValue( zoneKey ? (int)zoneKey->maxNote.get() : 127, juce::dontSendNotification );
             samplePlay.setSelected( (int)pKeygroup->getNoteSamplePlay( keys[0] ), juce::dontSendNotification );
             layerPlay.setSelected( (int)pKeygroup->getNoteLayerPlay( keys[0] ), juce::dontSendNotification );

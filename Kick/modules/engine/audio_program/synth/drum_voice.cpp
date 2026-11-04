@@ -25,11 +25,7 @@
 
 namespace mt
 {
-    void DrumVoice::attachToAndReset( const juce::ValueTree& Tree, juce::UndoManager* Undo )
-    {
-        pLfo.attachTo( Tree.getChildWithName( IDs::LFO ) );
-        pEnv.attachTo( Tree.getChildWithName( IDs::ENVELOPE ) );
-    }
+    static inline bool hasSustain( ADSRType Type ) { return Type == Type_ADSR || Type == Type_AHDS || Type == Type_AHDSR; }
 
     void DrumVoice::noteOn( int Number, int Velocity )
     {
@@ -42,15 +38,22 @@ namespace mt
         pitchEnv.setSampleRate( sampleRate );
 
         // Setup LFO.
-        lfo.setType( toEnum<LFOType>( pLfo.type() ) );
-        lfo.setFrequency( pLfo.freq(), true );
-        lfo.setEnabled( pLfo.isEnabled() );
+        lfo.setType( toEnum<LFOType>( pLfo->type() ) );
+        lastLfoFreq = pLfo->freq();
+        lfo.setFrequency( lastLfoFreq, true );
+        lfo.setEnabled( pLfo->isEnabled() );
 
         // Setup Envelopes.
-        sampleLength = MIDI::SCALER * getLength();
+        // The envelope times are fractions (value / 127) of the sample's length, in SAMPLES (ADSR::setParameters divides by the rate).
+        // This used to be SCALER * length in seconds, scaled by SCALER again below: a few thousandths of a sample.
+        sampleLength = getLength() * sampleRate;
         updateAmplitudeEnvelope( sampleLength );
         updateFilterEnvelope( sampleLength );
         updatePitchEnvelope( sampleLength );
+
+        ampEnv.setEnabled( pEnv->amp.isEnabled() );
+        filtEnv.setEnabled( pEnv->filter.isEnabled() );
+        pitchEnv.setEnabled( pEnv->pitch.isEnabled() );
 
         // Setup filter.
         updateFilter();
@@ -81,42 +84,60 @@ namespace mt
 
     void DrumVoice::updateLFO()
     {
-        lfo.setType( toEnum<LFOType>( (int)pLfo.type() ) );
-        lfo.setFrequency( pLfo.freq() );
+        if( !pLfo->isEnabled() )
+        {
+            lfoToAmp    = 0.0;
+            lfoToPan    = 0.0;
+            lfoToPitch  = 0.0;
+            lfoToFilter = 0.0;
+            return;
+        }
 
-        lfoToAmp    = pLfo.ampMod() * MIDI::SCALER;
-        lfoToPan    = pLfo.panMod() * MIDI::SCALER;
-        lfoToPitch  = pLfo.pitchMod() * MIDI::SCALER;
-        lfoToFilter = pLfo.filterMod() * MIDI::SCALER;
+        lfo.setType( toEnum<LFOType>( (int)pLfo->type() ) );
+        // setFrequency() restarts the LFO phase: only when the rate really changed, not at every block (the LFO stood at the start of
+        // its cycle: a constant instead of a wave).
+        if( !juce::exactlyEqual( lastLfoFreq, (float)pLfo->freq() ) )
+        {
+            lastLfoFreq = pLfo->freq();
+            lfo.setFrequency( lastLfoFreq );
+        }
+
+        lfoToAmp    = pLfo->ampMod() * MIDI::SCALER;
+        lfoToPan    = pLfo->panMod() * MIDI::SCALER;
+        lfoToPitch  = pLfo->pitchMod() * MIDI::SCALER;
+        lfoToFilter = pLfo->filterMod() * MIDI::SCALER;
     }
 
     void DrumVoice::updateFilter( double modulation )
     {
-        filter.setFilterType( toEnum<FilterType>( pEnv.filter.type() ) );
-        filter.setResonance( pEnv.filter.resonance() );
+        filter.setFilterType( toEnum<FilterType>( pEnv->filter.type() ) );
+        filter.setResonance( pEnv->filter.resonance() );
 
-        auto cutoff = Filter::freqRange.convertTo0to1( pEnv.filter.cutoff() ) + modulation;
+        auto cutoff = Filter::freqRange.convertTo0to1( pEnv->filter.cutoff() ) + modulation;
         filter.setCutoff( cutoff );
     }
 
     void DrumVoice::updateAmplitudeEnvelope( double Length )
     {
-        auto type  = toEnum<ADSRType>( pEnv.amp.adsrType() );
+        auto type  = toEnum<ADSRType>( pEnv->amp.adsrType() );
         auto scale = MIDI::SCALER * Length;
 
         auto adF = scale * getAttackDecayScaler( type );
         auto hF  = scale * getHoldScaler( type );
         auto rF  = scale * getReleaseScaler( type );
 
-        auto ampToAttack = juce::jmap<float>( pEnv.amp.ampMod(), 0.0, 127.0, -1.0, 1.0 );
-        ampToVel         = juce::jmap<float>( pEnv.amp.velMod(), 0.0, 127.0, -1.0, 1.0 );
-        ampToPan         = juce::jmap<float>( pEnv.amp.panMod(), 0.0, 127.0, -1.0, 1.0 );
+        // The amplitude envelope's level / pan / velocity modulators are not in the clip model and have no control: they stay
+        // neutral. (Their atomic defaults 0 / 1 / 1 were mapped to -1 / -0.98 / -0.98 here: the Attack knob turned into Hold and the
+        // pad was panned almost hard left as soon as the voice was bound to a clip.)
+        const float ampToAttack = 1.0f; // 1 = Attack as set (the shift of Attack into Hold is off)
+        ampToVel                = 0.0f;
+        ampToPan                = 0.0f;
 
-        auto aa = ( pEnv.amp.a() * adF );
-        auto ad = ( pEnv.amp.d() * adF );
-        auto ah = ( pEnv.amp.h() * hF );
-        auto ar = ( pEnv.amp.r() * rF );
-        auto as = ( pEnv.amp.s() );
+        auto aa = ( pEnv->amp.a() * adF );
+        auto ad = ( pEnv->amp.d() * adF );
+        auto ah = ( pEnv->amp.h() * hF );
+        auto ar = ( pEnv->amp.r() * rF );
+        auto as = hasSustain( type ) ? (double)pEnv->amp.s() : 0.0; // AD / AHD decay to silence
 
         auto mod = aa - ( ampToAttack * aa );
         aa -= mod;
@@ -127,35 +148,35 @@ namespace mt
 
     void DrumVoice::updateFilterEnvelope( double Length )
     {
-        auto type  = toEnum<ADSRType>( pEnv.filter.adsrType() );
+        auto type  = toEnum<ADSRType>( pEnv->filter.adsrType() );
         auto scale = MIDI::SCALER * Length;
 
         auto adF = scale * getAttackDecayScaler( type );
         auto hF  = scale * getHoldScaler( type );
         auto rF  = scale * getReleaseScaler( type );
 
-        auto aa = ( pEnv.filter.a() * adF );
-        auto ad = ( pEnv.filter.d() * adF );
-        auto ah = ( pEnv.filter.h() * hF );
-        auto ar = ( pEnv.filter.r() * rF );
-        auto as = ( pEnv.filter.s() );
+        auto aa = ( pEnv->filter.a() * adF );
+        auto ad = ( pEnv->filter.d() * adF );
+        auto ah = ( pEnv->filter.h() * hF );
+        auto ar = ( pEnv->filter.r() * rF );
+        auto as = hasSustain( type ) ? (double)pEnv->filter.s() : 0.0; // AD / AHD decay to silence
         filtEnv.setParameters( aa, ah, ad, ar, as ); // In terms of samples...
     }
 
     void DrumVoice::updatePitchEnvelope( double Length )
     {
-        auto type  = toEnum<ADSRType>( pEnv.pitch.adsrType() );
+        auto type  = toEnum<ADSRType>( pEnv->pitch.adsrType() );
         auto scale = MIDI::SCALER * Length;
 
         auto adF = scale * getAttackDecayScaler( type );
         auto hF  = scale * getHoldScaler( type );
         auto rF  = scale * getReleaseScaler( type );
 
-        auto aa = ( pEnv.pitch.a() * adF );
-        auto ad = ( pEnv.pitch.d() * adF );
-        auto ah = ( pEnv.pitch.h() * hF );
-        auto ar = ( pEnv.pitch.r() * rF );
-        auto as = ( pEnv.pitch.s() );
+        auto aa = ( pEnv->pitch.a() * adF );
+        auto ad = ( pEnv->pitch.d() * adF );
+        auto ah = ( pEnv->pitch.h() * hF );
+        auto ar = ( pEnv->pitch.r() * rF );
+        auto as = hasSustain( type ) ? (double)pEnv->pitch.s() : 0.0; // AD / AHD decay to silence
         pitchEnv.setParameters( aa, ah, ad, ar, as ); // In terms of samples...
     }
 
@@ -186,12 +207,16 @@ namespace mt
                 auto panMod = ( lfoToPan * lfoOut ) + ( gain.getTargetValue() * ampToPan ); // Pan modulation factor.
 
                 double pitchEnvFactor = 1.0;
-                if( pEnv.pitch.isEnabled() && pEnv.pitch.depth() != 0 )
+                if( pEnv->pitch.isEnabled() && pEnv->pitch.depth() != 0 )
                 {
-                    pitchEnvFactor = std::pow( 2.0, ( ( pitchAdsr - 1.0 ) * pEnv.pitch.depth() ) / 12.0 );
+                    pitchEnvFactor = std::pow( 2.0, ( ( pitchAdsr - 1.0 ) * pEnv->pitch.depth() ) / 12.0 );
                 }
                 auto pMod   = pitchEnvFactor * masterPitchRatio * ( 1.0 - ( lfoToPitch * lfoOut ) ); // Pitch modulation factor.
-                auto fMod   = filtAdsr * pEnv.filter.depth() * ( ( lfoToFilter * lfoOut ) + ( lfoToPitch * lfoOut ) ); // Filter cutoff frequency modulation.
+                // Filter cutoff modulation, in the normalised cutoff range: the filter envelope (only when it is on) times its depth
+                // (0..127), plus the LFO's filter amount. (The old formula multiplied the envelope with the LFO terms, so the
+                // envelope alone never moved the cutoff, and the LFO pitch amount leaked into the filter.)
+                const double envToFilter = pEnv->filter.isEnabled() ? filtAdsr * ( pEnv->filter.depth() * MIDI::SCALER ) : 0.0;
+                auto         fMod        = envToFilter + ( lfoToFilter * lfoOut );
 
                 // get next sample.
                 updateFilter( fMod );

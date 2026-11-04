@@ -166,6 +166,7 @@ namespace mt
         int  getArpMode();
         int  getArpRate();
         int  getArpOctaves();
+        int  getArpGate();
         bool isArpLatch();
 
         // SEQUENCE RECORDING (hardware REC / OVERDUB + PLAY, see mt_seq_record.h). The track's Record (arm) button sets
