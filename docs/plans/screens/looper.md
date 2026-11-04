@@ -126,21 +126,21 @@ A hardveres REC-hez tartozó engine-viselkedés (a szekvenciafelvétel és a loo
 
 Hibák (sorrendben):
 - [ ] **LO-01** (P0, S) Overdub közben a meglévő hurok lejátszása (lejátszás + felvétel egyszerre), összegzési headroom — `REC/Recorder.cpp:175-187`; teszt: LO-17.
-- [ ] **LO-02** (P0, S) Overdub-flag kezelése: a REC mindig csere-mód, az OVERDUB-gomb kikapcsolása töröl; a `looperBusy` ne az időtlen flagre épüljön (`isRecording() || (isOverdubbing() && isRecording())`); LED-javítás — `UI/kick_LoopRecorder.cpp:94-103, 138-148, 372`; `ENG/mt_audio_manager.cpp:625`; `hardware/led_map.h:157-185`.
-- [ ] **LO-03** (P0, S) A hossz-összehasonlítás egész mintaszámra/ütemre; a hurok ne törlődjön képernyő-belépéskor; ütemszám-váltás megerősítéssel — `UI/kick_LoopRecorder.cpp:85-89, 429-436`; `REC/Recorder.h:41`.
+- [x] **LO-02** (P0, S) Overdub-flag kezelése: a REC mindig csere-mód, az OVERDUB-gomb kikapcsolása töröl; a `looperBusy` ne az időtlen flagre épüljön (`isRecording() || (isOverdubbing() && isRecording())`); LED-javítás — `UI/kick_LoopRecorder.cpp:94-103, 138-148, 372`; `ENG/mt_audio_manager.cpp:625`; `hardware/led_map.h:157-185`.
+- [x] **LO-03** (P0, S) A hossz-összehasonlítás egész mintaszámra/ütemre; a hurok ne törlődjön képernyő-belépéskor; ütemszám-váltás megerősítéssel — `UI/kick_LoopRecorder.cpp:85-89, 429-436`; `REC/Recorder.h:41`.
 - [ ] **LO-04** (P0, S) Gain/Pan csak a lejátszási úton (vagy csak a felvételin), egyszer; a mentett WAV ne égesse be — `REC/Recorder.cpp:163-184`.
-- [ ] **LO-05** (P1, S) Export/Clear engedélyezése az engine állapotából (hardveres felvétel is), nem a UI-jelből — `UI/kick_Looper.cpp:33-44`; `UI/kick_LoopRecorder.cpp:94-112, 163-176`.
+- [x] **LO-05** (P1, S) Export/Clear engedélyezése az engine állapotából (hardveres felvétel is), nem a UI-jelből — `UI/kick_Looper.cpp:33-44`; `UI/kick_LoopRecorder.cpp:94-112, 163-176`.
 - [ ] **LO-06** (P1, L) Hullámforma-gyorsítótár és a teljes puffer-másolat megszüntetése — közös tétel: **SA-07** (`REC/Recorder.cpp:107-112, 159-160`; `UI/kick_LoopRecorder.cpp:194-198, 387-390`).
 - [ ] **LO-07** (P1, M) Export: a közös mentő-folyamat (SA-03/SA-11): projekt `samples/` mappa, egyedi név, hiba megjelenítése, **ütem-hosszra kerekített** export, `addAsset` hibaellenőrzés — `UI/kick_Looper.cpp:47-67`; `REC/Recorder.cpp:119-134`. Függ: SA-03, SA-11, SE-12.
-- [ ] **LO-08** (P1, S) Reverse állapot-visszatükrözés javítása (`reverseB`), a `record()` ne módosítsa a irányt a gomb nélkül, dupla indítás kiküszöbölése — `UI/kick_LoopRecorder.cpp:159-160, 367-370`; `REC/Recorder.cpp:51, 77-91`.
+- [x] **LO-08** (P1, S) Reverse állapot-visszatükrözés javítása (`reverseB`), a `record()` ne módosítsa a irányt a gomb nélkül, dupla indítás kiküszöbölése — `UI/kick_LoopRecorder.cpp:159-160, 367-370`; `REC/Recorder.cpp:51, 77-91`.
 - [ ] **LO-09** (P1, M) Tempó/taktus-kapcsolat: a hurok ütem-egységben, a skála a szekvencia taktusát használja (nem a Project Defaults-ot), a `tempoMgr` életciklusa (nem nyers mutató), tempóváltás-kezelés — `UI/kick_LoopRecorder.cpp:67-70, 220-224, 244-281`.
 - [ ] **LO-10** (P1, S) Képernyő-elhagyás viselkedése: a looper háttérben is szóljon (opció), a SYNC ne állítsa meg a szekvenciát — owner-döntés — `UI/kick_LoopRecorder.cpp:420-446`.
 - [ ] **LO-11** (P1, M) Egymenetes „N ütem” felvételi mód + szinkron-indítás ütemhatáron (a körbeérő felülírás opció) — `REC/Recorder.cpp:175-182`; `UI/kick_LoopRecorder.cpp:138-161`.
 
 Hiányzó funkciók / hardver:
-- [ ] **LO-12** (P1, M) Undo/Redo kivezetése a UI-ra és a hardverre (Undo a Looper képernyőn a looper-szintű visszavonásra); Clear megerősítése — `ENG/mt_audio_interface_looper.cpp:79-80`; `REC/Recorder.cpp:113-118`.
+- [x] **LO-12** (P1, M) Undo/Redo kivezetése a UI-ra és a hardverre (Undo a Looper képernyőn a looper-szintű visszavonásra); Clear megerősítése — `ENG/mt_audio_interface_looper.cpp:79-80`; `REC/Recorder.cpp:113-118`.
 - [ ] **LO-13** (P1, S) Looper megnyitása a Key 61-ről: gomb-kiosztás **owner-döntés** (nincs szabad Looper-gomb a térképen); LED a képernyőhöz — `Kick/apps/kick/hardware/akai_map.h`; `led_map.h`; `bridge:1293-1300` mintára.
-- [ ] **LO-14** (P2, S) Key 61 4-Q-Link kiosztás (küszöb, monitor, gain, pan); az 5-ös Q-Link hivatkozás kivezetése — `UI/kick_LoopRecorder.cpp:177-191`; `kick_IOComponent.cpp`.
+- [x] **LO-14** (P2, S) Key 61 4-Q-Link kiosztás (küszöb, monitor, gain, pan); az 5-ös Q-Link hivatkozás kivezetése — `UI/kick_LoopRecorder.cpp:177-191`; `kick_IOComponent.cpp`.
 - [ ] **LO-15** (P1, M) SYNC-fázis (H7/Z2b) és AC2 mérése MPC-n, javítás, az eredmény rögzítése a `known-issues`-ban — `UI/kick_LoopRecorder.cpp:115-127, 138-161`; `ENG/mt_audio_manager.cpp:620-640`; `TODO_MASTER.md:62`.
 - [ ] **LO-16** (P2, S) A „gain” csúszka átnevezése küszöbre, bemeneti trim, clip-jelzés, halott mérő-ág törlése — `UI/kick_LoopRecorder.cpp:76, 375-384`. Közös: SA-10.
 
@@ -148,3 +148,11 @@ Tesztek:
 - [ ] **LO-17** (P1, S) `AudioTests.cpp` bővítés: overdub közbeni kimenet (L1), flag-törlés (L2), gain/pan egyszeri alkalmazása (L4), hossz-összehasonlítás float/double (L3) — `Kick/tests/platform/AudioTests.cpp:99-114` mellé. Függ: LO-01…LO-04.
 - [ ] **LO-18** (P2, M) A Looper UI-állapotgép GUI-mentes kivonása és host-teszt (Export/Clear állapot, Reverse, hardveres parancsok). Függ: LO-05, LO-08.
 - [ ] **LO-19** (P1, M) WP-B Looper-szakasz (v3.10: 338–341. oldal körül, ellenőrzendő) végigvétele → Akai-paritási TODO-k; a MPC-s ellenőrző-lista (§6) felvétele a `HW_TEST_CHECKLIST.md`-be és lefuttatása.
+
+## 8. Állapot (S-E kör, 2026-11-04)
+
+Kész (kód + host-teszt `LooperLogicTests`, Mac build + smoke): **LO-02** (az overdub-flag minden kilépésnél törlődik, `looperBusy = isRecording()`; a duplikált indítás megszűnt: csak `looperStart`), **LO-03** (hossz-összehasonlítás egész mintaszámra, nincs törlés ismeretlen tempónál, megerősítés ütemszám-váltás előtt), **LO-05** (Export/Clear az engine állapotából, hardveres felvételre is), **LO-08** (Reverse tükrözés javítva, a felvétel a gombot előre állítja), **LO-12** (UNDO gomb, a második lenyomás redo; Clear megerősítéssel), **LO-14** (Q-Link 1-4: küszöb, monitor, gain, pan; a küszöb a motorba is megy).
+
+Részben: **LO-07** (UI-oldal kész: `<project>/samples`, egyedi név, lemezen ellenőrzött mentés, hibaüzenet a motor `lastError()`-jából, `addAsset` ellenőrzés, a program a dialógus választása szerint; az ütem-pontos export a `Recorder::save`-ben van: R-2), **LO-09** (a tempó lekérése minden használatkor friss, nincs nyers mutató; ütem-egységes hossz és a szekvencia taktusát követő skála NYITOTT), **LO-10** (a képernyő elhagyása már nem állítja meg a szekvenciát; a háttérben szóló looper owner-döntés), **LO-16** (halott mérő-ág törölve; a „gain" -> „threshold" átnevezés a közös `KickIOComponent`-ben van, SA-10), **LO-17/18** (`LooperLogicTests`; a Recorder-motor tesztjei R-2).
+
+Nem érintve (R-2 vagy `AudIO/Recorder`): **LO-01** (overdub alatt a hurok némán fut: `Recorder::process` ágai), **LO-04** (gain/pan kétszer), **LO-06** (hullámforma-pillanatkép spinlock alatt, ~-0,04 s/s drift: mérést kér, R-2), **LO-11** (egymenetes felvétel). Owner-döntés / ember: **LO-13** (Key 61 gomb-kiosztás), **LO-15** (SYNC fázis és AC2 mérése MPC-n), **LO-19** (WP-B Looper-szakasz; MPC-s lista: `AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` 36-37.).

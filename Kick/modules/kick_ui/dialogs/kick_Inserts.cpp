@@ -135,7 +135,7 @@ namespace kick_ui
         mt::utils::addChildComponents( this, list, selector, options ); // Not visible by default.
 
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
-        header.showOptions( true, true );
+        header.showOptions( true, false ); // no insert-parameter automation exists: the header icon did nothing
 
         ui::themeChanged.connect( [&]() { header.setIcon( "Icon_Mixer" ); } );
 

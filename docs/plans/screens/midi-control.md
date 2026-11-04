@@ -190,25 +190,25 @@ Súlyosság szerint rendezve.
 ## 7. TODO
 
 Hibák:
-- [ ] **MC-01** (P0, S) A Hardware fül konstruktorában ne törölj semmit; mentett fa betöltése, hiányzó elemek alapértékkel — `T:264-268`.
-- [ ] **MC-02** (P0, M) Eseményút szétválasztása: a DCL-üzenet közvetlenül `ControlId`-ra képződik, a fantom-küldés (MC-B2) megszüntetése — `M:137-177`, `T:1336-1393`. Függ: MC-03.
-- [ ] **MC-03** (P0, S) `controlEnums` és lista egységesítése (egyetlen táblázatból generálva), "−/+" szétválasztása, "Undo" felvétele, XYFXY-Axis javítása — `kick_MidiControl.h:100-106`, `T:215-218`, `T:342`, `T:713`.
-- [ ] **MC-04** (P0, M) MIDI Learn szálbiztonság és élettartam: FIFO a MIDI-szálról, üzenetszálon feldolgozás, értékkel fogott lambdák, `messageBuffer` ürítése/zárása, inicializált jelzők — `T:2448-2517`, `T:2555-2770`, `H:174-175`.
-- [ ] **MC-05** (P0, M) Leképezés azonosító szerint (port/csatorna/típus/szám → sor), nem a kijelölt sor szerint — `T:2519-2772`. Függ: MC-04.
-- [ ] **MC-06** (P0, S) A `numRows` a fából számolódjon, a tábla betöltéskor feltöltődjön, az Add ne töröljön; Delete és Clear egységes — `T:1869-1926`, `T:3029-3032`.
-- [ ] **MC-07** (P1, S) Toggle mód valódi megvalósítása (belső állapot, nyomásra vált) — `T:1389-1393`.
-- [ ] **MC-08** (P1, M) Q-Link: Absolute/Relative kódolás, lépésnagyság/gyorsítás, a `knobRotated` elnyelés megszüntetése, Touch Sense eltávolítása vagy bekötése — `T:815-829`, `T:1359-1363`, `T:1544-1565`.
-- [ ] **MC-09** (P1, S) Aftertouch: a véletlen érték eltávolítása; Poly/Channel csak valódi csomaggal (függ a hídtól, `B:1775-1780`) — `T:1465`, `T:1503`.
-- [ ] **MC-10** (P1, S) XY fül: nincs üres SysEx, mute-logika átnevezése/egyszerűsítése, csökkentés és deduplikáció, `mouseUp`-nál utolsó érték — `T:1649-1693`, `M:65-68`.
-- [ ] **MC-11** (P1, S) Output lista a valódi kimeneti eszközökből, a választott port mentése, nincs automatikus első eszköz — `M:111-120`.
-- [ ] **MC-12** (P1, M) Alapértékek javítása (CC 14/15, pad 7/8/11, Velocity-bool) — `T:369`, `T:377`, `T:547-606`, `T:1330`.
+- [x] **MC-01** (P0, S) A Hardware fül konstruktorában ne törölj semmit; mentett fa betöltése, hiányzó elemek alapértékkel — `T:264-268`.
+- [x] **MC-02** (P0, M) Eseményút szétválasztása: a DCL-üzenet közvetlenül `ControlId`-ra képződik, a fantom-küldés (MC-B2) megszüntetése — `M:137-177`, `T:1336-1393`. Függ: MC-03.
+- [x] **MC-03** (P0, S) `controlEnums` és lista egységesítése (egyetlen táblázatból generálva), "−/+" szétválasztása, "Undo" felvétele, XYFXY-Axis javítása — `kick_MidiControl.h:100-106`, `T:215-218`, `T:342`, `T:713`.
+- [x] **MC-04** (P0, M) MIDI Learn szálbiztonság és élettartam: FIFO a MIDI-szálról, üzenetszálon feldolgozás, értékkel fogott lambdák, `messageBuffer` ürítése/zárása, inicializált jelzők — `T:2448-2517`, `T:2555-2770`, `H:174-175`.
+- [x] **MC-05** (P0, M) Leképezés azonosító szerint (port/csatorna/típus/szám → sor), nem a kijelölt sor szerint — `T:2519-2772`. Függ: MC-04.
+- [x] **MC-06** (P0, S) A `numRows` a fából számolódjon, a tábla betöltéskor feltöltődjön, az Add ne töröljön; Delete és Clear egységes — `T:1869-1926`, `T:3029-3032`.
+- [x] **MC-07** (P1, S) Toggle mód valódi megvalósítása (belső állapot, nyomásra vált) — `T:1389-1393`.
+- [x] **MC-08** (P1, M) Q-Link: Absolute/Relative kódolás, lépésnagyság/gyorsítás, a `knobRotated` elnyelés megszüntetése, Touch Sense eltávolítása vagy bekötése — `T:815-829`, `T:1359-1363`, `T:1544-1565`.
+- [x] **MC-09** (P1, S) Aftertouch: a véletlen érték eltávolítása; Poly/Channel csak valódi csomaggal (függ a hídtól, `B:1775-1780`) — `T:1465`, `T:1503`.
+- [x] **MC-10** (P1, S) XY fül: nincs üres SysEx, mute-logika átnevezése/egyszerűsítése, csökkentés és deduplikáció, `mouseUp`-nál utolsó érték — `T:1649-1693`, `M:65-68`.
+- [x] **MC-11** (P1, S) Output lista a valódi kimeneti eszközökből, a választott port mentése, nincs automatikus első eszköz — `M:111-120`.
+- [x] **MC-12** (P1, M) Alapértékek javítása (CC 14/15, pad 7/8/11, Velocity-bool) — `T:369`, `T:377`, `T:547-606`, `T:1330`.
 - [ ] **MC-13** (P1, M) Célok javítása: valódi track-index, Pan/Send, Submix Volume/Solo, Main Mute, Drum Sustain setter, bank-figyelembevétel, Mute/Solo élérzékelés — `T:2528-2770`, `T:2195`.
-- [ ] **MC-14** (P1, S) Monitor: IN lista feltöltése a Learn-bemenetről, Clear javítás, % számítás, méretkorlát, helyes típuscímkék — `M:209-305`.
+- [x] **MC-14** (P1, S) Monitor: IN lista feltöltése a Learn-bemenetről, Clear javítás, % számítás, méretkorlát, helyes típuscímkék — `M:209-305`.
 
 Hiányzó funkciók:
-- [ ] **MC-15** (P1, M) Flip megvalósítása a leképezésben és tesztben — `T:2377-2383`.
-- [ ] **MC-16** (P1, M) Note, Pitch Bend, Program Change tanítása és leképezése (a hangszám is tárolva) — `T:2470-2488`.
-- [ ] **MC-17** (P1, M) Több bemeneti port, port-választó a Learn-hez, az `activeMidiInput` életciklusa — `T:2413-2445`.
+- [x] **MC-15** (P1, M) Flip megvalósítása a leképezésben és tesztben — `T:2377-2383`.
+- [x] **MC-16** (P1, M) Note, Pitch Bend, Program Change tanítása és leképezése (a hangszám is tárolva) — `T:2470-2488`.
+- [x] **MC-17** (P1, M) Több bemeneti port, port-választó a Learn-hez, az `activeMidiInput` életciklusa — `T:2413-2445`.
 - [ ] **MC-18** (P1, M) Projektbetöltésre újraépülő kötések a motorban (háttérben működik a képernyő megnyitása nélkül) — függ: MC-05.
 - [ ] **MC-19** (P1, M) Strip-elem a Hardware listába (CC, csatorna, Low/High Range, Touch Sense) — függ: híd T12.
 - [ ] **MC-20** (P2, M) LED Midi Input/Local megvalósítása a híd LED-táblájával (a UI csomagot a híd ma eldobja) — `T:2813-2845`, `B:137-160`.
@@ -224,3 +224,11 @@ Tesztek:
 - [ ] **MC-26** (P1, M) Host-tesztek: leképezés, lista-egyezés, Learn-kötés, perzisztencia (6. pont) — `Kick/tests/platform`.
 - [ ] **MC-27** (P1, S) MPC-s ellenőrzőlista bővítése (6. pont) a `HW_TEST_CHECKLIST`-be.
 - [ ] **MC-28** (P2, M) TSAN/ASAN futás a Learn útvonalon külső MIDI-forrással.
+
+## 8. Állapot (S-E kör, 2026-11-04)
+
+Kész (host-teszt `MidiControlLogicTests`, Mac build + smoke): **MC-01** (a mentett kiosztás megmarad; sémaverzió: a régi hibás alapértékű fa nem olvad be), **MC-02/03** (a vezérlő a hardver-üzenetből jön, nem a lista kijelöléséből: nincs fantom-üzenet; egy táblázat a lista, az enum-sorrend és az alapértékek számára; a "-/+" szétvált, XY-sorok elérhetők; az Undo bejegyzés törölve, nincs gombja), **MC-04/05/06** (a Learn a MIDI-szálról a üzenetszálra másol, értékkel fogott lambdák, a kötés típus+csatorna+szám szerint, minden sor a saját céljára; a tábla a projekt fájából épül, az Add nem töröl; undo/törlés a fa figyelőjén át frissít), **MC-07** (Toggle), **MC-08** (Absolute/Relative, gyorsítás, nincs elnyelt esemény; a Touch Sense / Note sor elrejtve, a híd nem adja), **MC-09** (nincs véletlen aftertouch; a sor elrejtve), **MC-10** (tengelyenként, csak változásra, nincs üres SysEx), **MC-11** ("None" az első elem, a port mentve), **MC-12** (CC-k, pad 7/8/11, Velocity), **MC-14** (IN nézet a Learn bemenetéről, Clear, százalék, 200 bejegyzés, helyes típuscímkék), **MC-15** (Flip), **MC-16** (Note, Pitch Bend, Program Change tanítás és leképezés, a hangszám tárolva), **MC-17** (minden bemeneti port nyitva).
+
+Részben: **MC-13** (a cél név szerint, Pan -1..1, Gain 0..1, Mute/Solo él, Drum Sustain setter, bank; track Pan és Submix Volume nincs motor-hívás: a listából kivéve), **MC-26** (a leképezés, kötés-egyezés, tábla és monitor-logika tesztelt; perzisztencia-körút és szál-stressz nem).
+
+Nyitott: **MC-18** (a kötések a képernyő megnyitása nélkül is működjenek: a bemenetek ma az első "Enable Mapping"-kor nyílnak), **MC-19** (strip-elem: híd T12), **MC-20** (LED Midi Input / Local: a Light Led sor elrejtve, a híd eldobja a UI LED-csomagokat), **MC-21** (Preferences kimeneti port: `kick_ui_settings`), **MC-22** (teljes `ControllerMap`/`MidiLearnEngine` refaktor), **MC-23** (a navigáló gombok elrejtése a listából), **MC-24**, **MC-25**, **MC-27** (checklist 42.), **MC-28** (TSAN: ember / külön futás).
