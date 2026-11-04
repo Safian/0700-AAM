@@ -38,6 +38,7 @@ namespace kick_ui
         std::vector<int>&   pads;
         mt::MTDrumProgram*& pDrum;
 
+        ui::KickToggleButton lfoEnable{ "ON", "ON", "OFF" };
         ui::KickListBox     lfoType{ "WAVEFORM", { "SINE", "TRIANGLE", "SAW_UP", "SAW_DOWN", "SQUARE", "NOISE", "SAMPLE_HOLD" }, 0, 1 };
         ui::KickImageButton num{ "1", "num_Header" };
         ui::KickRotary      rate{ "RATE", juce::Slider::TextBoxAbove, true };

@@ -38,6 +38,7 @@ namespace kick_ui
         std::vector<int>&   pads;
         mt::MTDrumProgram*& pDrum;
 
+        std::array<ui::KickToggleButton, 3> envEnable;
         std::array<ui::KickListBox, 3> env;
 
         std::array<ui::KickRotary, 3> a;

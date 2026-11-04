@@ -230,6 +230,11 @@ namespace kick_ui::padmap
         bool isHeld( int key ) const { return held_.find( key ) != held_.end(); }
         int  heldKeys() const { return (int)held_.size(); }
         int  count( int note ) const { return note >= 0 && note <= kMaxNote ? count_[(size_t)note] : 0; }
+        const std::vector<int>* notesFor( int key ) const
+        {
+            auto it = held_.find( key );
+            return it != held_.end() ? &it->second : nullptr;
+        }
 
         // Pitch classes that sound (0..11), for the chord-name display.
         std::vector<int> soundingNotes() const
@@ -309,5 +314,35 @@ namespace kick_ui::padmap
     {
         if( param == LevelParam::Velocity ) return { std::max( 0, std::min( kMaxNote, baseNote ) ), levelVelocity( pad ) };
         return { levelNote( baseNote, pad ), -1 };
+    }
+
+    // PP-40: Scale degree of a note in the active scale (1-based, 1..N, or 0 if non-scale / out of range).
+    inline int scaleDegree( int note, int rootPc, const std::vector<int>& scale )
+    {
+        if( note < 0 || scale.empty() ) return 0;
+        const int targetPc = ( ( note - rootPc ) % 12 + 12 ) % 12;
+        int acc = 0;
+        for( size_t i = 0; i < scale.size(); ++i )
+        {
+            if( acc == targetPc )
+                return (int)i + 1;
+            acc += scale[i];
+        }
+        return 0;
+    }
+
+    // PP-24: Touch strip position (0..127) mapped to the Pad Perform layout's sounding note for the bank.
+    inline int noteForStrip( int val127, const Layout& layout, int bankOffset )
+    {
+        if( val127 < 0 ) val127 = 0;
+        if( val127 > 127 ) val127 = 127;
+        const int slot = ( val127 * 16 ) / 128;
+        const int padIndex = bankOffset + ( slot >= 16 ? 15 : slot );
+        if( padIndex >= 0 && padIndex < kPads )
+        {
+            const int note = layout[(size_t)padIndex].note;
+            if( note >= 0 ) return note;
+        }
+        return std::max( 0, std::min( kMaxNote, bankOffset + ( slot >= 16 ? 15 : slot ) ) );
     }
 }

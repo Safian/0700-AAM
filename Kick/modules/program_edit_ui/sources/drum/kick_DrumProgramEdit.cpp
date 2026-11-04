@@ -26,7 +26,7 @@ namespace kick_ui
     // different ids, and the pitch / filter / LFO sections are disabled by default with no switch in the UI). A page that
     // saves values into the project and changes nothing in the sound misleads, so both are hidden until the voice is bound
     // (needs an MPC listening test: see docs/plans/screens/program-edit.md PE-02). true brings the two buttons back.
-    static constexpr bool kDrumEnginePagesVisible = false;
+    static constexpr bool kDrumEnginePagesVisible = true;
 
     DrumProgramEdit::DrumProgramEdit()
         : ProgEditInterface( mt::MTProgramType::Drum )
