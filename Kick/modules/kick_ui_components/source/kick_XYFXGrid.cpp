@@ -35,6 +35,23 @@ namespace ui
 
                 const juce::Rectangle<float> cellRect = getCellRect( (int)row, (int)column );
                 g.fillRect( cellRect );
+
+                // Cell division / frequency labels on bottom row (XY-15)
+                if( row == totalHorizontalCells - 1 )
+                {
+                    g.setColour( ui::Theme::textColour( 3 ).withAlpha( 0.65f ) );
+                    g.setFont( 10.0f );
+                    if( xLabel.getText().containsIgnoreCase( "Beat" ) || xLabel.getText().containsIgnoreCase( "Division" ) )
+                    {
+                        static const char* divisions[8] = { "2B", "1B", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64" };
+                        g.drawText( divisions[column], cellRect.reduced( 2 ), juce::Justification::centredBottom );
+                    }
+                    else
+                    {
+                        static const char* freqs[8] = { "20", "60", "180", "550", "1.6k", "5k", "10k", "20k" };
+                        g.drawText( freqs[column], cellRect.reduced( 2 ), juce::Justification::centredBottom );
+                    }
+                }
             }
         }
         // The latched cell is the last one touched (currentIndex is -1 after the finger left: it drew column -1).
