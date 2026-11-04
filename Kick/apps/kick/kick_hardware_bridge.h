@@ -540,7 +540,13 @@ private:
                 }
                 clicks = m_click_count[slot] > 0 ? m_click_count[slot] : 1;
             }
-            juce::MouseEvent e(juce::Desktop::getInstance().getMainMouseSource(),
+            auto mouseSrc = juce::Desktop::getInstance().getMainMouseSource();
+            if (peer && slot >= 0) {
+                peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::touch, {}, {}, 0, 0, 0, {}, slot);
+                for (auto& s : juce::Desktop::getInstance().getMouseSources())
+                    if (s.getType() == juce::MouseInputSource::InputSourceType::touch && s.getIndex() == slot) { mouseSrc = s; break; }
+            }
+            juce::MouseEvent e(mouseSrc,
                                localPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                target, target,
                                juce::Time::getCurrentTime(),
@@ -569,7 +575,7 @@ private:
                 if (effectiveTarget) {
                     auto downLocalPt = effectiveTarget->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
                     const bool wasDragged = slot >= 0 && slot < 10 && m_touch_dragging[slot];
-                    juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
+                    juce::MouseEvent downE(mouseSrc,
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                            effectiveTarget, effectiveTarget,
                                            juce::Time::getCurrentTime(),
@@ -615,7 +621,7 @@ private:
                     auto downLocalPt = downTarget->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
                     auto pressLocalPt = inSlot ? downTarget->getLocalPoint(nullptr, juce::Point<int>(m_touch_down_x[slot], m_touch_down_y[slot])).toFloat()
                                                : downLocalPt;
-                    juce::MouseEvent downE(juce::Desktop::getInstance().getMainMouseSource(),
+                    juce::MouseEvent downE(mouseSrc,
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                            downTarget, downTarget,
                                            juce::Time::getCurrentTime(),

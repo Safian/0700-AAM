@@ -20,12 +20,17 @@
  */
 #pragma once
 
+#include "kick_grid_logic.h"
+
 namespace kick_ui
 {
     /////////////////////////////////////////////////////////////////////
     // Grid Edit Options
     /////////////////////////////////////////////////////////////////////
-    const static std::vector<juce::String> gridEditOptionList = { "Clear", "Double Length With Events", "Half Speed", "Double Speed", "Trim To Length", "Pitch Quantize", "Humanize", "Random Events", "Split Events", "Convert To Progression", "Bounce To Sample", "Bounce To Audio Track" };
+    const static std::vector<juce::String> gridEditOptionList = {
+        "Clear", "Double Length With Events", "Half Speed", "Double Speed",
+        "Pitch Quantize", "Humanize", "Random Events", "Split Events"
+    };
 
     class GridEditOptions : public juce::Component
     {
@@ -37,20 +42,7 @@ namespace kick_ui
     private:
         void resized() override;
 
-        std::array<ui::KickImageButton, 12> options;
-
-        ui::KickImageButton clear{ "Clear" };
-        ui::KickImageButton doubleLength{ "Double Length With Events" };
-        ui::KickImageButton halfSpeed{ "Half Speed" };
-        ui::KickImageButton doubleSpeed{ "Double Speed" };
-        ui::KickImageButton trimToLength{ "Trim To Length" };
-        ui::KickImageButton pitchQuantize{ "Pitch Quantize" };
-        ui::KickImageButton humanize{ "Humanize" };
-        ui::KickImageButton randomEvents{ "Random Events" };
-        ui::KickImageButton splitEvents{ "Split Events" };
-        ui::KickImageButton convertToProgression{ "Convert To Progression" };
-        ui::KickImageButton bounceToSample{ "Bounce To Sample" };
-        ui::KickImageButton bounceToAudioTrack{ "Bounce To Audio Track" };
+        std::array<ui::KickImageButton, 8> options;
     };
 
     ///////////////////////////////////////////////////////////////////////
@@ -335,6 +327,8 @@ namespace kick_ui
         MetronomePopup& metronome{ MetronomePopup::Instance() };
         GridSettings&   gridSettings{ GridSettings::Instance() };
         int             gridPage{ 0 };
+
+        grid_logic::GridButtonStateMachine buttonStateMachine;
 
         juce::Array<juce::ValueTree>& selectedNotes{ ae.getSelectedNoteList() };
 

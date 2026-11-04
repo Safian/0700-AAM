@@ -36,16 +36,18 @@ namespace kick_ui
         erase.setRadioGroupId( (int)RadioGroupId::AppGridHeader, juce::dontSendNotification );
         select.setRadioGroupId( (int)RadioGroupId::AppGridHeader, juce::dontSendNotification );
         magnify.setRadioGroupId( (int)RadioGroupId::AppGridHeader, juce::dontSendNotification );
+        copyTool.setRadioGroupId( (int)RadioGroupId::AppGridHeader, juce::dontSendNotification );
 
-        mt::utils::addChildComponents( this, tracks, pencil, erase, select, copy, play, paste, cut, bars, magnify );
+        mt::utils::addChildComponents( this, tracks, pencil, erase, select, copyTool, copy, play, paste, cut, bars, magnify );
         mt::utils::setTitleColour( ui::Theme::textColour( 1 ), tracks, bars );
         mt::utils::setTitleFontHeight( 16, tracks, bars );
         bars.setTitleProportion( .4f );
 
-        pencil.onClick  = [&]() { if( pencil.getToggleState() ) toolSelectionChanged( GridToolType::GridPencilTool ); };
-        erase.onClick   = [&]() { if( erase.getToggleState() ) toolSelectionChanged( GridToolType::GridEraseTool ); };
-        select.onClick  = [&]() { if( select.getToggleState() ) toolSelectionChanged( GridToolType::GridSelectTool ); };
-        magnify.onClick = [&]() { if( magnify.getToggleState() ) toolSelectionChanged( GridToolType::GridMagnifyTool ); };
+        pencil.onClick   = [&]() { if( pencil.getToggleState() ) toolSelectionChanged( GridToolType::GridPencilTool ); };
+        erase.onClick    = [&]() { if( erase.getToggleState() ) toolSelectionChanged( GridToolType::GridEraseTool ); };
+        select.onClick   = [&]() { if( select.getToggleState() ) toolSelectionChanged( GridToolType::GridSelectTool ); };
+        magnify.onClick  = [&]() { if( magnify.getToggleState() ) toolSelectionChanged( GridToolType::GridMagnifyTool ); };
+        copyTool.onClick = [&]() { if( copyTool.getToggleState() ) toolSelectionChanged( GridToolType::GridCopyTool ); };
         copy.onClick    = [&]() {
             auto& ae          = mt::getAudioInterface();
             selectedNotesSize = ae.getSelectedNoteList().size();
@@ -109,6 +111,7 @@ namespace kick_ui
             pencil.setImages( "Pencil_Normal", "Pencil_Active" );
             erase.setImages( "Erase_Normal", "Erase_Active" );
             select.setImages( "Select", "Select_Normal", "Select_Active" );
+            copyTool.setImages( "Copy Button", "Copy Button_Active" );
             copy.setImages( "Copy Button", "Copy Button_Active" );
             cut.setImages( "Cut_Normal", "Cut_Active" );
             paste.setImages( "Copy_Normal", "Copy_Activ" );
@@ -118,27 +121,28 @@ namespace kick_ui
 
     void GridHeader::resized()
     {
-        tracks.setBoundsRelative( .0f, .21f, .2666f, 0.5789f );
-        bars.setBoundsRelative( .283f, 0.21f, .123f, 0.5789f );
-        play.setBoundsRelative( .423f, 0.21f, .073f, 0.5789f );
-        magnify.setBoundsRelative( .503f, 0.21f, .073f, 0.5789f );
-        select.setBoundsRelative( .583f, 0.21f, .073f, 0.5789f );
-        pencil.setBoundsRelative( .663f, 0.21f, .073f, 0.5789f );
-        erase.setBoundsRelative( .743f, 0.21f, .073f, 0.5789f );
+        tracks.setBoundsRelative( .0f, .21f, .250f, 0.5789f );
+        bars.setBoundsRelative( .258f, 0.21f, .110f, 0.5789f );
+        play.setBoundsRelative( .375f, 0.21f, .065f, 0.5789f );
+        magnify.setBoundsRelative( .445f, 0.21f, .065f, 0.5789f );
+        select.setBoundsRelative( .515f, 0.21f, .065f, 0.5789f );
+        pencil.setBoundsRelative( .585f, 0.21f, .065f, 0.5789f );
+        erase.setBoundsRelative( .655f, 0.21f, .065f, 0.5789f );
+        copyTool.setBoundsRelative( .725f, 0.21f, .065f, 0.5789f );
         if( isCutClicked )
         {
-            cut.setBoundsRelative( .823f, 0.21f, .073f, 0.5789f );
-            paste.setBoundsRelative( .903f, 0.21f, .073f, 0.5789f );
+            cut.setBoundsRelative( .800f, 0.21f, .065f, 0.5789f );
+            paste.setBoundsRelative( .870f, 0.21f, .065f, 0.5789f );
         }
         else if( isCopyClicked )
         {
-            copy.setBoundsRelative( .823f, 0.21f, .073f, 0.5789f );
-            paste.setBoundsRelative( .903f, 0.21f, .073f, 0.5789f );
+            copy.setBoundsRelative( .800f, 0.21f, .065f, 0.5789f );
+            paste.setBoundsRelative( .870f, 0.21f, .065f, 0.5789f );
         }
         else
         {
-            cut.setBoundsRelative( .823f, 0.21f, .073f, 0.5789f );
-            copy.setBoundsRelative( .903f, 0.21f, .073f, 0.5789f );
+            cut.setBoundsRelative( .800f, 0.21f, .065f, 0.5789f );
+            copy.setBoundsRelative( .870f, 0.21f, .065f, 0.5789f );
         }
     }
 

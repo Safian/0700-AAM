@@ -191,6 +191,11 @@ add_executable(kick-logging-tests LoggingTests.cpp)
 add_test(NAME kick-logging COMMAND kick-logging-tests)
 set_tests_properties(kick-logging PROPERTIES TIMEOUT 10)
 
+# Grid pure logic: pad-to-note bank mapping, button state machine, Q-Link zoom scaling; JUCE-free, header only.
+add_executable(kick-grid-logic-tests GridLogicTests.cpp)
+add_test(NAME kick-grid-logic COMMAND kick-grid-logic-tests)
+set_tests_properties(kick-grid-logic PROPERTIES TIMEOUT 10)
+
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()
