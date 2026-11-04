@@ -1,9 +1,129 @@
 
+#include <engine/audio_engine/engine/mt_clap_effect.h>
+#include <engine/audio_engine/engine/mt_airwindopedia.h>
+
 namespace kick_ui
 {
 #define insertGridHorSpacing 3
 #define insertGridVerSpacing 30
 #define insertTotalRows      2
+
+    class ClapGuiComponent : public juce::Component
+    {
+    public:
+        explicit ClapGuiComponent( mt::ClapEffect* effectIn, const juce::String& /*title*/ = "CLAP Plugin" )
+            : effect( effectIn )
+        {
+            setOpaque( true );
+            if( effect && effect->isLoaded() && effect->getHost().supportsGui() )
+            {
+                auto& host = effect->getHost();
+                const char* targetApi = nullptr;
+#if JUCE_MAC
+                if( host.isGuiApiSupported( CLAP_WINDOW_API_COCOA, false ) )
+                    targetApi = CLAP_WINDOW_API_COCOA;
+#elif JUCE_LINUX
+                if( host.isGuiApiSupported( CLAP_WINDOW_API_X11, false ) )
+                    targetApi = CLAP_WINDOW_API_X11;
+#elif JUCE_WINDOWS
+                if( host.isGuiApiSupported( CLAP_WINDOW_API_WIN32, false ) )
+                    targetApi = CLAP_WINDOW_API_WIN32;
+#endif
+                if( targetApi != nullptr )
+                {
+                    if( host.createGui( targetApi, false ) )
+                    {
+                        guiCreated = true;
+                        uint32_t w = 640, h = 480;
+                        if( host.getGuiSize( &w, &h ) && w > 0 && h > 0 )
+                            setSize( static_cast<int>( w ), static_cast<int>( h ) );
+                        else
+                            setSize( 640, 480 );
+                    }
+                }
+            }
+        }
+
+        ~ClapGuiComponent() override
+        {
+            if( effect && effect->isLoaded() && guiCreated )
+            {
+                auto& host = effect->getHost();
+                host.hideGui();
+                host.destroyGui();
+            }
+        }
+
+        void parentHierarchyChanged() override
+        {
+            if( guiCreated && !attached && isShowing() )
+                attachGui();
+        }
+
+        void visibilityChanged() override
+        {
+            if( guiCreated && isShowing() && !attached )
+                attachGui();
+            else if( guiCreated && !isShowing() && attached && effect && effect->isLoaded() )
+                effect->getHost().hideGui();
+        }
+
+        void resized() override
+        {
+            if( guiCreated && attached && effect && effect->isLoaded() )
+            {
+                effect->getHost().setGuiSize( static_cast<uint32_t>( getWidth() ), static_cast<uint32_t>( getHeight() ) );
+            }
+        }
+
+        void paint( juce::Graphics& g ) override
+        {
+            g.fillAll( juce::Colour( 0xff15191e ) );
+            if( !guiCreated )
+            {
+                g.setColour( juce::Colours::white );
+                g.setFont( 16.0f );
+                g.drawText( "Native GUI not supported on this platform.\nUsing Generic Parameters.",
+                            getLocalBounds(), juce::Justification::centred, true );
+            }
+        }
+
+        bool isGuiSuccessfullyCreated() const noexcept { return guiCreated; }
+
+    private:
+        void attachGui()
+        {
+            if( !effect || !effect->isLoaded() ) return;
+            auto* peer = getPeer();
+            if( !peer ) return;
+            void* nativeHandle = peer->getNativeHandle();
+            if( !nativeHandle ) return;
+
+            auto& host = effect->getHost();
+            clap_window_t win{};
+#if JUCE_MAC
+            win.api = CLAP_WINDOW_API_COCOA;
+            win.cocoa = static_cast<clap_nsview>( nativeHandle );
+#elif JUCE_LINUX
+            win.api = CLAP_WINDOW_API_X11;
+            win.x11 = reinterpret_cast<clap_xwnd>( nativeHandle );
+#elif JUCE_WINDOWS
+            win.api = CLAP_WINDOW_API_WIN32;
+            win.win32 = static_cast<clap_hwnd>( nativeHandle );
+#endif
+            if( win.api != nullptr )
+            {
+                host.setGuiParent( &win );
+                host.setGuiSize( static_cast<uint32_t>( getWidth() ), static_cast<uint32_t>( getHeight() ) );
+                host.showGui();
+                attached = true;
+            }
+        }
+
+        mt::ClapEffect* effect{ nullptr };
+        bool guiCreated{ false };
+        bool attached{ false };
+    };
 
     ///
     /// Inserts : Main screen interface class
@@ -72,11 +192,33 @@ namespace kick_ui
         {
             add[i].setEnabled( false );
             enable[i].setEnabled( false );
+            moveUp[i].setEnabled( false );
+            moveDown[i].setEnabled( false );
             add[i].setToggleButtonText( "DELETE", "ADD" );
             enable[i].setToggleButtonText( "ENABLED", "BYPASSED" );
+            moveUp[i].setButtonText( "▲" );
+            moveDown[i].setButtonText( "▼" );
             inserts[i].setValueFontHeight( 18 );
 
-            mt::utils::addAndMakeVisible( this, inserts[i], enable[i], add[i] );
+            mt::utils::addAndMakeVisible( this, inserts[i], enable[i], add[i], moveUp[i], moveDown[i] );
+
+            moveUp[i].onClick = [&, i] {
+                if( i > 0 && pEffects )
+                {
+                    pEffects->swapInserts( i, i - 1 );
+                    refresh();
+                    inserts[i - 1].triggerClick();
+                }
+            };
+
+            moveDown[i].onClick = [&, i] {
+                if( i < numRows - 1 && pEffects )
+                {
+                    pEffects->swapInserts( i, i + 1 );
+                    refresh();
+                    inserts[i + 1].triggerClick();
+                }
+            };
 
             inserts[i].onClick = [&, i] {
                 auto insName = inserts[i].getButtonText();
@@ -191,13 +333,18 @@ namespace kick_ui
             auto isAdded   = name.isNotEmpty();
             auto isEnabled = !insertInfo.bypass;
 
-            inserts[i].setButtonText( name );
+            if( insertInfo.missing )
+                inserts[i].setButtonText( "[MISSING] " + name );
+            else
+                inserts[i].setButtonText( name );
 
             add[i].setToggleState( isAdded, juce::dontSendNotification );
             enable[i].setToggleState( isEnabled, juce::dontSendNotification );
 
             enable[i].setEnabled( isAdded );
             add[i].setEnabled( isAdded );
+            moveUp[i].setEnabled( isAdded && i > 0 );
+            moveDown[i].setEnabled( isAdded && i < numRows - 1 );
 
             if( isAdded )
                 isMasterEnable = true;
@@ -248,9 +395,11 @@ namespace kick_ui
         for( auto i = 0; i < numRows; ++i )
         {
             auto rowB = b.removeFromTop( rowHeight );
-            add[i].setBounds( rowB.removeFromRight( buttonWidth ).reduced( 5, 10 ) );
-            enable[i].setBounds( rowB.removeFromRight( buttonWidth ).reduced( 5, 10 ) );
-            inserts[i].setBounds( rowB.reduced( 5 ) );
+            add[i].setBounds( rowB.removeFromRight( 48 ).reduced( 2, 8 ) );
+            enable[i].setBounds( rowB.removeFromRight( 58 ).reduced( 2, 8 ) );
+            moveDown[i].setBounds( rowB.removeFromRight( 22 ).reduced( 1, 8 ) );
+            moveUp[i].setBounds( rowB.removeFromRight( 22 ).reduced( 1, 8 ) );
+            inserts[i].setBounds( rowB.reduced( 2 ) );
         }
     }
 
@@ -259,15 +408,35 @@ namespace kick_ui
     ///
     InsertsSelector::InsertsSelector()
     {
-        mt::utils::addAndMakeVisible( this, insertCategories, insertList );
+        mt::utils::addAndMakeVisible( this, searchLabel, searchBox, insertCategories, insertList, docTitle, docEditor );
 
-        insertCategories.onSelectionChanged = [&]( int index, const juce::String& selectedOption ) {
-            auto list = mt::getAudioInterface().getAvailableInsertsListByCatogary( selectedOption );
-            insertList.setContent( list, juce::dontSendNotification );
+        mt::utils::setValueFontHeight( 14, searchLabel );
+        mt::utils::setValueColour( ui::Theme::textColour( 2 ), searchLabel );
+
+        mt::utils::setValueFontHeight( 14, docTitle );
+        mt::utils::setValueColour( ui::Theme::textColour( 2 ), docTitle );
+
+        docEditor.setMultiLine( true );
+        docEditor.setReadOnly( true );
+        docEditor.setScrollbarsShown( true );
+        docEditor.setCaretVisible( false );
+        docEditor.setFont( juce::Font( 13.0f ) );
+        docEditor.setColour( juce::TextEditor::backgroundColourId, ui::Theme::backgroundColour( 1 ) );
+        docEditor.setColour( juce::TextEditor::textColourId, ui::Theme::textColour( 1 ) );
+        docEditor.setColour( juce::TextEditor::outlineColourId, ui::Theme::outlineColour( 1 ) );
+
+        searchBox.onTextChange = [this]() {
+            updateFilteredList();
         };
 
-        insertList.onSelectionChanged = [&]( int index, const juce::String& selectedOption ) {
+        insertCategories.onSelectionChanged = [&]( int, const juce::String& selectedOption ) {
+            allCategoryItems = mt::getAudioInterface().getAvailableInsertsListByCatogary( selectedOption );
+            updateFilteredList();
+        };
+
+        insertList.onSelectionChanged = [&]( int, const juce::String& selectedOption ) {
             onClick( selectedOption );
+            showDocFor( selectedOption );
         };
 
         juce::MessageManager::callAsync( [&]() {
@@ -276,18 +445,102 @@ namespace kick_ui
         } );
     }
 
+    void InsertsSelector::updateFilteredList()
+    {
+        auto query = searchBox.getText().trim();
+        std::vector<juce::String> filtered;
+        if( query.isEmpty() )
+        {
+            filtered = allCategoryItems;
+        }
+        else
+        {
+            for( const auto& item : allCategoryItems )
+            {
+                if( item.containsIgnoreCase( query ) )
+                    filtered.emplace_back( item );
+            }
+            if( filtered.empty() )
+            {
+                auto awMatches = mt::airwindows::search( query.toStdString() );
+                for( const auto* doc : awMatches )
+                {
+                    if( doc ) filtered.emplace_back( juce::String( doc->name ) );
+                }
+                auto clapEffects = mt::ClapEffectRegistry::getInstance().getEffectDescriptors();
+                for( const auto& desc : clapEffects )
+                {
+                    if( juce::String( desc.name ).containsIgnoreCase( query ) || juce::String( desc.id ).containsIgnoreCase( query ) )
+                    {
+                        filtered.emplace_back( juce::String( desc.name ) );
+                    }
+                }
+            }
+        }
+        insertList.setContent( filtered, juce::dontSendNotification );
+        if( !filtered.empty() )
+        {
+            showDocFor( filtered[0] );
+            onClick( filtered[0] );
+        }
+    }
+
+    void InsertsSelector::showDocFor( const juce::String& name )
+    {
+        const auto* doc = mt::airwindows::getDoc( name.toStdString() );
+        if( doc )
+        {
+            juce::String text;
+            text << doc->name << " [" << doc->category << "]\n\n";
+            text << "Summary:\n" << doc->summary << "\n\n";
+            text << "Description:\n" << doc->description;
+            docEditor.setText( text );
+        }
+        else
+        {
+            const auto* desc = mt::ClapEffectRegistry::getInstance().findByName( name.toStdString() );
+            if( desc )
+            {
+                juce::String text;
+                text << desc->name << " [CLAP Plugin]\n\n";
+                text << "Vendor: " << ( desc->vendor.empty() ? "CLAP" : desc->vendor ) << "\n";
+                text << "Version: " << ( desc->version.empty() ? "1.0.0" : desc->version ) << "\n";
+                text << "ID: " << desc->id << "\n";
+                text << "Path: " << desc->path << "\n\n";
+                text << "Description:\n" << ( desc->description.empty() ? "No description provided." : desc->description );
+                docEditor.setText( text );
+            }
+            else
+            {
+                docEditor.setText( name + "\n\nBuilt-in effect." );
+            }
+        }
+    }
+
     void InsertsSelector::paint( juce::Graphics& g )
     {
         mt::utils::fillRoundedRect( g, insertCategories.getBounds(), ui::Theme::backgroundColour( 2 ) );
         mt::utils::fillRoundedRect( g, insertList.getBounds(), ui::Theme::backgroundColour( 3 ) );
+        mt::utils::fillRoundedRect( g, docEditor.getBounds(), ui::Theme::backgroundColour( 1 ) );
     }
 
     void InsertsSelector::resized()
     {
-        auto b = getLocalBounds();
-        insertCategories.setBounds( b.removeFromLeft( b.proportionOfWidth( .35f ) ) );
-        b.removeFromLeft( 5 );
-        insertList.setBounds( b );
+        auto b = getLocalBounds().reduced( 5 );
+        auto topRow = b.removeFromTop( 28 );
+        searchLabel.setBounds( topRow.removeFromLeft( 65 ) );
+        searchBox.setBounds( topRow.removeFromLeft( 220 ) );
+        b.removeFromTop( 5 );
+
+        auto leftW = 160;
+        auto midW = 200;
+        insertCategories.setBounds( b.removeFromLeft( leftW ) );
+        b.removeFromLeft( 6 );
+        insertList.setBounds( b.removeFromLeft( midW ) );
+        b.removeFromLeft( 6 );
+        auto rightB = b;
+        docTitle.setBounds( rightB.removeFromTop( 20 ) );
+        docEditor.setBounds( rightB );
     }
 
     ///
@@ -299,9 +552,16 @@ namespace kick_ui
         mt::utils::setValueColour( ui::Theme::textColour( 2 ), insertName );
         mt::utils::setValueJustification( juce::Justification::centred, insertName );
 
-        enable.setToggleButtonText( "ENABLED", "BYPASSED" );
+        mt::utils::setValueFontHeight( 13, latencyTailLabel );
+        mt::utils::setValueColour( ui::Theme::textColour( 3 ), latencyTailLabel );
 
+        mt::utils::setValueFontHeight( 13, guiNoticeLabel );
+        mt::utils::setValueColour( ui::Theme::textColour( 2 ), guiNoticeLabel );
+
+        enable.setToggleButtonText( "ENABLED", "BYPASSED" );
         enable.onClick = [&]() { onEnableClicked( pos, enable.getToggleState() ); };
+
+        openGuiButton.onClick = [this] { openNativeGui(); };
     }
 
     void InsertsOptions::setupControls( mt::MTIInsertsInterface* pEffect, int Position )
@@ -311,7 +571,7 @@ namespace kick_ui
 
         // Resize controls.
         info = pInsert ? pInsert->getInsertsInfo( pos ) : mt::MTInsertsInfo{};
-        setupControls( info.params.size() );
+        setupControls( static_cast<int>( info.params.size() ) );
 
         // Update values.
         refresh();
@@ -321,21 +581,74 @@ namespace kick_ui
     {
         info = pInsert ? pInsert->getInsertsInfo( pos ) : mt::MTInsertsInfo{};
 
-        insertName.setText( info.name, juce ::dontSendNotification );
+        if( info.missing )
+            insertName.setText( "[MISSING] " + info.name, juce::dontSendNotification );
+        else
+            insertName.setText( info.name, juce::dontSendNotification );
+
         enable.setToggleState( !info.bypass, juce::dontSendNotification );
-        for( auto i = 0; i < info.params.size(); ++i )
+
+        if( info.isClap )
         {
-            rotary[i]->setTitle( info.params[i].name );
-            rotary[i]->setValue( info.params[i].value, juce::dontSendNotification );
+            latencyTailLabel.setText( "Latency: " + juce::String( info.latency ) + " smp | Tail: " + juce::String( info.tail ) + " smp", juce::dontSendNotification );
+            if( info.missing )
+            {
+                guiNoticeLabel.setText( "MISSING PLUGIN: " + info.pluginId, juce::dontSendNotification );
+                openGuiButton.setVisible( false );
+            }
+            else if( info.supportsGui )
+            {
+                guiNoticeLabel.setText( "Native GUI available", juce::dontSendNotification );
+                openGuiButton.setVisible( true );
+            }
+            else
+            {
+                guiNoticeLabel.setText( "Native GUI not supported on this platform. Using Generic Parameters.", juce::dontSendNotification );
+                openGuiButton.setVisible( false );
+            }
+        }
+        else
+        {
+            latencyTailLabel.setText( "", juce::dontSendNotification );
+            guiNoticeLabel.setText( "", juce::dontSendNotification );
+            openGuiButton.setVisible( false );
+        }
+
+        for( size_t i = 0; i < info.params.size(); ++i )
+        {
+            if( i < rotary.size() )
+            {
+                rotary[i]->setTitle( info.params[i].name );
+                rotary[i]->setValue( info.params[i].value, juce::dontSendNotification );
+            }
+        }
+    }
+
+    void InsertsOptions::openNativeGui()
+    {
+        if( pInsert )
+        {
+            auto* clap = pInsert->getClapEffect( static_cast<unsigned int>( pos ) );
+            if( clap && clap->isLoaded() && clap->getHost().supportsGui() )
+            {
+                juce::DialogWindow::LaunchOptions dialog;
+                dialog.content.setOwned( new ClapGuiComponent( clap, info.name ) );
+                dialog.dialogTitle = "CLAP - " + info.name;
+                dialog.dialogBackgroundColour = juce::Colour( 0xff15191e );
+                dialog.escapeKeyTriggersCloseButton = true;
+                dialog.useNativeTitleBar = true;
+                dialog.resizable = true;
+                dialog.launchAsync();
+            }
         }
     }
 
     void InsertsOptions::setupControls( int NumControls )
     {
         // Resize; if required.
-        if( NumControls > rotary.size() )
+        if( NumControls > static_cast<int>( rotary.size() ) )
         {
-            auto i = (int)rotary.size();
+            auto i = static_cast<int>( rotary.size() );
             for( ; i < NumControls; ++i )
             {
                 auto ptr = std::make_unique<ui::KickRotary>( "" );
@@ -343,14 +656,28 @@ namespace kick_ui
                 ptr->showTitleAndValue( true, juce::Slider::TextBoxBelow, juce::Justification::centred );
                 ptr->setDisplayProportions( 0.6f, 0.2f, 0.2f );
                 ptr->setRange( 0.f, 1.f, 0.001f );
-                ptr->onValueChanged = [&, i]( double Value ) { onRotaryChanged( pos, i, (float)Value ); };
+                ptr->onValueChanged = [&, i]( double Value ) { onRotaryChanged( pos, i, static_cast<float>( Value ) ); };
+                ptr->onDragStart = [&, i]() {
+                    if( pInsert )
+                    {
+                        if( auto* c = pInsert->getClapEffect( static_cast<unsigned int>( pos ) ) )
+                            c->beginGesture( i );
+                    }
+                };
+                ptr->onDragEnd = [&, i]() {
+                    if( pInsert )
+                    {
+                        if( auto* c = pInsert->getClapEffect( static_cast<unsigned int>( pos ) ) )
+                            c->endGesture( i );
+                    }
+                };
 
                 // Insert this control to vector.
                 rotary.emplace_back( std::move( ptr ) );
             }
         }
 
-        // Clear all rotaties...
+        // Clear all rotaries...
         removeAllChildren();
         for( auto& it : rotary )
         {
@@ -361,8 +688,11 @@ namespace kick_ui
         // Enable required number of controls...
         addAndMakeVisible( insertName );
         addAndMakeVisible( enable );
+        addAndMakeVisible( latencyTailLabel );
+        addAndMakeVisible( guiNoticeLabel );
+        addAndMakeVisible( openGuiButton );
         for( auto i = 0; i < NumControls; ++i )
-            addAndMakeVisible( rotary[i].get() );
+            addAndMakeVisible( rotary[static_cast<size_t>( i )].get() );
 
         resized();
     }
@@ -382,15 +712,23 @@ namespace kick_ui
     {
         auto b = getLocalBounds().reduced( 20 );
         // Name
-        auto topBar = b.removeFromTop( 30 ).reduced( 20, 1 );
+        auto topBar = b.removeFromTop( 30 ).reduced( 5, 1 );
         enable.setBounds( topBar.removeFromRight( 75 ) );
-        topBar.removeFromRight( 10 );
+        topBar.removeFromRight( 8 );
+        openGuiButton.setBounds( topBar.removeFromRight( 85 ) );
+        topBar.removeFromRight( 8 );
         insertName.setBounds( topBar );
+
+        // Latency and Tail info bar
+        auto infoBar = b.removeFromTop( 24 ).reduced( 5, 2 );
+        latencyTailLabel.setBounds( infoBar.removeFromLeft( infoBar.proportionOfWidth( 0.45f ) ) );
+        guiNoticeLabel.setBounds( infoBar );
+
         // Controls
         auto w = b.proportionOfWidth( 0.25f );
         auto h = b.proportionOfHeight( 0.25f );
 
-        auto numControls = (int)info.params.size();
+        auto numControls = static_cast<int>( info.params.size() );
         auto idx         = 0;
         while( idx < numControls )
         {
@@ -400,7 +738,7 @@ namespace kick_ui
                 auto colB = rowB.removeFromLeft( w ).reduced( 5 );
                 if( idx < numControls )
                 {
-                    rotary[idx]->setBounds( colB );
+                    rotary[static_cast<size_t>( idx )]->setBounds( colB );
                 }
                 else
                     break;
