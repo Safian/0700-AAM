@@ -674,7 +674,7 @@ namespace kick_ui
     {
         auto& _cns          = ui::KickVirtualKeyBoard::getWithText( Initial );
         _cns.onEnterPressed = [&_cns, this]( int v ) {
-            mt::utils::exitDialog( _cns.getCurrentlyFocusedComponent(), v );
+            mt::utils::exitDialog( &_cns, v );
         };
         _cns.show(
             Title, ui::KickVirtualKeyBoard::Type::KEYS_LOWERCASE_ALPHABETIC,

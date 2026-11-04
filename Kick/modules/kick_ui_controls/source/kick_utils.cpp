@@ -86,10 +86,19 @@ namespace mt
             if( Comp )
             {
                 if( Comp->isCurrentlyModal() )
+                {
                     Comp->exitModalState( exitCode );
-                else if( auto dw = Comp->findParentComponentOfClass<dialogDisplayer>() )
+                    return;
+                }
+                if( auto dw = Comp->findParentComponentOfClass<dialogDisplayer>() )
+                {
                     dw->exitModalState( exitCode );
+                    return;
+                }
             }
+            auto& r = openDialogRegistry();
+            if( !r.empty() )
+                r.back()->exitModalState( exitCode );
         }
 
         void showDialog( const juce::String& Title, juce::Component* Comp, std::function<void( int )> Callback,

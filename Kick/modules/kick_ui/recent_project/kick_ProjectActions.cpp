@@ -206,7 +206,7 @@ namespace ui
         {
             auto& keyboard          = ui::KickVirtualKeyBoard::getWithText( initial );
             keyboard.onEnterPressed = [&keyboard]( int ) {
-                mt::utils::exitDialog( keyboard.getCurrentlyFocusedComponent(), UI::APPLY );
+                mt::utils::exitDialog( &keyboard, UI::APPLY );
             };
             keyboard.show(
                 title, ui::KickVirtualKeyBoard::Type::KEYS_LOWERCASE_ALPHABETIC,
