@@ -4,6 +4,7 @@
 // Build: see CMakeLists.txt (links the AudIO core library).
 #include "Design.h"
 #include "DawInserts.h"
+#include "TouchFx.h"
 #include "AudIOBuffer.h"
 #include "MemoryPool.h"
 
@@ -29,6 +30,21 @@ namespace
             for( uint32_t c = 0; c < 2; ++c )
                 for( uint32_t n = 0; n < b.getBlockSize(); ++n )
                     out[c][n] = v;
+        }
+        float v;
+    };
+
+    // +v, -v, +v ... : the highest frequency there is
+    class NyquistSource : public AudIO::Object
+    {
+    public:
+        explicit NyquistSource( float V ) : Object( 0, 2, 0 ), v( V ) {}
+        void process( AudIO::Buffer<float>& b ) override
+        {
+            auto** out = b.getOutputs();
+            for( uint32_t c = 0; c < 2; ++c )
+                for( uint32_t n = 0; n < b.getBlockSize(); ++n )
+                    out[c][n] = ( n & 1u ) ? -v : v;
         }
         float v;
     };
@@ -106,6 +122,30 @@ int main()
     // After remove-all a new effect is heard (the master bypass used to stay on).
     CHECK( 0 == inserts.addEffect( std::make_unique<AddFx>( 0.5f ), 1 ) );
     CHECK( std::fabs( renderOnce( design ) - 0.75f ) < 1e-5f );
+
+    // ---- Touch FX of the chain (the XY screen). A second source adds the highest frequency there is (+0.5, -0.5 ...): the last
+    // sample of a block (odd index) is 0.25 - 0.5 = -0.25 until a low pass removes the alternating part and leaves the 0.25 DC.
+    {
+        inserts.removeAllEffects();
+        const auto nyq = design.createObject( std::make_unique<NyquistSource>( 0.5f ) );
+        design.sendToBus( bus, nyq, 1.f );
+        CHECK( std::fabs( renderOnce( design ) - ( -0.25f ) ) < 1e-4f );
+
+        AudIO::TouchFx::Settings fx;
+        fx.mode = AudIO::TouchFx::Mode::FilterManual; fx.filter = AudIO::TouchFx::FilterType::LowPass;
+        fx.x = 0.3f; fx.y = 0.f; fx.attackMs = 1.f; fx.releaseMs = 1.f; fx.wet = 1.f;
+        fx.gate = false;
+        inserts.touchFx().set( fx );
+        CHECK( std::fabs( renderOnce( design ) - ( -0.25f ) ) < 1e-4f ); // gate closed: untouched
+
+        fx.gate = true;
+        inserts.touchFx().set( fx );
+        CHECK( std::fabs( renderOnce( design ) - 0.25f ) < 0.03f ); // open: only the 0.25 DC is left
+
+        fx.gate = false;
+        inserts.touchFx().set( fx );
+        CHECK( std::fabs( renderOnce( design ) - ( -0.25f ) ) < 1e-3f ); // released: back
+    }
 
     if( g_fail == 0 )
         std::printf( "BusInsertsTests: all passed\n" );

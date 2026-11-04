@@ -258,6 +258,30 @@ namespace mt
         return info;
     }
 
+    void MTIInsertsInterface::setTouchFx( const MTTouchFxSettings& S ) noexcept
+    {
+        if( !pImpl || !pImpl->synth )
+            return;
+        AudIO::TouchFx::Settings fx;
+        fx.mode      = static_cast<AudIO::TouchFx::Mode>( juce::jlimit( 0, 5, S.mode ) );
+        fx.filter    = static_cast<AudIO::TouchFx::FilterType>( juce::jlimit( 0, 2, S.filter ) );
+        fx.x         = S.x;
+        fx.y         = S.y;
+        fx.division  = juce::jlimit( 0, AudIO::TouchFx::kNumDivisions - 1, S.division );
+        fx.gate      = S.gate;
+        fx.attackMs  = juce::jmax( 0.f, S.attackMs );
+        fx.releaseMs = juce::jmax( 0.f, S.releaseMs );
+        fx.wet       = juce::jlimit( 0.f, 1.f, S.wet );
+        fx.bpm       = S.bpm;
+        pImpl->synth->touchFx().set( fx );
+    }
+
+    void MTIInsertsInterface::closeTouchFx() noexcept
+    {
+        if( pImpl && pImpl->synth )
+            pImpl->synth->touchFx().close();
+    }
+
     bool              MTIInsertsInterface::isAvailable() const noexcept { return pImpl && pImpl->synth != nullptr; }
     int               MTIInsertsInterface::getNumInserts() { return pImpl->synth ? pImpl->synth->getNumEffects() : 0; }
     int               MTIInsertsInterface::getNumParameters( unsigned int Position ) { return pImpl->synth ? pImpl->synth->getNumEffectParameters( Position ) : 0; }

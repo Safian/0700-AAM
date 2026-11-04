@@ -54,6 +54,21 @@ namespace mt
 
     class ClapEffect;
 
+    // Touch FX (the XY screen) of a chain: plain values, converted to AudIO::TouchFx in the engine.
+    struct MTTouchFxSettings
+    {
+        int    mode{ 0 };      // AudIO::TouchFx::Mode
+        int    filter{ 0 };    // AudIO::TouchFx::FilterType
+        float  x{ 0.f };
+        float  y{ 0.f };
+        int    division{ 0 };  // 0..7 = 2 bar .. 1/64
+        bool   gate{ false };
+        float  attackMs{ 10.f };
+        float  releaseMs{ 100.f };
+        float  wet{ 1.f };
+        double bpm{ 120.0 };
+    };
+
     ///
     struct MTIInsertsImpl;
     class MTIInsertsInterface
@@ -85,6 +100,8 @@ namespace mt
         int          getNumInserts();
         // False for programs that have no insert chain (MIDI / CV): ADD would do nothing, the screen says so instead.
         bool         isAvailable() const noexcept;
+        void         setTouchFx( const MTTouchFxSettings& Settings ) noexcept; // lock-free, any thread
+        void         closeTouchFx() noexcept;
         int          getNumParameters( unsigned int Position );
         juce::String getInsertName( unsigned int InsertPosition );
         juce::String getParameterName( unsigned int InsertPosition, int Parameter );

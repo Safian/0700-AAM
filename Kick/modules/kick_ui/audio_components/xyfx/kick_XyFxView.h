@@ -25,16 +25,27 @@ namespace kick_ui
     class XyFxSetupScreen : public juce::Component
     {
     public:
-        std::function<void( void )> onPresetChange;
+        std::function<void( void )> onPresetChange; // the preset changed (axes change)
+        std::function<void( void )> onChanged;      // anything changed (preset, attack, release, wet / dry)
 
         XyFxSetupScreen();
-        void                      paint( juce::Graphics& g );
-        void                      resized() override;
-        std::vector<juce::String> getXYdata();
-        void                      knobCommand( int knob, int value );
-        void                      setXYCoordinateValues( const float xCoord, const float yCoord );
+        void paint( juce::Graphics& g );
+        void resized() override;
+
+        int   getPreset() { return presets.getSelectedIndex() < 0 ? 0 : presets.getSelectedIndex(); }
+        float getAttackPercent() { return (float)attack.getValue(); }
+        float getReleasePercent() { return (float)release.getValue(); }
+        float getWetPercent() { return (float)wetDry.getValue(); }
+        void  setValues( int Preset, float AttackPct, float ReleasePct, float WetPct ); // restore, no change callbacks
+        void  stepPreset( int Delta );                                                  // Data Dial / +-
+        void  knobCommand( int knob, int value );
+        void  setXYCoordinateValues( const float xCoord, const float yCoord );
+        // "LPF Manual | Attack 12 ms | Release 80 ms | Wet 100 %" for the status line (the panel may be closed)
+        juce::String summary();
 
     private:
+        void refreshAxes();
+
         ui::KickListBox                 presets{ "PRESETS", 2 };
         ui::KickSliderWithAttachedValue attack{ "Attack" };
         ui::KickSliderWithAttachedValue release{ "Release" };
@@ -53,6 +64,7 @@ namespace kick_ui
     {
     public:
         XyFxView();
+        ~XyFxView() override;
 
         bool requiresControlBar() override { return false; }
         bool requiresStatusBar() override { return true; }
@@ -63,6 +75,25 @@ namespace kick_ui
         std::function<void( void )> onchange;
 
     private:
+        // Where the effect sits: the selected track's program, or a bus (return / submix / output).
+        struct Target
+        {
+            juce::String label;
+            bool         isTrack{ true };
+            juce::String bus;
+        };
+
+        mt::MTIInsertsInterface* interfaceFor( const Target& T );
+        void                     rebuildTargets();
+        const Target*            selectedTarget();
+        void                     push();            // current state -> the engine (lock-free)
+        void                     closeEffect();     // gate shut on the applied destination, grid dark
+        void                     applyGate();
+        void                     saveState();
+        void                     loadState();
+        void                     showSummary();
+        double                   bpm();
+
         ui::KickToggleButton latch{ "Latch", "Latch", "Latch" };
         ui::KickToggleButton setup{ "Setup", "Setup", "Setup" };
         ui::KickToggleButton on_off{ "Off", "On", "Off" };
@@ -72,6 +103,12 @@ namespace kick_ui
         XyFxSetupScreen                setupScreen;
         KickModeHeader                 header{ "XY Effects", "Icon_XY" };
         KickProgramSelectorWithDisplay hdrComp{ true };
+
+        xyfx::Gate          gate;
+        std::vector<Target> targets;
+        Target              applied;          // the destination the engine currently holds the effect on
+        bool                hasApplied{ false };
+        bool                restoring{ false };
 
         void resized() override;
         void visibilityChanged() override;

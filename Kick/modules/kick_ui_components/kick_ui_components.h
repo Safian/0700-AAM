@@ -39,6 +39,7 @@
     #include "source/kick_padMiniMap.h"
     #include "source/kick_menuComponent.h"
     #include "source/kick_IOComponent.h"
+    #include "source/kick_xy_fx_map.h"
     #include "source/kick_XYFXGrid.h"
     #include "source/kick_GridSettings.h"
     #include "source/kick_WarningComponent.h"
