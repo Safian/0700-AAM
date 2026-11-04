@@ -104,6 +104,11 @@ namespace mt
         bool         isAvailable() const noexcept;
         void         setTouchFx( const MTTouchFxSettings& Settings ) noexcept; // lock-free, any thread
         void         closeTouchFx() noexcept;
+        // Automation playback (any thread, no allocation, the value tree is not touched): the Touch FX gesture, and one effect parameter.
+        void         setTouchFxGesture( float X, float Y, bool Gate ) noexcept;
+        void         setParameterAutomated( unsigned int InsertPosition, int Parameter, float Value ) noexcept;
+        // Message thread: puts the slot's stored (value tree) parameters back after automation played over them.
+        void         restoreInsertFromState( unsigned int InsertPosition );
         int          getNumParameters( unsigned int Position );
         juce::String getInsertName( unsigned int InsertPosition );
         juce::String getParameterName( unsigned int InsertPosition, int Parameter );

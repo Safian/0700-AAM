@@ -30,12 +30,25 @@ namespace mt::automation
         Pan          = 1, // program pan, fixed point: -kPanScale..kPanScale (= PAN::MIN..PAN::MAX = -1..1)
         TouchX       = 2, // XY FX Touch X 0..1000
         TouchY       = 3, // XY FX Touch Y 0..1000
-        InsertParam0 = 4, // Insert slot 0 primary param 0..1000
-        InsertParam1 = 5, // Insert slot 1 primary param 0..1000
-        InsertParam2 = 6, // Insert slot 2 primary param 0..1000
-        InsertParam3 = 7, // Insert slot 3 primary param 0..1000
+        InsertParam0 = 4, // Insert slot 0: one parameter of the effect (the lane node stores which: `autoTarget`) 0..1000
+        InsertParam1 = 5, // Insert slot 1, like InsertParam0
+        InsertParam2 = 6, // Insert slot 2, like InsertParam0
+        InsertParam3 = 7, // Insert slot 3, like InsertParam0
+        TouchGate    = 8, // XY FX finger down / Latch: 0 or 1000 (a Touch lane set without a gate lane keeps the gate open)
         Count
     };
+
+    // The lanes besides Level / Pan ("FX lanes": Touch FX gesture + insert parameters). They are plain 0..1000 values on the
+    // track, played back by MTAudioManager::applyAutomatedFx on the message thread.
+    constexpr int kFirstFxLane = TouchX;
+    constexpr int kNumFxLanes  = Count - kFirstFxLane;
+    constexpr int kNumInsertLanes = 4;
+    inline bool isFxLane( int P ) noexcept { return P >= kFirstFxLane && P < Count; }
+    inline int  fxLaneIndex( int P ) noexcept { return isFxLane( P ) ? P - kFirstFxLane : -1; }
+    inline bool isInsertLane( int P ) noexcept { return P >= InsertParam0 && P < InsertParam0 + kNumInsertLanes; }
+    inline int  insertLaneParam( int Slot ) noexcept { return ( Slot >= 0 && Slot < kNumInsertLanes ) ? InsertParam0 + Slot : -1; }
+    inline int  insertLaneSlot( int P ) noexcept { return isInsertLane( P ) ? P - InsertParam0 : -1; }
+    inline bool gateOpen( int GateValue ) noexcept { return GateValue >= 500; }
 
     constexpr int kPanScale = 1000; // lane value = round( pan * kPanScale ); 1 unit = 0.001, finer than PAN::STEP (0.01)
     constexpr int kNoValue  = INT32_MIN; // "nothing" for atomics that carry a lane value

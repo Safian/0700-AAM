@@ -504,8 +504,13 @@ namespace mt
         // The automation lane breakpoints of the track in Selection as events, sorted by tick (Level lane, then Pan lane
         // at equal ticks). setAutomationEvent: OldTick < 0 inserts, else moves the point at OldTick; 0 ok, -1 refused.
         // The caller opens the undo transaction (ScopedUndoTransaction); delete likewise.
-        std::vector<MTAutomationEvent> getAutomationEvents( const MTSelected& Selection );
+        // IncludeFxLanes: also the FX lanes (Touch FX gesture, insert parameters); List Edit shows Level / Pan only.
+        std::vector<MTAutomationEvent> getAutomationEvents( const MTSelected& Selection, bool IncludeFxLanes = false );
         int                            setAutomationEvent( const MTSelected& Selection, int Param, int OldTick, int NewTick, int Value );
+        // Write mode: records a live move of an FX lane (mt::automation::TouchX / TouchY / TouchGate / InsertParam0..3, Value 0..1000;
+        // Target = effect parameter index for an insert lane) at the track's play position. Message thread; a no-op unless the
+        // automation mode is Write and the track plays.
+        void                           recordAutomationValue( const MTSelected& Selection, int Param, int Value, int Target = 0 );
         int                            deleteAutomationEvent( const MTSelected& Selection, int Param, int Tick );
         int randomNotes( const MTSelected& Selection, const track::randomEventsInfo& Info );
         int pitchQuantizeNotes( const MTSelected& Selection, const track::pitchQuantizeInfo& Info );

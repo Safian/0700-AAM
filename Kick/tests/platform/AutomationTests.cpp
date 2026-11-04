@@ -113,7 +113,20 @@ int main()
     CHECK_EQ( (int)TouchY, 3 );
     CHECK_EQ( (int)InsertParam0, 4 );
     CHECK_EQ( (int)InsertParam3, 7 );
-    CHECK_EQ( (int)Count, 8 );
+    CHECK_EQ( (int)TouchGate, 8 );
+    CHECK_EQ( (int)Count, 9 );
+    CHECK_EQ( kNumFxLanes, 7 );
+    CHECK_EQ( fxLaneIndex( TouchX ), 0 );
+    CHECK_EQ( fxLaneIndex( TouchGate ), 6 );
+    CHECK_EQ( fxLaneIndex( Pan ), -1 );
+    CHECK_EQ( fxLaneIndex( Count ), -1 );
+    CHECK_EQ( isInsertLane( InsertParam2 ), true );
+    CHECK_EQ( isInsertLane( TouchGate ), false );
+    CHECK_EQ( insertLaneSlot( InsertParam3 ), 3 );
+    CHECK_EQ( insertLaneParam( 1 ), (int)InsertParam1 );
+    CHECK_EQ( insertLaneParam( 4 ), -1 );
+    CHECK_EQ( gateOpen( 1000 ), true );
+    CHECK_EQ( gateOpen( 0 ), false );
     CHECK_EQ( normToValue( 0.5 ), 500 );
     CHECK_EQ( normToValue( -3.0 ), 0 );
     CHECK_EQ( normToValue( 9.0 ), 1000 );
@@ -140,7 +153,8 @@ int main()
     CHECK_EQ( paramFromStored( true, 0 ), (int)Level );
     CHECK_EQ( paramFromStored( true, 1 ), (int)Pan );
     CHECK_EQ( paramFromStored( true, 2 ), (int)TouchX );
-    CHECK_EQ( paramFromStored( true, 8 ), -1 );  // unknown (future) param: not ours
+    CHECK_EQ( paramFromStored( true, 8 ), (int)TouchGate );
+    CHECK_EQ( paramFromStored( true, 9 ), -1 );  // unknown (future) param: not ours
     CHECK_EQ( paramFromStored( true, -1 ), -1 );
 
     // negative pan values survive the text form; interpolation through the centre

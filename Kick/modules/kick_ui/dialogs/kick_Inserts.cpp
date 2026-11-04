@@ -2,6 +2,7 @@
 #include <engine/audio_engine/engine/mt_clap_effect.h>
 #include <engine/audio_engine/engine/mt_airwindopedia.h>
 #include <hardware/source/kick_Resorces.h>
+#include <engine/audio_engine/engine/mt_automation.h>
 
 namespace kick_ui
 {
@@ -159,7 +160,7 @@ namespace kick_ui
         mt::utils::addChildComponents( this, list, selector, options ); // Not visible by default.
 
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
-        header.showOptions( true, false ); // no insert-parameter automation exists: the header icon did nothing
+        header.showOptions( true, true ); // INS-14: the Automation icon sets the mode that records / plays the insert parameter lanes
 
         ui::themeChanged.connect( [&]() { header.setIcon( "Icon_Mixer" ); } );
 
@@ -381,6 +382,15 @@ namespace kick_ui
             if( pEffects )
             {
                 pEffects->setParameterValue( Position, Parameter, Value );
+                // INS-14: Write mode records the move as the insert lane of the selected track, when this chain is its program's.
+                if( Position >= 0 && Position < mt::automation::kNumInsertLanes )
+                {
+                    auto& ae    = mt::getAudioInterface();
+                    auto  sel   = ae.getSelected();
+                    auto* pProg = ae.getProgramDataForTrack( sel.sequence, sel.track );
+                    if( pProg != nullptr && ae.getInsertsInterface( ae.getProgramIndexByName( pProg->name.get() ) ) == pEffects )
+                        ae.recordAutomationValue( sel, mt::automation::insertLaneParam( Position ), mt::automation::normToValue( Value ), Parameter );
+                }
                 refresh();
                 options.refresh(); // the shown value text (e.g. "-6.0 dB") follows the parameter
             }

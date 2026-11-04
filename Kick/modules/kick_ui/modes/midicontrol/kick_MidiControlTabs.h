@@ -256,6 +256,8 @@ namespace kick_ui
         void            refresh();
         void            visibilityChanged() override;
         void            midiMessages( float x, float y );
+        bool            sendExternal( float x, float y ); // XY FX "MIDI CC" location: false when there is no XY configuration / output yet
+        void            resetExternal();
         juce::ValueTree vTree;
 
     private:
@@ -264,7 +266,8 @@ namespace kick_ui
         void                   resized();
         void                   paint( juce::Graphics& g ) override;
         int                    midiXyIndex{ 0 };
-        midictl::AxisFilter    filterX, filterY;
+        bool                   bindConfig();
+        midictl::XyCcEngine    engine;
     };
     class MidiControlHardwareButtons : public ui::KickViewport
     {

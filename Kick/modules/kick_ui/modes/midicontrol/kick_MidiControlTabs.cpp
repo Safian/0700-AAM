@@ -1618,29 +1618,15 @@ namespace kick_ui
         bool isMute2Active = vTree.getProperty( "Mute2" ).toString() == "Active";
         rightComp.mute2.setToggleState( isMute2Active, juce::dontSendNotification );
 
-        filterX.reset();
-        filterY.reset();
+        engine.reset();
         leftComp.onValueChanged = [&]( float xaxis, float yaxis ) {
             midiMessages( xaxis, yaxis );
         };
     }
     void MidiControlXY::visibilityChanged()
     {
-        bool found = false;
-        for( auto id = 0; id < mt::getSettings().midiControl.vTree.getNumChildren(); ++id )
-        {
-            auto child = mt::getSettings().midiControl.vTree.getChild( id );
-            if( child.hasProperty( "MIDIChannelX" ) )
-            {
-                vTree = child;
-                found = true;
-                break;
-            }
-        }
-        if( found )
-        {
+        if( bindConfig() )
             refresh();
-        }
     }
     // The XY node (vTree) holds channel / CC / range / mute of both axes. An axis whose "mute" is switched on sends
     // nothing (nothing is built for it: a default constructed MidiMessage is an empty SysEx), and an axis sends only when
@@ -1650,17 +1636,50 @@ namespace kick_ui
         if( !vTree.isValid() || !onAxisMessage )
             return;
 
-        auto axis = [this]( const char* mute, const char* channel, const char* cc, const char* low, const char* high, float value, midictl::AxisFilter& filter ) {
-            if( vTree.getProperty( mute ).toString() == "Active" ) // muted axis
-                return;
-            const int mapped = midictl::scaleAxis( value, (int)vTree.getProperty( low ), (int)vTree.getProperty( high ) );
-            if( !filter.changed( mapped ) )
-                return;
-            auto msg = juce::MidiMessage::controllerEvent( juce::jlimit( 1, 16, (int)vTree.getProperty( channel ) ), juce::jlimit( 0, 127, (int)vTree.getProperty( cc ) ), mapped );
-            onAxisMessage( msg );
+        auto config = [this]( const char* mute, const char* channel, const char* cc, const char* low, const char* high ) {
+            midictl::XyAxisConfig c;
+            c.muted   = vTree.getProperty( mute ).toString() == "Active";
+            c.channel = (int)vTree.getProperty( channel );
+            c.cc      = (int)vTree.getProperty( cc );
+            c.low     = (int)vTree.getProperty( low );
+            c.high    = (int)vTree.getProperty( high );
+            return c;
         };
-        axis( "Mute1", "MIDIChannelX", "CCNumberX", "LowRangeX", "HighRangeX", xaxis, filterX );
-        axis( "Mute2", "MIDIChannelY", "CCNumberY", "LowRangeY", "HighRangeY", yaxis, filterY );
+        midictl::XyCc out[2];
+        const int     n = engine.process( xaxis, yaxis, config( "Mute1", "MIDIChannelX", "CCNumberX", "LowRangeX", "HighRangeX" ),
+                                          config( "Mute2", "MIDIChannelY", "CCNumberY", "LowRangeY", "HighRangeY" ), out );
+        for( int i = 0; i < n; ++i )
+        {
+            auto msg = juce::MidiMessage::controllerEvent( out[i].channel, out[i].cc, out[i].value );
+            onAxisMessage( msg );
+        }
+    }
+
+    // The XY FX screen with the "MIDI CC" location drives the same engine, configuration and output port.
+    bool MidiControlXY::sendExternal( float xaxis, float yaxis )
+    {
+        if( !vTree.isValid() )
+            bindConfig();
+        if( !vTree.isValid() || !onAxisMessage )
+            return false;
+        midiMessages( xaxis, yaxis );
+        return true;
+    }
+
+    void MidiControlXY::resetExternal() { engine.reset(); }
+
+    bool MidiControlXY::bindConfig()
+    {
+        for( auto id = 0; id < mt::getSettings().midiControl.vTree.getNumChildren(); ++id )
+        {
+            auto child = mt::getSettings().midiControl.vTree.getChild( id );
+            if( child.hasProperty( "MIDIChannelX" ) )
+            {
+                vTree = child;
+                return true;
+            }
+        }
+        return false;
     }
 
     void MidiControlXY::resized()

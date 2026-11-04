@@ -8,6 +8,7 @@
 #include "SequencerSmoke.h"
 #include "ProgramEditSmoke.h"
 #include "ProjectsSmoke.h"
+#include "FxLanesSmoke.h"
 
 // Runs on the application's message thread against its real manager and graph.
 // The Python supervisor supplies an isolated data root and trusted test fixture.
@@ -37,6 +38,8 @@ inline juce::String runKickAppSmoke() {
     if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SEQUENCERS", {}).isNotEmpty()) return runKickSequencersSmoke();
     // KICK_SMOKE_PROGRAMEDIT=1: Program Edit screen against the real engine (ProgramEditSmoke.h).
     if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_PROGRAMEDIT", {}).isNotEmpty()) return runKickProgramEditSmoke();
+    // KICK_SMOKE_FXLANES=1: FX automation lanes + insert automation calls (FxLanesSmoke.h).
+    if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_FXLANES", {}).isNotEmpty()) return runKickFxLanesSmoke();
     // KICK_SMOKE_PROJECTS=1: project operations (missing project, unsaved flag, Save As / copy, Don't save, demo) (ProjectsSmoke.h).
     if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_PROJECTS", {}).isNotEmpty()) return runKickProjectsSmoke();
     const auto path = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_CLAP_PATH", {});

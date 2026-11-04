@@ -282,6 +282,30 @@ namespace mt
             pImpl->synth->touchFx().close();
     }
 
+    void MTIInsertsInterface::setTouchFxGesture( float X, float Y, bool Gate ) noexcept
+    {
+        if( pImpl && pImpl->synth )
+            pImpl->synth->touchFx().setGesture( juce::jlimit( 0.f, 1.f, X ), juce::jlimit( 0.f, 1.f, Y ), Gate );
+    }
+
+    void MTIInsertsInterface::setParameterAutomated( unsigned int Position, int Parameter, float Value ) noexcept
+    {
+        if( pImpl && pImpl->synth && Parameter >= 0 && static_cast<int>( Position ) < pImpl->synth->getNumEffects() )
+            pImpl->synth->setEffectParameter( Position, static_cast<unsigned int>( Parameter ), juce::jlimit( 0.f, 1.f, Value ) );
+    }
+
+    void MTIInsertsInterface::restoreInsertFromState( unsigned int Position )
+    {
+        if( !pImpl || !pImpl->synth || static_cast<int>( Position ) >= pImpl->synth->getNumEffects() || Position >= static_cast<unsigned int>( state.getNumChildren() ) )
+            return;
+        const auto child = state.getChild( static_cast<int>( Position ) );
+        if( child.getProperty( "isClap", false ) )
+            return;
+        const auto saved = JuceVarToVector<float>( child.getProperty( IDs::state ) );
+        if( !saved.empty() )
+            pImpl->synth->deserializeEffect( Position, saved );
+    }
+
     bool              MTIInsertsInterface::isAvailable() const noexcept { return pImpl && pImpl->synth != nullptr; }
     int               MTIInsertsInterface::getNumInserts() { return pImpl->synth ? pImpl->synth->getNumEffects() : 0; }
     int               MTIInsertsInterface::getNumParameters( unsigned int Position ) { return pImpl->synth ? pImpl->synth->getNumEffectParameters( Position ) : 0; }
