@@ -348,3 +348,13 @@ set_tests_properties(kick-sysinfo PROPERTIES TIMEOUT 10)
 add_executable(kick-update-tests KickUpdateTests.cpp)
 add_test(NAME kick-update COMMAND kick-update-tests)
 set_tests_properties(kick-update PROPERTIES TIMEOUT 10)
+
+# Humanize arithmetic (time / length / velocity), JUCE-free header only.
+add_executable(kick-humanize-tests HumanizeTests.cpp)
+add_test(NAME kick-humanize COMMAND kick-humanize-tests)
+set_tests_properties(kick-humanize PROPERTIES TIMEOUT 10)
+
+# Numpad entry state + tap tempo estimator, JUCE-free headers only.
+add_executable(kick-numpad-taptempo-tests NumPadTapTempoTests.cpp)
+add_test(NAME kick-numpad-taptempo COMMAND kick-numpad-taptempo-tests)
+set_tests_properties(kick-numpad-taptempo PROPERTIES TIMEOUT 10)

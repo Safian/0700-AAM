@@ -71,9 +71,7 @@ namespace ui
         int maxValue{ 0 };
         int minValue{ 0 };
         // Tap Tempo related
-        int    numTapsForTempo{ 3 };
-        int    tapCount{ 0 };
-        double startMs{ 0 };
+        ui::TapTempo tapTempo{ 3 };
 
         int                                                intermidentValue{ 0 };
         std::chrono::time_point<std::chrono::steady_clock> lastInputTime;

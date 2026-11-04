@@ -23,6 +23,7 @@
 
 #include "contracts/dcl/dcl_contracts_helper.h"
 #include "contracts/dcl/dcl_signals.h"
+#include "kick_numpad_entry.h"
 
 namespace ui
 {
@@ -345,17 +346,18 @@ namespace ui
             num7.onClick = [&]() { addInput( 7 ); };
             num8.onClick = [&]() { addInput( 8 ); };
             num9.onClick = [&]() { addInput( 9 ); };
-            sign.onClick = [&]() { intermidentValue *= -1; refreshDisplay( ); };
-            del.onClick  = [&]() { intermidentValue /= 10; refreshDisplay( ); };
-            mul.onClick  = [&]() { intermidentValue *= 2;  refreshDisplay( ); };
-            div.onClick  = [&]() { intermidentValue /= 2;  if(intermidentValue == 0){ intermidentValue = 1;} refreshDisplay( ); };
-            inc.onClick  = [&]() { intermidentValue += (int)stepValue; refreshDisplay( ); };
-            dec.onClick  = [&]() { intermidentValue -= (int)stepValue; refreshDisplay( ); };
-            clr.onClick  = [&]() { intermidentValue =0; refreshDisplay( ); };
+            dot.onClick  = [&]() { entry.dot( kAllowDecimal ); refreshDisplay( true ); };
+            sign.onClick = [&]() { entry.toggleSign(); refreshDisplay( true ); };
+            del.onClick  = [&]() { entry.backspace(); refreshDisplay( true ); };
+            mul.onClick  = [&]() { entry.setValue( entry.value() * 2.0 ); refreshDisplay(); };
+            div.onClick  = [&]() { entry.setValue( entry.value() / 2.0 ); refreshDisplay(); };
+            inc.onClick  = [&]() { entry.setValue( entry.value() + (double)stepValue ); refreshDisplay(); };
+            dec.onClick  = [&]() { entry.setValue( entry.value() - (double)stepValue ); refreshDisplay(); };
+            clr.onClick  = [&]() { entry.clear(); refreshDisplay(); };
 
             slider.onValueChanged = [&]( double V ) {
-                intermidentValue = (int)V;
-                slider.sendPercentValueToHardware( (int)intermidentValue );
+                entry.setValue( V );
+                slider.sendPercentValueToHardware( (int)V );
                 refreshDisplay();
             };
 
@@ -393,10 +395,12 @@ namespace ui
             maxValue         = max;
             defaultValue     = defaultVal;
             stepValue        = stepSize;
-            intermidentValue = 0;
+            entry.clear();
+            lastInputTime = {}; // the first digit of every use starts a new number
 
-            if( minValue > 0 )
-                sign.setEnabled( false );
+            // One pad serves many fields: the sign key follows the range of the field that opens it now.
+            sign.setEnabled( !( minValue > 0 ) );
+            dot.setEnabled( kAllowDecimal );
 
             slider.setRange( (double)minValue, (double)maxValue, (double)stepValue );
             setValue( defaultVal );
@@ -409,7 +413,7 @@ namespace ui
 
         void setValue( Type Value )
         {
-            intermidentValue = (int)validate( Value );
+            entry.setValue( (double)validate( Value ) );
             refreshDisplay();
         }
 
@@ -431,7 +435,8 @@ namespace ui
         KickSlider       slider;
         juce::TextEditor inputTextLabel;
 
-        int                                                intermidentValue{ 0 };
+        static constexpr bool                              kAllowDecimal = std::is_floating_point<Type>::value;
+        NumPadEntry                                        entry;
         std::chrono::time_point<std::chrono::steady_clock> lastInputTime;
         std::chrono::milliseconds                          timeoutDuration{ 1000 }; // 2 seconds
 
@@ -464,27 +469,27 @@ namespace ui
             auto now = std::chrono::steady_clock::now();
             if( now - lastInputTime > timeoutDuration )
             {
-                intermidentValue = 0; // Reset current value if timeout
+                entry.clear(); // reset the typed number after a pause
             }
             lastInputTime = now;
 
-            intermidentValue = intermidentValue * 10 + i;
-            if( intermidentValue > maxValue )
-            {
-                intermidentValue = (int)maxValue; // Ensure value does not exceed max
-            }
-            refreshDisplay();
+            entry.digit( i );
+            if( entry.value() > (double)maxValue )
+                entry.setValue( (double)maxValue ); // never above max
+            else if( entry.value() < (double)minValue && minValue < 0 )
+                entry.setValue( (double)minValue );
+            refreshDisplay( true );
         }
 
         void checkMaxnReset( int newInput )
         {
             static int attempts = 0;
-            auto       value    = juce::jlimit<Type>( minValue, maxValue, intermidentValue );
+            auto       value    = juce::jlimit<Type>( minValue, maxValue, (Type)entry.value() );
             if( value == maxValue )
             {
                 if( ++attempts >= 2 )
                 {
-                    intermidentValue = newInput;
+                    entry.setValue( newInput );
                 }
             }
             else
@@ -498,11 +503,12 @@ namespace ui
             return juce::jlimit( minValue, maxValue, Val );
         }
 
-        void refreshDisplay()
+        // typing: show what is being typed ("-", "12.", "0.25"), otherwise the value.
+        void refreshDisplay( bool typing = false )
         {
-            auto val = validate( (Type)intermidentValue );
+            auto val = validate( (Type)entry.value() );
             slider.setValue( (double)val, juce::dontSendNotification );
-            inputTextLabel.setText( juce::String( val ) );
+            inputTextLabel.setText( typing && !entry.isEmpty() ? juce::String( entry.text() ) : juce::String( val ) );
         };
 
         void resized() override
