@@ -119,53 +119,43 @@ int main()
     trimTo( v, 10 );
     CHECK_EQ( v.size(), 4 );
 
-    // ---- MC-23: navigating buttons
-    CHECK( isNavigatingButton( "Step Seq" ) );
-    CHECK( isNavigatingButton( "Browser" ) );
-    CHECK( isNavigatingButton( "XYFX" ) );
-    CHECK( !isNavigatingButton( "Tap" ) );
-    CHECK( !isNavigatingButton( "Enter" ) );
-    CHECK( !isNavigatingButton( "-" ) );
+    // ---- MC-22: the Learn matcher
+    {
+        MidiLearnEngine engine;
+        CHECK_EQ( engine.size(), 0 );
+        CHECK( engine.match( "cc", 1, 7, 127 ).empty() );
+        engine.rebuild( { { 0, "cc", 1, 7, false, "" }, { 1, "cc", 2, 10, true, "" }, { 2, "cc", 1, 7, true, "" }, { 3, "Note", 1, 36, false, "Pad Bank" } } );
+        CHECK_EQ( engine.size(), 4 );
+        const auto both = engine.match( "cc", 1, 7, 100 ); // two rows learned the same controller: both react, each with its own flip
+        CHECK_EQ( both.size(), 2 );
+        CHECK( both[0].row == 0 && both[0].value == 100 );
+        CHECK( both[1].row == 2 && both[1].value == 27 );
+        const auto flip = engine.match( "cc", 2, 10, 127 );
+        CHECK( flip.size() == 1 && flip[0].row == 1 && flip[0].value == 0 );
+        CHECK( engine.match( "cc", 3, 7, 127 ).empty() );     // another channel
+        CHECK( engine.match( "Note", 1, 7, 127 ).empty() );   // another type
+        CHECK( engine.match( "Note", 1, 36, 90, "Other" ).empty() ); // another input port
+        CHECK( engine.match( "Note", 1, 36, 90, "Pad Bank" ).size() == 1 );
+        CHECK( engine.match( "Note", 1, 36, 90 ).size() == 1 );      // port unknown: matches
+        CHECK( engine.match( "cc", 1, 7, 900 )[0].value == 127 );    // out of range raw value is clamped
+        engine.rebuild( {} );
+        CHECK( engine.match( "cc", 1, 7, 100 ).empty() );
+    }
 
-    // ---- MC-22: ControllerMap
-    ControllerMap ctrlMap;
-    CHECK( ctrlMap.getItems().size() >= 38 );
-    const auto* btn0 = ctrlMap.findItem( 0 );
-    CHECK( btn0 != nullptr && btn0->name == "Step Seq" && btn0->momentary );
-    const auto* ql0 = ctrlMap.findItem( kFirstQLink );
-    CHECK( ql0 != nullptr && ql0->name == "Q-Link 1" && ql0->isAbsolute );
-
-    // ---- MC-22: MidiLearnEngine
-    MidiLearnEngine engine;
-    CHECK_EQ( engine.numBindings(), 0 );
-
-    MidiLearnBinding b1;
-    b1.type = "cc";
-    b1.channel = 1;
-    b1.number = 7;
-    b1.target = "Track Volume";
-    b1.flip = false;
-    engine.addBinding( b1 );
-
-    MidiLearnBinding b2;
-    b2.type = "cc";
-    b2.channel = 2;
-    b2.number = 10;
-    b2.target = "Track Pan";
-    b2.flip = true;
-    engine.addBinding( b2 );
-
-    CHECK_EQ( engine.numBindings(), 2 );
-
-    auto res1 = engine.processIncoming( "cc", 1, 7, 127 );
-    CHECK( res1.matched && res1.target == "Track Volume" && std::fabs( res1.value - 1.0f ) < 1e-4f );
-
-    auto res2 = engine.processIncoming( "cc", 2, 10, 127 );
-    // flipped: 127 -> 0
-    CHECK( res2.matched && res2.target == "Track Pan" && std::fabs( res2.value - 0.0f ) < 1e-4f );
-
-    auto res3 = engine.processIncoming( "cc", 3, 7, 127 ); // unmapped channel
-    CHECK( !res3.matched );
+    // ---- MC-18: ports plugged in / out
+    {
+        const auto d0 = diffPorts( {}, { "a", "b" } );
+        CHECK_EQ( d0.toOpen.size(), 2 );
+        CHECK_EQ( d0.toClose.size(), 0 );
+        const auto d1 = diffPorts( { "a", "b" }, { "b", "c", "c" } );
+        CHECK_EQ( d1.toOpen.size(), 1 ); // a duplicated id opens once
+        CHECK( d1.toOpen[0] == "c" );
+        CHECK_EQ( d1.toClose.size(), 1 );
+        CHECK( d1.toClose[0] == "a" );
+        const auto d2 = diffPorts( { "a" }, { "a" } );
+        CHECK( d2.toOpen.empty() && d2.toClose.empty() );
+        CHECK( diffPorts( { "a" }, {} ).toClose.size() == 1 );
+    }
 
     // ---- XY engine shared by MIDI Control > XY and XY FX "MIDI CC" (XY-14)
     {

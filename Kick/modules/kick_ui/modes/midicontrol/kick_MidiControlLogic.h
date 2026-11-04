@@ -187,6 +187,24 @@ namespace kick_ui::midictl
         AxisFilter filterX_, filterY_;
     };
 
+    // ---- MC-18: input ports follow the devices that are plugged in / out while mapping is on
+    struct PortDiff
+    {
+        std::vector<std::string> toOpen;  // available, not open yet
+        std::vector<std::string> toClose; // open, no longer available
+    };
+    inline PortDiff diffPorts( const std::vector<std::string>& Open, const std::vector<std::string>& Available )
+    {
+        PortDiff d;
+        for( const auto& a : Available )
+            if( std::find( Open.begin(), Open.end(), a ) == Open.end() && std::find( d.toOpen.begin(), d.toOpen.end(), a ) == d.toOpen.end() )
+                d.toOpen.push_back( a );
+        for( const auto& o : Open )
+            if( std::find( Available.begin(), Available.end(), o ) == Available.end() )
+                d.toClose.push_back( o );
+        return d;
+    }
+
     // ---- MIDI Learn
     struct LearnRow
     {
@@ -232,143 +250,45 @@ namespace kick_ui::midictl
             Entries.erase( Entries.begin(), Entries.begin() + static_cast<std::ptrdiff_t>( Entries.size() - Max ) );
     }
 
-    // ---- MC-23: Navigating button identification
-    inline bool isNavigatingButton( const std::string& name ) noexcept
+    // ---- MC-22: the MIDI Learn matcher. The table rows (type, channel, number, flip) are turned into bindings; a message is matched
+    // against all of them: every row that learned this controller reacts (two rows may share one), each with its own flip. Pure and
+    // allocation-free per message except for the result; the screen rebuilds the bindings when the table changes (message thread).
+    struct LearnBinding
     {
-        return name == "Step Seq" || name == "Next Seq" || name == "Sample Edit"
-            || name == "Program Edit" || name == "Browser" || name == "Track Mix"
-            || name == "Pad Mixer" || name == "sampler" || name == "XYFX";
-    }
-
-    // ---- MC-22: ControllerMap & MidiLearnEngine clean architecture
-    struct ControllerMapItem
-    {
-        int         controlId{ -1 };
-        std::string name;
-        int         defaultCc{ 0 };
-        int         midiChannel{ 1 };
-        bool        momentary{ true };
-        std::string ledMode{ "Never" }; // "Never", "Midi Input", "Local" (MC-20)
-        int         lowRange{ 0 };
-        int         highRange{ 127 };
-        bool        isAbsolute{ true };
-    };
-
-    class ControllerMap
-    {
-    public:
-        ControllerMap()
-        {
-            initDefaults();
-        }
-
-        void initDefaults()
-        {
-            items.clear();
-            const auto& bTable = buttons();
-            for( size_t i = 0; i < bTable.size(); ++i )
-            {
-                ControllerMapItem item;
-                item.controlId   = static_cast<int>( i );
-                item.name        = bTable[i].name;
-                item.defaultCc   = bTable[i].defaultCc;
-                item.momentary   = true;
-                item.ledMode     = "Never";
-                items.push_back( item );
-            }
-            for( int i = 0; i < kQLinks; ++i )
-            {
-                ControllerMapItem item;
-                item.controlId   = kFirstQLink + i;
-                item.name        = qlinkName( i );
-                item.defaultCc   = 16 + i;
-                item.isAbsolute  = true;
-                items.push_back( item );
-            }
-            for( int i = 0; i < kPads; ++i )
-            {
-                ControllerMapItem item;
-                item.controlId   = kFirstPad + i;
-                item.name        = padName( i );
-                item.defaultCc   = 36 + i;
-                items.push_back( item );
-            }
-        }
-
-        const std::vector<ControllerMapItem>& getItems() const noexcept { return items; }
-        std::vector<ControllerMapItem>&       getItems() noexcept { return items; }
-
-        const ControllerMapItem* findItem( int controlId ) const noexcept
-        {
-            for( const auto& item : items )
-                if( item.controlId == controlId )
-                    return &item;
-            return nullptr;
-        }
-
-        ControllerMapItem* findItem( int controlId ) noexcept
-        {
-            for( auto& item : items )
-                if( item.controlId == controlId )
-                    return &item;
-            return nullptr;
-        }
-
-    private:
-        std::vector<ControllerMapItem> items;
-    };
-
-    struct MidiLearnBinding
-    {
-        std::string sourcePort; // empty = any
-        std::string type;       // "cc", "Note", "PitchBend", "ProgramChange"
-        int         channel{ 1 };
-        int         number{ -1 }; // CC or Note number
-        std::string target;       // target parameter description
+        int         row{ -1 };
+        std::string type;
+        int         channel{ -1 };
+        int         number{ -1 };
         bool        flip{ false };
-        bool        isToggle{ false };
-        float       lastValue{ 0.0f };
+        std::string port; // empty = any input port
     };
 
-    struct ProcessedMapping
+    struct LearnHit
     {
-        bool        matched{ false };
-        std::string target;
-        float       value{ 0.0f };
-        bool        isToggle{ false };
+        int row{ -1 };
+        int value{ 0 }; // 0..127, flipped when the row says so
     };
 
     class MidiLearnEngine
     {
     public:
-        void clearBindings() noexcept { bindings.clear(); }
+        void rebuild( std::vector<LearnBinding> Bindings ) { bindings_ = std::move( Bindings ); }
+        std::size_t size() const noexcept { return bindings_.size(); }
 
-        void addBinding( const MidiLearnBinding& binding )
+        std::vector<LearnHit> match( const std::string& Type, int Channel, int Number, int RawValue127, const std::string& Port = {} ) const
         {
-            bindings.push_back( binding );
-        }
-
-        std::size_t numBindings() const noexcept { return bindings.size(); }
-        const MidiLearnBinding& getBinding( std::size_t index ) const { return bindings.at( index ); }
-
-        ProcessedMapping processIncoming( const std::string& type, int channel, int number, int rawValue127, const std::string& port = "" ) noexcept
-        {
-            for( auto& b : bindings )
+            std::vector<LearnHit> hits;
+            for( const auto& b : bindings_ )
             {
-                if( !b.sourcePort.empty() && !port.empty() && b.sourcePort != port )
+                if( !b.port.empty() && !Port.empty() && b.port != Port )
                     continue;
-                if( b.type == type && b.channel == channel && ( b.number == number || b.number < 0 ) )
-                {
-                    const int   v    = flipped( rawValue127, b.flip );
-                    const float norm = v / 127.0f;
-                    b.lastValue      = norm;
-                    return { true, b.target, norm, b.isToggle };
-                }
+                if( learnMatches( LearnRow{ b.type, b.channel, b.number, b.flip }, Type, Channel, Number ) )
+                    hits.push_back( { b.row, flipped( RawValue127, b.flip ) } );
             }
-            return { false, "", 0.0f, false };
+            return hits;
         }
 
     private:
-        std::vector<MidiLearnBinding> bindings;
+        std::vector<LearnBinding> bindings_;
     };
 }
