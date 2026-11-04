@@ -53,6 +53,7 @@ namespace kick_ui
     public:
         std::function<void( int )> onDataChanged     = []( int ) {};
         std::function<void()>      onSoloMuteChanged = []() {};
+        std::function<void( int )> onAssign          = []( int ) {}; // key note of the row: open the sample list
 
         PadMixerDisplay();
         ~PadMixerDisplay() = default;
@@ -60,7 +61,6 @@ namespace kick_ui
         void                 setData( mt::MTIProgram*, PadMixerData* );
         int                  getKeyNote() { return pData ? pData->KeyNote : 0; };
         void                 linkRotated( int ID, int value );
-        juce::Rectangle<int> getElementBounds( int state );
         void                 setMute( bool, bool );
         void                 refreshLevel();
 
@@ -69,6 +69,7 @@ namespace kick_ui
 
         ui::KickImageButton    solo{ "SOLO", "Solo_normal", "Solo_active" };
         ui::KickImageButton    mute{ "MUTE", "Mute_normal", "Mute_active" };
+        ui::KickButton         assign{ "Assign" };
         ui::KickSlider         levelSlider{ "LEVEL", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
         ui::KickRotary         panSlider{ "PAN", juce::Slider::TextBoxLeft, true };
         ui::Kick2LineNameLabel nameLabel{ "" };
@@ -92,6 +93,7 @@ namespace kick_ui
         ~PadMixerContent() = default;
 
         void setPadEnable( bool Enable );
+        void openAssignForSelected(); // ENTER on the row list
         void programChanged();
         void knobCommand( int knob, int value );
         void handleCommand( CPktMgr::HWMsg_t& );
