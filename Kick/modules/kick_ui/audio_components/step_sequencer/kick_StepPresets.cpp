@@ -141,7 +141,7 @@ namespace kick_ui
                 break;
             case StepPresetType::Flip:
             case StepPresetType::Mirror:
-                if( addValues ) addValues( presetValues );
+                if( structuralPreset ) structuralPreset( Type );
                 break;
         }
     }
@@ -491,7 +491,7 @@ namespace kick_ui
         auto size = values.size();
         for( auto i = 0; i < size; i++ )
         {
-            values[i] = juce::jlimit( min, max, ( max - values[(size_t)i] ) );
+            values[i] = juce::jlimit( min, max, ( max + min - values[(size_t)i] ) ); // mirrors inside [min..max]; velocity never reaches 0
         }
     }
 

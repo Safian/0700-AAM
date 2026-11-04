@@ -29,6 +29,40 @@ namespace mt
 {
     //==============================================================================
     /**
+    Groups every undoable edit made while it lives into ONE undo step (one UNDO press).
+    A CachedValue starts a new undo transaction on every change; while a ScopedUndoTransaction
+    is alive on this thread those starts are suppressed, so a drag, a Clear, a preset or a
+    Timing Correct pass that touches many notes is undone in a single step. Nesting is allowed
+    (only the outermost scope begins the transaction). UI/message-thread use only.
+    */
+    class ScopedUndoTransaction
+    {
+    public:
+        // BeginNew = false joins a transaction that is already open (e.g. a touch gesture that started
+        // it on mouse-down) and only suppresses the per-change transactions of CachedValue.
+        explicit ScopedUndoTransaction( juce::UndoManager& UM, const juce::String& Name = {}, bool BeginNew = true )
+        {
+            if( BeginNew && depth() == 0 )
+                UM.beginNewTransaction( Name );
+            ++depth();
+        }
+        ~ScopedUndoTransaction() { --depth(); }
+
+        static bool isActive() noexcept { return depth() > 0; }
+
+        ScopedUndoTransaction( const ScopedUndoTransaction& )            = delete;
+        ScopedUndoTransaction& operator=( const ScopedUndoTransaction& ) = delete;
+
+    private:
+        static int& depth() noexcept
+        {
+            static thread_local int d = 0;
+            return d;
+        }
+    };
+
+    //==============================================================================
+    /**
     This class acts as a typed wrapper around a property inside a ValueTree.
 
     A CachedValue provides an easy way to read and write a ValueTree property with
@@ -202,7 +236,7 @@ namespace mt
 
         void beginTransactionForUndo()
         {
-            if( undoManager )
+            if( undoManager && !ScopedUndoTransaction::isActive() )
                 undoManager->beginNewTransaction();
         }
 

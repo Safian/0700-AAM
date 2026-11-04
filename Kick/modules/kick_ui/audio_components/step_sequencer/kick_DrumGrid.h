@@ -44,6 +44,7 @@ namespace kick_ui
         ~DrumGrid() override = default;
 
         void  refresh();
+        void  externalChange(); // note list changed elsewhere (undo, recording, another screen)
         void  setLayer( Layer L );
         Layer getLayer() const { return layer; }
 
@@ -63,6 +64,7 @@ namespace kick_ui
             int  velocity{ 0 };
             int  probability{ 100 };
             int  ratchet{ 1 };
+            int  count{ 0 }; // notes that start in this step
         };
 
         enum class Paint
@@ -125,13 +127,14 @@ namespace kick_ui
         std::vector<mt::MTNote>                   notes;
         std::vector<mt::MTISample*>               samples;
 
-        juce::Rectangle<int> tabArea, headerArea, gridArea;
+        juce::Rectangle<int> tabArea, selectArea, headerArea, gridArea;
 
         Paint paintMode{ Paint::None };
         int   dragRow{ -1 };
         int   lastColumn{ -1 };
         int   playColumn{ -1 };
-        int   pollCounter{ 0 };
+        bool  selectTool{ false }; // touch select mode: taps toggle the selection like Shift+tap
+        bool  gestureOpen{ false };
         bool  dragging{ false };
         juce::Point<int>     downPos;
         juce::Rectangle<int> rubberBand;
