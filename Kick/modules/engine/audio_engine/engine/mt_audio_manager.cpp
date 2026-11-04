@@ -459,6 +459,7 @@ namespace mt
             // restore itself is never recorded when the new mode is Write.
             automationMode.store( automation::Off );
             restoreAutomatedPans();
+            restoreAutomatedFx();
         }
         automationMode.store( Mode );
         forAllSequences( [Mode]( MTSequence* S ) {
@@ -528,6 +529,66 @@ namespace mt
             panBases.emplace( c.prog->id.get(), (double)c.prog->getPan() ); // keeps the first (pre-automation) value
             c.prog->vTree.setProperty( IDs::pan, target, nullptr ); // same property the mixer knob writes; not undoable
         }
+    }
+
+    void MTAudioManager::applyAutomatedFx()
+    {
+        const bool read = automation::Read == getAutomationMode();
+        forAllSequences( [&]( MTSequence* S ) {
+            S->forAllTracks( [&]( MTTrack* T ) {
+                // The pending values are always consumed, so nothing stale survives a mode change.
+                int  v[automation::kNumFxLanes];
+                bool any = false;
+                for( int i = 0; i < automation::kNumFxLanes; ++i )
+                {
+                    v[i] = T->takeFxTarget( automation::kFirstFxLane + i );
+                    any  = any || v[i] != automation::kNoValue;
+                }
+                if( !any || !read )
+                    return;
+                auto* p = T->getProgram();
+                auto* f = p ? dynamic_cast<MTIInsertsInterface*>( p ) : nullptr;
+                if( !f || !f->isAvailable() )
+                    return;
+                const auto id = p->id.get();
+                if( v[automation::TouchX - automation::kFirstFxLane] != automation::kNoValue || v[automation::TouchY - automation::kFirstFxLane] != automation::kNoValue
+                    || v[automation::TouchGate - automation::kFirstFxLane] != automation::kNoValue )
+                {
+                    auto last = [&]( int Param, int Fallback ) { const int a = T->lastFxValue( Param ); return a == automation::kNoValue ? Fallback : a; };
+                    // A gesture without a gate lane (edited by hand) keeps the gate open.
+                    const bool gate = T->hasFxLane( automation::TouchGate ) ? automation::gateOpen( last( automation::TouchGate, 0 ) ) : true;
+                    f->setTouchFxGesture( (float)automation::valueToNorm( last( automation::TouchX, 0 ) ), (float)automation::valueToNorm( last( automation::TouchY, 0 ) ), gate );
+                    fxDriven[id] |= 256u;
+                }
+                for( int slot = 0; slot < automation::kNumInsertLanes; ++slot )
+                {
+                    const int value = v[automation::InsertParam0 + slot - automation::kFirstFxLane];
+                    const int param = T->getFxLaneTarget( automation::InsertParam0 + slot );
+                    if( value == automation::kNoValue || param < 0 )
+                        continue;
+                    f->setParameterAutomated( (unsigned)slot, param, (float)automation::valueToNorm( value ) );
+                    fxDriven[id] |= ( 1u << slot );
+                }
+            } );
+        } );
+    }
+
+    // Leaving Read: the Touch FX gate closes and the driven insert parameters go back to the values stored in the tree.
+    void MTAudioManager::restoreAutomatedFx()
+    {
+        for( const auto& d : fxDriven )
+        {
+            auto* p = getProgramById( d.first );
+            auto* f = p ? dynamic_cast<MTIInsertsInterface*>( p ) : nullptr;
+            if( !f )
+                continue;
+            if( d.second & 256u )
+                f->closeTouchFx();
+            for( int slot = 0; slot < automation::kNumInsertLanes; ++slot )
+                if( d.second & ( 1u << slot ) )
+                    f->restoreInsertFromState( (unsigned)slot );
+        }
+        fxDriven.clear();
     }
 
     // Message thread. Puts back the stored pan of one program, unless another track's pan lane still drives it.
@@ -847,6 +908,7 @@ namespace mt
         MTAudioSequenceManager::processMidiMeters();
         MTAudioProgramManager::processMidiMeters();
         applyAutomatedPans();
+        applyAutomatedFx();
         pollSequenceRecording();
 
         listeners.call( [&]( MTAudioInterfaceListener& l ) { l.onPlayHeadChanged( MTAudioSequenceManager::getPlayhead().bnb ); } );

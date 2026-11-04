@@ -116,6 +116,19 @@ int main()
     g.touchUp();
     CHECK( !g.open() );
 
+    // ---- cell labels (XY-15): the value at the centre of each cell
+    CHECK( cellLabel( Axis::BeatDivision, 0 ) == "2 Bar" );
+    CHECK( cellLabel( Axis::BeatDivision, 7 ) == "1/64" );
+    CHECK( cellLabel( Axis::BeatDivision, 99 ) == "1/64" ); // clamped
+    CHECK( cellLabel( Axis::Cutoff, 0 ) == "31" );          // 20 Hz * 1000^(1/16)
+    CHECK( cellLabel( Axis::Cutoff, 7 ) == "13.0k" );
+    CHECK( cellLabel( Axis::Depth, 0 ) == "6%" );
+    CHECK( cellLabel( Axis::Depth, 7 ) == "94%" );
+    CHECK( cellLabel( Axis::Resonance, 0 ) == "Q0.5" );
+    CHECK( cellLabel( Axis::Resonance, 7 ) == "Q10.6" );
+    for( int i = 1; i < 8; ++i ) // the cutoff labels rise along the axis
+        CHECK( cellLabel( Axis::Cutoff, i ) != cellLabel( Axis::Cutoff, i - 1 ) );
+
     if( g_fail == 0 )
         std::printf( "XyFxMapTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;

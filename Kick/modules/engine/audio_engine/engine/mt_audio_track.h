@@ -222,6 +222,17 @@ namespace mt
         // True while this track's non-empty pan lane belongs to program Id (message thread).
         bool panLaneDrives( const juce::String& Id );
 
+        // FX lanes (automation::isFxLane: Touch FX X / Y / gate and the four insert-parameter lanes). Same threading as the
+        // Level lane. Write mode records through recordFxValue (message thread, while this track plays); the tick thread
+        // publishes the played value in fxPending and MTAudioManager::applyAutomatedFx (message thread) collects it.
+        // Target is the effect parameter index for an insert lane (ignored otherwise); a lane holds ONE target: recording another
+        // one starts a fresh lane.
+        void recordFxValue( int Param, int Value, int Target = 0 );
+        int  takeFxTarget( int Param ) { return fxLanes[automation::fxLaneIndex( Param )].pending.exchange( automation::kNoValue ); }
+        int  lastFxValue( int Param ) const { return fxLanes[automation::fxLaneIndex( Param )].applied.load( std::memory_order_relaxed ); }
+        bool hasFxLane( int Param ) const;
+        int  getFxLaneTarget( int Param ) const; // insert parameter the lane drives, -1 when there is no lane
+
         // Solo Mute; don't call this API's directly without careful analysis.
         inline void setSoloMute( bool Mute ) { soloMuted = Mute; }
 
@@ -296,6 +307,17 @@ namespace mt
         std::atomic<bool>     lanePanActive{ false };  // lane non-empty and its program id == the track's program id
         std::atomic<int>      panApplied{ automation::kNoValue }; // last pan value published by playback (tick thread)
         std::atomic<int>      panTarget{ automation::kNoValue };  // tick thread -> message thread hand-off
+        struct FxLane
+        {
+            automation::Lane      lane;                                   // like laneLevel: tick thread under `lock`, writers under `lock` + laneWriteLock
+            automation::RecState  rec;                                    // laneWriteLock
+            juce::String          committed;                              // laneWriteLock
+            int                   target{ 0 };                            // insert parameter index (insert lanes); laneWriteLock
+            std::atomic<int>      applied{ automation::kNoValue };        // last value published by playback
+            std::atomic<int>      pending{ automation::kNoValue };        // tick thread -> message thread
+        };
+        FxLane fxLanes[automation::kNumFxLanes];
+        void   commitFxLane( int Param );
         mutable juce::CriticalSection lock;
 
         std::atomic<bool>         soloMuted{ false };

@@ -83,6 +83,8 @@ namespace mt
         gain.referTo( state, IDs::gain, UM, GAIN::DEFAULT );
         pan.referTo( state, IDs::pan, UM, PAN::DEFAULT );
         routedTo.referTo( state, IDs::route, UM, AudIO::DawBusManager::getDefaultStereoOutBusName() );
+        postFader.referTo( state, IDs::postFaderInserts, nullptr, false ); // a processing setting of the bus, not an undo step
+        if( bus ) bus->setPostFader( postFader.get() );
 
         auto insertsVT = state.getOrCreateChildWithName( IDs::INSERTS, nullptr );
         MTIInsertsInterface::setup( insertsVT, UM, bus ? bus->getInsertsInterface() : nullptr );
@@ -92,6 +94,12 @@ namespace mt
         // referTo() does not fire onValueChange, so the engine bus stayed bypassed after the setBypass( true ) above and
         // Chain::process skipped its gain / mute / pan (Mixer master fader and Main Volume had no audible effect).
         if( bus ) bus->setBypass( bypass.get() );
+    }
+
+    void MTIBus::setPostFader( bool Post ) noexcept
+    {
+        postFader = Post;
+        if( bus ) bus->setPostFader( Post );
     }
 
     void MTIBus::valueTreePropertyChanged( juce::ValueTree& treeWhosePropertyHasChanged, const juce::Identifier& property )

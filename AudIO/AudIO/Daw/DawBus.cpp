@@ -184,6 +184,9 @@ namespace AudIO
     float DawBus::getOutputPan() const { return design_.getParameter( id_, BusOrChain::kParamPan ); }
     void  DawBus::setOutputPan( float Pan ) { design_.setParameter( id_, BusOrChain::kParamPan, Pan ); }
 
+    bool DawBus::isPostFader() const { return design_.getParameter( id_, BusOrChain::kParamPostFader ) > 0.5f; }
+    void DawBus::setPostFader( bool PostFader ) { design_.setParameter( id_, BusOrChain::kParamPostFader, PostFader ? 1.f : 0.f ); }
+
     // Bus Status...
     BusStatus DawBus::getStatus() const
     {

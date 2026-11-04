@@ -41,6 +41,7 @@ namespace kick_ui
         void         handleCommand( CPktMgr::HWMsg_t& ) override;
 
         void nextQLinkRow();
+        void showScreenRoles(); // QL-10: the Q-Link roles of the screen under the menu
 
     private:
         int                     qlinkRow{ 0 };

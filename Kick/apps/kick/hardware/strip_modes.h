@@ -20,7 +20,12 @@ enum Mode {
     kExpression  = 7,
     kNotes       = 8,
     kOff         = 9,
-    kNumModes    = 10
+    kNumModes    = 10,
+    // QL-12: modes of the MPC that the bridge does not drive yet (the maths below is ready and tested). They are NOT in the
+    // TOUCH STRIP button cycle: nextMode() stops at kNumModes, so the strip never lands on a mode that does nothing. When the
+    // bridge handles them (see REPORT.md, QL-12) they move in front of kOff and kNumModes grows.
+    kQLink       = 10,
+    kCrossfader  = 11
 };
 
 constexpr int kPitchCentre = 8192;  // 14-bit pitch wheel centre
@@ -88,6 +93,28 @@ inline int notesFromPosition(int val127, int numNotes = 16)
     if (val127 > 127) val127 = 127;
     int idx = (val127 * numNotes) / 128;
     return idx >= numNotes ? numNotes - 1 : idx;
+}
+
+// Strip position 0..127 -> Q-Link normalized parameter value (0.0f..1.0f) (QL-12)
+inline float qlinkFromPosition(int val127)
+{
+    if (val127 < 0) val127 = 0;
+    if (val127 > 127) val127 = 127;
+    return val127 / 127.0f;
+}
+
+// Strip position 0..127 -> Crossfader value (-1.0f..+1.0f): center at 64 is 0.0f, left/A side < 0, right/B side > 0 (QL-12)
+inline float crossfaderFromPosition(int val127)
+{
+    if (val127 < 0) val127 = 0;
+    if (val127 > 127) val127 = 127;
+    return (val127 - 64) / 64.0f;
+}
+
+// Pad index 0..15 selection for Touch Strip Q-Link target
+inline int qlinkIndexFromPad(int pad)
+{
+    return (pad < 0 || pad > 15) ? 0 : pad;
 }
 
 // Pad Level target: the note the Grid plays for `pad` (0..15) is the engine bank offset + pad. -1 for a bad pad.

@@ -31,6 +31,7 @@ namespace kick_ui
             content.setVisible( true );
             customContent.setVisible( false );
             knobControl.setMode( 1 );
+            showScreenRoles();
             knob.repaint();
         };
         custom.onClick = [&] {
@@ -108,6 +109,31 @@ namespace kick_ui
         knob.knobCommand( knobnum, value );
     }
 
+    // The roles of the Q-Links on the screen the user came from (the one under the menu).
+    void KnobEdit::showScreenRoles()
+    {
+        const auto scr = KickHome::Instance().getLastNonMenuScreen();
+        const char* key = "";
+        switch( scr )
+        {
+            case Screen::HomeGridView: key = "HomeGridView"; break;
+            case Screen::HomeXYView: key = "HomeXYView"; break;
+            case Screen::MenuLooper: key = "MenuLooper"; break;
+            case Screen::MenuSampler: key = "MenuSampler"; break;
+            case Screen::MenuSampleEdit: key = "MenuSampleEdit"; break;
+            case Screen::MenuPadMixer: key = "MenuPadMixer"; break;
+            case Screen::MenuTrackMute: key = "MenuTrackMute"; break;
+            case Screen::MenuPadMute: key = "MenuPadMute"; break;
+            case Screen::MenuPadPerform: key = "MenuPadPerform"; break;
+            case Screen::MenuListEdit: key = "MenuListEdit"; break;
+            case Screen::MenuNextSequence: key = "MenuNextSequence"; break;
+            case Screen::MenuSong: key = "MenuSong"; break;
+            case Screen::Inserts: key = "Inserts"; break;
+            default: break;
+        }
+        content.updateQLinkDisplay( key );
+    }
+
     void KnobEdit::nextQLinkRow()
     {
         qlinkRow = ( qlinkRow + 1 ) % 4;
@@ -149,6 +175,7 @@ namespace kick_ui
                 tracks.setListOptions( options );
             }
             tracks.setSelected( sel.track, juce::sendNotification );
+            showScreenRoles();
         }
     }
 }

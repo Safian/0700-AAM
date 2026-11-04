@@ -865,7 +865,12 @@ namespace mt
 
         inline MTIInsertsInterface* getInsertsInterface() { return dynamic_cast<MTIInsertsInterface*>( this ); }
 
+        bool supportsPostFader() const noexcept override { return bus != nullptr; }
+        bool isPostFader() const noexcept override { return postFader.get(); }
+        void setPostFader( bool Post ) noexcept override;
+
         juce::String                 name;
+        CachedValue<bool>            postFader;
         CachedValue<bool>            mute;
         CachedValue<bool>            bypass;
         CachedValue<juce::String>    routedTo;

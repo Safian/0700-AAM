@@ -119,6 +119,76 @@ int main()
     trimTo( v, 10 );
     CHECK_EQ( v.size(), 4 );
 
+    // ---- MC-22: the Learn matcher
+    {
+        MidiLearnEngine engine;
+        CHECK_EQ( engine.size(), 0 );
+        CHECK( engine.match( "cc", 1, 7, 127 ).empty() );
+        engine.rebuild( { { 0, "cc", 1, 7, false, "" }, { 1, "cc", 2, 10, true, "" }, { 2, "cc", 1, 7, true, "" }, { 3, "Note", 1, 36, false, "Pad Bank" } } );
+        CHECK_EQ( engine.size(), 4 );
+        const auto both = engine.match( "cc", 1, 7, 100 ); // two rows learned the same controller: both react, each with its own flip
+        CHECK_EQ( both.size(), 2 );
+        CHECK( both[0].row == 0 && both[0].value == 100 );
+        CHECK( both[1].row == 2 && both[1].value == 27 );
+        const auto flip = engine.match( "cc", 2, 10, 127 );
+        CHECK( flip.size() == 1 && flip[0].row == 1 && flip[0].value == 0 );
+        CHECK( engine.match( "cc", 3, 7, 127 ).empty() );     // another channel
+        CHECK( engine.match( "Note", 1, 7, 127 ).empty() );   // another type
+        CHECK( engine.match( "Note", 1, 36, 90, "Other" ).empty() ); // another input port
+        CHECK( engine.match( "Note", 1, 36, 90, "Pad Bank" ).size() == 1 );
+        CHECK( engine.match( "Note", 1, 36, 90 ).size() == 1 );      // port unknown: matches
+        CHECK( engine.match( "cc", 1, 7, 900 )[0].value == 127 );    // out of range raw value is clamped
+        engine.rebuild( {} );
+        CHECK( engine.match( "cc", 1, 7, 100 ).empty() );
+    }
+
+    // ---- MC-18: ports plugged in / out
+    {
+        const auto d0 = diffPorts( {}, { "a", "b" } );
+        CHECK_EQ( d0.toOpen.size(), 2 );
+        CHECK_EQ( d0.toClose.size(), 0 );
+        const auto d1 = diffPorts( { "a", "b" }, { "b", "c", "c" } );
+        CHECK_EQ( d1.toOpen.size(), 1 ); // a duplicated id opens once
+        CHECK( d1.toOpen[0] == "c" );
+        CHECK_EQ( d1.toClose.size(), 1 );
+        CHECK( d1.toClose[0] == "a" );
+        const auto d2 = diffPorts( { "a" }, { "a" } );
+        CHECK( d2.toOpen.empty() && d2.toClose.empty() );
+        CHECK( diffPorts( { "a" }, {} ).toClose.size() == 1 );
+    }
+
+    // ---- XY engine shared by MIDI Control > XY and XY FX "MIDI CC" (XY-14)
+    {
+        XyCcEngine  xy;
+        XyAxisConfig cx, cy;
+        cx.channel = 2; cx.cc = 24; cx.low = 10; cx.high = 110;
+        cy.channel = 3; cy.cc = 25; cy.low = 0;  cy.high = 127; cy.muted = false;
+        XyCc out[2];
+        CHECK_EQ( xy.process( 0.5f, 1.0f, cx, cy, out ), 2 );
+        CHECK_EQ( out[0].channel, 2 );
+        CHECK_EQ( out[0].cc, 24 );
+        CHECK_EQ( out[0].value, 60 );
+        CHECK_EQ( out[1].channel, 3 );
+        CHECK_EQ( out[1].cc, 25 );
+        CHECK_EQ( out[1].value, 127 );
+        CHECK_EQ( xy.process( 0.5f, 1.0f, cx, cy, out ), 0 ); // nothing changed: nothing sent
+        CHECK_EQ( xy.process( 0.5f, 0.0f, cx, cy, out ), 1 ); // only Y moved
+        CHECK_EQ( out[0].cc, 25 );
+        CHECK_EQ( out[0].value, 0 );
+        cx.muted = true;
+        CHECK_EQ( xy.process( 1.0f, 0.0f, cx, cy, out ), 0 ); // X muted, Y unchanged
+        xy.reset();
+        CHECK_EQ( xy.process( 1.0f, 0.0f, cx, cy, out ), 1 ); // reset: the next touch sends its first position again
+        cy.muted = true;
+        xy.reset();
+        CHECK_EQ( xy.process( 1.0f, 1.0f, cx, cy, out ), 0 ); // both muted
+        cx.muted = false; cx.channel = 99; cx.cc = -5;
+        xy.reset();
+        CHECK_EQ( xy.process( 0.0f, 0.0f, cx, cy, out ), 1 ); // out-of-range configuration is clamped, never a bad message
+        CHECK_EQ( out[0].channel, 16 );
+        CHECK_EQ( out[0].cc, 0 );
+    }
+
     if( g_fail == 0 )
         std::printf( "MidiControlLogicTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;

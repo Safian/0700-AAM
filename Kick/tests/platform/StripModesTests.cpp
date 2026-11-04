@@ -14,8 +14,9 @@ static void check(bool ok, const char* why)
 int main()
 {
     using namespace kick_hw::strip;
-    // cycle: Kick slider first, then the manual's order (p. 101)
+    // cycle: Kick slider first, then the manual's order (p. 101); Q-Link / Crossfader are not cycled until the bridge drives them
     const int expected[] = { kSlider, kPitchBend, kPadLevel, kModWheel, kTrackLevel, kSustain, kTouchFx, kExpression, kNotes, kOff };
+    check(kQLink >= kNumModes && kCrossfader >= kNumModes, "Q-Link / Crossfader are outside the cycle (the bridge does not handle them)");
     check(kNumModes == 10 && (int)(sizeof(expected) / sizeof(expected[0])) == kNumModes, "10 modes");
     int m = kSlider;
     for (int i = 0; i < kNumModes; ++i) { check(m == expected[i], "cycle order"); m = nextMode(m); }
@@ -59,6 +60,17 @@ int main()
     check(notesFromPosition(64, 16) == 8, "notes pos 64 -> note 8");
     check(notesFromPosition(-5, 16) == 0, "notes pos clamp low");
     check(notesFromPosition(200, 16) == 15, "notes pos clamp high");
+
+    // QL-12: Q-Link and Crossfader modes
+    check(std::fabs(qlinkFromPosition(0) - 0.0f) < 1e-5, "qlink pos 0");
+    check(std::fabs(qlinkFromPosition(127) - 1.0f) < 1e-5, "qlink pos 127");
+    check(std::fabs(qlinkFromPosition(64) - (64.0f / 127.0f)) < 1e-5, "qlink pos mid");
+    check(qlinkIndexFromPad(0) == 0 && qlinkIndexFromPad(15) == 15 && qlinkIndexFromPad(16) == 0, "qlink pad 0..15");
+
+    check(std::fabs(crossfaderFromPosition(64) - 0.0f) < 1e-5, "crossfader centre 0");
+    check(std::fabs(crossfaderFromPosition(0) - (-1.0f)) < 1e-5, "crossfader left -1");
+    check(crossfaderFromPosition(127) > 0.98f, "crossfader right > 0.98");
+    check(crossfaderFromPosition(-10) == -1.0f, "crossfader clamp low");
 
     // AF1a: Pad Level note = engine bank offset + pad (not a bridge-side bank)
     check(padNote(0, 0) == 0 && padNote(16, 0) == 16 && padNote(16, 15) == 31 && padNote(48, 3) == 51, "pad note = bank offset + pad");

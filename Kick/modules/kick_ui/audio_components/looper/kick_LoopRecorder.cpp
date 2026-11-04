@@ -280,6 +280,7 @@ namespace kick_ui
     {
         stop();
         setRecordingLength( Bars );
+        ae.setLooperBars( Bars ); // LO-07: the export rounds to whole bars of this loop
         shownBars = Bars;
         setThumbnail();
     }
@@ -302,8 +303,18 @@ namespace kick_ui
         g.setColour( ui::Theme::backgroundColour( 8 ) );
         juce::Font f( 9 );
         g.setFont( f );
-        int   numBeats  = bars.getValue() * 4;
-        float beatWidth = static_cast<float>( getWidth() / static_cast<float>( numBeats ) );
+
+        int num = 4, denom = 4;
+        if( !ae.getTimeSignature( ae.getSelectedSequence(), num, denom ) || num <= 0 || denom <= 0 )
+        {
+            num   = settings.projects.numerator().getIntValue();
+            denom = settings.projects.denominator().getIntValue();
+        }
+        if( num <= 0 ) num = 4;
+        if( denom <= 0 ) denom = 4;
+
+        int   numBeats  = looper_logic::calculateTotalBeats( bars.getValue(), num );
+        float beatWidth = looper_logic::calculateBeatWidth( static_cast<float>( getWidth() ), numBeats );
         paintBeats( g, numBeats, beatWidth, scaleArea );
     }
 
@@ -317,10 +328,15 @@ namespace kick_ui
         int totalDigits      = 1;
         int noOfBeatMarkings = 0;
 
-        // total beat markings
-        noOfBeatMarkings = settings.projects.numerator().getIntValue();
-        // An unset project default reads as 0: barInc below would be 0 (integer division by zero, and an endless loop).
-        if( noOfBeatMarkings <= 0 ) noOfBeatMarkings = 4;
+        // total beat markings from sequence time signature (LO-09)
+        int num = 4, denom = 4;
+        if( !ae.getTimeSignature( ae.getSelectedSequence(), num, denom ) || num <= 0 || denom <= 0 )
+        {
+            num   = settings.projects.numerator().getIntValue();
+            denom = settings.projects.denominator().getIntValue();
+        }
+        noOfBeatMarkings = ( num > 0 ) ? num : 4;
+        auto denominator = ( denom > 0 ) ? denom : 4;
 
         // total tick markings
         int noOfTickMarkings = 0;
@@ -328,21 +344,16 @@ namespace kick_ui
         if( std::floor( ( beatWidth - maxBeatDisplayLen ) / maxTickDisplayLen ) > 0 )
             noOfTickMarkings = static_cast<int>( std::floor( beatWidth / maxTickDisplayLen ) - 1 );
 
-        auto denominator = settings.projects.denominator().getIntValue();
-        if( denominator <= 0 ) denominator = 4;
-
         if( noOfBeatMarkings > 0 )
             totalDigits += 1;
         if( noOfTickMarkings > 0 )
             totalDigits += 1;
 
-        // todo get ppq from settings
+        // Safe ppq resolution calculation preventing ARM SIGFPE
         int ppqResolution = 960;
         if( noOfTickMarkings > 0 )
         {
-            // A fresh /data has no stored project defaults: the denominator then reads as 0 (or 1), and 960 / 0 is a SIGFPE on ARM
-            // (libgcc raises it from __aeabi_idiv0); opening the Looper screen crashed Kick on the MPC.
-            ppqResolution = 960 / juce::jmax( 1, denominator / 2 );
+            ppqResolution = looper_logic::safePpqResolution( denominator );
         }
 
         float currentPosX = 0;
@@ -508,6 +519,7 @@ namespace kick_ui
             if( wanted > 0.0 && !looper_logic::sameLoopLength( wanted, ae.getLooperLength(), ae.getLooperSampleRate() ) )
                 setRecordingLength( numBars );
             shownBars = numBars;
+            ae.setLooperBars( numBars ); // LO-07: the export length follows the loop that is shown (also after a project / screen change)
 
             lastExportable = !lastExportable; // force the Export / Clear state to be sent
             startTimerHz( 30 );

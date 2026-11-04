@@ -140,6 +140,71 @@ namespace kick_ui::midictl
         void reset() noexcept { last = -1; }
     };
 
+    // The two axes of the XY screens (MIDI Control > XY tab and XY FX with the "MIDI CC" location) as controller messages: one engine,
+    // so both send the same CC numbers, channels and ranges, each axis only when its value changed, nothing for a muted axis.
+    struct XyAxisConfig
+    {
+        int  channel{ 1 };
+        int  cc{ 24 };
+        int  low{ 0 };
+        int  high{ 127 };
+        bool muted{ false };
+    };
+    struct XyCc
+    {
+        int channel{ 1 };
+        int cc{ 0 };
+        int value{ 0 };
+    };
+    class XyCcEngine
+    {
+    public:
+        // Writes the messages to send for the position (0..1 each) into Out[0..1] and returns how many.
+        int process( float X, float Y, const XyAxisConfig& Cx, const XyAxisConfig& Cy, XyCc* Out ) noexcept
+        {
+            int n = 0;
+            n += axis( X, Cx, filterX_, Out + n );
+            n += axis( Y, Cy, filterY_, Out + n );
+            return n;
+        }
+        void reset() noexcept
+        {
+            filterX_.reset();
+            filterY_.reset();
+        }
+
+    private:
+        static int axis( float V, const XyAxisConfig& C, AxisFilter& F, XyCc* Out ) noexcept
+        {
+            if( C.muted )
+                return 0;
+            const int mapped = scaleAxis( V, C.low, C.high );
+            if( !F.changed( mapped ) )
+                return 0;
+            *Out = { std::clamp( C.channel, 1, 16 ), std::clamp( C.cc, 0, 127 ), mapped };
+            return 1;
+        }
+        AxisFilter filterX_, filterY_;
+    };
+
+    // ---- MC-18: input ports follow the devices that are plugged in / out while mapping is on
+    struct PortDiff
+    {
+        std::vector<std::string> toOpen;  // available, not open yet
+        std::vector<std::string> toClose; // open, no longer available
+    };
+    inline PortDiff diffPorts( const std::vector<std::string>& Open, const std::vector<std::string>& Available )
+    {
+        PortDiff d;
+        for( const auto& a : Available )
+            if( std::find( Open.begin(), Open.end(), a ) == Open.end() && std::find( d.toOpen.begin(), d.toOpen.end(), a ) == d.toOpen.end() )
+                d.toOpen.push_back( a );
+        for( const auto& o : Open )
+            if( std::find( Available.begin(), Available.end(), o ) == Available.end() )
+                d.toClose.push_back( o );
+        return d;
+    }
+
     // ---- MIDI Learn
     struct LearnRow
     {
@@ -184,4 +249,46 @@ namespace kick_ui::midictl
         if( Entries.size() > Max )
             Entries.erase( Entries.begin(), Entries.begin() + static_cast<std::ptrdiff_t>( Entries.size() - Max ) );
     }
+
+    // ---- MC-22: the MIDI Learn matcher. The table rows (type, channel, number, flip) are turned into bindings; a message is matched
+    // against all of them: every row that learned this controller reacts (two rows may share one), each with its own flip. Pure and
+    // allocation-free per message except for the result; the screen rebuilds the bindings when the table changes (message thread).
+    struct LearnBinding
+    {
+        int         row{ -1 };
+        std::string type;
+        int         channel{ -1 };
+        int         number{ -1 };
+        bool        flip{ false };
+        std::string port; // empty = any input port
+    };
+
+    struct LearnHit
+    {
+        int row{ -1 };
+        int value{ 0 }; // 0..127, flipped when the row says so
+    };
+
+    class MidiLearnEngine
+    {
+    public:
+        void rebuild( std::vector<LearnBinding> Bindings ) { bindings_ = std::move( Bindings ); }
+        std::size_t size() const noexcept { return bindings_.size(); }
+
+        std::vector<LearnHit> match( const std::string& Type, int Channel, int Number, int RawValue127, const std::string& Port = {} ) const
+        {
+            std::vector<LearnHit> hits;
+            for( const auto& b : bindings_ )
+            {
+                if( !b.port.empty() && !Port.empty() && b.port != Port )
+                    continue;
+                if( learnMatches( LearnRow{ b.type, b.channel, b.number, b.flip }, Type, Channel, Number ) )
+                    hits.push_back( { b.row, flipped( RawValue127, b.flip ) } );
+            }
+            return hits;
+        }
+
+    private:
+        std::vector<LearnBinding> bindings_;
+    };
 }

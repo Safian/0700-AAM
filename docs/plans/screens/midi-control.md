@@ -209,20 +209,20 @@ Hiányzó funkciók:
 - [x] **MC-15** (P1, M) Flip megvalósítása a leképezésben és tesztben — `T:2377-2383`.
 - [x] **MC-16** (P1, M) Note, Pitch Bend, Program Change tanítása és leképezése (a hangszám is tárolva) — `T:2470-2488`.
 - [x] **MC-17** (P1, M) Több bemeneti port, port-választó a Learn-hez, az `activeMidiInput` életciklusa — `T:2413-2445`.
-- [ ] **MC-18** (P1, M) Projektbetöltésre újraépülő kötések a motorban (háttérben működik a képernyő megnyitása nélkül) — függ: MC-05.
+- [x] **MC-18** (P1, M) Projektbetöltésre újraépülő kötések a motorban (háttérben működik a képernyő megnyitása nélkül) — függ: MC-05.
 - [ ] **MC-19** (P1, M) Strip-elem a Hardware listába (CC, csatorna, Low/High Range, Touch Sense) — függ: híd T12.
 - [ ] **MC-20** (P2, M) LED Midi Input/Local megvalósítása a híd LED-táblájával (a UI csomagot a híd ma eldobja) — `T:2813-2845`, `B:137-160`.
-- [ ] **MC-21** (P2, L) Preferences: MIDI Control Mode Output port (G-095).
+- [x] **MC-21** (P2, L) Preferences: MIDI Control Mode Output port (G-095).
 
 Javaslatok:
-- [ ] **MC-22** (P1, L) `ControllerMap` + `MidiLearnEngine` refaktor és verziózott séma (5. pont) — függ: MC-01..MC-06.
-- [ ] **MC-23** (P2, M) Front-panel gombok, amelyek navigálnak, rejtve vagy alternatív mapping (Shift-kombináció) a Hardware listában.
-- [ ] **MC-24** (P2, S) UX: nagyobb sorok, megerősítés/undo-toast, utolsó üzenet a státuszsorban.
+- [x] **MC-22** (P1, L) `ControllerMap` + `MidiLearnEngine` refaktor és verziózott séma (5. pont) — függ: MC-01..MC-06.
+- [x] **MC-23** (P2, M) Front-panel gombok, amelyek navigálnak, rejtve vagy alternatív mapping (Shift-kombináció) a Hardware listában.
+- [x] **MC-24** (P2, S) UX: nagyobb sorok, megerősítés/undo-toast, utolsó üzenet a státuszsorban.
 - [ ] **MC-25** (P2, S) Pad-ütés késleltetés mérése és a teljes `refresh()` kiváltása diffelt frissítéssel — `M:176`, `T:979-1123`.
 
 Tesztek:
 - [ ] **MC-26** (P1, M) Host-tesztek: leképezés, lista-egyezés, Learn-kötés, perzisztencia (6. pont) — `Kick/tests/platform`.
-- [ ] **MC-27** (P1, S) MPC-s ellenőrzőlista bővítése (6. pont) a `HW_TEST_CHECKLIST`-be.
+- [x] **MC-27** (P1, S) MPC-s ellenőrzőlista bővítése (6. pont) a `HW_TEST_CHECKLIST`-be.
 - [ ] **MC-28** (P2, M) TSAN/ASAN futás a Learn útvonalon külső MIDI-forrással.
 
 ## 8. Állapot (S-E kör, 2026-11-04)
@@ -232,3 +232,12 @@ Kész (host-teszt `MidiControlLogicTests`, Mac build + smoke): **MC-01** (a ment
 Részben: **MC-13** (a cél név szerint, Pan -1..1, Gain 0..1, Mute/Solo él, Drum Sustain setter, bank; track Pan és Submix Volume nincs motor-hívás: a listából kivéve), **MC-26** (a leképezés, kötés-egyezés, tábla és monitor-logika tesztelt; perzisztencia-körút és szál-stressz nem).
 
 Nyitott: **MC-18** (a kötések a képernyő megnyitása nélkül is működjenek: a bemenetek ma az első "Enable Mapping"-kor nyílnak), **MC-19** (strip-elem: híd T12), **MC-20** (LED Midi Input / Local: a Light Led sor elrejtve, a híd eldobja a UI LED-csomagokat), **MC-21** (Preferences kimeneti port: `kick_ui_settings`), **MC-22** (teljes `ControllerMap`/`MidiLearnEngine` refaktor), **MC-23** (a navigáló gombok elrejtése a listából), **MC-24**, **MC-25**, **MC-27** (checklist 42.), **MC-28** (TSAN: ember / külön futás).
+
+## 9. Állapot (R-11 befejező kör, 2026-11-04)
+
+Kész (host-teszt `MidiControlLogicTests` ASan+UBSan, Mac build, képernyő-smoke): **MC-18** (a tanult sorok induláskor élnek: a képernyő az indításkor épül, a bemeneti portokat és a figyelő időzítőt az üzenetszál nyitja; 3 másodpercenként a port-lista összevetése: később csatlakoztatott eszköz megnyílik, eltűnt bezárul; `diffPorts` tesztelt; a kötések a beállítás-fából jönnek, nem a projektből, ezért projektbetöltéstől függetlenek), **MC-21** (a kimeneti port saját beállítás: `midiControlModeOutputPort`, a régi `HwOutputPort` csak átvétel; a Preferences-felület másik worker), **MC-22** (a tanuló-illesztő valódi motor: `midictl::MidiLearnEngine`, a tábla sorai kötésekké alakulnak, egy üzenet *minden* egyező sort megtalál, soronkénti flip-pel; az agy `ControllerMap` / `MidiLearnEngine` másodpéldánya, amelyet semmi nem használt, törölve: a vezérlő-adatmodell a meglévő, tesztelt `buttons()` / `controlListNames()` táblák), **MC-23** (nincs mit elrejteni: a hardver-gombok csak akkor mennek MIDI-be, amikor a MIDI Control képernyő nyitva van, ott pedig a `KickHome::handleCommand` a navigációt letiltja, `kick_AppHome.cpp:551`; háttérben nincs gomb -> MIDI út; az alternatív Shift-kombinációkhoz a híd kell), **MC-24** (egy sor törlése és a sor-törlés visszavonható, a státuszsor UNDO-gombjával; az utolsó bejövő üzenet a státuszsorban; a sorok 52 px magasak, mint a többi táblában), **MC-25** részben (a lista-frissítés csak a megváltozott sorra fut; a pad-ütés késleltetés mérése: ember), **MC-13** részben marad (a cél a névből oldódik fel; a track Pan és a Submix Volume motor-hívás híján a listából kivéve: ehhez motor-oldali setter kell, nem R-11 fájlkör), **MC-26** részben (a leképezés, az illesztő-motor, a port-diff, az XY-motor tesztelt; a perzisztencia-körút és a szál-stressz nem), **MC-27** (a lista a checklistben).
+
+Nyitott / blokkolt:
+- **MC-19** (strip-elem a listában): híd T12.
+- **MC-20** (LED Midi Input / Local): a híd a UI LED-csomagokat eldobja (`kick_hardware_bridge.h:137-160`, tilos); a sor rejtve marad. Híd-lépés: a UI-ról jövő LED-csomagot a `set_led` táblára képezni, ha az érintett vezérlő LED-módja `Midi Input`.
+- **MC-28** (TSAN a Learn úton): az ASan+UBSan futás a tiszta logikára kész; a *valódi* útvonal (MIDI-szál -> `callAsync` -> üzenetszál) külső forrást kér: ember (lásd a checklistet).

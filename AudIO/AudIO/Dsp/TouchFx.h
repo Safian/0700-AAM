@@ -104,6 +104,14 @@ namespace AudIO
             gate_.store( S.gate, std::memory_order_release );
         }
 
+        // Automation playback: only the gesture (position and gate) changes, the preset and the envelope stay as set().
+        void setGesture( float X, float Y, bool Gate ) noexcept
+        {
+            x_.store( X, std::memory_order_relaxed );
+            y_.store( Y, std::memory_order_relaxed );
+            gate_.store( Gate, std::memory_order_release );
+        }
+
         // Switches the effect off (gate closed, nothing audible after the release).
         void close() noexcept { gate_.store( false, std::memory_order_release ); }
 
@@ -170,6 +178,25 @@ namespace AudIO
 
             const double lfoInc = 1.0 / std::max( 1.0, divisionSeconds( div, bpm ) * rate_ ); // cycles per sample
 
+            // Pre-calculate block-invariant filter parameters outside the per-sample loop
+            if( mode == Mode::FilterManual )
+            {
+                setFilter( ftype, cutoffHz( x ), 0.5f + 11.5f * y * y );
+            }
+            else if( mode == Mode::BeatRepeat )
+            {
+                setFilter( ftype, cutoffHz( y ), 1.f );
+            }
+
+            float phaserManualA = 0.f, phaserManualFb = 0.f;
+            if( mode == Mode::PhaserManual )
+            {
+                const float centre = 100.f * std::pow( 80.f, std::clamp( x, 0.f, 1.f ) );
+                const float t      = std::tan( 3.14159265f * std::min( centre, 0.45f * static_cast<float>( rate_ ) ) / static_cast<float>( rate_ ) );
+                phaserManualA      = ( t - 1.f ) / ( t + 1.f );
+                phaserManualFb     = 0.9f * std::clamp( y, 0.f, 1.f );
+            }
+
             for( int n = 0; n < NumSamples; ++n )
             {
                 const float target = gate ? 1.f : 0.f;
@@ -186,7 +213,6 @@ namespace AudIO
                 switch( mode )
                 {
                     case Mode::FilterManual:
-                        setFilter( ftype, cutoffHz( x ), 0.5f + 11.5f * y * y );
                         for( int c = 0; c < ch; ++c ) fx[c] = svf( c, in[c] );
                         break;
                     case Mode::FilterBeat:
@@ -203,14 +229,28 @@ namespace AudIO
                             for( int c = 0; c < ch; ++c ) fx[c] = rb->rep[static_cast<std::size_t>( repPos_ ) * 2u + static_cast<std::size_t>( c )];
                             repPos_ = ( repPos_ + 1 ) % repLen_;
                         }
-                        setFilter( ftype, cutoffHz( y ), 1.f );
                         for( int c = 0; c < ch; ++c ) fx[c] = svf( c, fx[c] );
                         break;
                     }
                     case Mode::PhaserManual:
+                    {
+                        for( int c = 0; c < ch; ++c )
+                        {
+                            float s = in[c] + phaserManualFb * phaseFb_[c];
+                            for( int k = 0; k < 4; ++k )
+                            {
+                                const float out = -phaserManualA * s + ap_[c][k];
+                                ap_[c][k]       = s + phaserManualA * out;
+                                s               = out;
+                            }
+                            phaseFb_[c] = s;
+                            fx[c]       = 0.5f * ( in[c] + s );
+                        }
+                        break;
+                    }
                     case Mode::PhaserBeat:
                     {
-                        const float centre = mode == Mode::PhaserManual ? 100.f * std::pow( 80.f, std::clamp( x, 0.f, 1.f ) ) : 300.f * std::pow( 8.f, lfo );
+                        const float centre = 300.f * std::pow( 8.f, lfo );
                         const float t      = std::tan( 3.14159265f * std::min( centre, 0.45f * static_cast<float>( rate_ ) ) / static_cast<float>( rate_ ) );
                         const float a      = ( t - 1.f ) / ( t + 1.f );
                         const float fb     = 0.9f * std::clamp( y, 0.f, 1.f );

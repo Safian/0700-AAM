@@ -21,7 +21,9 @@ namespace kick_ui
 
         ui::KickLabel        searchLabel{ "SEARCH:" };
         ui::KickTextEditor   searchBox{ "" };
+        ui::KickToggleButton favToggle{ "★ FAV" };
         ui::KickList         insertCategories{ "CATEGORY" };
+        std::vector<juce::String> categoryKeys; // registration keys, parallel to the readable list
         ui::KickList         insertList{ "INSERTS", {}, 0, 2 };
         ui::KickLabel        docTitle{ "DESCRIPTION" };
         juce::TextEditor     docEditor;
@@ -57,8 +59,12 @@ namespace kick_ui
 
         ui::KickLabel                                insertName;
         ui::KickToggleButton                         enable;
+        ui::KickToggleButton                         abButton{ "A/B" };
+        ui::KickButton                               presetSave{ "SAVE" };
+        ui::KickButton                               presetLoad{ "LOAD" };
         ui::KickLabel                                latencyTailLabel;
         ui::KickLabel                                guiNoticeLabel;
+        ui::KickLabel                                cpuNoticeLabel;
         ui::KickButton                               openGuiButton{ "OPEN GUI" };
         std::vector<std::unique_ptr<ui::KickRotary>> rotary;
     };
@@ -100,6 +106,9 @@ namespace kick_ui
         ui::KickLabel        allInserts{ "ALL INSERTS" };
         ui::KickButton       allDelete{ "DELETE" };
         ui::KickToggleButton allEnable{ "All Enable" };
+        ui::KickButton       copyChain{ "COPY" };
+        ui::KickButton       pasteChain{ "PASTE" };
+        ui::KickToggleButton postFaderBtn{ "PRE-FADER" };
     };
 
     class Inserts

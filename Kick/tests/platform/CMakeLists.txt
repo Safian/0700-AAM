@@ -132,6 +132,15 @@ target_include_directories(kick-bus-inserts-tests PRIVATE
 add_test(NAME kick-bus-inserts COMMAND kick-bus-inserts-tests)
 set_tests_properties(kick-bus-inserts PROPERTIES TIMEOUT 30)
 
+# All 327 Airwindows effects: creation, parameters, processing, serialization round-trip (INS-22, INS-23).
+add_executable(kick-all-effects-tests AllEffectsTests.cpp)
+target_link_libraries(kick-all-effects-tests PRIVATE kick_audio_core Threads::Threads)
+target_include_directories(kick-all-effects-tests PRIVATE
+    ../../../AudIO/AudIO/Includes ../../../AudIO/AudIO/Daw ../../../AudIO/AudIO/Dsp ../../../AudIO/AudIO/Core ../../../AudIO/AudIO)
+target_compile_definitions(kick-all-effects-tests PRIVATE KICK_STEP_TABLE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../../AudIO/AudIO/airwindows/airwindows_steps.h")
+add_test(NAME kick-all-effects COMMAND kick-all-effects-tests)
+set_tests_properties(kick-all-effects PROPERTIES TIMEOUT 60)
+
 add_executable(kick-key-transpose-tests KeyTransposeTests.cpp)
 add_test(NAME kick-key-transpose COMMAND kick-key-transpose-tests)
 set_tests_properties(kick-key-transpose PROPERTIES TIMEOUT 10)
@@ -205,6 +214,10 @@ set_tests_properties(kick-daw-inserts PROPERTIES TIMEOUT 30)
 add_executable(kick-touch-fx-tests TouchFxTests.cpp)
 add_test(NAME kick-touch-fx COMMAND kick-touch-fx-tests)
 set_tests_properties(kick-touch-fx PROPERTIES TIMEOUT 30)
+# Insert favourites / user presets / A-B compare (text form, hostile input); JUCE-free, header only.
+add_executable(kick-insert-store-tests InsertStoreTests.cpp)
+add_test(NAME kick-insert-store COMMAND kick-insert-store-tests)
+set_tests_properties(kick-insert-store PROPERTIES TIMEOUT 10)
 add_executable(kick-xy-fx-map-tests XyFxMapTests.cpp)
 add_test(NAME kick-xy-fx-map COMMAND kick-xy-fx-map-tests)
 set_tests_properties(kick-xy-fx-map PROPERTIES TIMEOUT 10)
