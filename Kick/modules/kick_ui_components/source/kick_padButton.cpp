@@ -478,8 +478,8 @@ namespace ui
             case PadButtonType::padMixer:
             {
                 hdr5();
-                // The engine has no per-pad meter, so the meter stays hidden (it used to show the program signal on every pad).
-                constexpr bool kPerPadMeterAvailable = false;
+                // PM-04: Per-pad meter backed by engine readPadMeter API.
+                constexpr bool kPerPadMeterAvailable = true;
                 if( isVisible )
                     mt::utils::makeVisible( lrow1, lrow2, solo, mute );
                 else

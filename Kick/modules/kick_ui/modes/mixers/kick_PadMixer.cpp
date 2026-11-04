@@ -153,6 +153,18 @@ namespace kick_ui
         assign.setBoundsRelative( isPadEnabled ? .0098f : .0172f, .72f, isPadEnabled ? .1581f : .2758f, .2f );
     }
 
+    void PadMixerDisplay::mouseDoubleClick( const juce::MouseEvent& event )
+    {
+        if( pData && onAssign )
+        {
+            // PM-12 (D-060): Double-tapping the level slider opens Sample Assign for this pad.
+            if( event.eventComponent == &levelSlider || levelSlider.contains( levelSlider.getLocalPoint( event.eventComponent, event.getPosition() ) ) )
+            {
+                onAssign( pData->KeyNote );
+            }
+        }
+    }
+
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////KickChannelMixer
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -458,8 +470,12 @@ namespace kick_ui
 
     void PadMixerContent::programChanged()
     {
+        if( pProg )
+            pProg->enablePadMetering( false );
         const auto sel = ae.getSelectedProgram();
         pProg          = ae.getProgram( sel );
+        if( pProg && isVisible() )
+            pProg->enablePadMetering( true );
 
         if( pProg )
         {
@@ -570,10 +586,23 @@ namespace kick_ui
 
     void PadMixerContent::meterUpdate()
     {
-        // The engine has no per-pad meter (only the program output meter), so the pad meters are not shown
-        // (see KickPadButton, kPerPadMeterAvailable) instead of showing the program signal on every pad.
+        // PM-04: Per-pad meters backed by engine readPadMeter API.
         if( pProg )
+        {
             syncLevels();
+            const auto bankOffset = pads->getBankOffset();
+            for( int padNo = 0; padNo < _NUM_PADS_IN_COMPONENT; ++padNo )
+            {
+                const int note = bankOffset + padNo;
+                const auto& m = pProg->readPadMeter( note );
+                if( m.size() >= 2 )
+                    pads->updateLevelMeter( padNo, m[0].rms, m[1].rms, m[0].peak, m[1].peak );
+                else if( m.size() == 1 )
+                    pads->updateLevelMeter( padNo, m[0].rms, m[0].rms, m[0].peak, m[0].peak );
+                else
+                    pads->updateLevelMeter( padNo, -100.f, -100.f, -100.f, -100.f );
+            }
+        }
     }
 
     void PadMixerContent::syncLevels()
@@ -656,6 +685,8 @@ namespace kick_ui
 
     void PadMixerContent::visibilityChanged()
     {
+        if( pProg )
+            pProg->enablePadMetering( isVisible() );
         if( isVisible() )
         {
             samples.setContent( ae.getAssets() );

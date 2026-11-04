@@ -63,6 +63,7 @@
     #include "engine/mt_audio_metronome.h"
     #include "engine/mt_audio_manager.h"
     #include "engine/mt_audio_note.h"
+    #include "engine/mt_time_division_mute.h"
     #include "engine/mt_audio_sequence.h"
     #include "engine/mt_audio_track.h"
 

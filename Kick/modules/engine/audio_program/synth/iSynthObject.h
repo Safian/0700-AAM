@@ -45,6 +45,8 @@ namespace mt
         // Metering.
         inline void  enableOutputMetering( bool Enable ) { outMeterEnabled_ = Enable; };
         MTMeterData& readOutMeter();
+        virtual void               enablePadMetering( bool Enable ) { (void)Enable; }
+        virtual const MTMeterData& readPadMeter( int Note ) const { (void)Note; return AudIO::_emptyMeterData; }
 
         // Voices.
         void       addVoices( std::vector<std::unique_ptr<ISynthVoice>>& Voices );

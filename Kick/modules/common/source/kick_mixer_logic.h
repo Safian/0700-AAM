@@ -170,4 +170,39 @@ namespace mt::mixlogic
         for( auto& t : Tracks )
             t.soloMuted = any && !t.solo;
     }
+
+    // Main Volume apply / pickup model (CM-11, CM-17):
+    // In Direct mode (pickupMode == false), any incoming hardware knob position immediately sets gain.
+    // In Pickup mode (pickupMode == true), incoming values are ignored until the knob crosses or matches
+    // the current software value within a tolerance window (default 5%), preventing sudden jumps on project load.
+    struct VolumePickupState
+    {
+        float currentGain{ 1.0f }; // current active gain (0..1)
+        bool  pickedUp{ true };    // true when knob is in sync with current software gain
+        float tolerance{ 0.05f };  // 5% window for pickup
+
+        // Returns true if the gain was updated, false if blocked by pickup guard.
+        bool applyHardwareGain( float hardwareGain, bool pickupMode ) noexcept
+        {
+            if( !pickupMode )
+            {
+                currentGain = std::clamp( hardwareGain, 0.0f, 1.0f );
+                pickedUp    = true;
+                return true;
+            }
+            if( !pickedUp )
+            {
+                if( std::abs( hardwareGain - currentGain ) <= tolerance )
+                {
+                    pickedUp = true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            currentGain = std::clamp( hardwareGain, 0.0f, 1.0f );
+            return true;
+        }
+    };
 }

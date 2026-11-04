@@ -19,11 +19,12 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+#include <audio_engine/engine/mt_time_division_mute.h>
+
 namespace kick_ui
 {
-    // Instant / Time Division and the Settings window had no engine side (nothing read them): not shown until
-    // the mute can wait for the next grid point (docs/plans/screens/pad-mute-track-mute.md MU-12).
-    static constexpr bool kTrackMuteTimeDivisionAvailable = false;
+    // Instant / Time Division and the Settings window are enabled with engine-side next grid point scheduling (MU-12).
+    static constexpr bool kTrackMuteTimeDivisionAvailable = true;
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////    KickTrackMute
@@ -47,7 +48,6 @@ namespace kick_ui
             auto  sel = ae.getSelected();
 
             ae.setSelectedSequence( Sel );
-            DBG( "On Selection Changed" );
             tab->refreshData();
             tab->refreshAllLEDs();
         };
@@ -206,7 +206,17 @@ namespace kick_ui
                 {
                     // Engine state, not the picture, decides the new state.
                     auto* pTrack = ae.getTrackData( seq, Id );
-                    ae.setTrackMute( seq, Id, !( pTrack && pTrack->mute.get() ) );
+                    const bool newMute = !( pTrack && pTrack->mute.get() );
+                    if( instantAndTD.getToggleState() )
+                    {
+                        const auto divStr = timeDivList.getSelected().toStdString();
+                        const int divTicks = ::mt::timedivmute::divisionToTicks( divStr );
+                        ae.setTrackMuteTimeDivision( seq, Id, newMute, divTicks );
+                    }
+                    else
+                    {
+                        ae.setTrackMute( seq, Id, newMute );
+                    }
                 }
             }
             else

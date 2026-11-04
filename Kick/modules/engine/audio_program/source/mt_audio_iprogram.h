@@ -183,6 +183,8 @@ namespace mt
         const MTMeterData&         readInMeter() const { return midiMeter.getMeter(); };
         virtual void               enableOutputMetering( bool Enable ) { outMeterEnabled = Enable; };
         virtual const MTMeterData& readOutMeter() const { return AudIO::_dummyMeter; };
+        virtual void               enablePadMetering( bool Enable ) { (void)Enable; }
+        virtual const MTMeterData& readPadMeter( int note ) const { (void)note; return AudIO::_dummyMeter; }
         virtual void               processMidiMeter() { midiMeter.process(); }
 
         inline juce::ValueTree&   getState() { return vTree; }

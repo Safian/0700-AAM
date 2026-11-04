@@ -43,6 +43,8 @@ namespace mt
         // Metering....
         void               enableOutputMetering( bool Enable ) override { drum->enableOutputMetering( Enable ); }
         const MTMeterData& readOutMeter() const override { return drum->readOutMeter(); };
+        void               enablePadMetering( bool Enable ) override { drum->enablePadMetering( Enable ); }
+        const MTMeterData& readPadMeter( int Note ) const override { return drum->readPadMeter( Note ); }
 
         // IMidiMsgProcessor
         void noteOn( int Note, int Velocity ) override { drum->noteOn( Note, Velocity ); };
