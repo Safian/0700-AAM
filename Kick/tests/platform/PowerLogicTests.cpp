@@ -54,15 +54,16 @@ struct Fake
         e.log          = []( const char* ) {};
         return e;
     }
+    bool   called{ false }; // the result callback of the last run() (it may come later when a question is held)
+    Result last{ Result::Busy };
     Result run( Action a )
     {
         trace.clear();
         reported.clear();
-        Result r = Result::Busy;
-        bool   called = false;
-        runner.run( env(), a, [&]( Result x ) { r = x; called = true; } );
-        if( !called ) return Result::Busy; // deferred
-        return r;
+        called = false;
+        last   = Result::Busy;
+        runner.run( env(), a, [this]( Result x ) { last = x; called = true; } );
+        return last; // Busy while a question is still held (called == false)
     }
 };
 
@@ -192,8 +193,8 @@ int main()
         f.st = { true, false, false };
         f.us = { true, true, false, false };
         f.deferred = true;
-        CHECK( f.run( Action::ShutDown ) == Result::Busy ); // pending: the callback was not called yet
-        CHECK( f.runner.busy() );
+        f.run( Action::ShutDown );
+        CHECK( !f.called && f.runner.busy() ); // the question is on screen: no result yet
         Result second = Result::Started;
         f.runner.run( f.env(), Action::Restart, [&]( Result r ) { second = r; } );
         CHECK( second == Result::Busy );
@@ -201,6 +202,7 @@ int main()
         // Answer the pending question: a Started request stays busy for ever (the device is going down).
         f.deferred = false;
         f.pending();
+        CHECK( f.called && f.last == Result::Started );
         CHECK( f.runner.busy() );
         f.runner.run( f.env(), Action::ShutDown, [&]( Result r ) { first = r; } );
         CHECK( first == Result::Busy );

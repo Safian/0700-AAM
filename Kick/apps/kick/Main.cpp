@@ -32,6 +32,7 @@
 #endif
 #if JUCE_LINUX || __linux__
  #include "kick_hardware_bridge.h"
+ #include "hardware/power_key_watcher.h"
 #endif
 #if KICK_APP_SMOKE_TEST
  #include "../../tests/platform/AppSmoke.h"
@@ -273,6 +274,113 @@ public:
         } );
     }
 
+    // KICK_SMOKE_POWER=1: the shutdown sequence against the real engine and dialogs (the desktop PlatformServices only logs the
+    // power off, and the smoke refuses to run on any other platform type). Step 0: a changed factory demo (it always asks, also
+    // with auto save on; the engine's own unsaved flag of a demo drops again after ~0.5 s, so the smoke does not check it): the Power window opens and closes (Cancel). Step 1: Shut Down asks the unsaved-changes question, Cancel
+    // keeps the demo open and changed. Step 2: a changed normal project with auto save on (the default) restarts without a
+    // question: saved, closed, the (logged) reboot is issued. Prints "POWER ..." per step and "PASS: power".
+    void smokePower( int step )
+    {
+        const auto fail = [this]( const juce::String& m ) {
+            std::cerr << "FAIL: " << m << std::endl;
+            setApplicationReturnValue( 3 );
+            juce::ModalComponentManager::getInstance()->cancelAllModalComponents();
+            quit();
+        };
+        auto& ae = mt::getAudioInterface();
+        namespace kp = kick_power;
+        if( step == 0 )
+        {
+            if( mt::PlatformServices::getInstance().getPlatformType() != mt::PlatformType::Desktop )
+                return fail( "power smoke: not a desktop platform, refusing to run a power off" );
+            const auto root = juce::File( juce::SystemStats::getEnvironmentVariable( "KICK_DATA_ROOT", {} ) ).getChildFile( "power" );
+            root.deleteRecursively();
+            auto src = root.getChildFile( "DemoSrc/DemoSrc.kickPrj" );
+            if( !src.getParentDirectory().createDirectory() || !ae.loadProject( src, true ) || !ae.saveProject() || !ae.closeProject() )
+                return fail( "power smoke: cannot make the demo source" );
+            std::atomic<bool> noCancel{ false };
+            const auto demo = getAppDirs( MTDemos ).getChildFile( "PowerDemo" );
+            demo.deleteRecursively();
+            if( !kick_fileops::copyFolderTo( src.getParentDirectory().getFullPathName().toStdString(), demo.getFullPathName().toStdString(), noCancel ).ok
+                || !demo.getChildFile( "DemoSrc.kickPrj" ).moveFileTo( demo.getChildFile( "PowerDemo.kickPrj" ) ) )
+                return fail( "power smoke: cannot place the demo" );
+            auto demoFile = demo.getChildFile( "PowerDemo.kickPrj" );
+            if( !ae.loadProject( demoFile ) || !ae.isProjectReadOnly() )
+                return fail( "power smoke: cannot open the demo" );
+            ae.createProgram( mt::MTProgramType::Drum, "PowerDirty" );
+            if( !ae.isProjectDirty() )
+                return fail( "power smoke: the edit did not make the demo unsaved" );
+            ui::power::showPowerWindow();
+            juce::Timer::callAfterDelay( 700, [this, fail] {
+                const bool open = ui::power::isWindowOpen() && mt::utils::isDialogOpen();
+                std::cout << "POWER window open=" << open << std::endl;
+                if( !open ) return fail( "power smoke: the Power window did not open" );
+                const auto shots = juce::SystemStats::getEnvironmentVariable( "KICK_SMOKE_SHOTS_DIR", {} );
+                if( shots.isNotEmpty() )
+                {
+                    juce::File( shots ).createDirectory();
+                    auto image = mt::utils::snapshotTopDialog();
+                    auto shotFile = juce::File( shots ).getChildFile( "Dialog_Power.png" );
+                    shotFile.deleteFile();
+                    juce::FileOutputStream output{ shotFile };
+                    juce::PNGImageFormat   png;
+                    if( image.isValid() && ( !output.openedOk() || !png.writeImageToStream( image, output ) ) ) setApplicationReturnValue( 2 );
+                }
+                mt::utils::closeTopDialogFromHardware( false ); // Cancel
+                juce::Timer::callAfterDelay( 500, [this, fail] {
+                    const bool ok = !ui::power::isWindowOpen() && !mt::utils::isDialogOpen() && !ui::power::isBusy() && mt::getAudioInterface().isProjectLoaded();
+                    std::cout << "POWER window cancel ok=" << ok << std::endl;
+                    if( !ok ) return fail( "power smoke: Cancel in the Power window changed something" );
+                    smokePower( 1 );
+                } );
+            } );
+            return;
+        }
+        if( step == 1 )
+        {
+            auto result = std::make_shared<kp::Result>( kp::Result::Busy );
+            auto called = std::make_shared<bool>( false );
+            ui::power::request( kp::Action::ShutDown, [result, called]( kp::Result r ) { *result = r; *called = true; } );
+            juce::Timer::callAfterDelay( 700, [this, fail, result, called] {
+                const bool asked = mt::utils::isDialogOpen() && ui::power::isBusy() && !*called;
+                std::cout << "POWER step 1 unsaved question open=" << asked << std::endl;
+                if( !asked ) return fail( "power smoke: the unsaved-changes question did not open" );
+                mt::utils::closeTopDialogFromHardware( false ); // X = Cancel
+                juce::Timer::callAfterDelay( 700, [this, fail, result, called] {
+                    auto&      ae2 = mt::getAudioInterface();
+                    const bool ok  = *called && *result == kick_power::Result::Cancelled && ae2.isProjectLoaded() && ae2.isProjectReadOnly() && !ui::power::isBusy();
+                    std::cout << "POWER step 1 cancel ok=" << ok << " result=" << (int)*result << std::endl;
+                    if( !ok ) return fail( "power smoke: Cancel at the unsaved question did not keep the project open" );
+                    smokePower( 2 );
+                } );
+            } );
+            return;
+        }
+        if( step == 2 )
+        {
+            ae.discardProjectChangesOnClose();
+            getAppDirs( MTDemos ).getChildFile( "PowerDemo" ).deleteRecursively(); // the demo of step 0 (it is in the build tree)
+            auto file = juce::File( juce::SystemStats::getEnvironmentVariable( "KICK_DATA_ROOT", {} ) ).getChildFile( "power/Project/Project.kickPrj" );
+            if( !ae.closeProject() || !file.getParentDirectory().createDirectory() || !ae.loadProject( file, true ) || !ae.saveProject() )
+                return fail( "power smoke: cannot make the project" );
+            ae.createProgram( mt::MTProgramType::Drum, "PowerDirty" );
+            if( !ae.isProjectDirty() || !ae.isProjectAutoSave() || ae.isProjectReadOnly() )
+                return fail( "power smoke: expected a changed project with auto save on" );
+            auto result = std::make_shared<kp::Result>( kp::Result::Busy );
+            auto called = std::make_shared<bool>( false );
+            ui::power::request( kp::Action::Restart, [result, called]( kp::Result r ) { *result = r; *called = true; } );
+            juce::Timer::callAfterDelay( 900, [this, fail, result, called, file] {
+                auto&      ae2 = mt::getAudioInterface();
+                const bool ok  = *called && *result == kick_power::Result::Started && !ae2.isProjectLoaded() && ui::power::isBusy() && !mt::utils::isDialogOpen();
+                std::cout << "POWER step 2 autosave+restart ok=" << ok << " result=" << (int)*result << std::endl;
+                if( !ok ) return fail( "power smoke: the restart did not run through" );
+                if( !file.loadFileAsString().contains( "PowerDirty" ) ) return fail( "power smoke: the project was not saved before the close" );
+                std::cout << "PASS: power" << std::endl;
+                quit();
+            } );
+        }
+    }
+
     // KICK_SMOKE_DIALOGS="Metronome,TimeSignature,Locate,Stp,Tempo,UndoHistory,SystemResources" (+ KICK_SMOKE_SHOTS_DIR for the pictures,
     // KICK_SMOKE_DIALOG_CYCLES, default 3): each dialog is opened and closed the way the hardware closes it, the cycle is repeated with a
     // theme reload after every round (the slots of a closed dialog must not run). Prints "DIALOG ..." per step and "PASS: dialogs".
@@ -306,6 +414,7 @@ public:
         else if( name.equalsIgnoreCase( "Tempo" ) ) bar.showTempoEditor();
         else if( name.equalsIgnoreCase( "UndoHistory" ) ) kick_ui::UndoHistory::show();
         else if( name.equalsIgnoreCase( "SystemResources" ) ) kick_ui::KickModeHeader::showSystemResources();
+        else if( name.equalsIgnoreCase( "Power" ) ) ui::power::showPowerWindow();
         else
         {
             fail( "unknown dialog " + name );
@@ -559,6 +668,8 @@ public:
         {
             hwBridge = std::make_unique<KickHardwareBridge>();
             hwBridge->start( w.get(), &kick_ui::KickHome::Instance() );
+            // Power button (short press): the Power window. A missing / unopenable device is logged; Menu > Power always works.
+            kick_input::startPowerKeyWatcher( powerKey, [] { juce::MessageManager::callAsync( [] { ui::power::showPowerWindow(); } ); } );
         }
         else
 #endif
@@ -610,6 +721,11 @@ public:
                 smokeDialogs(juce::StringArray::fromTokens(dialogs, ",", ""), shots.isNotEmpty() ? juce::File(shots) : juce::File(), 0, 0, cycles);
                 return;
             }
+            if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_POWER", {}).isNotEmpty())
+            {
+                smokePower(0);
+                return;
+            }
             if (juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_MENUTILES", {}).isNotEmpty())
             {
                 smokeMenuTiles(0, false);
@@ -639,6 +755,7 @@ public:
 #endif
         // Add your application's shutdown code here ...
 #if JUCE_LINUX || __linux__
+        powerKey.stop();
         if (hwBridge) hwBridge->stop();
         hwBridge.reset();
 #endif
@@ -1077,6 +1194,7 @@ private:
     std::shared_ptr<contracts::AudioInterface> audioInterface;
 #if JUCE_LINUX || __linux__
     std::unique_ptr<KickHardwareBridge>        hwBridge;
+    kick_input::PowerKeyWatcher                powerKey;
 #endif
 #if PERFETTO
     std::unique_ptr<perfetto::TracingSession> tracingSession;
