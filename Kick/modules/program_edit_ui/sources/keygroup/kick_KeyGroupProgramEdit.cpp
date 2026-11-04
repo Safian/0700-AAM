@@ -1,6 +1,12 @@
 
 namespace kick_ui
 {
+    // The Layer Mix / Envelopes (filter + amp envelope) / LFO pages are bound to the program model, but the keygroup
+    // voice does not read those values (only the velocity layer play is honoured; no ADSR, filter or LFO in the synth
+    // voice). Showing controls that change nothing misleads, so the three pages are hidden until the engine uses them.
+    // Set to true to bring the pages (and their buttons) back; nothing else needs to change.
+    static constexpr bool kKeygroupEnginePagesVisible = false;
+
     KeyGroupProgramEdit::KeyGroupProgramEdit()
         : ProgEditInterface( mt::MTProgramType::Keygroup )
     {
@@ -15,7 +21,9 @@ namespace kick_ui
         for( auto& it : comps )
             mt::utils::addChildComponents( this, it.get() );
 
-        mt::utils::addAndMakeVisible( this, mainButton, samplesButton, layerMixButton, envelopesButton, lfoButton );
+        mt::utils::addAndMakeVisible( this, mainButton, samplesButton );
+        if( kKeygroupEnginePagesVisible )
+            mt::utils::addAndMakeVisible( this, layerMixButton, envelopesButton, lfoButton );
         mt::utils::addListener( this, mainButton, samplesButton, layerMixButton, envelopesButton, lfoButton );
         mt::utils::setValueColour( ui::Theme::textColour( 1 ), mainButton, samplesButton, layerMixButton, envelopesButton, lfoButton );
         mt::utils::setValueFontHeight( 18, mainButton, samplesButton, layerMixButton, envelopesButton, lfoButton );
@@ -52,11 +60,19 @@ namespace kick_ui
 
     void KeyGroupProgramEdit::resized()
     {
-        mainButton.setBoundsRelative( .0099f, .022f, .1896f, .096f );
-        samplesButton.setBoundsRelative( .2078f, .022f, .1896f, .096f );
-        layerMixButton.setBoundsRelative( .4051f, .022f, .1896f, .096f );
-        envelopesButton.setBoundsRelative( .6028f, .022f, .1896f, .096f );
-        lfoButton.setBoundsRelative( .8004f, .022f, .1896f, .096f );
+        if( kKeygroupEnginePagesVisible )
+        {
+            mainButton.setBoundsRelative( .0099f, .022f, .1896f, .096f );
+            samplesButton.setBoundsRelative( .2078f, .022f, .1896f, .096f );
+            layerMixButton.setBoundsRelative( .4051f, .022f, .1896f, .096f );
+            envelopesButton.setBoundsRelative( .6028f, .022f, .1896f, .096f );
+            lfoButton.setBoundsRelative( .8004f, .022f, .1896f, .096f );
+        }
+        else
+        {
+            mainButton.setBoundsRelative( .0099f, .022f, .1896f, .096f );
+            samplesButton.setBoundsRelative( .2078f, .022f, .1896f, .096f );
+        }
 
         for( auto& it : comps )
             it->setBoundsRelative( .0097f, .139f, .982f, .842f );
