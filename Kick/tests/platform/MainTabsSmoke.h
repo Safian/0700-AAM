@@ -9,7 +9,7 @@ inline juce::String runKickMainTabsSmoke() {
     auto& api = mt::getAudioInterface();
     auto file = juce::File(juce::SystemStats::getEnvironmentVariable("KICK_DATA_ROOT", {})).getChildFile("maintabs/Project.kickPrj");
     if (!file.getParentDirectory().createDirectory()) return "Cannot create project directory";
-    if (!api.loadProject(file)) return "Cannot create project";
+    if (!api.loadProject(file, true)) return "Cannot create project";
     const auto fail = [](const juce::String& m) { std::cout << "MAINTABS FAIL: " << m << "\n" << std::flush; return m; };
     const auto say  = [](const juce::String& m) { std::cout << "MAINTABS: " << m << "\n" << std::flush; };
 

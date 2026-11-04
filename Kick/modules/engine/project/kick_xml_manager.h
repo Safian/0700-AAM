@@ -54,6 +54,26 @@ namespace mt
         bool            save(SaveReason reason = SaveReason::Explicit);
         bool            close();
         bool            isDirty() const noexcept { return dirty.load(); }
+        // A factory demo / template (or a read-only location): it can never be saved in place, only with saveAs.
+        bool isReadOnlyDocument() const;
+        // Leaving without saving ("Don't save"): the NEXT close() detaches the document without writing it. Cleared by clearDiscard().
+        void discardChangesOnClose() noexcept { discardOnClose.store( true ); }
+        void clearDiscard() noexcept { discardOnClose.store( false ); }
+        static bool isAutoSaveEnabled() noexcept { return autoSave; }
+
+        struct SaveAsResult
+        {
+            bool         ok{ false };
+            bool         cancelled{ false };
+            juce::String error;
+            juce::File   file; // the new project file
+        };
+        // Folder copy done by the caller (it owns the progress / cancel policy): from -> to (to does not exist yet), true = complete.
+        using CopyFolderFn = std::function<bool( const juce::File& from, const juce::File& to )>;
+        // Save As / Save a Copy: the project folder is copied to `newDir` (named like the project: newDir/<newDirName>.kickPrj), the
+        // live state written there. switchToNew = the open document is now that copy (later saves go there); false = the open one
+        // stays as it is (copy / template). Any thread; the live state is read on the message thread. Nothing is left behind on failure.
+        SaveAsResult saveAs( const juce::File& newDir, bool switchToNew, const CopyFolderFn& copyFolder, const std::atomic<bool>& cancel );
         const juce::String& getLastSaveError() const noexcept { return lastSaveError; }
 
         void                   setAutoSave( bool AutoSave ) { autoSave = AutoSave; }
@@ -87,7 +107,7 @@ namespace mt
         // keep a copy's saved reference once its source is gone (unmounted drive); entries whose copy vanished are dropped.
         std::map<juce::String, juce::File> sessionCopies;
         juce::UndoManager     undo;
-        std::atomic<bool> dirty{false}, autosaveDue{false}, saving{false};
+        std::atomic<bool> dirty{false}, autosaveDue{false}, saving{false}, discardOnClose{false};
 
         static bool autoSave;
         static int  autoSaveTimeOutInMS;

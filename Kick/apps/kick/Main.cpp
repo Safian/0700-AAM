@@ -131,6 +131,7 @@ private:
 //==============================================================================
 class AudioEngineApplication : public juce::JUCEApplication
 {
+    bool quitAsked{ false }, quitConfirmed{ false }; // unsaved-changes question on a quit request
 public:
     //==============================================================================
     const juce::String getApplicationName() override
@@ -205,6 +206,13 @@ public:
 
         if( !resourcesDialog )
             kick_ui::signals::sigScreenClose( screen );
+        // KICK_SMOKE_BROWSE=<folder>: the file browser lists that folder (a test fixture) before its screenshot.
+        const auto browseDir = juce::SystemStats::getEnvironmentVariable( "KICK_SMOKE_BROWSE", {} );
+        if( screen == Screen::MenuFileBrowser && browseDir.isNotEmpty() )
+            juce::Timer::callAfterDelay( 600, [browseDir] { // after the screen has been shown (it lists its own folder when it shows)
+                if( auto* fb = dynamic_cast<ui::FileBrowser*>( kick_ui::KickHome::Instance().findScreen( kick_ui::Screen::MenuFileBrowser ) ) )
+                    fb->showFolder( browseDir );
+            } );
         juce::Timer::callAfterDelay( 1200, [this, names, dir, index, name, resourcesDialog] {
             // KICK_SMOKE_QLINK="1:1,2:-1,3:1" injects Q-Link turns (knob 1..4 : signed ticks) through the same
             // dispatch path as the MPC bridge (on_encoder_turn), after the screen opened and before the snapshot.
@@ -224,6 +232,19 @@ public:
                 contracts::DclSignals::dispatchHardwareInput( msg );
                 kick_log( "info", "[SMOKE] qlink %d %d on %s\n", knob, delta, name.toRawUTF8() );
             }
+            // KICK_SMOKE_BROWSE_EXPECT="a,b,c": the rows the browser shows for KICK_SMOKE_BROWSE, in this order (sorted, no hidden files).
+            const auto expect = juce::SystemStats::getEnvironmentVariable( "KICK_SMOKE_BROWSE_EXPECT", {} );
+            if( name.equalsIgnoreCase( "MenuFileBrowser" ) && expect.isNotEmpty() )
+                if( auto* fb = dynamic_cast<ui::FileBrowser*>( kick_ui::KickHome::Instance().findScreen( Screen::MenuFileBrowser ) ) )
+                {
+                    const auto shown = fb->getShownNames().joinIntoString( "," );
+                    std::cout << "BROWSER rows: " << shown << std::endl;
+                    if( shown != expect )
+                    {
+                        std::cerr << "FAIL: browser rows '" << shown << "' expected '" << expect << "'" << std::endl;
+                        setApplicationReturnValue( 3 );
+                    }
+                }
             if( auto* content = w != nullptr ? w->getContentComponent() : nullptr )
             {
                 // The dialog is a popup window the content snapshot does not contain: photograph the dialog itself.
@@ -475,13 +496,22 @@ public:
     //==============================================================================
     void systemRequestedQuit() override
     {
-        if (ui::RecentProject::isProjectLoading) {
+        if (ui::RecentProject::isProjectLoading || ui::BackgroundTask::activeCount() > 0) {
             juce::Timer::callAfterDelay(100, [this] { systemRequestedQuit(); });
             return;
         }
-        // Check while the UI and live programs still exist. A rejected save
-        // leaves the project open and its global error visible for recovery.
-        if (!mt::getAudioInterface().saveProject()) return;
+        // Unsaved changes: ask (Save / Don't save / Cancel) unless auto save covers them; then the project is saved while the UI
+        // and live programs still exist. A rejected save leaves the project open and its global error visible for recovery.
+        if (!quitConfirmed && kick_unsaved::needsPrompt(ui::project_actions::unsavedState())) {
+            if (quitAsked) return; // the question is already on screen
+            quitAsked = true;
+            // Save: saved (or Save As done); Don't save: the next close of the project writes nothing. Either way the project is
+            // settled when this runs again.
+            ui::project_actions::leaveProject([this] { quitAsked = false; quitConfirmed = true; systemRequestedQuit(); }, [this] { quitAsked = false; });
+            return;
+        }
+        // A demo / template cannot be saved in place (and the user was asked above when it had changes).
+        if (!quitConfirmed && !mt::getAudioInterface().isProjectReadOnly() && !mt::getAudioInterface().saveProject()) return;
 #if PERFETTO
         MelatoninPerfetto::get().endSession();
 #endif

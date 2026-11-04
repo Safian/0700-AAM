@@ -55,9 +55,16 @@ namespace mt
 
         // Project API's..
         bool isProjectLoaded() const noexcept { return projectLoaded; };
-        bool loadProject( juce::File& ProjectFile );
+        // createIfMissing = false (opening an existing project): a missing / unreadable project is an error and the open one stays
+        // untouched; true (New project) creates the folder and an empty project. getLastLoadError() says why a load returned false.
+        bool loadProject( juce::File& ProjectFile, bool createIfMissing = false );
         bool closeProject();
         bool saveProject();
+        // Save As / Save a Copy (any thread, see KickXML::saveAs). The audio engine is not touched.
+        SaveAsResult saveProjectAs( const juce::File& newDir, bool switchToNew, const CopyFolderFn& copyFolder, const std::atomic<bool>& cancel );
+        const juce::String& getLastLoadError() const noexcept { return lastLoadError; }
+        // Waits until the audio thread has passed `callbacks` full device callbacks (no wait when no device is running).
+        void settleAudioThread( int callbacks, int timeoutMs );
 
         // State
         inline juce::UndoManager& getUndoManager() noexcept { return undoManager; }
@@ -173,6 +180,7 @@ namespace mt
         KickPrivateTimer internalTimer;
 
         bool projectLoaded{ false };
+        juce::String lastLoadError;
         std::atomic<int> automationMode{ 0 };
 
 #if defined( USE_VALUE_TREE_DEBUGGER ) && ( USE_VALUE_TREE_DEBUGGER > 0 )

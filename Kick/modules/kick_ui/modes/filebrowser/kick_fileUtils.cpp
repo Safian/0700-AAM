@@ -6,60 +6,6 @@ namespace ui
     {
         int lastPressedPad = -1;
 
-        namespace
-        {
-            // Mount point of the first mounted device whose node starts with devPrefix (Linux /proc/mounts), else the
-            // fallback. The Kick hardware mounts at /mnt/{sdcard,flash}; the Akai MPC mounts at /sdcard and /media/<label>,
-            // so the file browser must follow the mount table instead of a fixed path. Mount points that hold only a
-            // boot partition (…/EFI) are skipped.
-            juce::String mountPointOf( const char* devPrefix, const char* fallback )
-            {
-#if defined( LINUX ) || defined( __linux__ )
-                juce::StringArray lines;
-                juce::File( "/proc/mounts" ).readLines( lines );
-                for( const auto& line : lines )
-                {
-                    auto fields = juce::StringArray::fromTokens( line, " ", "" );
-                    if( fields.size() < 2 || !fields[0].startsWith( devPrefix ) ) continue;
-                    auto mnt = fields[1].replace( "\\040", " " );
-                    if( mnt.endsWith( "/EFI" ) ) continue;
-                    if( juce::File( mnt ).isDirectory() ) return mnt;
-                }
-#endif
-                return fallback;
-            }
-        }
-
-        juce::String getSdCardMountedPath()
-        {
-            return mountPointOf( "/dev/mmcblk1", "/mnt//sdcard" );
-        }
-        juce::String getUsbMountedPath()
-        {
-            return mountPointOf( "/dev/sd", "/mnt//flash" );
-        }
-
-        bool getSdCardStatus()
-        {
-#if defined( LINUX ) || defined( __linux__ )
-            const char* sdCardDevicePath = "/dev/mmcblk1";
-            if( access( sdCardDevicePath, F_OK ) != -1 )
-                return true;
-            else
-                return false;
-#endif
-            return false;
-        }
-
-        bool getUsbStatus()
-        {
-#if defined( LINUX ) || defined( __linux__ )
-            if( access( "/dev/sda", F_OK ) != -1 ) return true;
-            return getUsbMountedPath() != "/mnt//flash"; // a mounted /dev/sd* (the MPC numbers its drives from sdb)
-#endif
-            return false;
-        }
-
         FolderSizeCache& getFolderSizeCache()
         {
             static FolderSizeCache cache;
@@ -68,40 +14,48 @@ namespace ui
 
         juce::int64 calculateFolderSize( juce::File filePath, std::function<bool()> shouldExit )
         {
-            juce::int64 totalSize = 0;
-
-            // One recursive scan is enough: the result already lists every nested file, so directories are not descended
-            // into again (that made the cost grow with the depth of the tree: minutes on the MPC's 22 GB SD card).
-            if( filePath.isDirectory() )
+            if( !filePath.isDirectory() )
+                return filePath.getSize();
+            auto&       cache = getFolderSizeCache();
+            juce::int64 total = 0;
+            // Each direct sub-folder is one unit of work and is cached when it is done: a scan of a big SD card that is cancelled
+            // keeps what it finished. Files directly in the folder are added up on the way.
+            for( const auto& entry : juce::RangedDirectoryIterator( filePath, false, "*", juce::File::findFilesAndDirectories ) )
             {
-                for( const auto& entry : juce::RangedDirectoryIterator( filePath, true, "*", juce::File::findFiles ) )
+                if( shouldExit && shouldExit() )
+                    return -1;
+                if( entry.isDirectory() )
                 {
-                    if( shouldExit && shouldExit() )
-                        return -1;
-                    totalSize += entry.getFileSize();
+                    const auto  sub   = entry.getFile();
+                    const auto  mtime = sub.getLastModificationTime().toMilliseconds();
+                    juce::int64 subSize = 0;
+                    if( !cache.get( sub.getFullPathName().toStdString(), mtime, subSize ) )
+                    {
+                        subSize = calculateFolderSize( sub, shouldExit );
+                        if( subSize < 0 )
+                            return -1;
+                        cache.put( sub.getFullPathName().toStdString(), subSize, mtime );
+                    }
+                    total += subSize;
                 }
+                else
+                    total += entry.getFileSize();
             }
-            else
+            return total;
+        }
+
+        void invalidateFolderSizes( const juce::File& changed )
+        {
+            auto& cache = getFolderSizeCache();
+            auto  f     = changed;
+            for( int i = 0; i < 64 && f != juce::File(); ++i )
             {
-                totalSize = filePath.getSize();
+                cache.invalidate( f.getFullPathName().toStdString() );
+                const auto parent = f.getParentDirectory();
+                if( parent == f )
+                    break;
+                f = parent;
             }
-            return totalSize;
-        }
-        void setSdCardEjectStatus( bool status )
-        {
-            isSdCardEject = status;
-        }
-        void setUsbEjectStatus( bool status )
-        {
-            isUSBEject = status;
-        }
-        bool getSdCardEjectStatus()
-        {
-            return isSdCardEject;
-        }
-        bool getUsbEjectStatus()
-        {
-            return isUSBEject;
         }
 
         juce::String getFilePath( juce::String originalFullPath, juce::String replacementPath )
@@ -129,6 +83,16 @@ namespace ui
                         return kick_ui::Pad_Assigned;
             }
             return kick_ui::Pad_NotAssigned;
+        }
+
+        int targetPad()
+        {
+            if( lastPressedPad >= 0 && lastPressedPad < 16 )
+                return lastPressedPad;
+            std::array<bool, 16> assigned{};
+            for( int i = 0; i < 16; ++i )
+                assigned[static_cast<size_t>( i )] = hasSampleAssignedToPad( i ) == kick_ui::Pad_Assigned;
+            return kick_fblogic::firstFreePad( assigned );
         }
 
         void setHighlightLED( int hwPadIndex )
@@ -176,117 +140,94 @@ namespace ui
 
     LoadSamplesAndAnimation::~LoadSamplesAndAnimation()
     {
+        stopThread( 5000 );
     }
 
-    void LoadSamplesAndAnimation::startLoading( const juce::Array<juce::File>& assetsFiles, bool IsMultiple, std::function<void()> onCompleteCallback )
+    void LoadSamplesAndAnimation::startLoading( const juce::Array<juce::File>& assetsFiles, bool IsMultiple, int pad, bool copyExternal, std::function<void()> onCompleteCallback )
     {
+        if( isThreadRunning() )
+            return; // one load at a time (a double tap on Load must not start two)
         sampleLoaded       = false;
         completionCallback = std::move( onCompleteCallback );
         assetsFile         = assetsFiles;
         isMultiple         = IsMultiple;
+        targetPadNo        = pad;
+        copyExt            = copyExternal;
+        {
+            const juce::ScopedLock l( lock );
+            result.clear();
+        }
         startThread();
         startAnimation();
     }
 
-    void LoadSamplesAndAnimation::addMultipleAssets()
-    {
-        auto&                     ae        = mt::getAudioInterface();
-        std::vector<juce::String> assets    = ae.getAssets( mt::AssetTypes::Samples );
-        bool                      firstTime = true;
-        for( auto assetFile : assetsFile ) //Whatever we want to load
-        {
-            for( auto asset : assets ) //Already Loaded Samples
-            {
-                if( ( asset != assetFile.getFullPathName() ) )
-                    if( assetFile.hasFileExtension( sampleFileList ) )
-                    {
-                        if( ae.addAsset( assetFile.getFullPathName(), mt::AssetTypes::Samples ) == mt::AssetAdded )
-                        {
-                            if( firstTime ) //assigning one sample to one pad for the first time
-                            {
-                                if( ui::fileUtils::lastPressedPad < 0 )
-                                    ui::fileUtils::lastPressedPad = 0;
-                                ae.addSampleToProgram( ae.getSelectedProgram(), ui::fileUtils::lastPressedPad + mt::getAudioInterface().getBankOffset(), assetFile.getFullPathName() );
-                                juce::Logger::outputDebugString( assetFile.getFullPathName() + " Sample assigned to Pad: " + juce::String( ui::fileUtils::lastPressedPad + mt::getAudioInterface().getBankOffset() ) );
-                                firstTime = false;
-                            }
-                            sampleLoaded = true;
-                        }
-                    }
-            }
-        }
-        if( !assets.size() ) //if nothing is loaded
-        {
-            for( auto dir : assetsFile )
-                if( dir.hasFileExtension( sampleFileList ) )
-                {
-                    if( ae.addAsset( dir.getFullPathName(), mt::AssetTypes::Samples ) == mt::AssetAdded )
-                    {
-                        if( firstTime )
-                        {
-                            if( ui::fileUtils::lastPressedPad < 0 )
-                                ui::fileUtils::lastPressedPad = 0;
-                            ae.addSampleToProgram( ae.getSelectedProgram(), ui::fileUtils::lastPressedPad + mt::getAudioInterface().getBankOffset(), dir.getFullPathName() );
-                            juce::Logger::outputDebugString( dir.getFullPathName() + " Sample assigned to Pad: " + juce::String( ui::fileUtils::lastPressedPad + mt::getAudioInterface().getBankOffset() ) );
-                            firstTime = false;
-                        }
-                        sampleLoaded = true;
-                    }
-                }
-        }
-    }
-
-    void LoadSamplesAndAnimation::addAsset()
-    {
-        juce::MessageManager::callAsync( [&]() {
-            if( !assetsFile.size() )
-            {
-                auto p = new FilePopup( "Please Select the sample to load", false, false );
-                mt::utils::showDialog(
-                    "WARNING!", p, [p, this]( int R ) { delete p; }, { 0, 0, 600, 360 }, Theme::backgroundColour( 1 ), Theme::titleColour( 1 ), Theme::backgroundColour( 2 ) );
-            }
-            else
-            {
-                if( assetsFile.getLast().hasFileExtension( sampleFileList ) )
-                {
-                    auto& ae = mt::getAudioInterface();
-                    if( !ae.addAsset( assetsFile.getLast().getFullPathName(), mt::AssetTypes::Samples ) )
-                    {
-                        auto p = new FilePopup( "This Sample has already Loaded", false, false );
-                        mt::utils::showDialog(
-                            "WARNING!", p, [p, this]( int R ) { delete p; }, { 0, 0, 600, 360 }, Theme::backgroundColour( 1 ), Theme::titleColour( 1 ), Theme::backgroundColour( 2 ) );
-                    }
-                    else
-                    {
-                        if( ui::fileUtils::lastPressedPad < 0 )
-                            ui::fileUtils::lastPressedPad = 0;
-                        ae.addSampleToProgram( ae.getSelectedProgram(), ui::fileUtils::lastPressedPad + mt::getAudioInterface().getBankOffset(), assetsFile.getLast().getFullPathName() );
-                        juce::Logger::outputDebugString( "Sample assigned to Pad: " + juce::String( ui::fileUtils::lastPressedPad + mt::getAudioInterface().getBankOffset() ) );
-                        sampleLoaded = true;
-                        return;
-                    }
-                }
-                else
-                {
-                    auto p = new FilePopup( "Selected file cannot be loaded", false, false );
-                    mt::utils::showDialog(
-                        "WARNING!", p, [p, this]( int R ) { delete p; }, { 0, 0, 600, 360 }, Theme::backgroundColour( 1 ), Theme::titleColour( 1 ), Theme::backgroundColour( 2 ) );
-                }
-            }
-        } );
-        sampleLoaded = false;
-    }
-
+    // Worker thread: decoding, copying and the engine calls all happen here, never on the message thread. The result is a message
+    // for the status line, built from the engine's real answer (kick_fblogic::mapAssetResult).
     void LoadSamplesAndAnimation::run()
     {
-        if( isMultiple )
-            addMultipleAssets();
-        else
-            addAsset();
-        if( completionCallback ) // Call the completion callback on the main thread
+        auto&                   ae = mt::getAudioInterface();
+        int                     added = 0, already = 0, failed = 0;
+        juce::String            firstName, lastText;
+        kick_fblogic::AssetStatus lastStatus = kick_fblogic::AssetStatus::Invalid;
+        const bool              projectLoaded = ae.isProjectLoaded();
+        const int               program       = projectLoaded ? ae.getSelectedProgram() : -1;
+        const auto              projDir       = projectLoaded ? ae.getProjectDir() : juce::File();
+
+        for( int i = 0; i < assetsFile.size(); ++i )
         {
-            juce::MessageManager::callAsync( completionCallback );
+            auto file = assetsFile[i];
+            if( !file.hasFileExtension( fileUtils::sampleExtensions() ) )
+                continue;
+            if( threadShouldExit() )
+                break;
+            if( firstName.isEmpty() )
+                firstName = file.getFileNameWithoutExtension();
+            // From outside the project (SD, USB, library): copy into <project>/samples so the sample stays when the stick is pulled.
+            if( copyExt && projectLoaded && projDir.isDirectory() && !file.isAChildOf( projDir ) )
+            {
+                auto samples = projDir.getChildFile( "samples" );
+                samples.createDirectory();
+                const auto name = kick_fsguard::uniqueName( file.getFileName().toStdString(), [&]( const std::string& n ) {
+                    const auto c = samples.getChildFile( juce::String( n ) );
+                    return c.exists() && !c.hasIdenticalContentTo( file ); // an identical copy from an earlier load is reused
+                } );
+                const auto copy = samples.getChildFile( juce::String( name ) );
+                if( !name.empty() && ( copy.existsAsFile() || file.copyFileTo( copy ) ) )
+                    file = copy;
+                else
+                    kick_log( "warn", "[WARN] [BROWSER] could not copy %s into the project; loading it from where it is\n", file.getFullPathName().toRawUTF8() );
+            }
+            const int  code   = static_cast<int>( ae.addAsset( file.getFullPathName(), mt::AssetTypes::Samples ) );
+            const auto status = kick_fblogic::mapAssetResult( code, projectLoaded, program );
+            lastStatus        = status;
+            if( status == kick_fblogic::AssetStatus::Added ) ++added;
+            else if( status == kick_fblogic::AssetStatus::AlreadyExists ) ++already;
+            else ++failed;
+            if( !isMultiple && kick_fblogic::assignsToPad( status ) )
+                ae.addSampleToProgram( program, targetPadNo + ae.getBankOffset(), file.getFullPathName() );
+            if( status == kick_fblogic::AssetStatus::NoProject || status == kick_fblogic::AssetStatus::NoProgram )
+                break;
         }
+
+        juce::String text;
+        const auto   pad = kick_fblogic::padText( targetPadNo, ae.getBankOffset() );
+        if( added + already + failed == 0 )
+            text = "Selected file cannot be loaded (not an audio file)";
+        else if( !isMultiple )
+            text = juce::String( kick_fblogic::describe( lastStatus, firstName.toStdString(), pad ) );
+        else
+        {
+            text = juce::String( added ) + " loaded into the pool";
+            if( already ) text << ", " << already << " already there";
+            if( failed ) text << ", " << failed << " could not be read";
+        }
+        sampleLoaded = added + already > 0;
+        {
+            const juce::ScopedLock l( lock );
+            result = text;
+        }
+        if( completionCallback ) // on the message thread
+            juce::MessageManager::callAsync( completionCallback );
     }
 
 }

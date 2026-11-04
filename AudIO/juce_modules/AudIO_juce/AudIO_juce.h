@@ -33,6 +33,10 @@ public:
     void stop() override;
     juce::AudioDeviceManager& getJuceAudioDeviceMgr() { return devices; }
     const juce::String& lastError() const noexcept { return error; }
+    // Device callbacks completed so far. After the engine objects were replaced, two more completed callbacks mean the audio
+    // thread has passed a full cycle and holds no reference to the old ones (replaces fixed sleeps around project load / close).
+    uint64_t completedCallbacks() const noexcept { return callbackCount.load( std::memory_order_acquire ); }
+    bool     isRunning() { auto* d = devices.getCurrentAudioDevice(); return d != nullptr && d->isPlaying(); }
 private:
     void audioDeviceAboutToStart(juce::AudioIODevice*) override;
     void audioDeviceStopped() override;
@@ -44,5 +48,6 @@ private:
     juce::AudioBuffer<float> inputBlock, outputBlock;
     uint32_t filled = 0;
     std::atomic<bool> resetPipeline{false};
+    std::atomic<uint64_t> callbackCount{0};
 };
 }
