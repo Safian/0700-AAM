@@ -24,6 +24,16 @@
 
 namespace kick_ui
 {
+    namespace
+    {
+        // The BPM field and the Seq/Song switch only changed the numbers shown in the table, never the
+        // engine, and a song has no tempo of its own. Hidden until the engine has a song tempo.
+        constexpr bool kSongTempoOverrideAvailable = false;
+        // Export opened a confirmation dialog whose Apply did nothing. Hidden until it is specified
+        // (what to export: MIDI file, audio mixdown, sequence chain).
+        constexpr bool kSongExportAvailable = false;
+    }
+
     struct CreateNewSong : public juce::Component
     {
         ui::KickLabel Name{ "Enter Name" };
@@ -96,10 +106,21 @@ namespace kick_ui
         provider.hdrComponent = [&]( juce::Component* Existing ) -> juce::Component* { return dynamic_cast<KickSongContent::Header*>( Existing ) ? Existing : new KickSongContent::Header(); };
 
         provider.cellComponent = [&]( int Row, juce::Component* Existing ) -> juce::Component* {
-            auto seqData            = ae.getSequenceData( info.steps[Row].seqNo );
-            info.steps[Row].bars    = seqData->length.get();
-            info.steps[Row].bpm     = isSeqSong ? bpmValue : seqData->tempo;
-            info.steps[Row].loopEnd = seqData->loopEnd.get();
+            if( !juce::isPositiveAndBelow( Row, (int)info.steps.size() ) )
+                return nullptr;
+            // A step whose sequence was deleted has seqNo -1: it is shown as missing, with no data.
+            auto* seqData = song_logic::isMissingStep( info.steps[(size_t)Row].seqNo ) ? nullptr : ae.getSequenceData( info.steps[(size_t)Row].seqNo );
+            if( seqData != nullptr )
+            {
+                info.steps[Row].bars    = seqData->length.get();
+                info.steps[Row].bpm     = isSeqSong ? bpmValue : seqData->tempo;
+                info.steps[Row].loopEnd = seqData->loopEnd.get();
+            }
+            else
+            {
+                info.steps[Row].bars = 0;
+                info.steps[Row].bpm  = 0;
+            }
             auto comp               = dynamic_cast<KickSongTableDisplay*>( Existing );
             if( comp == nullptr )
                 comp = new KickSongTableDisplay();
@@ -142,33 +163,40 @@ namespace kick_ui
 
         insert.onClick = [&]() {
             auto idx = pads->getSelected();
-            if( idx < seqList.size() )
+            if( idx >= 0 && idx < (int)seqList.size() )
             {
                 mt::MTSongStepInfo _step;
                 _step.seqNo = idx;
 
-                auto selStep = tableView.getSelectedRow();
-                auto insPos  = ( selStep < info.steps.size() ) ? selStep : -1;
-                if( ( selStep < info.steps.size() ) && ( idx == info.steps[selStep].seqNo ) )
-                { // Edit Step.
-                    _step.repeatCount = info.steps[selStep].repeatCount + 1;
-                    ae.editSongStep( songName, _step, insPos );
-                    selStep -= 1;
+                const int numSteps = (int)info.steps.size();
+                const int sel      = tableView.getSelectedRowOrNone();
+                const int selSeq   = ( sel >= 0 && sel < numSteps ) ? info.steps[(size_t)sel].seqNo : -1;
+                const auto plan    = song_logic::planInsert( numSteps, sel, idx, selSeq );
+
+                if( plan.kind == song_logic::InsertPlan::Kind::RepeatPlus1 )
+                { // The selected step already plays this sequence: one more repeat.
+                    _step.repeatCount = info.steps[(size_t)sel].repeatCount + 1;
+                    ae.editSongStep( songName, _step, plan.index );
                 }
-                else
-                { // Add new step.
-                    ae.addSongStep( songName, _step, insPos + 1 );
-                }
+                else // After the selected step; with no selection at the END of the song.
+                    ae.addSongStep( songName, _step, plan.index );
 
                 updateSong( songName );
-                tableView.selectRow( ( selStep + 1 ) < info.steps.size() ? selStep + 1 : 0 );
+                if( !info.steps.empty() )
+                    tableView.selectRow( juce::jlimit( 0, (int)info.steps.size() - 1, plan.selectAfter ) );
             }
         };
 
         del.onClick = [&]() {
-            auto selStep = tableView.getSelectedRow();
-            ae.deleteSongStep( songName, selStep );
+            const int numSteps = (int)info.steps.size();
+            const int sel      = tableView.getSelectedRowOrNone();
+            if( !song_logic::canDelete( numSteps, sel ) ) // nothing selected: nothing is deleted
+                return;
+            ae.deleteSongStep( songName, sel );
             updateSong( songName );
+            const int next = song_logic::selectionAfterDelete( numSteps, sel );
+            if( next >= 0 )
+                tableView.selectRow( next );
         };
 
         mt::signals::onSongSequencePlay.connect( [this]( int CurrentSeq, int NextSeq, int CurrentSeqIndex ) {
@@ -204,27 +232,48 @@ namespace kick_ui
         refreshTable();
     }
 
+    // Kept for the interface: steps of deleted sequences stay in the song, marked "! missing sequence".
     void KickSongContent::displayState( juce::String& Song )
     {
-        for( int index = info.steps.size() - 1; index >= 0; --index )
-            if( info.steps[index].dispName.isEmpty() )
-                ae.deleteSongStep( songName, index );
-
         info = ae.getSongInfo( songName );
     }
 
-    void KickSongContent::playOrResume()
+    // A different song was chosen: nothing is selected in it yet.
+    void KickSongContent::selectSong( const juce::String& Song )
     {
+        tableView.clearSelection();
+        updateSong( Song );
+    }
+
+    bool KickSongContent::hasMissingStep() const
+    {
+        for( auto& step : info.steps )
+            if( song_logic::isMissingStep( step.seqNo ) )
+                return true;
+        return false;
+    }
+
+    // Returns true when the song is playing afterwards.
+    bool KickSongContent::playOrResume( bool FromStart )
+    {
+        if( info.steps.empty() )
+            return false;
+        if( hasMissingStep() )
+        {
+            mt::utils::showNotification( "A step uses a deleted sequence: delete the marked step to play the song" );
+            return false;
+        }
+        if( isPlaying && !FromStart )
+            return true; // PLAY while playing leaves it running (it used to restart from the selected step)
+
+        if( FromStart )
+            tableView.selectRow( 0 );
         isPlaying = true;
         tableView.setInterceptsMouseClicks( false, false );
-        if( isPlaying && info.steps.size() )
-        {
-            pads->clearAllBreathing();
-            ae.playSong( songName, tableView.getSelectedRow() );
-        }
-        else
-            stopOrPause();
-        del.setEnabled( !isPlaying );
+        pads->clearAllBreathing();
+        ae.playSong( songName, juce::jmax( 0, tableView.getSelectedRowOrNone() ) );
+        del.setEnabled( false );
+        return true;
     }
 
     void KickSongContent::stopOrPause()
@@ -236,9 +285,28 @@ namespace kick_ui
         pads->resetBorderColor( selectedId );
         pads->clearAllBreathing();
         pads->setSelected( 0, juce::sendNotification );
-        setPadLED( selectedId + pads->getBankOffset(), contracts::DeviceControlContracts::PadButtonState::StateOn, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
+        setPadLED( selectedId, contracts::DeviceControlContracts::PadButtonState::StateOn, contracts::DeviceControlContracts::PadColourIds::PadColourOrange ); // setPadLED subtracts the bank offset itself
 
         selectedId = -1;
+        tableView.selectRow( 0 );
+    }
+
+    // The engine reported "song stopped" by itself (the end of the song): leave the playing lock, so the pads
+    // and the table work again, and make sure the transport does not keep looping the last sequence.
+    void KickSongContent::songEnded()
+    {
+        if( !song_logic::unlockAfterSongEnd( isPlaying ) )
+            return;
+        isPlaying = false;
+        del.setEnabled( true );
+        tableView.setInterceptsMouseClicks( true, true );
+        pads->resetBorderColor( selectedId );
+        pads->clearAllBreathing();
+        selectedId = -1;
+        if( ae.isSequencePlaying() )
+            ae.stopSong();
+        pads->setSelected( 0, juce::dontSendNotification );
+        pads->setBreathing( 0 );
         tableView.selectRow( 0 );
     }
 
@@ -357,7 +425,9 @@ namespace kick_ui
     {
         setLookAndFeel( ui::KickLooknFeel::getLnf() );
 
-        mt::utils::addChildComponents( this, header, content, songListBox, bpmNumber, exportt, seqSongBpm );
+        mt::utils::addChildComponents( this, header, content, songListBox, bpmNumber, exportt, seqSongBpm, renameSong, deleteSongBtn );
+        mt::utils::setValueFontHeight( 18, renameSong, deleteSongBtn );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), renameSong, deleteSongBtn );
 
         // header.showSettingsButton( true );
         songListBox.setJustificationType( juce::Justification::centredLeft );
@@ -372,41 +442,58 @@ namespace kick_ui
 
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
 
+        // Touch Play / Stop in the header (no hardware needed).
+        header.showPlayButton( true );
+        header.onPlayStopClick = [this]( bool Play ) {
+            if( Play )
+            {
+                if( !content.playOrResume( false ) )
+                    header.setPlayState( false, juce::dontSendNotification );
+            }
+            else
+                content.stopOrPause();
+        };
+
         mt::signals::onSongStopped.connect( [&]() {
             juce::MessageManager::callAsync( [this] {
-                header.setPlayState( false, juce::sendNotification );
+                content.songEnded();
+                header.setPlayState( false, juce::dontSendNotification );
             } );
         } );
 
         songListBox.onSelectionChanged = [&]( int Index, const juce::String& SongName ) {
             if( SongName.equalsIgnoreCase( "create new song" ) )
-            {
-                auto& _cns          = ui::KickVirtualKeyBoard::getWithText( "Enter Name" );
-                _cns.onEnterPressed = [&_cns, this]( int v ) {
-                    mt::utils::exitDialog( _cns.getCurrentlyFocusedComponent(), v );
-                };
-                _cns.show(
-                    "CREATE NEW SONG", ui::KickVirtualKeyBoard::Type::KEYS_LOWERCASE_ALPHABETIC,
-                    [&_cns, this]( int R ) {
-                        if( R == UI::APPLY )
-                        {
-                            juce::String newSongName = _cns.getInputText();
-
-                            if( ae.isSongExists( newSongName ) )
-                                warningPopup();
-                            else
-                            {
-                                mt::getAudioInterface().createSong( newSongName );
-                                triggerAsyncUpdate();
-                            }
-                        }
-                        else
-                            songListBox.setSelected( 0 );
-                    },
-                    ui::layout::keyBoardPopup );
-            }
+                askSongName( "CREATE NEW SONG", {}, [this]( const juce::String& N ) {
+                    mt::getAudioInterface().createSong( N );
+                    pendingSelect = N;
+                    triggerAsyncUpdate();
+                } );
             else
-                content.updateSong( SongName );
+                content.selectSong( SongName );
+        };
+
+        renameSong.onClick = [&]() {
+            const auto current = songListBox.getSelected();
+            renameSong.setToggleState( false, juce::dontSendNotification );
+            if( current.isEmpty() || current.equalsIgnoreCase( "create new song" ) )
+                return;
+            askSongName( "RENAME SONG", current, [this, current]( const juce::String& N ) {
+                ae.renameSong( current, N );
+                pendingSelect = N;
+                triggerAsyncUpdate();
+            } );
+        };
+
+        deleteSongBtn.onClick = [&]() {
+            const auto current = songListBox.getSelected();
+            deleteSongBtn.setToggleState( false, juce::dontSendNotification );
+            if( current.isEmpty() || current.equalsIgnoreCase( "create new song" ) )
+                return;
+            if( content.isSongPlaying() )
+                content.stopOrPause();
+            ae.deleteSong( current ); // undoable (UNDO brings the song back)
+            pendingSelect = {};
+            triggerAsyncUpdate();
         };
 
         exportt.onClick = [&]() {
@@ -444,8 +531,51 @@ namespace kick_ui
         auto list     = mt::getAudioInterface().getSongsList();
         auto selected = songListBox.getSelectedIndex();
 
+        // Which song is shown afterwards: a just created / renamed one, else the same row, else the first.
+        int show = -1;
+        for( size_t i = 0; i < list.size(); ++i )
+            if( pendingSelect.isNotEmpty() && list[i].equalsIgnoreCase( pendingSelect ) )
+                show = (int)i;
+        if( show < 0 )
+            show = list.empty() ? -1 : juce::jlimit( 0, (int)list.size() - 1, selected );
+        pendingSelect = {};
+
         list.push_back( "CREATE NEW SONG" );
-        songListBox.setListOptions( list, selected );
+        songListBox.setListOptions( list, show >= 0 ? show : (int)list.size() - 1 );
+        content.selectSong( show >= 0 ? list[(size_t)show] : juce::String() );
+    }
+
+    // Name entry for a new / renamed song: not empty, not the reserved entry, not a duplicate.
+    void KickSongMode::askSongName( const juce::String& Title, const juce::String& Initial, std::function<void( const juce::String& )> OnName )
+    {
+        auto& _cns          = ui::KickVirtualKeyBoard::getWithText( Initial );
+        _cns.onEnterPressed = [&_cns, this]( int v ) {
+            mt::utils::exitDialog( _cns.getCurrentlyFocusedComponent(), v );
+        };
+        _cns.show(
+            Title, ui::KickVirtualKeyBoard::Type::KEYS_LOWERCASE_ALPHABETIC,
+            [&_cns, this, Initial, OnName]( int R ) {
+                if( R == UI::APPLY )
+                {
+                    const juce::String name = _cns.getInputText().trim();
+                    std::vector<std::string> existing;
+                    for( auto& n : ae.getSongsList() )
+                        existing.push_back( n.toStdString() );
+
+                    switch( song_logic::checkName( name.toStdString(), existing, Initial.toStdString() ) )
+                    {
+                        case song_logic::NameCheck::Ok: OnName( name ); return;
+                        case song_logic::NameCheck::Duplicate: warningPopup(); return;
+                        case song_logic::NameCheck::Empty:
+                        case song_logic::NameCheck::Reserved:
+                            mt::utils::showNotification( "Enter a song name" );
+                            break;
+                    }
+                }
+                // Cancelled / refused: back to the song that was shown.
+                triggerAsyncUpdate();
+            },
+            ui::layout::keyBoardPopup );
     }
 
     void KickSongMode::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
@@ -466,49 +596,7 @@ namespace kick_ui
 
     void KickSongMode::knobCommand( int knob, int value )
     {
-        auto seqData   = ae.getSequenceData( ae.getSelectedSequence() );
-        auto trackData = ae.getTrackData( ae.getSelectedSequence(), ae.getSelectedTrack() );
-        switch( knob )
-        {
-            //sequence
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1:
-                ae.setSequenceBPM( ae.getSelectedSequence(), (int)seqData->tempo + value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_2:
-                ae.setSequenceLength( ae.getSelectedSequence(), seqData->length.get() + value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_3:
-                ae.setSequenceLoopPoints( ae.getSelectedSequence(), seqData->loopStart.get() + value, seqData->loopEnd.get() );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_4:
-                ae.setSequenceLoopPoints( ae.getSelectedSequence(), seqData->loopStart.get(), seqData->loopEnd.get() + value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_5:
-                ae.setSelectedSequence( ae.getSelectedSequence() + value );
-                break;
-            //track
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_6:
-                ae.setTrackMidiChannel( ae.getSelectedSequence(), ae.getSelectedTrack(), trackData ? trackData->midiChannel.get() + value : value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_7:
-                ae.setTrackLength( ae.getSelectedSequence(), ae.getSelectedTrack(), trackData ? trackData->length.get() + value : value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_8:
-                ae.setTrackLevel( ae.getSelectedSequence(), ae.getSelectedTrack(), trackData ? trackData->level.get() + value : value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_9:
-                ae.setTrackTranspose( ae.getSelectedSequence(), ae.getSelectedTrack(), trackData ? trackData->transpose.get() + value : value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_10:
-                ae.setSelectedTrack( ae.getSelectedTrack() + value );
-                break;
-                //metronome
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_11:
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_12:
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_13:
-                metronome.linkRotated( knob % 10, value );
-                break;
-        }
+        applySequenceKnob( ae, metronome, knob, value );
     }
 
     void KickSongMode::resized()
@@ -522,6 +610,8 @@ namespace kick_ui
         seqSongBpm.setBoundsRelative( .513f, .029f, .049f, .082f );
 
         exportt.setBoundsRelative( .738f, .029f, .049f, .082f );
+        renameSong.setBoundsRelative( .440f, .029f, .115f, .082f );
+        deleteSongBtn.setBoundsRelative( .565f, .029f, .135f, .082f );
 
         content.setBounds( b.reduced( 10 ) );
     }
@@ -530,11 +620,8 @@ namespace kick_ui
     {
         switch( Type )
         {
-            case contracts::DeviceControlContracts::EN_PLAY:
-            case contracts::DeviceControlContracts::EN_PLAYSTART:
-                content.playOrResume();
-                header.setPlayState( true, juce::dontSendNotification );
-                break;
+            case contracts::DeviceControlContracts::EN_PLAY: header.setPlayState( content.playOrResume( false ), juce::dontSendNotification ); break;
+            case contracts::DeviceControlContracts::EN_PLAYSTART: header.setPlayState( content.playOrResume( true ), juce::dontSendNotification ); break;
             case contracts::DeviceControlContracts::EN_STOP:
                 content.stopOrPause();
                 header.setPlayState( false, juce::dontSendNotification );
@@ -559,7 +646,10 @@ namespace kick_ui
         songListBox.setFocus( visible );
         for( auto it : getChildren() )
             it->setVisible( visible );
-        header.setPlayState( false );
+        bpmNumber.setVisible( visible && kSongTempoOverrideAvailable );
+        seqSongBpm.setVisible( visible && kSongTempoOverrideAvailable );
+        exportt.setVisible( visible && kSongExportAvailable );
+        header.setPlayState( false, juce::dontSendNotification );
         if( visible )
         {
             contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
@@ -598,7 +688,9 @@ namespace kick_ui
     {
         step = Step;
         seqName.setText( step.dispName, juce::dontSendNotification );
-        repeat.setValue( step.repeatCount, juce::sendNotification );
+        // No notification: only the user's own change may write to the engine (onRepeatChanged).
+        repeat.setValue( step.repeatCount, juce::dontSendNotification );
+        seqName.setTextColour( song_logic::isMissingStep( step.seqNo ) ? juce::Colours::red : ui::Theme::textColour( 1 ) );
         bpm.setValue( step.bpm, juce::dontSendNotification );
         bars.setValue( step.bars, juce::dontSendNotification );
     }

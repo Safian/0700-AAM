@@ -68,6 +68,7 @@ namespace mt
         void editStep( MTSongStepInfo& Step, int AtIndex );
         void removeStep( int Index );
         void removeAllSteps();
+        void setName( const juce::String& Name );
 
         MTSongInfo getInfo() const;
 
@@ -97,6 +98,7 @@ namespace mt
         void createSong( const juce::String& SongName );
         void deleteSong( const juce::String& SongName );
         void deleteSong( int Index );
+        void renameSong( const juce::String& OldName, const juce::String& NewName );
 
         MTSongInfo getSongInfo( const juce::String& SongName );
         void       addSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex = -1 );
