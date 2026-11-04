@@ -1416,8 +1416,11 @@ public:
                 break;
             case HW_BTN_OCTAVE_DOWN:
             case HW_BTN_OCTAVE_UP:
+            {
+                std::lock_guard<std::mutex> lk(m_transpose_mutex);
                 m_key_transpose.release(btn == HW_BTN_OCTAVE_UP);
                 break;
+            }
             case HW_BTN_STOP:
                 sendButtonMsg(contracts::DeviceControlContracts::BtnLedSequence::EN_STOP, contracts::DeviceControlContracts::BTN_RELEASED);
                 break;
@@ -1825,6 +1828,16 @@ public:
         int sounding_pitch;
         {
             std::lock_guard<std::mutex> lk(m_transpose_mutex);
+            if (m_key_transpose.isChordActive()) {
+                KeyTranspose::Action act = m_key_transpose.pressKey(pitch);
+                if (act != KeyTranspose::None) {
+                    updateOctaveLeds();
+                    printf("[BRIDGE] Octave %d, transpose %d semitones (chord key %d)\n",
+                           m_key_transpose.octave(), m_key_transpose.semitone(), pitch);
+                    fflush(stdout);
+                }
+                return; // Chord key does not sound
+            }
             sounding_pitch = m_key_transpose.soundingPitch(pitch);
         }
         if (pitch >= 0 && pitch < 128) {
@@ -1841,6 +1854,9 @@ public:
 
     void on_keybed_note_off(int pitch) override
     {
+        if (pitch >= 0 && pitch < 128 && m_key_pitch_map[pitch] < 0) {
+            return; // Not sounding (chord key or stray release)
+        }
         int sounding_pitch;
         if (pitch >= 0 && pitch < 128 && m_key_pitch_map[pitch] >= 0) {
             sounding_pitch = m_key_pitch_map[pitch];
