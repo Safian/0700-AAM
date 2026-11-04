@@ -205,11 +205,18 @@ namespace mt::ac
         LocateSTPDialog();
         ~LocateSTPDialog();
 
+        // The dialog applies a sequence change at once (the track / program lists depend on it): any exit that is not Apply
+        // (Cancel, the X, a tap outside) puts the selection back.
+        void restoreSelection();
+
     private:
+        bool applied{ false };
+        int  trackRow{ 0 }, progRow{ 0 };
+        void updateTrackAndProgramLists();
         int               stpEnumNum = -1;
         void              resized() override;
         void              buttonClicked( juce::Button* ) override;
-        void              close();
+        void              close( int exitCode );
         void              updateList();
         MTAudioInterface& ae{ getAudioInterface() };
 
@@ -224,7 +231,9 @@ namespace mt::ac
 
     LocateSTPDialog::LocateSTPDialog()
     {
-        seqRow = ae.getSelectedSequence();
+        seqRow   = ae.getSelectedSequence();
+        trackRow = ae.getSelectedTrack();
+        progRow  = ae.getSelectedProgram();
 
         setSize( 604, 560 );
 
@@ -246,16 +255,16 @@ namespace mt::ac
             ae.setSelectedSequence( seq.getSelectedIndex() );
             ae.setSelectedTrack( track.getSelectedIndex() );
             ae.setSelectedProgram( prog.getSelectedIndex() );
-            close();
+            applied = true;
+            close( UI::APPLY );
         };
         cancelBtn.onClick = [&]() {
-            ae.setSelectedSequence( seqRow );
-            updateList();
-            close();
+            close( UI::CANCEL );
         };
 
         seq.onSelectionChanged = [&]( int row, const juce::String& ) {
             ae.setSelectedSequence( row );
+            updateTrackAndProgramLists(); // the tracks of the new sequence
         };
         updateList();
 
@@ -276,10 +285,28 @@ namespace mt::ac
         applyBtn.setBoundsRelative( .5066f, .9f, .4586f, .0596f );
     }
 
-    void LocateSTPDialog::close()
+    void LocateSTPDialog::close( int exitCode )
     {
-        if( auto dw = getCurrentlyModalComponent() )
-            dw->exitModalState( 0 );
+        utils::exitDialog( this, exitCode ); // this dialog's own modal, not whichever is on top
+    }
+
+    void LocateSTPDialog::restoreSelection()
+    {
+        if( applied )
+            return;
+        ae.setSelectedSequence( seqRow );
+        ae.setSelectedTrack( trackRow );
+        ae.setSelectedProgram( progRow );
+    }
+
+    void LocateSTPDialog::updateTrackAndProgramLists()
+    {
+        trackList = ae.getTrackList( ae.getSelectedSequence() );
+        progList  = ae.getProgramList();
+        track.setNumColumns( juce::jmax( 1, (int)trackList.size() ) );
+        track.setListOptions( trackList, ae.getSelectedTrack() );
+        prog.setNumColumns( juce::jmax( 1, (int)progList.size() ) );
+        prog.setListOptions( progList, ae.getSelectedProgram() );
     }
 
     void LocateSTPDialog::updateList()
@@ -294,10 +321,10 @@ namespace mt::ac
         seq.setNumColumns( ae.getNumSequences() );
         seq.setListOptions( seqList, ae.getSelectedSequence() );
 
-        track.setNumColumns( ae.getNumSequences() );
+        track.setNumColumns( juce::jmax( 1, (int)trackList.size() ) );
         track.setListOptions( trackList, ae.getSelectedTrack() );
 
-        prog.setNumColumns( ae.getNumSequences() );
+        prog.setNumColumns( juce::jmax( 1, (int)progList.size() ) );
         prog.setListOptions( progList, ae.getSelectedProgram() );
     }
 
@@ -360,7 +387,12 @@ namespace mt::ac
         LocateSTPDialog* dlg = new LocateSTPDialog();
         utils::showDialog(
             "PLAYHEAD CONTROL MENU", dlg, [this, dlg]( int ) {
-                if( dlg ) delete dlg;
+                if( dlg )
+                {
+                    dlg->restoreSelection(); // any exit but Apply
+                    updateSelection();
+                    delete dlg;
+                }
             },
             dlg->getBounds(), ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
 
