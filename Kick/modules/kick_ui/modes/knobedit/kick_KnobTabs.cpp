@@ -1,20 +1,83 @@
 #include "kick_KnobTabs.h"
+#include "kick_KnobLogic.h"
 namespace kick_ui
 {
     Content::Content()
-    {}
+    {
+        mt::utils::addAndMakeVisible( this, titleLabel, subLabel );
+        for( auto& card : cards )
+            addAndMakeVisible( card );
+
+        titleLabel.setFontHeight( 18 );
+        titleLabel.setValueColour( ui::Theme::textColour( 1 ) );
+        titleLabel.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+
+        subLabel.setFontHeight( 14 );
+        subLabel.setValueColour( ui::Theme::textColour( 2 ) );
+        subLabel.setValueBackgroundColour( juce::Colours::transparentBlack );
+
+        updateQLinkDisplay( "Main" );
+    }
 
     Content::~Content()
     {}
 
+    void Content::updateQLinkDisplay( const juce::String& screenContext )
+    {
+        currentContext = screenContext.isNotEmpty() ? screenContext : "Main";
+        auto roles = knob_logic::screenQLinkRoles( currentContext.toStdString() );
+        for( size_t i = 0; i < 4; ++i )
+        {
+            cards[i].roleTitle   = juce::String( roles[i].roleName );
+            cards[i].paramName   = juce::String( roles[i].paramName );
+            cards[i].description = juce::String( roles[i].description );
+            cards[i].repaint();
+        }
+        repaint();
+    }
+
+    void Content::QLinkCard::paint( juce::Graphics& g )
+    {
+        auto bounds = getLocalBounds().toFloat();
+        mt::utils::fillRoundedRect( g, bounds.toNearestInt(), ui::Theme::backgroundColour( 5 ) );
+
+        // Header badge
+        auto headerRect = bounds.removeFromTop( 26.0f );
+        mt::utils::fillRoundedRect( g, headerRect.toNearestInt(), ui::Theme::backgroundColour( 6 ) );
+        g.setColour( ui::Theme::textColour( 1 ) );
+        g.setFont( juce::Font( 14.0f, juce::Font::bold ) );
+        g.drawText( roleTitle, headerRect.reduced( 10.0f, 0.0f ), juce::Justification::centredLeft );
+
+        // Parameter Name
+        g.setColour( ui::Theme::textColour( 1 ) );
+        g.setFont( juce::Font( 17.0f, juce::Font::bold ) );
+        g.drawText( paramName, bounds.removeFromTop( 30.0f ).reduced( 10.0f, 0.0f ), juce::Justification::centredLeft );
+
+        // Description
+        g.setColour( ui::Theme::textColour( 3 ) );
+        g.setFont( juce::Font( 12.0f, juce::Font::plain ) );
+        g.drawText( description, bounds.reduced( 10.0f, 0.0f ), juce::Justification::topLeft, true );
+    }
+
     void Content::resized()
     {
-        auto content = getLocalBounds();
+        auto b = getLocalBounds().reduced( 12 );
+        titleLabel.setBounds( b.removeFromTop( 30 ) );
+        b.removeFromTop( 4 );
+        subLabel.setBounds( b.removeFromTop( 22 ) );
+        b.removeFromTop( 10 );
+
+        int cardHeight = ( b.getHeight() - ( 3 * 8 ) ) / 4;
+        for( auto& card : cards )
+        {
+            card.setBounds( b.removeFromTop( cardHeight ) );
+            b.removeFromTop( 8 );
+        }
     }
 
     void Content::paint( juce::Graphics& g )
     {
-        mt::utils::fillRoundedRect( g, { 0, 0, 652, 460 }, ui::Theme::backgroundColour( 4 ) );
+        mt::utils::fillRoundedRect( g, getLocalBounds(), ui::Theme::backgroundColour( 4 ) );
     }
 
     CustomTab::CustomTab( KnobGrid& Knob )

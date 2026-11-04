@@ -295,6 +295,7 @@ namespace mt
         DECLARE_ID( midiInputControlState )
         DECLARE_ID( midiOutputTrackState )
         DECLARE_ID( midiOutputControlState )
+        DECLARE_ID( MidiControlModeOutputPort )
 
         DECLARE_ID( PREFCV )
         DECLARE_ID( CV0 )
@@ -319,6 +320,11 @@ namespace mt
 
         DECLARE_ID( MIDICONTROL )
         DECLARE_ID( KNOBCONTROL )
+        DECLARE_ID( defaultQLinkMode )
+        DECLARE_ID( qlinkPlayheadIncrement )
+        DECLARE_ID( swingControlAppliesTcOnRelease )
+        DECLARE_ID( showQLinkStatusWhenTouched )
+        DECLARE_ID( automationLaneFollowsQLinks )
 
         DECLARE_ID( probability )
         DECLARE_ID( ratchet )

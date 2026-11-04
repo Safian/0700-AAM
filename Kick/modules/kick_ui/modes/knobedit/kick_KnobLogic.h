@@ -177,4 +177,60 @@ namespace kick_ui::knob_logic
             return Route::Screen;
         return Route::None;
     }
+
+    // ---- QL-10: Screen Mode Q-Link Roles
+    struct ScreenQLinkRole
+    {
+        std::string roleName;
+        std::string paramName;
+        std::string description;
+    };
+
+    inline std::array<ScreenQLinkRole, 4> screenQLinkRoles( const std::string& screenContext ) noexcept
+    {
+        const auto ctx = normalise( screenContext );
+        if( ctx == "homexyview" || ctx == "xy" || ctx == "xyfx" )
+        {
+            return {{
+                { "Q-LINK 1", "Cutoff / Preset", "XY Effect Filter Cutoff / Preset" },
+                { "Q-LINK 2", "Attack", "Envelope Attack Time" },
+                { "Q-LINK 3", "Release", "Envelope Release Time" },
+                { "Q-LINK 4", "Wet/Dry", "Master Effect Mix Balance" }
+            }};
+        }
+        if( ctx == "homegridview" || ctx == "grid" )
+        {
+            return {{
+                { "Q-LINK 1", "Scroll X", "Horizontal Timeline Scroll" },
+                { "Q-LINK 2", "Scroll Y", "Vertical Note Scroll" },
+                { "Q-LINK 3", "Zoom X", "Horizontal Time Zoom" },
+                { "Q-LINK 4", "Zoom Y", "Vertical Key Zoom" }
+            }};
+        }
+        if( ctx == "menulooper" || ctx == "looper" )
+        {
+            return {{
+                { "Q-LINK 1", "Threshold", "Audio Recording Trigger Threshold" },
+                { "Q-LINK 2", "Monitor", "Input Audio Monitor Level" },
+                { "Q-LINK 3", "Gain", "Loop Playback Output Gain" },
+                { "Q-LINK 4", "Pan", "Stereo Pan Balance" }
+            }};
+        }
+        if( ctx == "menupadmixer" || ctx == "padmixer" )
+        {
+            return {{
+                { "Q-LINK 1", "Pad Level", "Selected Pad Volume Level" },
+                { "Q-LINK 2", "Pad Pan", "Selected Pad Stereo Pan" },
+                { "Q-LINK 3", "Pad Mute", "Selected Pad Mute State" },
+                { "Q-LINK 4", "Pad Solo", "Selected Pad Solo State" }
+            }};
+        }
+        // Default: Track / Main mode screen mappings
+        return {{
+            { "Q-LINK 1", "Track Transpose", "Track Semitone Transposition" },
+            { "Q-LINK 2", "Track Level", "Track Volume Level" },
+            { "Q-LINK 3", "Track Length", "Sequence Track Length in Bars" },
+            { "Q-LINK 4", "MIDI Input", "Active Track MIDI Input Channel" }
+        }};
+    }
 }
