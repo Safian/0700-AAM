@@ -62,6 +62,9 @@ namespace AudIO
         float getOutputPan() const;
         void  setOutputPan( float Pan );
 
+        bool isPostFader() const;
+        void setPostFader( bool PostFader );
+
         BusStatus   getStatus() const;
         DawInserts* getInsertsInterface() { return dynamic_cast<AudIO::DawInserts*>( this ); }
 

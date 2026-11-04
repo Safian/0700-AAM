@@ -3,6 +3,7 @@
 // periods, beat repeat slice, phaser, no NaN. Build: g++ -std=c++17 -Wall -Wextra -fsanitize=address,undefined TouchFxTests.cpp
 #include "../../../AudIO/AudIO/Dsp/TouchFx.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -259,6 +260,43 @@ int main()
             fx.process( c, 1, std::min( kBlock, 4800 - i ) );
         }
         CHECK( std::isfinite( in[4000] ) );
+    }
+
+    // ---- CPU performance & per-block timing: 1 second of audio in 256-sample blocks
+    // At 48 kHz / 256 samples, the real-time block budget is 256 / 48000 = 5333 microseconds.
+    // Lock-free, zero-alloc audio-thread processing must easily run in a tiny fraction of this.
+    {
+        TouchFx fx;
+        fx.prepare( kRate, kBlock );
+        const auto testInput = sine( 1000.0, 48000 );
+        const int numBlocks = 48000 / kBlock;
+
+        for( int m = 1; m <= 5; ++m )
+        {
+            TouchFx::Settings s;
+            s.mode = static_cast<TouchFx::Mode>( m );
+            s.filter = TouchFx::FilterType::LowPass;
+            s.x = 0.5f; s.y = 0.5f; s.division = 3; s.gate = true;
+            s.attackMs = 10.f; s.releaseMs = 50.f; s.wet = 1.0f; s.bpm = 120.0;
+            fx.set( s );
+
+            std::vector<float> L = testInput;
+            std::vector<float> R = testInput;
+
+            const auto tStart = std::chrono::high_resolution_clock::now();
+            for( int b = 0; b < numBlocks; ++b )
+            {
+                float* ch[2] = { L.data() + b * kBlock, R.data() + b * kBlock };
+                fx.process( ch, 2, kBlock );
+            }
+            const auto tEnd = std::chrono::high_resolution_clock::now();
+            const auto totalUs = std::chrono::duration_cast<std::chrono::microseconds>( tEnd - tStart ).count();
+            const double usPerBlock = static_cast<double>( totalUs ) / numBlocks;
+
+            std::printf( "TouchFx CPU mode %d: %.2f us/block (%.2f%% of 5333 us budget)\n",
+                         m, usPerBlock, ( usPerBlock / 5333.3 ) * 100.0 );
+            CHECK( usPerBlock < 1500.0 ); // Strict assertion for unoptimized ASan/UBSan build (< 25% of 5.33 ms budget)
+        }
     }
 
     if( g_fail == 0 )
