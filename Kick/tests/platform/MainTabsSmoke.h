@@ -79,6 +79,51 @@ inline juce::String runKickMainTabsSmoke() {
     if (api.setTimeSignature(seq, 7, 8) != 0) return fail("setTimeSignature 7/8 failed");
     say("time signature 4/4 -> 3/4 (" + juce::String(len0) + " -> " + juce::String(len34) + " bars) -> 7/8 (" + juce::String(api.getSequenceLength(seq)) + " bars), undo/redo ok");
 
+
+    // ---- seek, loop and events follow the time signature (HDR-43): 4/4, 3/4, 6/8, 7/8
+    {
+        api.setSelectedSequence(seq);
+        api.setSelectedTrack(trk0);
+        if (api.addOrModifyNote(36, 1000, 96) < 0) return fail("cannot add the test note");
+        const auto noteStart = [&]() -> int {
+            auto list = api.getNoteList(seq, trk0);
+            for (int i = 0; i < list.getNumChildren(); ++i) { mt::MTNoteRO n(list.getChild(i)); if (n.number() == 36) return n.start(); }
+            return -1;
+        };
+        if (noteStart() != 1000) return fail("test note start " + juce::String(noteStart()));
+        const struct { int num, den; } cases[] = { { 4, 4 }, { 3, 4 }, { 6, 8 }, { 7, 8 } };
+        for (const auto& cc : cases) {
+            // the ticks of one bar from the engine's own resolution (96 per quarter note): 4/4 = 384, 3/4 = 6/8 = 288, 7/8 = 336
+            struct { int num, den; long long ticksPerBar; } c{ cc.num, cc.den, mt::timesig::ticksPerBar(cc.num, cc.den, mt::MTTimeSignature::defaultPPQN) };
+            const auto tag = juce::String(c.num) + "/" + juce::String(c.den);
+            if (api.setTimeSignature(seq, c.num, c.den) != 0) return fail("setTimeSignature " + tag);
+            if (api.seekToBar(seq, 2) < 0 || api.getSequenceSeekTick(seq) != (int)(2 * c.ticksPerBar)) return fail("seekToBar(2) in " + tag + " is tick " + juce::String(api.getSequenceSeekTick(seq)) + " (follows global tempo: " + juce::String(api.getSequenceData(seq) && api.getSequenceData(seq)->isMasterBPM.get() ? "yes" : "no") + ")" + ", expected " + juce::String((int)(2 * c.ticksPerBar)));
+            const int len = api.getSequenceLength(seq);
+            if (len < 3) return fail("sequence too short in " + tag);
+            if (api.setSequenceLoopPoints(seq, 1, len) < 0) return fail("loop points in " + tag); // returns the loop end
+            if (api.getSequenceLoopEnd(seq) > len || api.getSequenceLoopEnd(seq) < 2) return fail("loop end " + juce::String(api.getSequenceLoopEnd(seq)) + " out of range in " + tag);
+            if (noteStart() != 1000) return fail("the event moved to tick " + juce::String(noteStart()) + " in " + tag + " (events keep their ticks)");
+        }
+        say("seek / loop / events ok in 4/4, 3/4, 6/8, 7/8");
+
+        // A sequence that follows the global tempo has the global grid: also a NEW one, and one that switches back to the global tempo.
+        api.setTimeSignature(seq, 6, 8); // global
+        const long long tpb68 = mt::timesig::ticksPerBar(6, 8, mt::MTTimeSignature::defaultPPQN);
+        api.createSequence("GridSeq");
+        const int seq2 = api.getNumSequences() - 1;
+        int n2 = 0, d2 = 0;
+        if (!api.getTimeSignature(seq2, n2, d2) || n2 != 6 || d2 != 8) return fail("a new sequence does not follow the global 6/8: " + juce::String(n2) + "/" + juce::String(d2));
+        if (api.seekToBar(seq2, 2) < 0 || api.getSequenceSeekTick(seq2) != (int)(2 * tpb68)) return fail("new sequence: seekToBar(2) is tick " + juce::String(api.getSequenceSeekTick(seq2)));
+        api.setSequenceBPMToMaster(seq2, false); // own tempo map from here on
+        if (api.setTimeSignature(seq2, 3, 4) != 0) return fail("own time signature");
+        if (api.seekToBar(seq2, 2) < 0 || api.getSequenceSeekTick(seq2) != (int)(2 * mt::timesig::ticksPerBar(3, 4, mt::MTTimeSignature::defaultPPQN))) return fail("own 3/4: seekToBar(2) is tick " + juce::String(api.getSequenceSeekTick(seq2)));
+        api.setSequenceBPMToMaster(seq2, true);   // back to global: 6/8 again, the grid follows
+        api.getTimeSignature(seq2, n2, d2);
+        if (n2 != 6 || d2 != 8 || api.seekToBar(seq2, 2) < 0 || api.getSequenceSeekTick(seq2) != (int)(2 * tpb68)) return fail("back on the global tempo: " + juce::String(n2) + "/" + juce::String(d2) + ", bar 2 at tick " + juce::String(api.getSequenceSeekTick(seq2)));
+        say("global-following sequences (new, switched back) have the global time signature grid");
+        api.setTimeSignature(seq, 4, 4);
+    }
+
     // ---- monitor persists
     auto* td = api.getTrackData(seq, trk0);
     if (!td || td->monitor.get() != 1) return fail("default Monitor is not In");
