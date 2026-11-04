@@ -371,7 +371,10 @@ namespace kick_ui
 
     IScreen* KickHome::getScreen( Screen screen )
     {
-        return screens_[screen].get();
+        // find, not operator[]: a lookup of a screen that does not exist must not insert a null entry (load() would then
+        // select it and show an empty display).
+        jassert( findScreen( screen ) != nullptr );
+        return findScreen( screen );
     }
 
     IScreen* KickHome::findScreen( Screen screen ) const
@@ -471,7 +474,8 @@ namespace kick_ui
 
     void KickHome::AssignSampleStartUp()
     {
-        dynamic_cast<AppAssignSample*>( screens_[Screen::MenuAssignSample].get() )->startup();
+        if( auto* assign = dynamic_cast<AppAssignSample*>( findScreen( Screen::MenuAssignSample ) ) )
+            assign->startup();
     }
 
     void KickHome::setHardwareDrawerVisible( bool isVisible )
@@ -586,7 +590,8 @@ namespace kick_ui
                             break;
 
                         case contracts::DeviceControlContracts::EN_LINK:
-                            dynamic_cast<KnobEdit*>( screens_[Screen::MenuKnobEdit].get() )->knobLongPress();
+                            if( auto* knobEdit = dynamic_cast<KnobEdit*>( findScreen( Screen::MenuKnobEdit ) ) )
+                                knobEdit->knobLongPress();
                             break;
                         case contracts::DeviceControlContracts::EN_SAVE:
                             if (!ae.saveProject())
@@ -613,7 +618,8 @@ namespace kick_ui
                 juce::Logger::writeToLog( log );
                 auto knob  = contracts::DclContractsHelper::getKnobCode( f_HwMsg );
                 auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
-                getScreen( Screen::MenuKnobEdit )->knobCommand( knob, value );
+                if( auto* knobScreen = findScreen( Screen::MenuKnobEdit ) )
+                    knobScreen->knobCommand( knob, value );
                 return;
             }
 
