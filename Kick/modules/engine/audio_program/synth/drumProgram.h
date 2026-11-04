@@ -36,9 +36,13 @@ namespace mt
         using ISynthObject::noteOff;
         void noteOff( int Note ) override;
 
+        void                    enablePadMetering( bool Enable ) override;
+        const AudIO::MeterData& readPadMeter( int Note ) const override;
+
     private:
         MTDrumProgram*                            pDrum{ nullptr };
         std::vector<std::unique_ptr<ISynthVoice>> voices;
         std::map<int, int>                        noteLayerIdx;
+        mutable AudIO::MeterData                  padMeterData{ 2 };
     };
 };

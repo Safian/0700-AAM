@@ -63,6 +63,10 @@ namespace mt
         tailOff = 0.0;
         lfo.reset();
         filter.reset();
+        vRmsL.store( -100.f, std::memory_order_relaxed );
+        vRmsR.store( -100.f, std::memory_order_relaxed );
+        vPeakL.store( -100.f, std::memory_order_relaxed );
+        vPeakR.store( -100.f, std::memory_order_relaxed );
 
         ISynthVoice::noteOn( Number, Velocity );
     }
@@ -206,8 +210,32 @@ namespace mt
             Buffer.addFrom( 0, 0, tempBuffer, 0, 0, numSamples, totalGainL );
             Buffer.addFrom( 1, 0, tempBuffer, 1, 0, numSamples, totalGainR );
 
+            if( master.padMeterEnabled.load( std::memory_order_relaxed ) )
+            {
+                const float* pL = tempBuffer.getReadPointer( 0 );
+                const float* pR = tempBuffer.getReadPointer( 1 );
+                float rL = 0.f, minL = 1.f, maxL = -1.f;
+                float rR = 0.f, minR = 1.f, maxR = -1.f;
+                AudIO::utils::rmsMinAndMax( pL, numSamples, rL, minL, maxL );
+                AudIO::utils::rmsMinAndMax( pR, numSamples, rR, minR, maxR );
+                float peakLinL = AudIO::utils::max( std::abs( minL ), maxL ) * totalGainL;
+                float peakLinR = AudIO::utils::max( std::abs( minR ), maxR ) * totalGainR;
+                float rmsLinL  = rL * totalGainL;
+                float rmsLinR  = rR * totalGainR;
+                vPeakL.store( AudIO::utils::linearTolog( peakLinL ), std::memory_order_relaxed );
+                vPeakR.store( AudIO::utils::linearTolog( peakLinR ), std::memory_order_relaxed );
+                vRmsL.store( AudIO::utils::linearTolog( rmsLinL ), std::memory_order_relaxed );
+                vRmsR.store( AudIO::utils::linearTolog( rmsLinR ), std::memory_order_relaxed );
+            }
+
             if( hasFinished() )
+            {
+                vRmsL.store( -100.f, std::memory_order_relaxed );
+                vRmsR.store( -100.f, std::memory_order_relaxed );
+                vPeakL.store( -100.f, std::memory_order_relaxed );
+                vPeakR.store( -100.f, std::memory_order_relaxed );
                 makeFree();
+            }
         }
     }
 

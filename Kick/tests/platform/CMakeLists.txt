@@ -24,6 +24,10 @@ add_executable(kick-mixer-logic-tests MixerLogicTests.cpp)
 add_test(NAME kick-mixer-logic COMMAND kick-mixer-logic-tests)
 set_tests_properties(kick-mixer-logic PROPERTIES TIMEOUT 10)
 
+add_executable(kick-mute-solo-tests MuteSoloTests.cpp)
+add_test(NAME kick-mute-solo COMMAND kick-mute-solo-tests)
+set_tests_properties(kick-mute-solo PROPERTIES TIMEOUT 10)
+
 add_executable(kick-midi-parser-tests MidiParserTests.cpp)
 add_test(NAME kick-midi-parser COMMAND kick-midi-parser-tests)
 set_tests_properties(kick-midi-parser PROPERTIES TIMEOUT 10)

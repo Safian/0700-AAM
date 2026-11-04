@@ -43,9 +43,11 @@ namespace kick_ui
     void OutputTrackMixer::meterUpdate()
     {
         auto& comps = getRowComponents();
-        for( auto& it : comps )
+        for( int i = 0; i < comps.size(); ++i )
         {
-            if( auto r = dynamic_cast<OutputTrackDisplay*>( it ) )
+            if( !isRowVisible( i ) )
+                continue;
+            if( auto r = dynamic_cast<OutputTrackDisplay*>( comps[i] ) )
             {
                 r->meterUpdate();
             }

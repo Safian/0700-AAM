@@ -90,9 +90,11 @@ namespace kick_ui
     void TrackMidiMixer::meterUpdate()
     {
         auto& comps = getRowComponents();
-        for( auto& it : comps )
+        for( int i = 0; i < comps.size(); ++i )
         {
-            if( auto r = dynamic_cast<TrackMidiMixerDisplay*>( it ) )
+            if( !isRowVisible( i ) )
+                continue;
+            if( auto r = dynamic_cast<TrackMidiMixerDisplay*>( comps[i] ) )
             {
                 r->meterUpdate();
             }
@@ -216,6 +218,14 @@ namespace kick_ui
             updateMonitor();
         };
 
+        armButton.onClick = [&]() {
+            if( !pTrack ) return;
+            auto currentSeq = ae.getSelectedSequence();
+            bool armed      = !ae.isTrackRecordArmed( currentSeq, pTrack->index );
+            ae.setTrackRecordArm( currentSeq, pTrack->index, armed );
+            armButton.setToggleState( armed, juce::dontSendNotification );
+        };
+
         soloButton.onClick = [&]() {
             ae.setTrackSolo( seq, pTrack->index, soloButton.getToggleState() );
             trackData->solo = ae.getTrackSolo( seq, pTrack->index );
@@ -236,15 +246,13 @@ namespace kick_ui
         };
 
         ui::themeChanged.connect( [&]() {
-            armButton.setImages( "Arm_normal" );
+            armButton.setImages( "Arm_normal", "Arm_active" );
             monitorButton.setImages( "Monitor_normal", "Monitor_active" );
             soloButton.setImages( "Solo_normal", "Solo_active" );
             muteButton.setImages( "Mute_normal", "Mute_active" );
         } );
 
-        mt::utils::addChildComponents( this, srNo, icon, trackName, trackHeader, levelMeter, midiInput, midiCh, sendTo, levelSlider, monitorButton, soloButton, muteButton );
-        // The record arm lives on the Track screen (setTrackRecordArm); the picture-only button is not shown here.
-        addChildComponent( armButton );
+        mt::utils::addChildComponents( this, srNo, icon, trackName, trackHeader, levelMeter, midiInput, midiCh, sendTo, levelSlider, monitorButton, soloButton, muteButton, armButton );
     };
 
     void TrackMidiMixerDisplay::updateMonitor()
@@ -339,6 +347,7 @@ namespace kick_ui
                 pTrack->level.onValueChange();
                 pTrack->route.onValueChange();
                 updateMonitor();
+                armButton.setToggleState( ae.isTrackRecordArmed( seq, pTrack->index ), juce::dontSendNotification );
             }
         }
     }
@@ -415,6 +424,7 @@ namespace kick_ui
         midiCh.setBoundsRelative( .3970f, .0892f, .1188f, .6071f );
         sendTo.setBoundsRelative( .5455f, .0892f, .1188f, .6071f );
         levelSlider.setBoundsRelative( .7089f, .0892f, .1188f, .8214f );
+        armButton.setBoundsRelative( .8465f, .0892f, .0594f, .3928f );
         soloButton.setBoundsRelative( .9108f, .0892f, .0594f, .3928f );
         monitorButton.setBoundsRelative( .8465f, .5178f, .0594f, .3928f );
         muteButton.setBoundsRelative( .9108f, .5178f, .0594f, .3928f );
@@ -434,7 +444,6 @@ namespace kick_ui
 
         for( auto child : getChildren() )
             child->setVisible( visible );
-        armButton.setVisible( false );
 
         if( visible )
             updateData();

@@ -80,6 +80,10 @@ namespace mt
         void setLength( int Length );
         void setUsingSeqLength( bool UseSeqLength );
         void setMute( bool Muted );
+        void scheduleMute( bool Muted, int64_t TargetTick );
+        void cancelScheduledMute();
+        bool hasScheduledMute() const;
+        int64_t getScheduledMuteTick() const;
         void setTranspose( int Transpose );
         void setMidiPort( const juce::String& MidiPort );
         void setMidiChannel( int MidiChannel );
@@ -147,6 +151,7 @@ namespace mt
         int timingCorrectLocked( const track::timingCorrectInfo& Info, const std::set<int>* OnlyIds = nullptr );
         // Track length in ticks (0 = not set yet); thread safe.
         int getLengthTicks() const { return (int)lengthInTicks.load(); }
+        unsigned int getTickCtr() const noexcept { return tickCtr; }
 
         // Arpeggiator (per track). Acts on live input only (processIncomingMidiMessage) and is stepped by onTick, so it
         // runs while the transport plays; with the transport stopped, live notes pass through unchanged. Setters may be
@@ -266,6 +271,8 @@ namespace mt
         unsigned int          prevTick{ 0 };
         unsigned int          tickCtr{ 0 };
         unsigned int          tickPos{ 0 };
+        std::atomic<bool>     pendingMuteState{ false };
+        std::atomic<int64_t>  pendingMuteTick{ -1 };
         std::atomic<double>   levelScaler{ 1.f }; // written by the UI thread (level change) and by onTick (Read mode)
         // Automation lane state (see automation methods above).
         automation::Lane      laneLevel;               // guarded by `lock` (reader: onTick) + laneWriteLock (writers)

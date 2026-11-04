@@ -85,9 +85,11 @@ namespace kick_ui
         else
         {
             auto& comps = getRowComponents();
-            for( auto& it : comps )
+            for( int i = 0; i < comps.size(); ++i )
             {
-                if( auto r = dynamic_cast<AudioTrackDisplay*>( it ) )
+                if( !isRowVisible( i ) )
+                    continue;
+                if( auto r = dynamic_cast<AudioTrackDisplay*>( comps[i] ) )
                 {
                     r->meterUpdate();
                 }

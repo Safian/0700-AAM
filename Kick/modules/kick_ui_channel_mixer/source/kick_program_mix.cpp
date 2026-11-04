@@ -102,9 +102,11 @@ namespace kick_ui
     void ProgramMixer::meterUpdate()
     {
         auto& comps = getRowComponents();
-        for( auto& it : comps )
+        for( int i = 0; i < comps.size(); ++i )
         {
-            if( auto r = dynamic_cast<ProgramMixerDisplay*>( it ) )
+            if( !isRowVisible( i ) )
+                continue;
+            if( auto r = dynamic_cast<ProgramMixerDisplay*>( comps[i] ) )
             {
                 r->meterUpdate();
             }

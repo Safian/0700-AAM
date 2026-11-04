@@ -93,6 +93,31 @@ int main()
     for( auto& s : t )
         CHECK( !s.solo && !s.soloMuted );
 
+    // Main Volume apply & pickup model (CM-11, CM-17).
+    VolumePickupState v;
+    v.currentGain = 0.8f;
+    v.pickedUp = false;
+    // Direct mode applies immediately regardless of pickedUp state
+    CHECK( v.applyHardwareGain( 0.2f, false ) );
+    CHECK( near( v.currentGain, 0.2f ) );
+    CHECK( v.pickedUp );
+
+    // Pickup mode with gap > tolerance blocks updates
+    v.currentGain = 0.8f;
+    v.pickedUp = false;
+    CHECK( !v.applyHardwareGain( 0.3f, true ) );
+    CHECK( near( v.currentGain, 0.8f ) );
+    CHECK( !v.pickedUp );
+
+    // Approaching within tolerance (0.05) achieves pickup
+    CHECK( v.applyHardwareGain( 0.82f, true ) );
+    CHECK( near( v.currentGain, 0.82f ) );
+    CHECK( v.pickedUp );
+
+    // Once picked up, subsequent movements apply freely
+    CHECK( v.applyHardwareGain( 0.5f, true ) );
+    CHECK( near( v.currentGain, 0.5f ) );
+
     std::puts( fails ? "FAILED" : "OK" );
     return fails ? 1 : 0;
 }
