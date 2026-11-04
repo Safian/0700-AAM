@@ -31,6 +31,7 @@ namespace kick_ui
             content.setVisible( true );
             customContent.setVisible( false );
             knobControl.setMode( 1 );
+            content.updateQLinkDisplay();
             knob.repaint();
         };
         custom.onClick = [&] {
@@ -149,6 +150,7 @@ namespace kick_ui
                 tracks.setListOptions( options );
             }
             tracks.setSelected( sel.track, juce::sendNotification );
+            content.updateQLinkDisplay();
         }
     }
 }

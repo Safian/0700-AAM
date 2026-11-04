@@ -136,6 +136,7 @@ namespace mt
         Atomic<bool> opControlState;
         AtomicString ipPortName;
         AtomicString opPortName;
+        AtomicString midiControlModeOutputPort; // MC-21
     };
 
     /// ///////////////////////////////////
@@ -228,14 +229,21 @@ namespace mt
     };
 
     /// ///////////////////////////////////
-    ///    KNOB Control .
+    ///    KNOB Control (QL-13)
     /// ///////////////////////////////////
-    struct KickKnobControl
+    struct KickKnobControl : public MTIVTBase
     {
-        inline int  getMode() const { return knobMode; };
-        inline void setMode( int mode ) { knobMode = mode; };
+        void setup( juce::ValueTree VT, juce::UndoManager* Undo );
+        bool isValid();
 
-        int knobMode{ 1 };
+        inline int  getMode() const { return defaultQLinkMode.get(); }
+        inline void setMode( int mode ) { defaultQLinkMode = mode; }
+
+        Atomic<int>  defaultQLinkMode;
+        Atomic<int>  qlinkPlayheadIncrement;
+        Atomic<bool> swingControlAppliesTcOnRelease;
+        Atomic<bool> showQLinkStatusWhenTouched;
+        Atomic<bool> automationLaneFollowsQLinks;
     };
 
     /// ///////////////////////////////////

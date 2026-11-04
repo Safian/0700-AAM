@@ -108,6 +108,26 @@ int main()
     in.screenHandlesCommands = false;
     CHECK( routeHardwareMessage( in ) == Route::None );
 
+    // ---- QL-10: Screen Mode Q-Link roles
+    const auto xyRoles = screenQLinkRoles( "HomeXYView" );
+    CHECK( xyRoles[0].roleName == "Q-LINK 1" );
+    CHECK( xyRoles[0].paramName == "Cutoff / Preset" );
+    CHECK( xyRoles[3].paramName == "Wet/Dry" );
+
+    const auto looperRoles = screenQLinkRoles( "MenuLooper" );
+    CHECK( looperRoles[0].paramName == "Threshold" );
+    CHECK( looperRoles[1].paramName == "Monitor" );
+    CHECK( looperRoles[2].paramName == "Gain" );
+    CHECK( looperRoles[3].paramName == "Pan" );
+
+    const auto gridRoles = screenQLinkRoles( "Grid" );
+    CHECK( gridRoles[0].paramName == "Scroll X" );
+    CHECK( gridRoles[2].paramName == "Zoom X" );
+
+    const auto defaultRoles = screenQLinkRoles( "Main" );
+    CHECK( defaultRoles[0].paramName == "Track Transpose" );
+    CHECK( defaultRoles[1].paramName == "Track Level" );
+
     if( g_fail == 0 )
         std::printf( "QLinkLogicTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;
