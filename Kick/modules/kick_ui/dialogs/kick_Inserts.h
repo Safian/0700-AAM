@@ -16,9 +16,16 @@ namespace kick_ui
     private:
         void paint( juce::Graphics& g ) override;
         void resized() override;
+        void updateFilteredList();
+        void showDocFor( const juce::String& name );
 
-        ui::KickList insertCategories{ "INSERT CATEGORY" };
-        ui::KickList insertList{ "INSERTS", {}, 0, 2 };
+        ui::KickLabel        searchLabel{ "SEARCH:" };
+        ui::KickTextEditor   searchBox{ "" };
+        ui::KickList         insertCategories{ "CATEGORY" };
+        ui::KickList         insertList{ "INSERTS", {}, 0, 2 };
+        ui::KickLabel        docTitle{ "DESCRIPTION" };
+        juce::TextEditor     docEditor;
+        std::vector<juce::String> allCategoryItems;
     };
 
     class InsertsOptions
@@ -36,6 +43,7 @@ namespace kick_ui
 
     private:
         void setupControls( int NumControls );
+        void openNativeGui();
 
         void visibilityChanged() override;
         void paint( juce::Graphics& g ) override;
@@ -48,6 +56,9 @@ namespace kick_ui
 
         ui::KickLabel                                insertName;
         ui::KickToggleButton                         enable;
+        ui::KickLabel                                latencyTailLabel;
+        ui::KickLabel                                guiNoticeLabel;
+        ui::KickButton                               openGuiButton{ "OPEN GUI" };
         std::vector<std::unique_ptr<ui::KickRotary>> rotary;
     };
 
@@ -80,6 +91,8 @@ namespace kick_ui
         std::array<ui::KickButton, numRows>       inserts;
         std::array<ui::KickToggleButton, numRows> enable;
         std::array<ui::KickToggleButton, numRows> add;
+        std::array<ui::KickButton, numRows>       moveUp;
+        std::array<ui::KickButton, numRows>       moveDown;
         int                                       selected{ -1 };
 
         ui::KickLabel        allInserts{ "ALL INSERTS" };

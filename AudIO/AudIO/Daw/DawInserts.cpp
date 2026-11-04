@@ -33,6 +33,20 @@ namespace AudIO
         return -1;
     }
 
+    int DawInserts::InsertEffects::setObject( std::unique_ptr<Object> obj, uint32_t Samplerate, uint32_t Blocksize )
+    {
+        bypassed.store( true );
+        pObj = std::move( obj );
+        if( pObj.get() )
+        {
+            if( 0 < Blocksize )
+                pObj->prepareToPlay( Samplerate, Blocksize );
+            bypassed.store( false );
+            return 0;
+        }
+        return -1;
+    }
+
     bool DawInserts::InsertEffects::isSame( const std::string& Effect ) const
     {
         if( !pObj.get() )
@@ -69,6 +83,53 @@ namespace AudIO
             return pIns->create( Effect, _rate, _block );
         }
         return -1;
+    }
+
+    int DawInserts::addEffect( std::unique_ptr<Object> customObj, unsigned int Position )
+    {
+        if( auto pIns = getEffect( Position ) )
+        {
+            pIns->reset();
+            return pIns->setObject( std::move( customObj ), _rate, _block );
+        }
+        return -1;
+    }
+
+    int DawInserts::swapEffects( unsigned int fromPos, unsigned int toPos )
+    {
+        if( fromPos >= _inserts.size() || toPos >= _inserts.size() )
+            return -1;
+        if( fromPos == toPos )
+            return 0;
+
+        bool fromBypassed = _inserts[fromPos].bypassed.exchange( true );
+        bool toBypassed   = _inserts[toPos].bypassed.exchange( true );
+
+        std::swap( _inserts[fromPos].pObj, _inserts[toPos].pObj );
+
+        _inserts[fromPos].bypassed.store( toBypassed );
+        _inserts[toPos].bypassed.store( fromBypassed );
+        return 0;
+    }
+
+    int DawInserts::moveEffect( unsigned int fromPos, unsigned int toPos )
+    {
+        if( fromPos >= _inserts.size() || toPos >= _inserts.size() )
+            return -1;
+        if( fromPos == toPos )
+            return 0;
+
+        if( fromPos < toPos )
+        {
+            for( unsigned int i = fromPos; i < toPos; ++i )
+                swapEffects( i, i + 1 );
+        }
+        else
+        {
+            for( unsigned int i = fromPos; i > toPos; --i )
+                swapEffects( i, i - 1 );
+        }
+        return 0;
     }
 
     int DawInserts::removeEffect( const std::string& Effect )
@@ -112,6 +173,12 @@ namespace AudIO
     {
         auto pIns = getEffect( Position );
         return ( pIns && pIns->pObj.get() ) ? pIns->pObj->getName() : _emptyStr;
+    }
+
+    Object* DawInserts::getEffectObject( unsigned int Position )
+    {
+        auto pIns = getEffect( Position );
+        return ( pIns && pIns->pObj ) ? pIns->pObj.get() : nullptr;
     }
 
     // Effect Parameters...
