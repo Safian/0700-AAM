@@ -67,9 +67,9 @@ namespace mt
         }
     }
 
-    MTIDrum* MTDrumProgram::getDrumClip( int Note )
+    MTDrumClip* MTDrumProgram::getDrumClip( int Note )
     {
-        return dynamic_cast<MTIDrum*>( getSample( Note ) );
+        return dynamic_cast<MTDrumClip*>( getSample( Note ) );
     }
 
     ///
@@ -78,7 +78,7 @@ namespace mt
     std::unique_ptr<MTISample> MTDrumProgram::iSampleCreator( int Note )
     {
         auto vt       = juce::ValueTree{ IDs::CLIP };
-        auto clip     = std::make_unique<MTIDrum>( vt, um );
+        auto clip     = std::make_unique<MTDrumClip>( vt, um );
         clip->minNote = Note;
         clip->maxNote = Note;
         clip->keyNote = Note;
@@ -87,7 +87,7 @@ namespace mt
 
     std::unique_ptr<MTISample> MTDrumProgram::iSampleCreator( juce::ValueTree& VT, juce::UndoManager* UM )
     {
-        return VT.hasType( IDs::CLIP ) ? ( std::make_unique<MTIDrum>( VT, UM ) ) : nullptr;
+        return VT.hasType( IDs::CLIP ) ? ( std::make_unique<MTDrumClip>( VT, UM ) ) : nullptr;
     }
 
     LayerPlayType MTDrumProgram::getNoteLayerPlay( int Note )

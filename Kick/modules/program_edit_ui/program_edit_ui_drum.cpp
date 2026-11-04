@@ -22,6 +22,7 @@
 #include "sources/drum/kick_DrumProgramLfoModulation.h"
 #include "sources/drum/kick_DrumProgramLayerMix.h"
 #include "sources/drum/kick_DrumProgramEnvelopes.h"
+#include "sources/drum/kick_DrumProgramFilter.h"
 #include "sources/drum/kick_DrumInserts.h"
 
 //
@@ -35,4 +36,5 @@
 #include "sources/drum/kick_DrumProgramLfoModulation.cpp"
 #include "sources/drum/kick_DrumProgramLayerMix.cpp"
 #include "sources/drum/kick_DrumProgramEnvelopes.cpp"
+#include "sources/drum/kick_DrumProgramFilter.cpp"
 #include "sources/drum/kick_DrumInserts.cpp"

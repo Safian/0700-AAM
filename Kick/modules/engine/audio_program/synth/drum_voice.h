@@ -34,7 +34,14 @@ namespace mt
             : ISynthVoice( Master, Slice ) {}
         virtual ~DrumVoice() = default;
 
-        void attachToAndReset( const juce::ValueTree& Tree, juce::UndoManager* Undo );
+        // Points the voice at the clip's LFO / envelope / filter atomics (no allocation, no ValueTree listener: safe at note-on on the
+        // audio thread). The shared_ptr keeps the parameters alive while the voice plays. nullptr: the neutral defaults.
+        void bindParams( const std::shared_ptr<MTDrumVoiceParams>& Params )
+        {
+            params = Params;
+            pLfo   = params ? &params->lfo : &defaultLfo;
+            pEnv   = params ? &params->env : &defaultEnv;
+        }
         void noteOn( int Number, int Velocity ) final;
         void noteOff() final;
 
@@ -64,8 +71,12 @@ namespace mt
         void process( juce::AudioBuffer<float>& Buffer );
 
     private:
-        MTIAtomicLFO       pLfo;
-        MTIAtomicEnvelopes pEnv;
+        MTIAtomicLFO       defaultLfo;
+        MTIAtomicEnvelopes defaultEnv;
+        MTIAtomicLFO*       pLfo{ &defaultLfo };
+        MTIAtomicEnvelopes* pEnv{ &defaultEnv };
+
+        std::shared_ptr<MTDrumVoiceParams> params;
 
         AudIO::Panner<float> panner;
         AudIO::LFO           lfo;
@@ -78,6 +89,8 @@ namespace mt
 
         std::atomic<float> padGainL{ 1.0f };
         std::atomic<float> padGainR{ 1.0f };
+
+        float lastLfoFreq{ -1.f };
 
         float lfoToAmp{ 0 };
         float lfoToPitch{ 0 };
