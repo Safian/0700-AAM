@@ -234,6 +234,23 @@ int main()
         check(live_notes_off == 1, "normal note-off triggered");
         check(key_pitch_map[60] == -1, "pitch map cleared");
     }
+    { // W3-A: on-screen steps share the physical transposition (no held-button state)
+        KeyTranspose k;
+        check(k.step(true, false) == KeyTranspose::OctaveChanged && k.octave() == 1, "screen octave up");
+        check(k.step(true, true) == KeyTranspose::TransposeChanged && k.semitone() == 1, "screen semitone up");
+        check(k.soundingPitch(60) == 60 + 12 + 1, "sounding pitch follows the screen step");
+        for (int i = 0; i < 10; ++i) k.step(true, false);
+        check(k.octave() == KeyTranspose::kMaxOctave, "octave clamps at +3");
+        check(k.step(true, false) == KeyTranspose::None, "no step beyond the clamp");
+        check(!k.isChordActive(), "screen steps never enter chord mode");
+        check(k.resetTranspose() == KeyTranspose::Reset && k.octave() == 0 && k.semitone() == 0, "screen reset");
+        check(k.resetTranspose() == KeyTranspose::None, "reset at 0 is no change");
+        // physical OCT button held while a screen step happens: the held state is untouched
+        k.press(true, false);
+        k.step(false, false);
+        check(k.isChordActive() == false, "one physical button held, still no chord");
+        k.release(true);
+    }
     std::puts("ok");
     return 0;
 }
