@@ -14,9 +14,10 @@ static void check(bool ok, const char* why)
 int main()
 {
     using namespace kick_hw::strip;
-    // cycle: Kick slider first, then the manual's order (p. 101): Pitch Bend, Pad Level, Mod Wheel, Track Level, Sustain, Touch FX, Expression, Notes, Q-Link, Crossfader, Off (12 modes)
-    const int expected[] = { kSlider, kPitchBend, kPadLevel, kModWheel, kTrackLevel, kSustain, kTouchFx, kExpression, kNotes, kQLink, kCrossfader, kOff };
-    check(kNumModes == 12 && (int)(sizeof(expected) / sizeof(expected[0])) == kNumModes, "12 modes");
+    // cycle: Kick slider first, then the manual's order (p. 101); Q-Link / Crossfader are not cycled until the bridge drives them
+    const int expected[] = { kSlider, kPitchBend, kPadLevel, kModWheel, kTrackLevel, kSustain, kTouchFx, kExpression, kNotes, kOff };
+    check(kQLink >= kNumModes && kCrossfader >= kNumModes, "Q-Link / Crossfader are outside the cycle (the bridge does not handle them)");
+    check(kNumModes == 10 && (int)(sizeof(expected) / sizeof(expected[0])) == kNumModes, "10 modes");
     int m = kSlider;
     for (int i = 0; i < kNumModes; ++i) { check(m == expected[i], "cycle order"); m = nextMode(m); }
     check(m == kSlider, "off -> slider (wraps)");

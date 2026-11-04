@@ -19,10 +19,13 @@ enum Mode {
     kTouchFx     = 6,
     kExpression  = 7,
     kNotes       = 8,
-    kQLink       = 9,
-    kCrossfader  = 10,
-    kOff         = 11,
-    kNumModes    = 12
+    kOff         = 9,
+    kNumModes    = 10,
+    // QL-12: modes of the MPC that the bridge does not drive yet (the maths below is ready and tested). They are NOT in the
+    // TOUCH STRIP button cycle: nextMode() stops at kNumModes, so the strip never lands on a mode that does nothing. When the
+    // bridge handles them (see REPORT.md, QL-12) they move in front of kOff and kNumModes grows.
+    kQLink       = 10,
+    kCrossfader  = 11
 };
 
 constexpr int kPitchCentre = 8192;  // 14-bit pitch wheel centre
