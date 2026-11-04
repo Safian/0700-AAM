@@ -287,12 +287,12 @@ namespace mt
                     params.push_back( thresholdNumber.getValue() );
                     params.push_back( minTimeNumber.getValue() );
                     seData.splitByThresh( params );
-                    utils::exitDialog( p->getCurrentlyFocusedComponent(), UI::CANCEL );
+                    utils::exitDialog( p, UI::CANCEL );
                 };
 
                 p->onCombineClicked = [p, this]() {
                     seData.joinSelectedAndPrev();
-                    utils::exitDialog( p->getCurrentlyFocusedComponent(), UI::CANCEL );
+                    utils::exitDialog( p, UI::CANCEL );
                 };
 
                 utils::showDialog( "SLICE / COMBINE", p, [p, this]( int R ) {

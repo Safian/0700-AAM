@@ -147,7 +147,7 @@ namespace ui
 
         auto& keyboard          = ui::KickVirtualKeyBoard::getWithText( enableEmptyText ? "" : Editor->getText() );
         keyboard.onEnterPressed = [&keyboard, this]( int v ) {
-            mt::utils::exitDialog( keyboard.getCurrentlyFocusedComponent(), v );
+            mt::utils::exitDialog( &keyboard, v );
         };
 
         keyboard.show(
@@ -155,14 +155,14 @@ namespace ui
                 if( r == UI::BUTTONS::APPLY )
                 {
                     auto text = keyboard.getInputText();
-                    if( text.containsNonWhitespaceChars() )
+                    if( text.containsNonWhitespaceChars() && text.isNotEmpty() )
                     {
-                        if( 0 < text.length() )
-                            setText( text, juce::sendNotification );
+                        setText( text, juce::sendNotification );
                     }
-                    if( onKeyBoardEnd )
-                        onKeyBoardEnd();
                 }
+                hideEditor( true );
+                if( onKeyBoardEnd )
+                    onKeyBoardEnd();
             },
             ui::layout::keyBoardPopup );
     }

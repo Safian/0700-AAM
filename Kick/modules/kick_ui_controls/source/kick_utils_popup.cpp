@@ -158,6 +158,10 @@ namespace mt
             cancel.onClick      = [&]() { utils::exitDialog( this, UI::CANCEL ); };
             closeButton.onClick = [&]() { utils::exitDialog( this, UI::CANCEL ); };
 
+            apply.setClickingTogglesState( false );
+            cancel.setClickingTogglesState( false );
+            closeButton.setClickingTogglesState( false );
+
             ui::themeChanged.connect( [&]() {
                 closeButton.setImages( "Icon Close" );
             } );
