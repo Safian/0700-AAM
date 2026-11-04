@@ -100,9 +100,13 @@ set_tests_properties(kick-audio-platform PROPERTIES TIMEOUT 20)
 add_executable(kick-key-transpose-tests KeyTransposeTests.cpp)
 add_test(NAME kick-key-transpose COMMAND kick-key-transpose-tests)
 set_tests_properties(kick-key-transpose PROPERTIES TIMEOUT 10)
+if(TARGET Kick)
+    # The in-app smoke hooks (KICK_SMOKE_* env, AppSmoke.h) exist whenever the platform tests are built; the CLAP fixture
+    # is only needed by the Python supervisor tests below.
+    target_compile_definitions(Kick PRIVATE KICK_APP_SMOKE_TEST=1)
+endif()
 if(TARGET Kick AND TARGET kick-clap-fixture-normal)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    target_compile_definitions(Kick PRIVATE KICK_APP_SMOKE_TEST=1)
     add_dependencies(Kick kick-clap-fixture-normal)
     add_test(NAME kick-app-smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/AppSmoke.py"
         $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}" $<TARGET_FILE:kick-clap-fixture-normal>)
