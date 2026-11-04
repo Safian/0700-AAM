@@ -3,6 +3,7 @@ namespace ui
     FilePopup::FilePopup( juce::String Info, bool isYes, bool isNo, int x, int y, int width )
         : info( Info ), startX( x ), startY( y ), width( width )
     {
+        getProperties().set( "outsideTapCancels", true ); // a confirmation: a tap beside it is a "No"
         mt::utils::addChildComponents( this, yes, no, info );
         yes.setVisible( isYes );
         no.setVisible( isNo );
@@ -18,7 +19,7 @@ namespace ui
         info.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
         info.setValueJustification( juce::Justification::centred );
 
-        ui::themeChanged.connect( [&]() {
+        themeConn = ui::themeChanged.connect( [this]() {
             no.setImages( "No" );
             yes.setImages( "Yes" );
         } );
@@ -26,8 +27,7 @@ namespace ui
 
     void FilePopup::close( int State )
     {
-        if( auto dw = getCurrentlyModalComponent() )
-            dw->exitModalState( State );
+        mt::utils::exitDialog( this, State ); // this popup's own dialog, not whichever modal is on top
     }
 
     void FilePopup::resized()

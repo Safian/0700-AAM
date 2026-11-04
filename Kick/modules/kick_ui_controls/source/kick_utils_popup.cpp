@@ -327,8 +327,14 @@ namespace mt
 
         void mouseDown( const juce::MouseEvent& e )
         {
-            if( !dialogArea.contains( e.getPosition() ) )
-                utils::exitDialog( this, UI::CANCEL );
+            if( dialogArea.contains( e.getPosition() ) )
+                return;
+            // A tap beside the dialog closes (cancels) it, except an EDITOR (a dialog with Apply / Cancel whose content is not a
+            // confirmation): an accidental tap must not throw away what was entered; those close with Cancel / X / Apply.
+            const bool confirmation = pCont != nullptr && pCont->getProperties().getWithDefault( "outsideTapCancels", false );
+            if( showYesNoButtons && !confirmation )
+                return;
+            utils::exitDialog( this, UI::CANCEL );
         }
 
         double getIncrement() { return 1.0; }
@@ -354,8 +360,12 @@ namespace mt
 
         _popups.emplace_back( new Type() );
         auto& p = _popups.back();
-        auto  c = juce::TopLevelWindow::getActiveTopLevelWindow();
-        c->addAndMakeVisible( p.get() );
+        // The top-level window of the MPC is hidden (no "active" window): fall back to the first one that exists.
+        auto c = juce::TopLevelWindow::getActiveTopLevelWindow();
+        if( c == nullptr && juce::TopLevelWindow::getNumTopLevelWindows() > 0 )
+            c = juce::TopLevelWindow::getTopLevelWindow( 0 );
+        if( c != nullptr )
+            c->addAndMakeVisible( p.get() );
         return p.get();
     }
 
