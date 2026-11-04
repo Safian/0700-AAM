@@ -73,11 +73,13 @@ namespace mt
 
         if( vTree == treeWhosePropertyHasChanged )
         {
-            if( Property.toString().containsIgnoreCase( "CC" ) )
+            // Strictly "CC<number>" (what the Q-Link Edit and the program page write): any other property that merely
+            // contains "cc" must never become a controller message.
+            const auto propName     = Property.toString();
+            const bool isCcProperty = propName.startsWith( "CC" ) && propName.length() > 2 && propName.substring( 2 ).containsOnly( "0123456789" ) && propName.substring( 2 ).getIntValue() <= 127;
+            if( isCcProperty )
             { // CC messages...
-                auto controllerS = Property.toString().trim().trimCharactersAtStart( "CC" );
-
-                const auto controllerType = controllerS.getIntValue();
+                const auto controllerType = propName.substring( 2 ).getIntValue();
                 const auto value          = (int)vTree.getProperty( Property, 0 );
                 auto       msg            = juce::MidiMessage::controllerEvent( getMidiChannel(), controllerType, value );
 

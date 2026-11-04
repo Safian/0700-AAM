@@ -24,7 +24,6 @@ namespace kick_ui
 {
     class KnobEdit : public kick_ui::IScreen
         , public juce::Component
-        , private juce::Timer
     {
     public:
         KnobEdit();
@@ -41,11 +40,10 @@ namespace kick_ui
         void         knobCommand( int knobnum, int value ) override;
         void         handleCommand( CPktMgr::HWMsg_t& ) override;
 
-        void knobLongPress();
-        void timerCallback() override;
+        void nextQLinkRow();
 
     private:
-        int                     timeinms = 5000;
+        int                     qlinkRow{ 0 };
         mt::KickKnobControl&    knobControl{ mt::getSettings().knobControl };
         kick_ui::KickModeHeader header{ "Q-Link Edit", "Icon_qlink" };
         ui::KickListBox         tracks{ ui::KickListBox::withoutTitleBar, "TRACK", {} };
@@ -56,7 +54,6 @@ namespace kick_ui
         KnobGrid                knob;
         Content                 content;
         CustomTab               customContent{ knob };
-        juce::Component*        comp{ nullptr };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( KnobEdit )
     };
