@@ -75,6 +75,12 @@ AppTrackDisplay::AppTrackDisplay( int Seq, int Track )
     arm.onArmChanged = [&]( bool On ) {
         ae.setTrackRecordArm( seq, track, On ); // Rec Arm: the track takes part in the next REC / OVERDUB take
     };
+    // Monitor: Off -> In -> Auto -> Off. Whether the external MIDI input of this track is heard (mt_track_monitor.h).
+    monitor.onClick = [&]() {
+        if( !pTrack ) return;
+        pTrack->monitor = mt::trackmonitor::next( pTrack->monitor.get() );
+        monitorValueHandler();
+    };
     mute.onClick = [&]() {
         if( !pTrack ) return;
 
@@ -156,6 +162,8 @@ void AppTrackDisplay::setTrack( int Seq, int Track )
     auto transposeValueHandler   = [&]() { transpose.setValue( pTrack ? (double)pTrack->transpose.get() : TRANSPOSE::DEFAULT, juce::dontSendNotification ); };
     auto programValueHandler     = [&]() {
         auto pProg = ae.getProgramDataForTrack( seq, track );
+        // An audio program has no MIDI input to monitor.
+        monitor.setEnabled( !pProg || pProg->type.get() != mt::MTProgramType::Audio );
         name.setLine2Text( pProg ? pProg->name.get() : "" );
         // Setup selector
         selector.setValues( pProg ? pProg->name.get() : "", pProg ? pProg->type.get() : mt::MTProgramType::Unknown, juce::dontSendNotification );
@@ -172,6 +180,7 @@ void AppTrackDisplay::setTrack( int Seq, int Track )
 
         trkMeter = &( ae.getTrackMeter( seq, track ) );
 
+        pTrack->monitor.onValueChange.connect( [&]() { monitorValueHandler(); }, scope );
         pTrack->name.onValueChange.connect( ( nameValueHandler ), scope );
         pTrack->programId.onValueChange.connect( ( programValueHandler ), scope );
         pTrack->mute.onValueChange.connect( ( muteValueHandler ), scope );
@@ -183,6 +192,7 @@ void AppTrackDisplay::setTrack( int Seq, int Track )
         pTrack->transpose.onValueChange.connect( ( transposeValueHandler ), scope );
 
         // Force refresh of values.
+        pTrack->monitor.onValueChange();
         pTrack->name.onValueChange();
         pTrack->programId.onValueChange();
         pTrack->mute.onValueChange();
@@ -199,6 +209,20 @@ void AppTrackDisplay::setTrack( int Seq, int Track )
 
 void AppTrackDisplay::handleAsyncUpdate()
 {
+}
+
+void AppTrackDisplay::monitorValueHandler()
+{
+    monitorMode = pTrack ? mt::trackmonitor::clamp( pTrack->monitor.get() ) : (int)mt::trackmonitor::Default;
+    monitor.setToggleState( monitorMode != mt::trackmonitor::Off, juce::dontSendNotification );
+    repaint( monitor.getBounds() );
+}
+
+// "A" on the lit button marks Auto; Off is the dark button, In the plain lit one.
+void AppTrackDisplay::paintOverChildren( juce::Graphics& g )
+{
+    if( monitorMode == mt::trackmonitor::Auto )
+        mt::utils::renderText( g, "A", monitor.getBounds(), ui::Theme::textColour( 1 ), juce::Justification::centred, 18.f );
 }
 
 void AppTrackDisplay::updateMeter()

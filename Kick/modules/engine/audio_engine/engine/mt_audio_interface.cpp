@@ -828,9 +828,20 @@ namespace mt
         return -1;
     }
 
-    int MTAudioInterface::setTimeSignature( int /*Sequence*/, int /*Numerator*/, int /*Denominator*/ )
+    int MTAudioInterface::setTimeSignature( int Sequence, int Numerator, int Denominator )
     {
-        return -1;
+        return manager->setTimeSignature( Sequence, Numerator, Denominator );
+    }
+
+    bool MTAudioInterface::getTimeSignature( int Sequence, int& Numerator, int& Denominator )
+    {
+        auto s = manager->getSequence( Sequence );
+        if( !s )
+            return false;
+        auto& t     = s->isUsingMasterBPM() ? manager->getTempoSettings( 0 ) : s->getTempoSettings( 0 );
+        Numerator   = t.getNumerator();
+        Denominator = t.getDenominator();
+        return true;
     }
 
     int MTAudioInterface::setSequenceLoop( int Sequence, bool Loop )

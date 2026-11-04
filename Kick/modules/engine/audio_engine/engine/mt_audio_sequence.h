@@ -23,6 +23,8 @@
 
 #include "mt_audio_bar_seek.h"
 #include "mt_event_seek.h"
+#include "mt_time_signature.h"
+#include "mt_tree_sync.h"
 
 namespace mt
 {
@@ -84,6 +86,26 @@ namespace mt
 
         bool getLoopingState() { return isLooping.get(); }
         int  modifySequenceLength( int ToModifyBars, bool Insert, int AtPosition = -1 );
+
+        // Time signature. The bar grid (ticks per bar) of this sequence changes; events stay where they are (ticks), the
+        // sequence / loop / track lengths are re-mapped by tick position and rounded up to whole new bars, so nothing is
+        // cut off (mt_time_signature.h). A TimeGrid is the state that the re-mapping needs from before the change.
+        struct TimeGrid
+        {
+            long long        ticksPerBar{ 0 };
+            int              length{ 0 };
+            int              loopStart{ 0 }, loopEnd{ 0 };
+            bool             loopStartSet{ false }, loopEndSet{ false };
+            std::vector<int> trackLengths; // bars per track, -1 = follows the sequence
+        };
+        TimeGrid captureTimeGrid();
+        void     remapTimeGrid( const TimeGrid& Old ); // call after the numerator / denominator changed
+        // The own time signature (setting 0 of this sequence's tempo map), or the global one when the sequence uses the
+        // global tempo. Returns 0, -1 invalid time signature, -2 the tempo map has several time signatures (not editable here).
+        // A global change must go through MTAudioSequenceManager::setTimeSignature (it re-maps every sequence that follows it).
+        int  setOwnTimeSignature( int Numerator, int Denominator );
+        // Re-reads everything derived from the bar grid (lengths in ticks, tick data, playhead phase). Also after undo / redo.
+        void refreshTimeGrid();
         int  copyTrackBars( int trackIndex, const SequenceCopyBars& copyBars, std::vector<MTNote>& noteList );
 
         // Time related API's
@@ -139,6 +161,9 @@ namespace mt
         int  deleteTrack( int Index );
         int  deleteTrack( const juce::String& Name );
         void deleteAllTracks();
+        // Makes the track objects match the TRACK nodes of the project tree (after undo / redo of a track create / delete):
+        // removed nodes lose their object, new nodes get one, tree order wins. Returns true if the track list changed.
+        bool reconcileTracksWithTree();
 
         int              getTrackIndex( const juce::String& Name );
         int              getTrackIndex( const MTTrack* pTrack );
@@ -193,6 +218,7 @@ namespace mt
         void                          updateTrackSoloList();
         void                          updateTrackList();
         void                          lengthChangeHandler();
+        int                           removeTrackAt( int Index ); // deleteTrack without opening an undo transaction
         void                          valueTreePropertyChanged( juce::ValueTree& treeWhosePropertyHasChanged, const juce::Identifier& property ) override;
         void                          valueTreeChildAdded( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenAdded ) override;
         void                          valueTreeChildRemoved( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenRemoved, int index ) override;
@@ -217,6 +243,7 @@ namespace mt
         std::vector<std::unique_ptr<MTTrack>> tracks;
         std::vector<juce::String>             trackList;
 
+        sigslot::scoped_connection trackNameConn;
         juce::CriticalSection lock;
         juce::ValueTree       vTree{ IDs::SEQUENCE };
         juce::MidiFile        mFile;

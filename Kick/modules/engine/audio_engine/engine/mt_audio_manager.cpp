@@ -338,16 +338,38 @@ namespace mt
     ////////////////////////////
     //// Undo/Redo..
     ////////////////////////////
+    // Undo / redo change the ValueTree only. The engine objects (programs, sequences, tracks) are built from tree nodes, so
+    // an undone/redone create or delete leaves them stale; this brings them back in line, then re-reads what depends on the
+    // bar grid (a time signature change is undone through the tree too). Done here, after the undo call returned, and not
+    // from valueTreeChildAdded/Removed: building objects inside the undo callback would write to the UndoManager while it
+    // is performing, which JUCE forbids (the write is dropped and asserts).
+    void MTAudioManager::syncEngineWithTree()
+    {
+        // Programs first: the tracks resolve their program from the program list.
+        MTAudioProgramManager::reconcileWithTree();
+        MTAudioSequenceManager::reconcileWithTree();
+        forAllSequences( [&]( MTSequence* S ) {
+            S->forAllTracks( []( MTTrack* T ) { T->refreshProgram(); } );
+            S->refreshTimeGrid();
+        } );
+    }
+
     void MTAudioManager::performUndo()
     {
         if( undoManager.canUndo() )
+        {
             undoManager.undo();
+            syncEngineWithTree();
+        }
     }
 
     void MTAudioManager::performRedo()
     {
         if( undoManager.canRedo() )
+        {
             undoManager.redo();
+            syncEngineWithTree();
+        }
     }
 
     ////////////////////////////
