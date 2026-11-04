@@ -294,15 +294,11 @@ namespace mt
 
     void MTAudioProgramManager::valueTreeChildAdded( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenAdded )
     {
-        if( parentTree == vTree && childWhichHasBeenAdded.hasType( IDs::PROGRAM ) )
-        {
-            auto id = childWhichHasBeenAdded.getProperty( IDs::id ).toString();
-            if( id.isNotEmpty() && getProgramById( id ) != nullptr )
-                return; // Already present in programs list
-
-            // Re-instantiate from undo/redo
-            createProgram( childWhichHasBeenAdded, false );
-        }
+        // No object is built here: createProgram() appends the child and builds the program in the same call (a program with an
+        // empty id was built twice from this callback), and building objects inside an UndoManager callback is not allowed.
+        // Undo/redo restores programs through reconcileWithTree() after the undo returns.
+        (void)parentTree;
+        (void)childWhichHasBeenAdded;
     }
 
     void MTAudioProgramManager::valueTreeChildRemoved( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenRemoved, int /*index*/ )

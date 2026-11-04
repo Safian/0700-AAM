@@ -328,16 +328,11 @@ namespace mt
 
     void MTSequence::valueTreeChildAdded( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenAdded )
     {
-        if( parentTree == vTree && childWhichHasBeenAdded.hasType( IDs::TRACK ) )
-        {
-            auto id = childWhichHasBeenAdded.getProperty( IDs::id ).toString();
-            for( auto& t : tracks )
-            {
-                if( t->getId() == id )
-                    return;
-            }
-            createTrack( childWhichHasBeenAdded );
-        }
+        // No object is built here: createTrack() appends the child first and builds the MTTrack right after, so creating it from
+        // this callback made every created track appear twice (same id, same tree), and building objects inside an UndoManager
+        // callback is not allowed anyway. Undo/redo restores tracks through reconcileTracksWithTree() after the undo returns.
+        (void)parentTree;
+        (void)childWhichHasBeenAdded;
     }
 
     void MTSequence::valueTreeChildRemoved( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenRemoved, int /*index*/ )
