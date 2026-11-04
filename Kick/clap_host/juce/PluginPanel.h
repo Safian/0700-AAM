@@ -12,6 +12,7 @@ public:
     ~PluginPanel() override;
     void resized() override;
     void paint(juce::Graphics&) override;
+    void mouseDown(const juce::MouseEvent&) override;
     void adjustMacro(int index, double delta) { session->adjustMacro(index, delta); }
     static std::filesystem::path scannerPath();
 private:
