@@ -83,6 +83,48 @@ namespace kick_ui
         };
     };
 
+    // Time signature of the selected sequence: numerator 1..16, denominator 4 / 8 / 16 / 32 (mt::timesig::isValid).
+    class APPSequenceOptionTimeSignature : public juce::Component
+    {
+    public:
+        APPSequenceOptionTimeSignature( const juce::String& Title, int Numerator, int Denominator )
+            : numerator( "BEATS PER BAR", 1, 16, Numerator )
+        {
+            setName( Title );
+            mt::utils::addAndMakeVisible( this, numerator, denominator, note );
+
+            const std::vector<juce::String> dens{ "4", "8", "16", "32" };
+            int                             sel = 0;
+            for( int i = 0; i < (int)dens.size(); ++i )
+                if( dens[(size_t)i].getIntValue() == Denominator ) sel = i;
+            denominator.setListOptions( dens, sel );
+            denominator.setTitle( "NOTE VALUE" );
+
+            note.setText( "Events keep their position. The sequence keeps its length and is rounded up to whole bars.", juce::dontSendNotification );
+            note.setJustificationType( juce::Justification::centred );
+            note.setColour( juce::Label::textColourId, ui::Theme::textColour( 2 ) );
+        }
+
+        int getNumerator() const { return numerator.getValue(); }
+        int getDenominator() { return denominator.getSelectedValue().getIntValue(); }
+
+    private:
+        ui::KickNumber  numerator;
+        ui::KickListBox denominator{ "NOTE VALUE", 4 };
+        juce::Label     note;
+
+        void paint( juce::Graphics& g ) override
+        {
+            g.fillAll( ui::Theme::backgroundColour( 1 ) );
+        }
+        void resized() override
+        {
+            numerator.setBoundsRelative( .10f, .08f, .30f, .45f );
+            denominator.setBoundsRelative( .50f, .08f, .40f, .30f );
+            note.setBoundsRelative( .05f, .62f, .90f, .30f );
+        }
+    };
+
     class AppCopyEvents : public juce::Component
     {
     public:
@@ -363,16 +405,28 @@ namespace kick_ui
                 case 1:; // Double Length
                     ae.setSequenceLength( ae.getSelectedSequence(), 2.0f );
                     break;
-                case 2:; // Time Signature
-                    break;
-                /* case 3: // Bounce to Sample
+                case 2: // Time Signature
                 {
-                    juce::File f( ae.getProjectDir().getChildFile( "test.wav" ) );
-                    char       c;
-                    f.replaceWithData( &c, 0 );
-                    ae.sequenceBounceToSample( ae.getSelectedSequence(), f );
+                    const int seqIndex = ae.getSelectedSequence();
+                    int       num = 4, den = 4;
+                    ae.getTimeSignature( seqIndex, num, den );
+                    auto p = new APPSequenceOptionTimeSignature( "TIME SIGNATURE", num, den );
+                    mt::utils::showOptions( p->getName(), p, [this, p, seqIndex]( int R ) {
+                        if( R == UI::APPLY )
+                        {
+                            const int res = ae.setTimeSignature( seqIndex, p->getNumerator(), p->getDenominator() );
+                            if( res == -2 )
+                                mt::utils::showNotification( "This sequence has several time signatures; they cannot be edited here." );
+                            else if( res != 0 )
+                                mt::utils::showNotification( "Invalid time signature." );
+                            if( refreshSequence )
+                                refreshSequence();
+                            seq.updateData();
+                        }
+                        if( p ) delete p;
+                    } );
                 }
-                break;*/
+                break;
                 case 3: // Insert Bars
                 {
                     auto p = new APPSequenceOptionDeleteBars( "INSERT BARS", true );
@@ -534,7 +588,8 @@ namespace kick_ui
         addOption( { "HalfLength", "HalfLength" }, "" );
         addOption( { "DoubleLength", "DoubleLength" }, "" );
         addOption( { "Time Signature", "TimeSignature" }, "" );
-        //addOption( { "Bounce", "Bounce" }, "" );
+        // No "Bounce" entry: the engine has no offline render (MTAudioInterface::sequenceBounceToSample is a stub), so it
+        // stays out of the menu instead of showing a tile that does nothing.
 
         addOption( { "InsertBars", "InsertBar" }, "" );
         addOption( { "CopyEvent", "CopyEvent" }, "" );

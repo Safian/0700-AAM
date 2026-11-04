@@ -108,7 +108,6 @@ namespace kick_ui
         std::vector<mt::MTISequenceData*>  seqList;
         std::vector<KickSongTableDisplay*> rowComps;
 
-        ui::KickButton convert{ "Convert >SEQ" };
         ui::KickButton clr{ "Clear" };
         ui::KickButton insert{ "Insert" };
         ui::KickButton del{ "Delete" };

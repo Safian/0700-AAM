@@ -80,9 +80,9 @@ namespace kick_ui
         pads->setHighlight( -1 );
         pads->setPadButtonSpacer( 4 );
 
-        mt::utils::setValueFontHeight( 18, convert, insert, clr, del );
-        mt::utils::setValueColour( ui::Theme::textColour( 1 ), convert, insert, clr, del );
-        mt::utils::addChildComponents( this, tableView, pads.get(), insert, convert, clr, del );
+        mt::utils::setValueFontHeight( 18, insert, clr, del );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), insert, clr, del );
+        mt::utils::addChildComponents( this, tableView, pads.get(), insert, clr, del );
 
         mt::signals::bankChanged.connect( [&]( int index, juce::String bankName ) {
             if( kick_ui::KickHome::Instance().getCurrentScreen() == kick_ui::Screen::MenuSong )
@@ -280,7 +280,8 @@ namespace kick_ui
 
         clr.setBoundsRelative( 0.f, 0.91f, 0.1174f, 0.09f );
 
-        //convert.setBoundsRelative( 0.6321f, 0.91f, 0.1174f, 0.09 );
+        // No "Convert >SEQ" button: converting a song into one sequence needs an engine function that does not exist
+        // (the song is a list of sequence steps played in order); the unlaid 0x0 stub was removed.
         insert.setBoundsRelative( 0.7534f, 0.91f, 0.1174f, 0.09f );
         del.setBoundsRelative( 0.8747f, 0.91f, 0.1174f, 0.09f );
     }
