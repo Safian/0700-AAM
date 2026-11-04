@@ -12,7 +12,10 @@
 #include "../../../AudIO/AudIO/Includes/AudIOBuffer.h"
 #include "../../../AudIO/AudIO/airwindows/airwindows_base.h"
 #include "../../../AudIO/AudIO/AudIO_airwindows.h"
+#include "../../modules/kick_ui/dialogs/kick_InsertCost.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <memory>
@@ -45,6 +48,22 @@ int main()
     // ---- INS-22: Instantiate and process all effects
     int tested = 0;
     int totalParamsChecked = 0;
+    std::vector<std::pair<double, std::string>> cost; // real-time ratio of one stereo block per effect (host)
+    auto fillSine = []( AudIO::Buffer<float>& B, uint32_t& Phase ) {
+        for( uint32_t n = 0; n < kBlock; ++n, ++Phase )
+        {
+            const float v = 0.3f * std::sin( 6.2831853f * 440.f * static_cast<float>( Phase ) / 48000.f );
+            B.getOutputs()[0][n] = v;
+            B.getOutputs()[1][n] = v;
+        }
+    };
+    auto finite = []( AudIO::Buffer<float>& B ) {
+        for( uint32_t c = 0; c < 2; ++c )
+            for( uint32_t n = 0; n < kBlock; ++n )
+                if( !std::isfinite( B.getOutputs()[c][n] ) )
+                    return false;
+        return true;
+    };
 
     for( const auto& item : map )
     {
@@ -99,7 +118,62 @@ int main()
                 CHECK( std::isfinite( out[n] ) );
             }
         }
+
+        // The parameter at both ends of its range while audio runs (a sine, and silence afterwards): nothing goes NaN / Inf.
+        uint32_t phase = 0;
+        for( int p = 0; p < numParams; ++p )
+            for( float v : { 1.0f, 0.0f, 0.37f } )
+            {
+                obj->setParameter( p, v );
+                fillSine( buf, phase );
+                obj->process( buf );
+                if( !finite( buf ) ) { std::printf( "FAIL %s parameter %d = %g gives a non finite output\n", name.c_str(), p, v ); ++g_fail; }
+            }
+        for( uint32_t c = 0; c < 2; ++c )
+            std::fill( buf.getOutputs()[c], buf.getOutputs()[c] + kBlock, 0.f );
+        obj->process( buf );
+        CHECK( finite( buf ) );
+
+        // Cost: 400 blocks of 64 frames of a sine (the effect as it was after the parameter sweep is not what is timed:
+        // a fresh instance with its defaults is).
+        auto timed = AudIO::ObjectFactory::Get().Create( name );
+        timed->prepareToPlay( 48000, kBlock );
+        const int blocks = 400;
+        for( int b = 0; b < 40; ++b ) // warm up
+        {
+            fillSine( buf, phase );
+            timed->process( buf );
+        }
+        const auto t0 = std::chrono::steady_clock::now();
+        for( int b = 0; b < blocks; ++b )
+        {
+            fillSine( buf, phase );
+            timed->process( buf );
+        }
+        const double seconds = std::chrono::duration<double>( std::chrono::steady_clock::now() - t0 ).count();
+        cost.emplace_back( seconds / ( blocks * kBlock / 48000.0 ), name );
     }
+
+    std::sort( cost.begin(), cost.end(), []( const auto& a, const auto& b ) { return a.first > b.first; } );
+    std::printf( "INS-19 (host): the heaviest effects, fraction of real time for one stereo insert at 48 kHz, 64 frame blocks (the ARMv7 MPC is several times slower):\n" );
+    for( std::size_t i = 0; i < std::min<std::size_t>( 40, cost.size() ); ++i )
+        std::printf( "    %-24s %.4f\n", cost[i].second.c_str(), cost[i].first );
+    for( const auto& c : cost )
+    {
+        using kick_ui::insert_cost::Level;
+        if( c.first > kick_ui::insert_cost::kHeavy && kick_ui::insert_cost::levelOf( c.second.c_str() ) == Level::Normal )
+        {
+            std::printf( "FAIL %s costs %.3f of real time on the host but is not in kick_InsertCost.h\n", c.second.c_str(), c.first );
+            ++g_fail;
+        }
+        if( c.first > 0.9 ) // does not even run in real time on the host
+        {
+            std::printf( "FAIL %s costs %.3f of real time on the host\n", c.second.c_str(), c.first );
+            ++g_fail;
+        }
+    }
+    CHECK( kick_ui::insert_cost::levelOf( "Pockey" ) == kick_ui::insert_cost::Level::VeryHeavy );
+    CHECK( kick_ui::insert_cost::levelOf( "Reverb" ) == kick_ui::insert_cost::Level::Normal );
 
     std::printf( "INS-22: Successfully instantiated and verified %d effects (%d parameters checked)\n",
                  tested, totalParamsChecked );

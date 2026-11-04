@@ -3,6 +3,7 @@
 #include <engine/audio_engine/engine/mt_airwindopedia.h>
 #include <hardware/source/kick_Resorces.h>
 #include "kick_InsertStore.h"
+#include "kick_InsertCost.h"
 #include <engine/audio_engine/engine/mt_automation.h>
 
 namespace kick_ui
@@ -849,23 +850,23 @@ namespace kick_ui
             openGuiButton.setVisible( false );
         }
 
-        double cpu = 0.0;
-        if( mt::SystemResource::getResourceInterface().cpuInfo( cpu ) )
+        // INS-19: expensive effects are named (host measured cost, kick_InsertCost.h); otherwise the live CPU load is shown.
         {
-            if( cpu > 80.0 )
+            double      cpu   = 0.0;
+            const auto  level = kick_ui::insert_cost::levelOf( info.name.toRawUTF8() );
+            if( level != kick_ui::insert_cost::Level::Normal )
             {
-                cpuNoticeLabel.setText( "CPU: " + juce::String( (int)cpu ) + "% [HIGH LOAD]", juce::dontSendNotification );
-                cpuNoticeLabel.setValueColour( juce::Colours::red );
+                const bool very = level == kick_ui::insert_cost::Level::VeryHeavy;
+                cpuNoticeLabel.setText( juce::String( very ? "VERY HEAVY EFFECT" : "HEAVY EFFECT" ), juce::dontSendNotification );
+                cpuNoticeLabel.setValueColour( very ? juce::Colours::red : juce::Colours::orange );
+            }
+            else if( mt::SystemResource::getResourceInterface().cpuInfo( cpu ) )
+            {
+                cpuNoticeLabel.setText( "CPU: " + juce::String( (int)cpu ) + "%" + ( cpu > 80.0 ? " [HIGH LOAD]" : "" ), juce::dontSendNotification );
+                cpuNoticeLabel.setValueColour( cpu > 80.0 ? juce::Colours::red : ui::Theme::textColour( 2 ) );
             }
             else
-            {
-                cpuNoticeLabel.setText( "CPU: " + juce::String( (int)cpu ) + "%", juce::dontSendNotification );
-                cpuNoticeLabel.setValueColour( ui::Theme::textColour( 2 ) );
-            }
-        }
-        else
-        {
-            cpuNoticeLabel.setText( "", juce::dontSendNotification );
+                cpuNoticeLabel.setText( "", juce::dontSendNotification );
         }
 
         for( size_t i = 0; i < info.params.size(); ++i )

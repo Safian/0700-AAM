@@ -81,6 +81,20 @@ inline juce::String runKickFxLanesSmoke() {
     ins->closeTouchFx();
     say("automated gesture / parameter playback calls ok, the stored value comes back");
 
+    // ---- INS-23: the chain through the value tree: names are registration keys (NC-17), values and bypass survive save / reopen
+    if (ins->addInsert("NCSeventeen", 1) != 0 || ins->addInsert("Console7Channel", 2) != 0) return fail("addInsert of the second / third effect failed");
+    ins->setParameterValue(2, 0, 0.65f);
+    ins->setInsertBypass(1, true);
+    if (!api.saveProject() || !api.closeProject() || !api.loadProject(file)) return fail("save / reopen failed (inserts)");
+    ins = api.getInsertsInterface(api.getProgramIndexByName("FxProg"));
+    if (!ins) return fail("no insert interface after reopen");
+    if (ins->getInsertName(0) != "Reverb" || ins->getInsertName(1) != "NCSeventeen" || ins->getInsertName(2) != "Console7Channel")
+        return fail("insert names changed: " + ins->getInsertName(0) + ", " + ins->getInsertName(1) + ", " + ins->getInsertName(2));
+    if (ins->getInsertName(3).isNotEmpty()) return fail("an empty slot got a name: " + ins->getInsertName(3));
+    if (!ins->isInsertBypassed(1) || ins->isInsertBypassed(0)) return fail("insert bypass did not survive save / reopen");
+    if (std::abs(ins->getParameterValue(2, 0) - 0.65f) > 1e-3f) return fail("insert parameter did not survive save / reopen");
+    say("insert chain (names incl. NC-17, bypass, parameter) survives save / reopen");
+
     // ---- bus inserts: pre-fader by default, post-fader selectable and persistent; a program has no such choice
     if (ins->supportsPostFader()) return fail("a program chain claims a pre/post-fader choice");
     const auto returns = api.getBusManager().getReturnBusNames();
