@@ -60,6 +60,13 @@ namespace mt
             info.seqNo    = seq->getIndex();
             info.dispName = juce::String( info.seqNo + 1 ) + " : " + seq->getName();
         }
+        else
+        {
+            // The sequence was deleted: the step stays in the song and is shown as missing (never silently
+            // removed). seqNo -1 marks it; playing a song with such a step is refused.
+            info.seqNo    = -1;
+            info.dispName = "! missing sequence";
+        }
         return info;
     }
 
@@ -108,6 +115,8 @@ namespace mt
 
     void MTSong::removeStep( int Index ) { vTree.removeChild( Index, undo ); };
     void MTSong::removeAllSteps() { vTree.removeAllChildren( undo ); }
+
+    void MTSong::setName( const juce::String& Name ) { vTree.setProperty( IDs::name, Name, undo ); }
 
     MTSongInfo MTSong::getInfo() const
     {
@@ -171,14 +180,34 @@ namespace mt
 
     void MTSongManager::createSong( const juce::String& SongName )
     {
+        if( undo ) undo->beginNewTransaction( "Create song" );
         auto vt = createVTree( IDs::song,
                                IDs::id, CommonUtils::createID(),
                                IDs::name, SongName );
         vTree.appendChild( vt, undo );
     }
 
-    void MTSongManager::deleteSong( const juce::String& SongName ) { vTree.removeChild( getSong( SongName ), undo ); }
-    void MTSongManager::deleteSong( int Index ) { vTree.removeChild( Index, undo ); }
+    void MTSongManager::deleteSong( const juce::String& SongName )
+    {
+        if( undo ) undo->beginNewTransaction( "Delete song" );
+        vTree.removeChild( getSong( SongName ), undo );
+    }
+    void MTSongManager::deleteSong( int Index )
+    {
+        if( undo ) undo->beginNewTransaction( "Delete song" );
+        vTree.removeChild( Index, undo );
+    }
+
+    void MTSongManager::renameSong( const juce::String& OldName, const juce::String& NewName )
+    {
+        auto   vt = getSong( OldName );
+        MTSong song( vt, undo );
+        if( song.isValid() )
+        {
+            if( undo ) undo->beginNewTransaction( "Rename song" );
+            song.setName( NewName );
+        }
+    }
 
     MTSongInfo MTSongManager::getSongInfo( const juce::String& SongName )
     {
@@ -190,33 +219,45 @@ namespace mt
     void MTSongManager::addSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex )
     {
         auto   vt = getSong( SongName );
-        MTSong song( vt, nullptr );
+        MTSong song( vt, undo );
         if( song.isValid() )
+        {
+            if( undo ) undo->beginNewTransaction( "Add song step" );
             song.addStep( Step, AtIndex );
+        }
     }
 
     void MTSongManager::editSongStep( const juce::String& SongName, MTSongStepInfo& Step, int AtIndex )
     {
         auto   vt = getSong( SongName );
-        MTSong song( vt, nullptr );
+        MTSong song( vt, undo );
         if( song.isValid() )
+        {
+            if( undo ) undo->beginNewTransaction( "Edit song step" );
             song.editStep( Step, AtIndex );
+        }
     }
 
     void MTSongManager::deleteSongStep( const juce::String& SongName, int AtIndex )
     {
         auto   vt = getSong( SongName );
-        MTSong song( vt, nullptr );
+        MTSong song( vt, undo );
         if( song.isValid() )
+        {
+            if( undo ) undo->beginNewTransaction( "Delete song step" );
             song.removeStep( AtIndex );
+        }
     }
 
     void MTSongManager::deleteAllSongSteps( const juce::String& SongName )
     {
         auto   vt = getSong( SongName );
-        MTSong song( vt, nullptr );
+        MTSong song( vt, undo );
         if( song.isValid() )
+        {
+            if( undo ) undo->beginNewTransaction( "Clear song" );
             song.removeAllSteps();
+        }
     }
 
     bool MTSongManager::isSongExists( const juce::String& SongName )
