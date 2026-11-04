@@ -8,6 +8,7 @@
 #include "../../../common/source/kick_mixer_logic.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -178,59 +179,65 @@ namespace kick_ui::knob_logic
         return Route::None;
     }
 
-    // ---- QL-10: Screen Mode Q-Link Roles
+    // ---- QL-10: what Q-Link 1..4 do on a screen in Screen mode. Every row below was read from that screen's knobCommand; a screen
+    // that is not listed says so instead of guessing (its Q-Links may still work: Channel Mixer, the Sequence / Track / Program lists).
     struct ScreenQLinkRole
     {
-        std::string roleName;
-        std::string paramName;
-        std::string description;
+        std::string name;        // short, fits a card
+        std::string description; // what one click does
     };
 
-    inline std::array<ScreenQLinkRole, 4> screenQLinkRoles( const std::string& screenContext ) noexcept
+    struct ScreenQLinkRoles
     {
-        const auto ctx = normalise( screenContext );
-        if( ctx == "homexyview" || ctx == "xy" || ctx == "xyfx" )
-        {
-            return {{
-                { "Q-LINK 1", "Cutoff / Preset", "XY Effect Filter Cutoff / Preset" },
-                { "Q-LINK 2", "Attack", "Envelope Attack Time" },
-                { "Q-LINK 3", "Release", "Envelope Release Time" },
-                { "Q-LINK 4", "Wet/Dry", "Master Effect Mix Balance" }
-            }};
-        }
-        if( ctx == "homegridview" || ctx == "grid" )
-        {
-            return {{
-                { "Q-LINK 1", "Scroll X", "Horizontal Timeline Scroll" },
-                { "Q-LINK 2", "Scroll Y", "Vertical Note Scroll" },
-                { "Q-LINK 3", "Zoom X", "Horizontal Time Zoom" },
-                { "Q-LINK 4", "Zoom Y", "Vertical Key Zoom" }
-            }};
-        }
-        if( ctx == "menulooper" || ctx == "looper" )
-        {
-            return {{
-                { "Q-LINK 1", "Threshold", "Audio Recording Trigger Threshold" },
-                { "Q-LINK 2", "Monitor", "Input Audio Monitor Level" },
-                { "Q-LINK 3", "Gain", "Loop Playback Output Gain" },
-                { "Q-LINK 4", "Pan", "Stereo Pan Balance" }
-            }};
-        }
-        if( ctx == "menupadmixer" || ctx == "padmixer" )
-        {
-            return {{
-                { "Q-LINK 1", "Pad Level", "Selected Pad Volume Level" },
-                { "Q-LINK 2", "Pad Pan", "Selected Pad Stereo Pan" },
-                { "Q-LINK 3", "Pad Mute", "Selected Pad Mute State" },
-                { "Q-LINK 4", "Pad Solo", "Selected Pad Solo State" }
-            }};
-        }
-        // Default: Track / Main mode screen mappings
-        return {{
-            { "Q-LINK 1", "Track Transpose", "Track Semitone Transposition" },
-            { "Q-LINK 2", "Track Level", "Track Volume Level" },
-            { "Q-LINK 3", "Track Length", "Sequence Track Length in Bars" },
-            { "Q-LINK 4", "MIDI Input", "Active Track MIDI Input Channel" }
-        }};
+        bool                             known{ false };
+        std::string                      screen; // readable
+        std::array<ScreenQLinkRole, 4>   roles;
+    };
+
+    // Key: the kick_ui::Screen enumerator name ("HomeGridView", "MenuLooper"), case and blanks ignored.
+    inline ScreenQLinkRoles screenQLinkRoles( const std::string& ScreenKey )
+    {
+        const auto k = normalise( ScreenKey );
+        using R      = ScreenQLinkRoles;
+        const auto make = []( const char* Screen, ScreenQLinkRole A, ScreenQLinkRole B, ScreenQLinkRole C, ScreenQLinkRole D ) {
+            return R{ true, Screen, { A, B, C, D } };
+        };
+        if( k == "homegridview" )
+            return make( "Grid", { "Scroll vertical", "Scrolls the grid up / down" }, { "Scroll horizontal", "Scrolls the grid left / right" },
+                         { "Zoom horizontal", "Time zoom" }, { "Zoom vertical", "Key zoom" } );
+        if( k == "homexyview" )
+            return make( "XY FX", { "Preset", "Steps the effect preset" }, { "Attack", "Opening time of the effect" }, { "Release", "Closing time of the effect" },
+                         { "Wet / Dry", "Effect level" } );
+        if( k == "menulooper" )
+            return make( "Looper", { "Threshold", "Level that starts the recording" }, { "Monitor", "Input monitor level" }, { "Output gain", "Playback level of the loop" },
+                         { "Output pan", "Playback pan of the loop" } );
+        if( k == "menusampler" )
+            return make( "Sampler", { "Max length", "Longest recording, coarse" }, { "Max length fine", "Longest recording, fine" }, { "Threshold", "Level that starts the recording" },
+                         { "Monitor", "Input monitor level" } );
+        if( k == "menusampleedit" )
+            return make( "Sample Edit (Chop)", { "Start coarse", "Moves the start point in big steps" }, { "End coarse", "Moves the end point in big steps" },
+                         { "Start fine", "Moves the start point in small steps" }, { "End fine", "Moves the end point in small steps" } );
+        if( k == "menupadmixer" )
+            return make( "Pad Mixer", { "Pad level", "Level of the selected pad" }, { "Pad pan", "Pan of the selected pad" }, { "Pad mute", "Right = muted, left = not" },
+                         { "Pad solo", "Right = solo, left = not" } );
+        if( k == "menutrackmute" )
+            return make( "Track Mute", { "Track 1", "Mutes / unmutes the 1st track of the bank" }, { "Track 2", "Mutes / unmutes the 2nd track of the bank" },
+                         { "Track 3", "Mutes / unmutes the 3rd track of the bank" }, { "Track 4", "Mutes / unmutes the 4th track of the bank" } );
+        if( k == "menupadmute" )
+            return make( "Pad Mute", { "Pad 1", "Mutes / unmutes the 1st pad of the bank" }, { "Pad 2", "Mutes / unmutes the 2nd pad of the bank" },
+                         { "Pad 3", "Mutes / unmutes the 3rd pad of the bank" }, { "Pad 4", "Mutes / unmutes the 4th pad of the bank" } );
+        if( k == "menupadperform" )
+            return make( "Pad Perform", { "Scale", "Scale of the pads" }, { "Root note", "Root note of the scale" }, { "Octave", "Octave of the pads" },
+                         { "Chord / step", "Chord when chords are shown, otherwise the step mode" } );
+        if( k == "menulistedit" )
+            return make( "List Edit", { "Pad", "Pad of the selected event" }, { "Length", "Length of the selected event" }, { "Velocity", "Velocity of the selected event" },
+                         { "Probability", "Probability of the selected event" } );
+        if( k == "menunextsequence" || k == "menusong" )
+            return make( k == "menusong" ? "Song" : "Next Sequence", { "Tempo", "BPM of the selected sequence" }, { "Length", "Bars of the selected sequence" },
+                         { "Loop start", "Loop start of the sequence" }, { "Loop end", "Loop end of the sequence" } );
+        if( k == "inserts" )
+            return make( "Inserts", { "Parameter 1", "First parameter of the shown insert" }, { "Parameter 2", "Second parameter of the shown insert" },
+                         { "Parameter 3", "Third parameter of the shown insert" }, { "Parameter 4", "Fourth parameter of the shown insert" } );
+        return R{};
     }
 }

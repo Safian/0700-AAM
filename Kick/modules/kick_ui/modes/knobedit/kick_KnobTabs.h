@@ -39,7 +39,7 @@ namespace kick_ui
         Content();
         ~Content();
 
-        void updateQLinkDisplay( const juce::String& screenContext = "" );
+        void updateQLinkDisplay( const juce::String& ScreenKey ); // kick_ui::Screen enumerator name
 
     private:
         void resized() override;
@@ -56,7 +56,7 @@ namespace kick_ui
         ui::KickLabel titleLabel{ "SCREEN Q-LINK MODE" };
         ui::KickLabel subLabel{ "Hardware Q-Links 1–4 follow active screen context:" };
         std::array<QLinkCard, 4> cards;
-        juce::String currentContext{ "Main" };
+        juce::String currentContext;
     };
 
     class BottomContent : public juce::Component

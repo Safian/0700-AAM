@@ -16,21 +16,23 @@ namespace kick_ui
         subLabel.setValueColour( ui::Theme::textColour( 2 ) );
         subLabel.setValueBackgroundColour( juce::Colours::transparentBlack );
 
-        updateQLinkDisplay( "Main" );
+        updateQLinkDisplay( "" );
     }
 
     Content::~Content()
     {}
 
-    void Content::updateQLinkDisplay( const juce::String& screenContext )
+    // The screen the Q-Links belong to while Knob Edit is open: the one under the menu (Knob Edit itself has no Q-Link roles).
+    void Content::updateQLinkDisplay( const juce::String& ScreenKey )
     {
-        currentContext = screenContext.isNotEmpty() ? screenContext : "Main";
-        auto roles = knob_logic::screenQLinkRoles( currentContext.toStdString() );
+        currentContext = ScreenKey;
+        const auto roles = knob_logic::screenQLinkRoles( ScreenKey.toStdString() );
+        titleLabel.setText( roles.known ? "SCREEN Q-LINK MODE: " + juce::String( roles.screen ).toUpperCase() : juce::String( "SCREEN Q-LINK MODE" ), juce::dontSendNotification );
         for( size_t i = 0; i < 4; ++i )
         {
-            cards[i].roleTitle   = juce::String( roles[i].roleName );
-            cards[i].paramName   = juce::String( roles[i].paramName );
-            cards[i].description = juce::String( roles[i].description );
+            cards[i].roleTitle   = "Q-LINK " + juce::String( (int)i + 1 );
+            cards[i].paramName   = roles.known ? juce::String( roles.roles[i].name ) : juce::String( "-" );
+            cards[i].description = roles.known ? juce::String( roles.roles[i].description ) : juce::String( "The Q-Link roles of this screen are not listed here" );
             cards[i].repaint();
         }
         repaint();

@@ -108,25 +108,28 @@ int main()
     in.screenHandlesCommands = false;
     CHECK( routeHardwareMessage( in ) == Route::None );
 
-    // ---- QL-10: Screen Mode Q-Link roles
-    const auto xyRoles = screenQLinkRoles( "HomeXYView" );
-    CHECK( xyRoles[0].roleName == "Q-LINK 1" );
-    CHECK( xyRoles[0].paramName == "Cutoff / Preset" );
-    CHECK( xyRoles[3].paramName == "Wet/Dry" );
-
-    const auto looperRoles = screenQLinkRoles( "MenuLooper" );
-    CHECK( looperRoles[0].paramName == "Threshold" );
-    CHECK( looperRoles[1].paramName == "Monitor" );
-    CHECK( looperRoles[2].paramName == "Gain" );
-    CHECK( looperRoles[3].paramName == "Pan" );
-
-    const auto gridRoles = screenQLinkRoles( "Grid" );
-    CHECK( gridRoles[0].paramName == "Scroll X" );
-    CHECK( gridRoles[2].paramName == "Zoom X" );
-
-    const auto defaultRoles = screenQLinkRoles( "Main" );
-    CHECK( defaultRoles[0].paramName == "Track Transpose" );
-    CHECK( defaultRoles[1].paramName == "Track Level" );
+    // ---- QL-10: Q-Link roles of the screens (each row was read from the screen's knobCommand)
+    {
+        const auto xy = screenQLinkRoles( "HomeXYView" );
+        CHECK( xy.known && xy.roles[0].name == "Preset" && xy.roles[3].name == "Wet / Dry" );
+        const auto lo = screenQLinkRoles( "MenuLooper" );
+        CHECK( lo.known && lo.roles[0].name == "Threshold" && lo.roles[1].name == "Monitor" && lo.roles[2].name == "Output gain" && lo.roles[3].name == "Output pan" );
+        const auto grid = screenQLinkRoles( " home Grid view " ); // case and blanks do not matter
+        CHECK( grid.known && grid.roles[0].name == "Scroll vertical" && grid.roles[1].name == "Scroll horizontal" && grid.roles[2].name == "Zoom horizontal" );
+        const auto pm = screenQLinkRoles( "MenuPadMixer" );
+        CHECK( pm.known && pm.roles[2].name == "Pad mute" && pm.roles[3].name == "Pad solo" );
+        CHECK( screenQLinkRoles( "MenuSong" ).roles[0].name == "Tempo" && screenQLinkRoles( "MenuNextSequence" ).screen == "Next Sequence" );
+        CHECK( !screenQLinkRoles( "MenuChannelMixer" ).known ); // not listed: no guess
+        CHECK( !screenQLinkRoles( "" ).known );
+        CHECK( screenQLinkRoles( "Inserts" ).roles[3].name == "Parameter 4" );
+        for( const char* name : { "HomeGridView", "HomeXYView", "MenuLooper", "MenuSampler", "MenuSampleEdit", "MenuPadMixer", "MenuTrackMute", "MenuPadMute", "MenuPadPerform", "MenuListEdit", "MenuNextSequence", "MenuSong", "Inserts" } )
+        {
+            const auto r = screenQLinkRoles( name );
+            CHECK( r.known );
+            for( const auto& role : r.roles )
+                CHECK( !role.name.empty() && !role.description.empty() );
+        }
+    }
 
     if( g_fail == 0 )
         std::printf( "QLinkLogicTests: all passed\n" );
