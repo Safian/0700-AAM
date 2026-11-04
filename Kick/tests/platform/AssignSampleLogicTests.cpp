@@ -76,6 +76,39 @@ int main()
     d.cancel();
     check( !d.isCurrent( t2 ), "cancel invalidates" );
 
+    // AS-10 layer indicators
+    check( formatLayerIndicator( false, false, false, false ).empty(), "no layers assigned is empty" );
+    check( formatLayerIndicator( true, false, false, false ) == "[1 - - -]", "layer 1 only" );
+    check( formatLayerIndicator( false, true, false, false ) == "[- 2 - -]", "layer 2 only" );
+    check( formatLayerIndicator( true, true, true, true ) == "[1 2 3 4]", "all layers" );
+    check( formatLayerIndicator( true, false, true, false ) == "[1 - 3 -]", "layers 1 and 3" );
+
+    // AS-11 sample usage check
+    std::vector<std::string> used{ "/data/projects/test/samples/Kick.wav", "/data/projects/test/samples/Snare.wav" };
+    check( isSampleUsed( "/data/projects/test/samples/Kick.wav", used ), "exact path used" );
+    check( isSampleUsed( "Kick.wav", used ), "filename match used" );
+    check( isSampleUsed( "/other/dir/Kick.wav", used ), "diff dir same filename used" );
+    check( !isSampleUsed( "HiHat.wav", used ), "unused sample" );
+    check( !isSampleUsed( "", used ), "empty sample unused" );
+
+    // AS-13 pad drop position (Akai 4x4 layout: row 0 bottom, row 3 top)
+    // Grid: x: 100..500 (w: 400), y: 100..500 (h: 400), col width: 100, row height: 100
+    // Pad 0 is bottom-left (x: 100..199, y: 400..499)
+    check( padIndexFromGridPoint( 150, 450, 100, 100, 400, 400, 0 ) == 0, "bottom-left is pad 0" );
+    // Pad 3 is bottom-right (x: 400..499, y: 400..499)
+    check( padIndexFromGridPoint( 450, 450, 100, 100, 400, 400, 0 ) == 3, "bottom-right is pad 3" );
+    // Pad 12 is top-left (x: 100..199, y: 100..199)
+    check( padIndexFromGridPoint( 150, 150, 100, 100, 400, 400, 0 ) == 12, "top-left is pad 12" );
+    // Pad 15 is top-right (x: 400..499, y: 100..199)
+    check( padIndexFromGridPoint( 450, 150, 100, 100, 400, 400, 0 ) == 15, "top-right is pad 15" );
+    // Bank B offset = 16
+    check( padIndexFromGridPoint( 150, 450, 100, 100, 400, 400, 16 ) == 16, "bank B pad 0" );
+    // Outside grid returns -1
+    check( padIndexFromGridPoint( 50, 450, 100, 100, 400, 400, 0 ) == -1, "outside left" );
+    check( padIndexFromGridPoint( 550, 450, 100, 100, 400, 400, 0 ) == -1, "outside right" );
+    check( padIndexFromGridPoint( 150, 50, 100, 100, 400, 400, 0 ) == -1, "outside top" );
+    check( padIndexFromGridPoint( 150, 550, 100, 100, 400, 400, 0 ) == -1, "outside bottom" );
+
     std::puts( "AssignSampleLogicTests OK" );
     return 0;
 }
