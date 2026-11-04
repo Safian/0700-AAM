@@ -131,28 +131,28 @@ int main()
         {
             SourceCache c( dir, 1000 );
             writeFile( c.partPath( key ), "12345" );
-            CHECK( c.commit( key, v ) );
+            CHECK( c.commit( key, v, "a.wav" ) );
             std::string f;
-            CHECK( c.lookup( key, v, f ) && readAll( f ) == "12345" );
+            CHECK( c.lookup( key, v, "a.wav", f ) && readAll( f ) == "12345" );
             // stale remote version invalidates and deletes the file
             webdav::PartMeta v2 = v; v2.etag = "\"y\"";
-            CHECK( !c.lookup( key, v2, f ) );
-            CHECK_EQ( SourceCache::fileSize( c.dataPath( key ) ), -1 );
+            CHECK( !c.lookup( key, v2, "a.wav", f ) );
+            CHECK_EQ( SourceCache::fileSize( c.dataPath( key, "a.wav" ) ), -1 );
             // wrong-length part is never published
             writeFile( c.partPath( key ), "123" );
-            CHECK( !c.commit( key, v ) );
+            CHECK( !c.commit( key, v, "a.wav" ) );
             c.discardPart( key );
             // corrupt (truncated) cached file is detected and dropped
             writeFile( c.partPath( key ), "12345" );
-            CHECK( c.commit( key, v ) );
-            writeFile( c.dataPath( key ), "12" );
-            CHECK( !c.lookup( key, v, f ) );
+            CHECK( c.commit( key, v, "a.wav" ) );
+            writeFile( c.dataPath( key, "a.wav" ), "12" );
+            CHECK( !c.lookup( key, v, "a.wav", f ) );
             CHECK_EQ( c.count(), 0 );
             // missing file is detected
             writeFile( c.partPath( key ), "12345" );
-            CHECK( c.commit( key, v ) );
-            ::unlink( c.dataPath( key ).c_str() );
-            CHECK( !c.lookup( key, v, f ) );
+            CHECK( c.commit( key, v, "a.wav" ) );
+            ::unlink( c.dataPath( key, "a.wav" ).c_str() );
+            CHECK( !c.lookup( key, v, "a.wav", f ) );
             CHECK_EQ( c.count(), 0 );
             // size limit + LRU
             c.setLimit( 12 );
@@ -160,13 +160,13 @@ int main()
             {
                 auto k = SourceCache::makeKey( "s", "/f" + std::to_string( i ) );
                 writeFile( c.partPath( k ), "12345" );
-                CHECK( c.commit( k, v ) );
+                CHECK( c.commit( k, v, "f.wav" ) );
             }
             CHECK( c.totalSize() <= 12 );
             CHECK_EQ( c.count(), 2 );
             std::string f0;
-            CHECK( !c.lookup( SourceCache::makeKey( "s", "/f0" ), v, f0 ) );
-            CHECK( c.lookup( SourceCache::makeKey( "s", "/f3" ), v, f0 ) );
+            CHECK( !c.lookup( SourceCache::makeKey( "s", "/f0" ), v, "f.wav", f0 ) );
+            CHECK( c.lookup( SourceCache::makeKey( "s", "/f3" ), v, "f.wav", f0 ) );
         }
         // index survives a restart
         SourceCache c2( dir, 12 );
@@ -176,6 +176,11 @@ int main()
         SourceCache c3( dir, 12 );
         CHECK_EQ( c3.count(), 0 );
     }
+
+    // --- cached files keep their (sanitised) name and extension
+    CHECK( SourceCache::safeName( "../x/y.wav" ) == ".._x_y.wav" );
+    CHECK( SourceCache::safeName( ".." ) == "file" && SourceCache::safeName( "" ) == "file" );
+    CHECK( SourceCache::safeName( "a\nb.wav" ) == "a_b.wav" );
 
     // --- secret files / config
     {
@@ -261,6 +266,7 @@ int main()
             q.enqueue( w.make( src, src->entry() ) );
             auto r = fut.get();
             CHECK( r.first.ok() );
+            CHECK( r.second.size() > 5 && r.second.substr( r.second.size() - 5 ) == "f.wav" ); // original name/extension kept
             CHECK( src->lastOffset == 400 );
             CHECK( readAll( r.second ) == src->content );
         }

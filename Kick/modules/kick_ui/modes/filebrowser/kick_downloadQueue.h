@@ -143,7 +143,7 @@ namespace ui
                 const auto key     = SourceCache::makeKey( job.source->id(), job.remote.path );
                 const auto version = webdav::partMetaFor( job.remote );
                 std::string cached;
-                if( cache.lookup( key, version, cached ) ) return done( Result{}, cached );
+                if( cache.lookup( key, version, job.remote.name, cached ) ) return done( Result{}, cached );
 
                 // resume decision for an existing .part
                 int64_t offset   = 0;
@@ -183,13 +183,13 @@ namespace ui
                     }
                     if( !fr.complete ) return done( Result::make( Status::NetworkError, "incomplete download" ), {} );
                 }
-                if( !cache.commit( key, version ) )
+                if( !cache.commit( key, version, job.remote.name ) )
                 {
                     cache.discardPart( key );
                     return done( Result::make( Status::IoError, "cache commit failed" ), {} );
                 }
                 std::string out;
-                if( !cache.lookup( key, version, out ) ) return done( Result::make( Status::IoError, "cache entry vanished" ), {} );
+                if( !cache.lookup( key, version, job.remote.name, out ) ) return done( Result::make( Status::IoError, "cache entry vanished" ), {} );
                 done( Result{}, out );
             }
 

@@ -6,6 +6,7 @@
 #include "kick_webdavHelper.h"
 
 #include <cstdio>
+#include <dirent.h>
 #include <fstream>
 #include <map>
 #include <mutex>
@@ -161,27 +162,37 @@ namespace ui
                 return buf;
             }
 
-            std::string dataPath( const std::string& key ) const { return root + "/" + key + ".bin"; }
+            // The finished file keeps its original name (extension!) inside a per-key directory: loaders pick the format by extension.
+            static std::string safeName( const std::string& name )
+            {
+                std::string n;
+                for( unsigned char c : name ) n += ( c < 0x20 || c == '/' || c == '\\' || c == 0x7f ) ? '_' : (char)c;
+                if( n.size() > 200 ) n.resize( 200 );
+                if( n.empty() || n == "." || n == ".." ) n = "file";
+                return n;
+            }
+            std::string dataDir( const std::string& key ) const { return root + "/" + key; }
+            std::string dataPath( const std::string& key, const std::string& name ) const { return dataDir( key ) + "/" + safeName( name ); }
             std::string partPath( const std::string& key ) const { return root + "/" + key + ".part"; }
             std::string metaPath( const std::string& key ) const { return root + "/" + key + ".part.meta"; }
 
             // Returns the cached file for `key` if it exists, has the recorded size and still matches the remote version.
             // A stale, missing or size-mismatching (corrupt/truncated) entry is dropped together with its file.
-            bool lookup( const std::string& key, const webdav::PartMeta& remote, std::string& outFile )
+            bool lookup( const std::string& key, const webdav::PartMeta& remote, const std::string& name, std::string& outFile )
             {
                 std::lock_guard<std::mutex> l( m );
                 CacheIndex::Item            it;
                 if( !index.get( key, it ) ) return false;
-                int64_t actual = fileSize( dataPath( key ) );
+                int64_t actual = fileSize( dataPath( key, name ) );
                 if( actual < 0 || actual != it.size || webdav::isCacheStaleMeta( it.version, remote ) )
                 {
                     index.remove( key );
-                    ::unlink( dataPath( key ).c_str() );
+                    removeData( key );
                     saveIndex();
                     return false;
                 }
                 index.touch( key );
-                outFile = dataPath( key );
+                outFile = dataPath( key, name );
                 return true;
             }
 
@@ -189,14 +200,16 @@ namespace ui
             void unpin( const std::string& key ) { std::lock_guard<std::mutex> l( m ); index.unpin( key ); }
 
             // Moves the finished .part into place, records it, evicts LRU entries down to the limit. Returns false on I/O failure.
-            bool commit( const std::string& key, const webdav::PartMeta& version )
+            bool commit( const std::string& key, const webdav::PartMeta& version, const std::string& name )
             {
                 std::lock_guard<std::mutex> l( m );
                 int64_t                     sz = fileSize( partPath( key ) );
                 if( sz < 0 ) return false;
                 if( version.size >= 0 && sz != version.size ) // incomplete or wrong length: never publish
                     return false;
-                if( ::rename( partPath( key ).c_str(), dataPath( key ).c_str() ) != 0 ) return false;
+                removeData( key );
+                ::mkdir( dataDir( key ).c_str(), 0700 );
+                if( ::rename( partPath( key ).c_str(), dataPath( key, name ).c_str() ) != 0 ) return false;
                 ::unlink( metaPath( key ).c_str() );
                 index.put( key, sz, version );
                 evictLocked( key );
@@ -244,11 +257,24 @@ namespace ui
             size_t  count() const { std::lock_guard<std::mutex> l( m ); return index.count(); }
 
         private:
+            void removeData( const std::string& key ) const
+            {
+                if( DIR* d = ::opendir( dataDir( key ).c_str() ) )
+                {
+                    while( auto* e = ::readdir( d ) )
+                    {
+                        std::string n = e->d_name;
+                        if( n != "." && n != ".." ) ::unlink( ( dataDir( key ) + "/" + n ).c_str() );
+                    }
+                    ::closedir( d );
+                    ::rmdir( dataDir( key ).c_str() );
+                }
+            }
             void evictLocked( const std::string& keep )
             {
                 for( auto& k : index.planEviction( limit, keep ) )
                 {
-                    ::unlink( dataPath( k ).c_str() );
+                    removeData( k );
                     index.remove( k );
                 }
             }
