@@ -58,6 +58,8 @@
     #endif
 
 // Module include files...
+    #include "engine/mt_clap_effect.h"
+    #include "engine/mt_airwindopedia.h"
     #include "engine/mt_audio_metronome.h"
     #include "engine/mt_audio_manager.h"
     #include "engine/mt_audio_note.h"

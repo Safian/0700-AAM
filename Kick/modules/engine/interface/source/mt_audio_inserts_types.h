@@ -41,7 +41,18 @@ namespace mt
         juce::String  name{ "" };
         bool          bypass{ false };
         InsertsParams params;
+        bool          isClap{ false };
+        juce::String  pluginId{ "" };
+        juce::String  version{ "" };
+        juce::String  path{ "" };
+        uint32_t      latency{ 0 };
+        uint32_t      tail{ 0 };
+        bool          missing{ false };
+        juce::String  statusMessage{ "" };
+        bool          supportsGui{ false };
     };
+
+    class ClapEffect;
 
     ///
     struct MTIInsertsImpl;
@@ -66,6 +77,10 @@ namespace mt
         int  removeInsert( const juce::String& Effect );
         int  removeInsert( unsigned int Position );
         void removeAllInserts();
+
+        int  swapInserts( unsigned int fromPosition, unsigned int toPosition );
+        int  moveInsert( unsigned int fromPosition, unsigned int toPosition );
+        ClapEffect* getClapEffect( unsigned int Position );
 
         int          getNumInserts();
         int          getNumParameters( unsigned int Position );

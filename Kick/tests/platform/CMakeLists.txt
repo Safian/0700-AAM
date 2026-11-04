@@ -55,6 +55,26 @@ add_library(kick-mock-clap-synth MODULE MockClapSynth.cpp)
 target_include_directories(kick-mock-clap-synth PRIVATE ../../clap_host/third_party/clap/include)
 set_target_properties(kick-mock-clap-synth PROPERTIES PREFIX "" SUFFIX ".clap")
 
+add_library(kick-mock-clap-effect MODULE MockClapEffect.cpp)
+target_include_directories(kick-mock-clap-effect PRIVATE ../../clap_host/third_party/clap/include)
+set_target_properties(kick-mock-clap-effect PROPERTIES PREFIX "" SUFFIX ".clap")
+
+add_executable(kick-clap-effect-tests
+    ClapEffectHostTests.cpp
+)
+target_include_directories(kick-clap-effect-tests PRIVATE
+    ../../clap_host/third_party/clap/include
+    ../../clap_host/include
+    ../../modules
+    ../../../AudIO
+    ../../../AudIO/AudIO
+    ../../../AudIO/Includes
+)
+target_link_libraries(kick-clap-effect-tests PRIVATE kick_clap_host kick_audio_core ${CMAKE_DL_LIBS})
+add_dependencies(kick-clap-effect-tests kick-mock-clap-effect)
+add_test(NAME kick-clap-effect COMMAND kick-clap-effect-tests $<TARGET_FILE:kick-mock-clap-effect>)
+set_tests_properties(kick-clap-effect PROPERTIES TIMEOUT 10)
+
 add_executable(kick-clap-processor-tests
     ClapInstrumentProcessorTests.cpp
     ../../../AudIO/processors/ClapInstrumentProcessor.cpp

@@ -40,7 +40,14 @@ int main(int argc, char** argv) {
 
     Host h;
     check(h.load(catalog.plugins[0], 48000, 128), "load exact instrument ID");
-    check(h.parameters().size() == 2 && h.latency() == 13 && h.supportsState(), "parameters, latency, state");
+    check(h.parameters().size() == 2 && h.latency() == 13 && h.tail() == 64 && h.supportsState(), "parameters, latency, tail, state");
+    check(h.supportsGui() && h.isGuiApiSupported(CLAP_WINDOW_API_COCOA, false), "gui extension advertised and supported");
+    uint32_t gw = 0, gh = 0;
+    check(h.createGui(CLAP_WINDOW_API_COCOA, false) && h.getGuiSize(&gw, &gh) && gw == 400 && gh == 300, "create and size gui");
+    check(h.showGui() && h.isGuiVisible(), "show gui");
+    check(h.hideGui() && !h.isGuiVisible(), "hide gui");
+    h.destroyGui();
+    check(!h.isGuiCreated(), "destroy gui");
     h.service();
     std::this_thread::sleep_for(std::chrono::milliseconds(2)); h.service();
     std::array<float, 1025> left{}, right{};
