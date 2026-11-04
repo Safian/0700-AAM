@@ -54,7 +54,7 @@ namespace kick_ui
         };
 
         ui::KickLabel titleLabel{ "SCREEN Q-LINK MODE" };
-        ui::KickLabel subLabel{ "Hardware Q-Links 1–4 follow active screen context:" };
+        ui::KickLabel subLabel{ "Q-Links 1-4 on the screen under the menu:" };
         std::array<QLinkCard, 4> cards;
         juce::String currentContext;
     };
