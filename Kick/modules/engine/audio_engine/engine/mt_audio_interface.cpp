@@ -157,6 +157,7 @@ namespace mt
     /// Project API's
     ///
     bool MTAudioInterface::isProjectLoaded() { return manager->isProjectLoaded(); }
+    bool MTAudioInterface::getAudioLoad( double& Cpu, int& XRuns ) { return manager->getAudioLoad( Cpu, XRuns ); }
     bool MTAudioInterface::loadProject( juce::File& ProjectFile, bool createIfMissing ) { return manager->loadProject( ProjectFile, createIfMissing ); }
     bool MTAudioInterface::closeProject() { return manager->closeProject(); }
     bool MTAudioInterface::saveProject() { return manager->saveProject(); }

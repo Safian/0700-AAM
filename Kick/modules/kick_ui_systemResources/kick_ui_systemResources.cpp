@@ -97,7 +97,7 @@ namespace kick_ui
     {
         setTitle( "SYSTEM RESOURCES" );
 
-        mt::utils::addAndMakeVisible( this, cpu, ram, flash, sdcard, usb, storage, info, purgeUnused_, ok );
+        mt::utils::addAndMakeVisible( this, cpu, ram, audio, flash, sdcard, usb, storage, info, purgeUnused_, ok );
 
         auto setup = [this]( ui::KickSlider& s, juce::Justification titleJust, juce::Slider::TextEntryBoxPosition box ) {
             s.setTitle( s.getName() );
@@ -114,6 +114,7 @@ namespace kick_ui
         setup( cpu, juce::Justification::centredTop, juce::Slider::TextBoxRight );
         cpu.showValue( true, juce::Justification::centredBottom, juce::Slider::TextBoxRight );
         setup( ram, juce::Justification::centred, juce::Slider::TextBoxBelow );
+        setup( audio, juce::Justification::centred, juce::Slider::TextBoxBelow );
         setup( flash, juce::Justification::centred, juce::Slider::TextBoxBelow );
         setup( sdcard, juce::Justification::centred, juce::Slider::TextBoxBelow );
         setup( usb, juce::Justification::centred, juce::Slider::TextBoxBelow );
@@ -160,6 +161,7 @@ namespace kick_ui
         info.setText( {}, juce::dontSendNotification );
         applySnapshot( Snapshot() );
         refreshCache();
+        refreshAudio();
         startTimerHz( 2 );
     }
 
@@ -179,6 +181,21 @@ namespace kick_ui
     {
         if( sampler )
             applySnapshot( sampler->get() );
+        refreshAudio();
+    }
+
+    // The audio callback load and the xrun count (an xrun = a dropout): how close the audio thread is to missing its deadline,
+    // which the system CPU figure does not tell. Hidden when no audio device is running.
+    void KSystemResources::refreshAudio()
+    {
+        double load  = 0.0;
+        int    xruns = -1;
+        const bool have = getAudioLoad && getAudioLoad( load, xruns );
+        audio.setVisible( have );
+        if( !have )
+            return;
+        audio.setValue( juce::jlimit( 0.0, 100.0, load * 100.0 ), juce::dontSendNotification );
+        audio.setTitle( xruns >= 0 ? "AUDIO  (dropouts: " + juce::String( xruns ) + ")" : juce::String( "AUDIO" ) );
     }
 
     void KSystemResources::applySnapshot( const Snapshot& s )
@@ -229,9 +246,10 @@ namespace kick_ui
         auto buttons = b.removeFromBottom( juce::jmax( 48, b.getHeight() / 9 ) );
         info.setBounds( b.removeFromBottom( 26 ) );
 
-        const int rowH = b.getHeight() / 6;
+        const int rowH = b.getHeight() / 7;
         cpu.setBounds( b.removeFromTop( rowH ).reduced( 60, 0 ) );
         ram.setBounds( b.removeFromTop( rowH ).reduced( 60, 0 ) );
+        audio.setBounds( b.removeFromTop( rowH ).reduced( 60, 0 ) );
         storage.setBounds( b.removeFromTop( 24 ).withSizeKeepingCentre( 100, 24 ) );
         const int volH = b.getHeight() / 3;
         flash.setBounds( b.removeFromTop( volH ).reduced( 60, 0 ) );

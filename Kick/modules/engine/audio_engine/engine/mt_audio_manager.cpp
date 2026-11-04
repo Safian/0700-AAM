@@ -708,6 +708,18 @@ namespace mt
         seqRecSyncState( getSequence( idx ) );
     }
 
+    bool MTAudioManager::getAudioLoad( double& Cpu, int& XRuns ) const
+    {
+        if( !dm )
+            return false;
+        auto* device = dm->getJuceAudioDeviceMgr().getCurrentAudioDevice();
+        if( device == nullptr || !device->isPlaying() )
+            return false;
+        Cpu    = dm->getJuceAudioDeviceMgr().getCpuUsage();
+        XRuns  = device->getXRunCount();
+        return true;
+    }
+
     void MTAudioManager::seqRecBeforePlay( int Seq )
     {
         // The Looper's sync record also calls setSequencePlay(Now) (LoopRecorder::record, after setLooperRecord): that play

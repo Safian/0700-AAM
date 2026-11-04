@@ -66,6 +66,9 @@ namespace kick_ui
         };
         std::function<CacheStats()> getCacheStats;
         std::function<CacheStats()> purgeUnused; // returns what was freed
+        /// Audio callback load (0..1 of the callback budget) and the xrun count of the running device; false without a device.
+        /// Read on the message thread.
+        std::function<bool( double& load, int& xruns )> getAudioLoad;
 
         static KSystemResources& Instance();
         KSystemResources();
@@ -91,12 +94,14 @@ namespace kick_ui
         void resized() override;
         void applySnapshot( const Snapshot& s );
         void refreshCache();
+        void refreshAudio();
 
     private:
         ui::KickLabel storage{ "STORAGE" };
 
         ui::KickSlider cpu{ "CPU" };
         ui::KickSlider ram{ "RAM" };
+        ui::KickSlider audio{ "AUDIO" };
         ui::KickSlider flash{ "INTERNAL MEMORY" };
         ui::KickSlider sdcard{ "SDCARD" };
         ui::KickSlider usb{ "USB DRIVE" };
