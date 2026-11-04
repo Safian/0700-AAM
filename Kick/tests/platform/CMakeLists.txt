@@ -390,3 +390,28 @@ find_package(Threads REQUIRED)
 target_link_libraries(kick-folder-size-tests PRIVATE Threads::Threads)
 add_test(NAME kick-folder-size COMMAND kick-folder-size-tests)
 set_tests_properties(kick-folder-size PROPERTIES TIMEOUT 30)
+
+# File operations (copy / move / delete with progress, cancel, partial-target clean-up); JUCE-free header only, temp folders.
+add_executable(kick-fileops-tests FileOpsTests.cpp)
+add_test(NAME kick-fileops COMMAND kick-fileops-tests)
+set_tests_properties(kick-fileops PROPERTIES TIMEOUT 30)
+
+# Mount table parsing, eject and format helpers; JUCE-free header only.
+add_executable(kick-mounts-tests MountsTests.cpp)
+add_test(NAME kick-mounts COMMAND kick-mounts-tests)
+set_tests_properties(kick-mounts PROPERTIES TIMEOUT 10)
+
+# Folder listing (hidden files, sorting, filter, search); JUCE-free header only, temp folders.
+add_executable(kick-filelist-tests FileListTests.cpp)
+add_test(NAME kick-filelist COMMAND kick-filelist-tests)
+set_tests_properties(kick-filelist PROPERTIES TIMEOUT 10)
+
+# Project folder operations (duplicate / rename / delete / info); JUCE-free header only, temp folders.
+add_executable(kick-project-ops-tests ProjectOpsTests.cpp)
+add_test(NAME kick-project-ops COMMAND kick-project-ops-tests)
+set_tests_properties(kick-project-ops PROPERTIES TIMEOUT 30)
+
+# Unsaved-changes gate (Save / Don't save / Cancel decision and order); JUCE-free header only.
+add_executable(kick-unsaved-gate-tests UnsavedGateTests.cpp)
+add_test(NAME kick-unsaved-gate COMMAND kick-unsaved-gate-tests)
+set_tests_properties(kick-unsaved-gate PROPERTIES TIMEOUT 10)
