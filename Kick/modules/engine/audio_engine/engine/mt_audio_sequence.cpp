@@ -574,12 +574,19 @@ namespace mt
 
     int MTSequence::resetTrackSolos()
     {
-        if( getNumSoloTracks() != 0 )
+        // Clear the solo flag of every track (not only the bit set), then rebuild the bit set and the solo-mute
+        // state of the tracks; otherwise the other tracks stay muted by the solo that no longer exists.
+        bool changed = getNumSoloTracks() != 0;
+        for( const auto& it : tracks )
         {
-            soloingTracks.clear();
-            return 0;
+            if( it->isSolo() )
+            {
+                it->solo = false;
+                changed  = true;
+            }
         }
-        return -1;
+        updateTrackSoloList();
+        return changed ? 0 : -1;
     }
 
     int MTSequence::getNumTracks()
