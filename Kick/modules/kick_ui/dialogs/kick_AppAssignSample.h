@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include "kick_assign_sample_logic.h"
 #define NOT_USED 0
 namespace kick_ui
 {
@@ -47,8 +48,13 @@ namespace kick_ui
         ui::KickList              fileList{ "Samples", {}, 0, 2 };
         std::vector<juce::String> files;
         ui::KickLabel             sampleLabel{ "Samples" };
-        juce::File                findFileInDirectory( const juce::File& directory, const juce::String& fileName );
         void                      audition( juce::File f );
+        void                      scheduleAudition( int listIndex );
+        void                      auditionListIndex( int listIndex );
+        static constexpr int      kAuditionDelayMs{ 150 };
+        int                       currentLayer{ 0 };
+        assign_logic::AuditionDebounce auditionDebounce;
+        ui::KickToggleOptions     layerSelector{ "Layer" };
         void                      resized() override;
         void                      paint( juce::Graphics& ) override;
         void                      visibilityChanged() override;

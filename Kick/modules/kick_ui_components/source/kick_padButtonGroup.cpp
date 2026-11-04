@@ -732,12 +732,11 @@ namespace ui
         bool visible = isVisible();
         if( visible && isSelectionEnabled() )
         {
-            contracts::DclSignals::hardwareInputTriggered.connect( handle_Bank );
+            if( !hwInputConnection.connected() )
+                hwInputConnection = contracts::DclSignals::hardwareInputTriggered.connect( handle_Bank );
         }
         else
-        {
-            contracts::DclSignals::hardwareInputTriggered.disconnect( handle_Bank );
-       }
+            hwInputConnection.disconnect();
 
         for( auto it : getChildren() )
             it->setVisible( visible );
