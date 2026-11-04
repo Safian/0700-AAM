@@ -133,8 +133,8 @@ namespace mt
             { "1-3-5", { 4, 7 } },
             { "1-4-5", { 5, 7 } },
             { "1-2-5", { 2, 7 } },
-            { "1-3-5-7", { 5, 7, 11 } },
-            { "1-3-5-7b", { 5, 7, 10 } },
+            { "1-3-5-7", { 4, 7, 11 } }, // stacked thirds: major 3rd (4), fifth, major 7th
+            { "1-3-5-7b", { 4, 7, 10 } }, // dominant 7th
         };
 
         static const std::vector<juce::String> PadPerform = {
@@ -233,7 +233,7 @@ namespace mt
             "Neapolitan Minor",
             "Persian",
             "Romanian Major",
-            "Romanian Major",
+            "Romanian Minor",
             "Spanish 8 Tone",
             "Ukrainian Dorian",
             "Japanese1",

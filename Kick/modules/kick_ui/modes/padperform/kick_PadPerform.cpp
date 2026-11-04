@@ -1,6 +1,5 @@
 namespace kick_ui
 {
-
     PadPerform::PadPerform()
         : kick_ui::IScreen( kick_ui::Screen::MenuPadPerform )
     {
@@ -26,41 +25,20 @@ namespace kick_ui
             it->setVisible( visible );
     }
 
-    int PadPerform::transposeNote( int Note )
-    {
-        return content.transposeNote( Note );
-    }
-
-    std::vector<int> PadPerform::transpose( int Note )
-    {
-        return content.transpose( Note );
-    }
-
+    // Hardware input of the screen. Q-Link 1-4 (Screen mode, the default; in Custom mode the KnobEdit takes the Q-Links
+    // before they get here, kick_AppHome.cpp): 1 Scale, 2 Root, 3 Octave, 4 Chord list (Chords / Progression) or the mode.
     void PadPerform::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
     {
         if( contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) )
         {
-            int              bankOffset = ae.getBankOffset();
-            auto             padNo      = contracts::DclContractsHelper::getPadNumber( f_HwMsg );
-            auto             padState   = contracts::DclContractsHelper::getPadState( f_HwMsg );
-            auto             velocity   = contracts::DclContractsHelper::getPadVelocity( f_HwMsg );
-            std::vector<int> pads;
+            const auto padNo    = contracts::DclContractsHelper::getPadNumber( f_HwMsg );
+            const auto padState = contracts::DclContractsHelper::getPadState( f_HwMsg );
+            const auto velocity = contracts::DclContractsHelper::getPadVelocity( f_HwMsg );
 
-            padNo += bankOffset;
-            pads = transpose( padNo );
-
-            for( auto& it : pads )
-            {
-                juce::MidiMessage Msg;
-
-                if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
-                    Msg = juce::MidiMessage::noteOn( 1, it, (juce::uint8)velocity );
-                else if( padState == contracts::DeviceControlContracts::BTN_RELEASED )
-                    Msg = juce::MidiMessage::noteOff( 1, it );
-
-                ae.addLiveMidiMsg( ae.getSelected(), Msg );
-            }
-            pads.clear();
+            if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
+                content.hardwarePad( padNo, true, velocity );
+            else if( padState == contracts::DeviceControlContracts::BTN_RELEASED )
+                content.hardwarePad( padNo, false, 0 );
         }
         else if( contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )
         {
@@ -82,239 +60,129 @@ namespace kick_ui
         }
     }
 
-    /// @brief
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
     PadPerformContent::PadPerformContent()
         : pads( std::make_unique<ui::KickPadButtonGroupComponent>( ui::KickPadButton::PadButtonType::with1Row ) )
     {
-        mt::utils::addChildComponents( this, type, rootNote, scale, startOn, octave, bankInc, bankDec, bank, chromaticBtn, notesBtn, chordsBtn, progressionBtn, chord, scale_octave, pads.get() );
+        mt::utils::addChildComponents( this, rootNote, scale, startOn, octave, bankInc, bankDec, bank, chromaticBtn, notesBtn, chordsBtn, progressionBtn, levelBtn, levelParamBtn, heldLabel, chord, scale_octave, pads.get() );
         mt::utils::setRadioGroupID( (int)kick_ui::RadioGroupId::Padperform, chromaticBtn, notesBtn, chordsBtn, progressionBtn );
-        mt::utils::setTitleColour( ui::Theme::textColour( 1 ), type, chord, startOn );
-        mt::utils::setValueColour( ui::Theme::textColour( 1 ), chromaticBtn, notesBtn, chordsBtn, progressionBtn, bank );
-        mt::utils::setValueFontHeight( 18, chromaticBtn, notesBtn, chordsBtn, progressionBtn, bank );
+        mt::utils::setTitleColour( ui::Theme::textColour( 1 ), chord, startOn );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), chromaticBtn, notesBtn, chordsBtn, progressionBtn, levelBtn, levelParamBtn, bank );
+        mt::utils::setValueFontHeight( 18, chromaticBtn, notesBtn, chordsBtn, progressionBtn, levelBtn, levelParamBtn, bank );
         mt::utils::setTitleFontHeight( 16, scale, rootNote, octave, chord, startOn );
         mt::utils::setValueFontHeight( 20, scale, rootNote, octave, chord, startOn );
-        mt::utils::setJustificationType( juce::Justification::centred, scale, rootNote, octave, chord, startOn, type );
+        mt::utils::setJustificationType( juce::Justification::centred, scale, rootNote, octave, chord, startOn );
+
+        heldLabel.setInterceptsMouseClicks( false, false );
+        heldLabel.setValueColour( ui::Theme::textColour( 1 ) );
+        heldLabel.setValueFontHeight( 18 );
+        heldLabel.setValueBackgroundColour( ui::Theme::backgroundColour( 3 ) );
+        heldLabel.setValueJustification( juce::Justification::centred );
 
         pads->setRow1Justification( -1, juce::Justification::centred );
+        // The hardware pads are handled by hardwarePad(); the group would also click its own pad on every hardware hit.
+        pads->setSelectionEnabled( false );
         bank.setInterceptsMouseClicks( false, false );
         bank.setValueBackgroundColour( ui::Theme::backgroundColour( 3 ) );
         bank.setValueJustification( juce::Justification::centred );
         bankInc.toFront( true );
         bankDec.toFront( true );
 
-        selectedStartOn    = 0;
-        octaveIndex        = 0;
-        bankIndex          = 0;
-        activeDisplayIndex = 0;
-        selectedType       = 0;
-        selectedScale      = 0;
-        selectedOctave     = 0;
-        selectedRootNote   = 0;
+        levelParamBtn.setToggleState( true, juce::dontSendNotification ); // on = Velocity, off = Tune
+        levelParamBtn.setVisible( false );
 
-        mt::signals::bankChanged.connect( [&]( int index, juce::String bankName ) {
+        // One bank truth: the engine's. The screen follows it (hardware bank buttons, KickHome) and writes to it (± buttons,
+        // the group's bank list), so the displayed bank, the pad LEDs and the notes the hardware pads play always agree.
+        bankConn_ = mt::signals::bankChanged.connect( [&]( int index, juce::String ) {
             if( kick_ui ::KickHome::Instance().getCurrentScreen() == kick_ui::Screen::MenuPadPerform )
             {
                 bankIndex = index;
-                pads->setBank( bankIndex );
+                if( pads->getBankIndex() != index ) pads->setBank( index );
             }
         } );
 
         pads->OnBankChanged = [&]( const juce::String& bankName ) {
             bank.setText( bankName, juce::dontSendNotification );
+            bankIndex = pads->getBankIndex();
+            if( ae.getBank().toUpperCase() != bankName.toUpperCase() )
+                ae.setBank( bankName );
             refreshData();
         };
 
-        bankInc.onClick = [&]() {
-            ++bankIndex;
-            if( bankIndex > 7 )
-                bankIndex = 7;
-            pads->setBank( bankIndex );
+        auto selectBank = [&]( int index ) {
+            index = juce::jlimit( 0, 7, index );
+            if( pads->getBankIndex() != index )
+                pads->setBank( index ); // -> OnBankChanged -> ae.setBank
+        };
+        bankInc.onClick = [&, selectBank]() {
+            selectBank( pads->getBankIndex() + 1 );
             bankInc.setToggleState( false, juce::dontSendNotification );
         };
-
-        bankDec.onClick = [&]() {
-            --bankIndex;
-            if( bankIndex < 0 )
-                bankIndex = 0;
-            pads->setBank( bankIndex );
+        bankDec.onClick = [&, selectBank]() {
+            selectBank( pads->getBankIndex() - 1 );
             bankDec.setToggleState( false, juce::dontSendNotification );
         };
 
-        chromaticBtn.onClick = [&]() {
-            if( chromaticBtn.getToggleState() && pPadPerform )
-            {
-                pPadPerform->performMode = mt::PerformanceMode::CHROMATIC;
-                selectedType             = 1;
-                refreshData();
-            }
+        // On-screen pads: one note-on per finger on touch-down (velocity from where on the pad), the matching note-off on lift.
+        pads->onPadTouchDown = [this]( int padId, int finger, float yFrac ) {
+            padDown( padmap::fingerKey( finger ), padId, ui::piano::velocityFromPosition( yFrac, 24 ) );
+        };
+        pads->onPadTouchUp = [this]( int, int finger ) { padUp( padmap::fingerKey( finger ) ); };
+
+        chromaticBtn.onClick = [&]() { if( chromaticBtn.getToggleState() ) setMode( padmap::Chromatic ); };
+        notesBtn.onClick     = [&]() { if( notesBtn.getToggleState() ) setMode( padmap::Notes ); };
+        chordsBtn.onClick    = [&]() { if( chordsBtn.getToggleState() ) setMode( padmap::Chords ); };
+        progressionBtn.onClick = [&]() { if( progressionBtn.getToggleState() ) setMode( padmap::Progression ); };
+
+        levelBtn.onClick = [&]() {
+            if( levelBtn.getToggleState() != level16_ ) toggleSixteenLevels();
+        };
+        levelParamBtn.onClick = [&]() {
+            levelParamTune_ = ! levelParamBtn.getToggleState();
+            updateLevelUi();
+            pushToUI();
+            pushToHW();
         };
 
-        notesBtn.onClick = [&]() {
-            if( notesBtn.getToggleState() && pPadPerform )
-            {
-                pPadPerform->performMode = mt::PerformanceMode::NOTES;
-                selectedType             = 2;
-                refreshData();
-            }
-        };
-
-        chordsBtn.onClick = [&]() {
-            if( chordsBtn.getToggleState() && pPadPerform )
-            {
-                pPadPerform->performMode = mt::PerformanceMode::CHORDS;
-                selectedType             = 3;
-                chord.setVisible( true );
-                refreshData();
-            }
-        };
-
-        progressionBtn.onClick = [&]() {
-            if( progressionBtn.getToggleState() && pPadPerform )
-            {
-                pPadPerform->performMode = mt::PerformanceMode::PROGRESSION;
-                selectedType             = 4;
-                refreshData();
-            }
-        };
-
-        //octaveInc.onClick = [&]() {
-        //    if( selectedStartOn == 1 )
-        //    {
-        //        octaveIndex = octaveIndex + 1;
-
-        //        int tempOctave      = octaveIndex + selectedOctave;
-        //        int tempRootNote    = selectedRootNote;
-        //        int tempStartOfNote = tempRootNote + ( tempOctave * 12 );
-
-        //        if( tempStartOfNote < 128 )
-        //        {
-        //            /*if( bankIndex < 7 )
-        //                bankIndex++;*/
-        //            pads->setBank( mt::Kick::padBankNames[bankIndex] );
-        //            Controls::InputEvents::clearAllPads();
-        //            displayFromNote( tempStartOfNote );
-
-        //            // Update octave ListBox
-        //            octave.setSelected( octave.getSelectedIndex() + 1 );
-        //        }
-        //        else
-        //            octaveIndex = octaveIndex - 1;
-        //    }
-        //    else
-        //    {
-        //        auto startPadIndex = startOfNotes + ( bankIndex * 16 );
-        //        if( bankIndex < 7 && startPadIndex < 112 )
-        //        {
-        //            int tempIndex = 0;
-        //            //bankIndex++;
-        //            tempIndex = startOfNotes + ( bankIndex * 16 );
-        //            Controls::InputEvents::clearAllPads();
-        //            displayFromNote( tempIndex );
-        //        }
-        //        pads->setBank( mt::Kick::padBankNames[bankIndex] );
-
-        //        // Update octave ListBox
-        //        octave.setSelected( octave.getSelectedIndex() + 1 );
-        //    }
-        //    octaveInc.setToggleState( false, juce::dontSendNotification );
-        //};
-
-        //octaveDec.onClick = [&]() {
-        //    if( octave.getSelectedIndex() == 0 )
-        //    {
-        //        octaveDec.setToggleState( false, juce::dontSendNotification );
-        //        return;
-        //    }
-        //    if( selectedStartOn == 1 )
-        //    {
-        //        if( octaveIndex > 0 )
-        //        {
-        //            octaveIndex = octaveIndex - 1;
-
-        //            int tempOctave      = octaveIndex + selectedOctave;
-        //            int tempRootNote    = selectedRootNote;
-        //            int tempStartOfNote = tempRootNote + ( tempOctave * 12 );
-
-        //            if( tempStartOfNote >= 0 )
-        //            {
-        //                /*if( bankIndex > 0 )
-        //                    bankIndex--;*/
-
-        //                pads->setBank( mt::Kick::padBankNames[bankIndex] );
-        //                Controls::InputEvents::clearAllPads();
-        //                displayFromNote( tempStartOfNote );
-
-        //                // Update octave ListBox
-        //                octave.setSelected( octave.getSelectedIndex() - 1 );
-        //            }
-        //            else
-        //                octaveIndex = octaveIndex + 1;
-        //        }
-        //        octave.setSelected( octave.getSelectedIndex() - 1 );
-        //    }
-        //    else
-        //    {
-        //        if( bankIndex >= 0 )
-        //        {
-        //            int tempIndex = 0;
-        //            // bankIndex--;
-        //            tempIndex = startOfNotes + ( bankIndex * 16 );
-        //            Controls::InputEvents::clearAllPads();
-        //            displayFromNote( tempIndex );
-        //            pads->setBank( mt::Kick::padBankNames[bankIndex] );
-        //        }
-
-        //        // Update octave ListBox
-        //        octave.setSelected( octave.getSelectedIndex() - 1 );
-        //    }
-        //    octaveDec.setToggleState( false, juce::dontSendNotification );
-        //};
-
-        rootNote.onSelectionChanged = [&]( int Sel, const juce::String& RootNote ) {
+        rootNote.onSelectionChanged = [&]( int, const juce::String& RootNote ) {
             if( pPadPerform )
             {
                 pPadPerform->performRootNote = RootNote;
-                selectedRootNote             = Sel;
-                refreshData();
+                requestRefresh();
             }
         };
 
-        octave.onSelectionChanged = [&]( int Sel, const juce::String& Octave ) {
+        // No bank gate: the octave applies in every bank (H bank used to keep the old octave while the list moved on).
+        octave.onSelectionChanged = [&]( int, const juce::String& Octave ) {
             if( pPadPerform )
             {
                 pPadPerform->performOctave = Octave;
-                if( Sel <= 10 && bankIndex < 7 )
-                {
-                    selectedOctave = Sel;
-                    refreshData();
-                }
+                requestRefresh();
             }
         };
 
-        scale.onSelectionChanged = [&]( int Sel, const juce::String& Scale ) {
+        scale.onSelectionChanged = [&]( int, const juce::String& Scale ) {
             if( pPadPerform )
             {
                 pPadPerform->performScale = Scale;
-                selectedScale             = Sel;
-                refreshData();
+                requestRefresh();
             }
         };
 
-        startOn.onSelectionChanged = [&]( int Sel, const juce::String& StartOnType ) {
+        startOn.onSelectionChanged = [&]( int, const juce::String& StartOnType ) {
             if( pPadPerform )
             {
                 pPadPerform->performBanks = StartOnType;
-                selectedStartOn           = Sel;
-                refreshData();
+                requestRefresh();
             }
         };
 
-        chord.onSelectionChanged = [&]( int Sel, const juce::String& Chord ) {
+        chord.onSelectionChanged = [&]( int, const juce::String& Chord ) {
             if( pPadPerform )
             {
                 pPadPerform->performChords = Chord;
-                selectedChord              = Sel;
-                refreshData();
+                requestRefresh();
             }
         };
 
@@ -323,7 +191,17 @@ namespace kick_ui
             notesBtn.setToggleButtonText( "Notes", "Notes" );
             chordsBtn.setToggleButtonText( "Chords", "Chords" );
             progressionBtn.setToggleButtonText( "Progressions", "Progressions" );
+            levelBtn.setToggleButtonText( "16 LEVELS", "16 LEVELS" );
+            levelParamBtn.setToggleButtonText( "Velocity", "Tune" );
         } );
+    }
+
+    PadPerformContent::~PadPerformContent()
+    {
+        stopTimer();
+        bankConn_.disconnect();
+        pads->onPadTouchDown = nullptr;
+        pads->onPadTouchUp   = nullptr;
     }
 
     void PadPerformContent::resized()
@@ -343,61 +221,30 @@ namespace kick_ui
         notesBtn.setBoundsRelative( .1310f, .912f, .117f, .0742f );
         chordsBtn.setBoundsRelative( .2523f, .912f, .117f, .0742f );
         progressionBtn.setBoundsRelative( .3736f, .912f, .117f, .0742f );
+        levelBtn.setBoundsRelative( .4949f, .912f, .105f, .0742f );
+        levelParamBtn.setBoundsRelative( .6049f, .912f, .105f, .0742f );
+        heldLabel.setBoundsRelative( .7149f, .912f, .105f, .0742f );
         bank.setBoundsRelative( .8317f, .91f, .1565f, .0782f );
         bankDec.setBoundsRelative( .8317f, .912f, .0332f, .0742f );
         bankInc.setBoundsRelative( .9549f, .912f, .0332f, .0742f );
     }
 
-    void PadPerformContent::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
-    {
-        if( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) )
-        {
-            int bankId;
-            int btnId = contracts::DclContractsHelper::getButtonCode( f_HwMsg );
-            DBG( "Pad Perform: " << btnId );
-            switch( btnId )
-            {
-                // Bank buttons...
-                case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A: pads->setBank( "A" ); break;
-                case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_B: pads->setBank( "B" ); break;
-                case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_C: pads->setBank( "C" ); break;
-                case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_D: pads->setBank( "D" ); break;
-                case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_E: pads->setBank( "E" ); break;
-                case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_F: pads->setBank( "F" ); break;
-                case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_G: pads->setBank( "G" ); break;
-                case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_H: pads->setBank( "H" ); break;
-                default: break; // DBG( "Unknown" ); break;
-            }
-        }
-    }
     void PadPerformContent::knobCommand( int knob, int value )
     {
+        const bool chordsShown = padmap::normaliseMode( selectedType ) == padmap::Chords || padmap::normaliseMode( selectedType ) == padmap::Progression;
         switch( knob )
         {
-            case contracts::DeviceControlContracts::EN_KNOB_1:
-                type.knobRotated( value );
-                break;
-            case contracts::DeviceControlContracts::EN_KNOB_2:
-                scale.knobRotated( value );
-                break;
-            case contracts::DeviceControlContracts::EN_KNOB_3:
-                rootNote.knobRotated( value );
-                break;
+            case contracts::DeviceControlContracts::EN_KNOB_1: scale.knobRotated( value ); break;
+            case contracts::DeviceControlContracts::EN_KNOB_2: rootNote.knobRotated( value ); break;
+            case contracts::DeviceControlContracts::EN_KNOB_3: octave.knobRotated( value ); break;
             case contracts::DeviceControlContracts::EN_KNOB_4:
-                scale.knobRotated( value );
+                if( chordsShown ) chord.knobRotated( value );
+                else stepMode( value > 0 ? 1 : -1 );
                 break;
-            case contracts::DeviceControlContracts::EN_KNOB_5:
-                chord.knobRotated( value );
-                break;
-            case contracts::DeviceControlContracts::EN_KNOB_6:
-                startOn.knobRotated( value );
-                break;
-            case contracts::DeviceControlContracts::EN_KNOB_7:
-                octave.knobRotated( value );
-                break;
-            default:
-                type.knobRotated( value );
-                break;
+            case contracts::DeviceControlContracts::EN_KNOB_5: chord.knobRotated( value ); break;
+            case contracts::DeviceControlContracts::EN_KNOB_6: startOn.knobRotated( value ); break;
+            case contracts::DeviceControlContracts::EN_KNOB_7: stepMode( value > 0 ? 1 : -1 ); break;
+            default: break;
         }
     }
 
@@ -410,413 +257,327 @@ namespace kick_ui
         if( isVisible() || isShowing() )
         {
             contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::clearAllPadsMessage() );
-            pPadPerform = ae.getPadPerformanceData();
+            lastHwColours_.clear();
+            kgColoursValid_ = false;
+            pPadPerform     = ae.getPadPerformanceData();
+
+            // Open on the engine's bank (it may have changed while another screen was in front).
+            bankIndex = juce::jlimit( 0, 7, ae.getBankOffset() / 16 );
+            if( pads->getBankIndex() != bankIndex ) pads->setBank( bankIndex );
+            else bank.setText( mt::Kick::padBankNames[(size_t)bankIndex], juce::dontSendNotification );
+
             refresh();
-            //refreshData();
+            if( level16_ )
+                contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::setLEDONMessage( contracts::DeviceControlContracts::EN_16LEVELS ) );
         }
         else
         {
+            stopTimer();
+            releaseAllNotes();
+            if( level16_ )
+            {
+                level16_ = false;
+                levelBtn.setToggleState( false, juce::dontSendNotification );
+                contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::setLEDOFFMessage( contracts::DeviceControlContracts::EN_16LEVELS ) );
+            }
             contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::clearAllPadsMessage() );
 
             contracts::DclSignals::refreshPadLeds();
         }
     }
 
+    // Stored Off / Chromatic Chords modes (no button, no behaviour) are normalised to Chromatic here, so a project that
+    // holds one of them shows and plays a normal pad map.
     void PadPerformContent::refresh()
     {
-        if( pPadPerform )
-        {
-            selectedRootNote = rootNote.getIndex( pPadPerform->performRootNote.get() );
-            selectedChord    = chord.getIndex( pPadPerform->performChords.get() );
-            selectedOctave   = octave.getIndex( pPadPerform->performOctave.get() );
-            selectedScale    = scale.getIndex( pPadPerform->performScale.get() );
-            selectedStartOn  = startOn.getIndex( pPadPerform->performBanks.get() );
-            scale.setSelected( pPadPerform->performScale.get(), juce::dontSendNotification );
-            octave.setSelected( pPadPerform->performOctave.get(), juce::dontSendNotification );
-            rootNote.setSelected( pPadPerform->performRootNote.get(), juce::dontSendNotification );
-            chord.setSelected( pPadPerform->performChords.get(), juce::dontSendNotification );
-            startOn.setSelected( pPadPerform->performBanks.get(), juce::dontSendNotification );
-            auto padPerformMode = pPadPerform->performMode.get();
-            chromaticBtn.setToggleState( padPerformMode == mt::PerformanceMode::CHROMATIC, juce::sendNotification );
-            notesBtn.setToggleState( padPerformMode == mt::PerformanceMode::NOTES, juce::sendNotification );
-            chordsBtn.setToggleState( padPerformMode == mt::PerformanceMode::CHORDS, juce::sendNotification );
-            progressionBtn.setToggleState( padPerformMode == mt::PerformanceMode::PROGRESSION, juce::sendNotification );
-        }
+        if( ! pPadPerform ) return;
+
+        const int stored = (int)pPadPerform->performMode.get();
+        const int mode   = padmap::normaliseMode( stored );
+        if( mode != stored ) pPadPerform->performMode = (mt::PerformanceMode)mode;
+        selectedType = mode;
+
+        scale.setSelected( pPadPerform->performScale.get(), juce::dontSendNotification );
+        octave.setSelected( pPadPerform->performOctave.get(), juce::dontSendNotification );
+        rootNote.setSelected( pPadPerform->performRootNote.get(), juce::dontSendNotification );
+        chord.setSelected( pPadPerform->performChords.get(), juce::dontSendNotification );
+        startOn.setSelected( pPadPerform->performBanks.get(), juce::dontSendNotification );
+        chromaticBtn.setToggleState( mode == padmap::Chromatic, juce::dontSendNotification );
+        notesBtn.setToggleState( mode == padmap::Notes, juce::dontSendNotification );
+        chordsBtn.setToggleState( mode == padmap::Chords, juce::dontSendNotification );
+        progressionBtn.setToggleState( mode == padmap::Progression, juce::dontSendNotification );
+        levelBtn.setToggleState( level16_, juce::dontSendNotification );
+        refreshData();
     }
 
-    int PadPerformContent::transposeNote( int Note )
+    void PadPerformContent::setMode( int mode )
     {
-        auto idx = juce::jlimit( MIDI::MIN, MIDI::MAX, Note );
-        return noteData[idx].activeDisplayIndex;
+        if( ! pPadPerform ) return;
+        mode         = padmap::normaliseMode( mode );
+        selectedType = mode;
+        pPadPerform->performMode = (mt::PerformanceMode)mode;
+        requestRefresh();
     }
 
-    std::vector<int> PadPerformContent::transpose( int Note )
+    void PadPerformContent::stepMode( int direction )
     {
-        std::vector<int> notes;
+        const int cur  = padmap::normaliseMode( selectedType );
+        const int next = juce::jlimit( (int)padmap::Chromatic, (int)padmap::Progression, cur + direction );
+        if( next == cur ) return;
+        ui::KickToggleButton* btns[] = { &chromaticBtn, &notesBtn, &chordsBtn, &progressionBtn };
+        btns[next - padmap::Chromatic]->setToggleState( true, juce::dontSendNotification );
+        setMode( next );
+    }
 
-        // Root note...
-        auto idx = transposeNote( Note );
-        notes.push_back( idx );
+    // Q-Link ticks and list taps arrive in bursts; the (DCL pad colour + engine colour + 16 label) recalculation waits for
+    // the burst to end.
+    void PadPerformContent::requestRefresh() { startTimer( 40 ); }
 
-        auto noteMappingType = (enumNoteTypes)( selectedType );
-        if( EN_TYPE_CHORDS == noteMappingType )
-        {
-            auto chrd = chord.getSelected();
-            auto it   = mt::ScaleAndNotes::chordFormulaMap.find( chrd );
-            if( it != mt::ScaleAndNotes::chordFormulaMap.end() )
-            {
-                auto& chordFormula = it->second;
-                for( auto i : chordFormula )
-                {
-                    notes.push_back( idx + i );
-                }
-            }
-        }
+    void PadPerformContent::timerCallback()
+    {
+        stopTimer();
+        refreshData();
+    }
 
-        return notes;
+    padmap::Params PadPerformContent::params()
+    {
+        padmap::Params p;
+        p.mode      = padmap::normaliseMode( selectedType );
+        p.rootPc    = juce::jlimit( 0, 11, rootNote.getSelectedIndex() );
+        p.octaveIdx = juce::jlimit( 0, 10, octave.getSelectedIndex() );
+        auto f      = mt::ScaleAndNotes::scaleFormulaMap.find( (mt::ScaleAndNotes::scale_type)juce::jmax( 0, scale.getSelectedIndex() ) );
+        if( f != mt::ScaleAndNotes::scaleFormulaMap.end() ) p.scale = f->second;
+        p.startOnRoot = startOn.getSelectedIndex() == 1;
+        p.chord       = chord.getSelected().toStdString();
+        return p;
     }
 
     void PadPerformContent::refreshData()
     {
+        stopTimer();
+        cur_    = params();
+        layout_ = padmap::layout( cur_ );
+
+        const bool chordsShown = cur_.mode == padmap::Chords || cur_.mode == padmap::Progression;
+        chord.setVisible( chordsShown && isVisible() );
+
         pads->refreshAllPads();
-        selectionChanged();
-        pushToUI();
-        pushToHW();
-    }
-
-    void PadPerformContent::selectionChanged()
-    {
-        //bankIndex          = 0;
-        octaveIndex        = 0;
-        activeDisplayIndex = 0;
-        //Clear Pad Names
         pads->clearAllPadData();
-        if( EN_TYPE_CHORDS != selectedType && EN_TYPE_PROGRESSION != selectedType )
-            chord.setVisible( false );
-
-        updateNoteData();
         pushToUI();
         pushToHW();
-        pushPadInfoToDisplay();
+        pushToEngineColours();
+        updateLevelUi();
+        for( auto& [key, slot] : keySlot_ )
+            pads->setPadHighlight( slot, true );
     }
 
-    void PadPerformContent::pushPadInfoToHw( int id, enumNoteMode f_enNoteMode )
+    int PadPerformContent::hwColour( padmap::Mark mark )
     {
-        int  colourId = 0;
-        auto state    = contracts::DeviceControlContracts::PadButtonState::StateOn;
-
-        if( f_enNoteMode == EN_NOTE_ROOT )
-            colourId = 4;
-        else if( f_enNoteMode == EN_NOTE_ACTIVE )
-            colourId = 1;
-        else
+        switch( mark )
         {
-            colourId = 0;
+            case padmap::Mark::Root: return (int)contracts::DeviceControlContracts::PadColourIds::PadColourRed;
+            case padmap::Mark::Active: return (int)contracts::DeviceControlContracts::PadColourIds::padColourDarkYellow;
+            default: return (int)contracts::DeviceControlContracts::PadColourIds::PadColourTrans;
         }
-        id = id % 16;
-
-        contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                     setPadDataMessage( id, state ? contracts::DeviceControlContracts::PadButtonState::StateOn : contracts::DeviceControlContracts::PadButtonState::StateOff,
-                                                                        convertToHwColour( colourId ) ) );
     }
 
-    void PadPerformContent::pushPadInfoToDisplay()
+    // The 16 pads of the shown bank: note names + border colour (root / scale / out of scale) from the layout; in 16 LEVELS
+    // the stepped value of each pad.
+    void PadPerformContent::pushToUI()
     {
-        int           noteIndex         = 0;
-        int           scaleFormulaStep  = 0;
-        int           scaleFormulaValue = 0;
-        int           scaleFormulaIndex = 0;
-        enumNoteTypes enNoteTypes       = (enumNoteTypes)selectedType;
-        enumNoteMode  enNoteMode        = EN_NOTE_NOT_AVAILABLE;
-
-        startOfNotes = juce::jlimit( MIDI::MIN, MIDI::MAX, selectedRootNote + ( selectedOctave * 12 ) );
-
-        if( mt::ScaleAndNotes::maxMidiNote < startOfNotes )
-            return;
-
-        juce::String selectedRootNoteName = rootNote.getSelectedValue();
-
-        enum mt::ScaleAndNotes::scale_type scaleFormTypes = ( mt::ScaleAndNotes::scale_type )( 0 + selectedScale );
-
-        std::vector<int> scaleFormula = mt::ScaleAndNotes::scaleFormulaMap.at( scaleFormTypes );
-
-        mt::MTPadColors padData     = { mt::EmptyPadColorMode::Off, mt::PadColorMode::OFF, { 0 } };
-        int             padColourId = 0;
-
-        for( int index = 0; index < 128; index++ )
+        const auto& names = mt::ScaleAndNotes::noteNames();
+        const int   first = juce::jlimit( 0, 112, bankIndex * 16 );
+        for( int i = 0; i < 16; ++i )
         {
-            juce::String noteName       = mt::ScaleAndNotes::midiNoteNames[index];
-            st_NoteData[index].noteName = noteName;
-            // Check for Note mode
-            if( index >= startOfNotes )
+            const int    slot = first + i;
+            padmap::Mark mark = padmap::Mark::NotAvailable;
+            juce::String text;
+            if( level16_ )
             {
-                // Check for Note Mode
-                if( scaleFormulaStep == 0 )
+                mark = padmap::Mark::Active;
+                if( levelParamTune_ )
                 {
-                    scaleFormulaStep = scaleFormula[scaleFormulaIndex];
-                    // Upper limit check
-                    scaleFormulaIndex++;
-                    scaleFormulaIndex = ( scaleFormulaIndex >= scaleFormula.size() ) ? 0 : ( scaleFormulaIndex );
-                    enNoteMode        = EN_NOTE_ACTIVE;
+                    const int off = i - 8;
+                    text          = off == 0 ? juce::String( "0" ) : ( off > 0 ? "+" : "" ) + juce::String( off );
+                    if( off == 0 ) mark = padmap::Mark::Root;
                 }
                 else
-                {
-                    enNoteMode = EN_NOTE_INACTIVE;
-                }
-                scaleFormulaStep--;
-
-                // Check for Root Note
-
-                if( ( selectedRootNoteName[0] == noteName[0] ) && ( noteName[1] != '#' ) )
-                {
-                    enNoteMode = EN_NOTE_ROOT;
-                }
-
-                noteIndex = index - startOfNotes;
-
-                st_NoteData[index].enNoteMode = enNoteMode;
-                switch( enNoteTypes )
-                {
-                    case EN_TYPE_OFF:
-                    case EN_TYPE_CHROMATIC:
-                    case EN_TYPE_CHORDS:
-                    case EN_TYPE_PROGRESSION:
-                    case EN_TYPE_CHROMATIC_CHORDS:
-                    {
-                        padColourId = pushPadInfoToUI( noteIndex, noteName, enNoteMode );
-                        break;
-                    }
-                    case EN_TYPE_NOTES:
-                    default:
-                    {
-                        if( ( enNoteMode == EN_NOTE_ACTIVE ) || ( enNoteMode == EN_NOTE_ROOT ) )
-                        {
-                            st_NoteData[activeDisplayIndex].activeDisplayIndex = activeDisplayIndex;
-                            padColourId                                        = pushPadInfoToUI( activeDisplayIndex, noteName, enNoteMode );
-                            activeDisplayIndex++;
-                        }
-                        break;
-                    }
-                }
-                padData.Colours[noteIndex] = padColourId;
+                    text = juce::String( padmap::levelVelocity( i ) );
             }
             else
             {
-                enNoteMode                    = EN_NOTE_NOT_AVAILABLE;
-                st_NoteData[index].enNoteMode = enNoteMode;
+                const auto& pad = layout_[(size_t)slot];
+                mark            = pad.mark;
+                if( pad.note >= 0 && pad.note < (int)names.size() ) text = names[(size_t)pad.note];
             }
+            const auto border = mark == padmap::Mark::Root   ? ui::Theme::highlightColour( 2 ) :
+                                mark == padmap::Mark::Active ? ui::Theme::highlightColour( 1 ) :
+                                                               ui::Theme::highlightColour( 0 );
+            pads->setRow1Text( slot, text, juce::dontSendNotification );
+            pads->setBorderColor( slot, border, 3.0f, juce::dontSendNotification );
+            pads->setActive( slot, mark == padmap::Mark::Root || mark == padmap::Mark::Active );
         }
-        displayFromNote( startOfNotes );
-
-        if( noteIndex != 0 )
-        {
-            ae.setKeyGroupPadColour( padData );
-        }
-        scaleFormula.clear();
     }
 
-    int PadPerformContent::pushPadInfoToUI( int id, const juce::String& text, enumNoteMode f_enNoteMode )
+    // Pad LEDs of the shown bank. Only sent when they changed (a Q-Link burst used to send the same packet again and again).
+    void PadPerformContent::pushToHW()
     {
-        static bool displayPad = false;
-        int         colourId   = 0;
-        auto        state      = contracts::DeviceControlContracts::PadButtonState::StateOn;
+        const int        first = juce::jlimit( 0, 112, bankIndex * 16 );
+        std::vector<int> colours;
+        for( int i = 0; i < 16; ++i )
+        {
+            padmap::Mark mark = layout_[(size_t)( first + i )].mark;
+            if( level16_ ) mark = ( levelParamTune_ && i == 8 ) ? padmap::Mark::Root : padmap::Mark::Active;
+            colours.push_back( hwColour( mark ) );
+        }
+        if( colours == lastHwColours_ ) return;
+        lastHwColours_ = colours;
+        contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::setAllPadDataColourInfoMessage( contracts::DeviceControlContracts::PadButtonState::StateOn, colours ) );
+    }
 
-        pads->setActive( id, true );
-        pads->setRow1Text( id, text, juce::dontSendNotification );
-        if( f_enNoteMode == EN_NOTE_ROOT )
-            colourId = 4;
-        else if( f_enNoteMode == EN_NOTE_ACTIVE )
-            colourId = 1;
+    // The engine keeps the colours of all 128 pad slots for the LEDs of the other screens (Keygroup / MIDI / Plugin / CV).
+    void PadPerformContent::pushToEngineColours()
+    {
+        std::array<int, 128> colours{};
+        for( size_t i = 0; i < 128; ++i )
+            colours[i] = hwColour( layout_[i].mark );
+        if( kgColoursValid_ && colours == lastKgColours_ ) return;
+        kgColoursValid_ = true;
+        lastKgColours_  = colours;
+        mt::MTPadColors padData = { mt::EmptyPadColorMode::Off, mt::PadColorMode::OFF, { 0 } };
+        padData.Colours         = colours;
+        ae.setKeyGroupPadColour( padData );
+    }
+
+    void PadPerformContent::updateLevelUi()
+    {
+        levelBtn.setToggleState( level16_, juce::dontSendNotification );
+        levelParamBtn.setVisible( level16_ && isVisible() );
+    }
+
+    void PadPerformContent::toggleSixteenLevels()
+    {
+        level16_ = ! level16_;
+        if( level16_ )
+        {
+            // The pad you hit last (its mapped note) is what all 16 pads play; before any hit: the first pad of the bank.
+            levelBase_ = lastBaseNote_ >= 0 ? lastBaseNote_ : layout_[(size_t)juce::jlimit( 0, 112, bankIndex * 16 )].note;
+            if( levelBase_ < 0 ) levelBase_ = 60;
+        }
+        contracts::DclSignals::sendCommandToDcl( level16_ ? contracts::DclContractsHelper::setLEDONMessage( contracts::DeviceControlContracts::EN_16LEVELS ) :
+                                                            contracts::DclContractsHelper::setLEDOFFMessage( contracts::DeviceControlContracts::EN_16LEVELS ) );
+        updateLevelUi();
+        pads->clearAllPadData();
+        pushToUI();
+        pushToHW();
+        for( auto& [key, slot] : keySlot_ )
+            pads->setPadHighlight( slot, true );
+        kick_log( "padperform", "16 LEVELS %s base note %d param %s\n", level16_ ? "on" : "off", levelBase_, levelParamTune_ ? "Tune" : "Velocity" );
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Playing
+
+    void PadPerformContent::sendNote( const mt::MTSelected& target, bool on, int note, int velocity )
+    {
+        const auto msg = on ? juce::MidiMessage::noteOn( 1, note, (juce::uint8)juce::jlimit( 1, 127, velocity ) ) : juce::MidiMessage::noteOff( 1, note );
+        ae.addLiveMidiMsg( target, msg );
+    }
+
+    void PadPerformContent::hardwarePad( int padNo, bool pressed, int velocity )
+    {
+        const int slot = juce::jlimit( 0, 127, ae.getBankOffset() + padNo );
+        if( pressed ) padDown( slot, slot, velocity );
+        else padUp( slot );
+    }
+
+    void PadPerformContent::padDown( int key, int slot, int velocity )
+    {
+        std::vector<int> notes;
+        int              vel = juce::jlimit( 1, 127, velocity );
+        if( level16_ )
+        {
+            const auto lv = padmap::levelFor( levelParamTune_ ? padmap::LevelParam::Tune : padmap::LevelParam::Velocity, levelBase_, slot % 16 );
+            notes         = { lv.note };
+            if( lv.velocity > 0 ) vel = lv.velocity;
+        }
         else
         {
-            colourId = 0;
-            pads->setActive( id, false );
+            notes = padmap::notesForPad( layout_, cur_, slot );
+            if( ! notes.empty() ) lastBaseNote_ = notes.front();
         }
-        pads->setBorderColor( id, ui::Theme::highlightColour( colourId ), 3.0f, juce::dontSendNotification );
-        return convertToHwColour( colourId );
+        if( notes.empty() ) return; // slot beyond note 127
+
+        const mt::MTSelected target = ae.getSelected();
+        const auto           old    = keyTarget_.find( key );
+        const mt::MTSelected oldTarget = old != keyTarget_.end() ? old->second : target;
+        for( int n : held_.press( key, notes ) ) // a lost release of the same key: end its old notes first
+            sendNote( oldTarget, false, n, 0 );
+        keyTarget_[key] = target;
+        keySlot_[key]   = slot;
+        for( int n : notes )
+            sendNote( target, true, n, vel );
+
+        pads->setPadHighlight( slot, true );
+        updateHeldDisplay();
     }
 
-    int PadPerformContent::convertToHwColour( int colourId )
+    // The note-off ends exactly the notes the press started, on the track it started on, whatever bank / scale / root /
+    // chord / selected track the screen has moved on to since.
+    void PadPerformContent::padUp( int key )
     {
-        int returnColourId = 0;
-        switch( colourId )
+        const auto off = held_.release( key );
+        const auto it  = keyTarget_.find( key );
+        const auto tgt = it != keyTarget_.end() ? it->second : ae.getSelected();
+        for( int n : off )
+            sendNote( tgt, false, n, 0 );
+        if( it != keyTarget_.end() ) keyTarget_.erase( it );
+
+        const auto sl = keySlot_.find( key );
+        if( sl != keySlot_.end() )
         {
-            case 0:
-                returnColourId = (int)contracts::DeviceControlContracts::PadColourIds::PadColourTrans;
-                break;
-            case 1:
-                returnColourId = (int)contracts::DeviceControlContracts::PadColourIds::padColourDarkYellow;
-                break;
-            case 2:
-                break;
-            case 3:
-                break;
-            case 4:
-                returnColourId = (int)contracts::DeviceControlContracts::PadColourIds::PadColourRed;
-                break;
-            case 5:
-                break;
-            case 6:
-                break;
-            case 7:
-                break;
+            const int slot = sl->second;
+            keySlot_.erase( sl );
+            bool stillHeld = false;
+            for( auto& kv : keySlot_ )
+                if( kv.second == slot ) stillHeld = true;
+            if( ! stillHeld ) pads->setPadHighlight( slot, false );
         }
-        return returnColourId;
+        updateHeldDisplay();
     }
 
-    void PadPerformContent::displayFromNote( int f_padIndex )
+    void PadPerformContent::releaseAllNotes()
     {
-        int  visualIndex = 0;
-        int  padIndex    = f_padIndex;
-        int  colourId    = 0;
-        auto state       = contracts::DeviceControlContracts::PadButtonState::StateOn;
+        std::vector<int> keys;
+        for( auto& kv : keyTarget_ ) keys.push_back( kv.first );
+        for( int k : keys ) padUp( k );
+        for( int n : held_.releaseAll() )
+            sendNote( ae.getSelected(), false, n, 0 );
+        keyTarget_.clear();
+        for( auto& kv : keySlot_ ) pads->setPadHighlight( kv.second, false );
+        keySlot_.clear();
+        updateHeldDisplay();
+    }
 
-        enumNoteMode  enNoteMode  = EN_NOTE_NOT_AVAILABLE;
-        enumNoteTypes enNoteTypes = (enumNoteTypes)selectedType;
-
-        while( visualIndex != 16 )
+    // Note name / chord name of what is held ("Cmaj7", "G7", "C3 E3").
+    void PadPerformContent::updateHeldDisplay()
+    {
+        const auto  notes = held_.soundingNotes();
+        const auto& names = mt::ScaleAndNotes::noteNames();
+        juce::String text;
+        if( ! notes.empty() )
         {
-            juce::String noteName = st_NoteData[padIndex].noteName;
-            enNoteMode            = st_NoteData[padIndex].enNoteMode;
-            switch( enNoteTypes )
-            {
-                case EN_TYPE_OFF:
-                case EN_TYPE_CHROMATIC:
-                case EN_TYPE_CHORDS:
-                case EN_TYPE_PROGRESSION:
-                case EN_TYPE_CHROMATIC_CHORDS:
-                {
-                    pushPadInfoToUI( ( ( bankIndex * 16 ) + visualIndex ), noteName, enNoteMode );
-                    pushPadInfoToHw( ( ( bankIndex * 16 ) + visualIndex ), enNoteMode );
-                    visualIndex++;
-                    break;
-                }
-                case EN_TYPE_NOTES:
-                default:
-                {
-                    if( ( enNoteMode == EN_NOTE_ACTIVE ) || ( enNoteMode == EN_NOTE_ROOT ) )
-                    {
-                        pushPadInfoToUI( ( ( bankIndex * 16 ) + visualIndex ), noteName, enNoteMode );
-                        pushPadInfoToHw( ( ( bankIndex * 16 ) + visualIndex ), enNoteMode );
-                        visualIndex++;
-                    }
-                    break;
-                }
-            }
-
-            padIndex++;
-            if( padIndex >= 128 )
-                break;
+            text = juce::String( padmap::chordName( notes, mt::_preferFlatNames.load() ) );
+            if( text.isEmpty() && notes.size() <= 3 )
+                for( int n : notes )
+                    text += ( text.isEmpty() ? "" : " " ) + names[(size_t)juce::jlimit( 0, 127, n )];
         }
+        heldLabel.setText( text, juce::dontSendNotification );
     }
 
     void PadPerformContent::paint( juce::Graphics& g )
     {
         g.setColour( ui::Theme::backgroundColour( 1 ) );
         g.fillRoundedRectangle( { 10.0f, 10.0f, 342.0f, 396.0f }, 5.0f );
-    }
-    void PadPerformContent::updateNoteNames( void )
-    {
-    }
-
-    void PadPerformContent::updateNoteData( void )
-    {
-        clearNoteData();
-
-        auto octaveNum       = octave.getSelectedIndex();
-        auto rootNoteNum     = rootNote.getSelectedIndex() + ( octaveNum * 12 );
-        auto scaleNum        = scale.getSelectedIndex();
-        auto noteMappingType = (enumNoteTypes)( selectedType );
-
-        auto& midiNoteNames = mt::ScaleAndNotes::noteNames();
-        auto& scaleFormula  = mt::ScaleAndNotes::scaleFormulaMap.at( ( mt::ScaleAndNotes::scale_type )( scaleNum ) );
-
-        auto max       = noteData.size();
-        int  noteIndex = rootNoteNum;
-        int  scaleIdx  = noteIndex;
-        int  scaleIt   = 0;
-
-        enumNoteMode noteMode;
-        bool         isInScale = ( ( EN_TYPE_NOTES == noteMappingType ) || ( EN_TYPE_CHORDS == noteMappingType ) || ( EN_TYPE_CHROMATIC_CHORDS == noteMappingType ) );
-        for( auto i = 0; i < max; ++i )
-        {
-            if( selectedStartOn == 1 )
-            {
-                if( ( i % 16 == 0 ) && ( i != 0 ) )
-                {
-                    noteIndex = noteIndex - 4;
-                    scaleIdx  = scaleIdx - 4;
-                    scaleIt   = 0;
-                }
-            }
-            noteData[i].activeDisplayIndex = noteIndex;
-            noteData[i].noteName           = midiNoteNames[noteIndex];
-
-            if( noteIndex == scaleIdx )
-            {
-                noteMode = ( 0 == scaleIt ) ? EN_NOTE_ROOT : EN_NOTE_ACTIVE;
-
-                auto inc = scaleFormula[(size_t)scaleIt];
-                scaleIdx += inc;
-
-                if( isInScale )
-                    noteIndex += ( inc - 1 ); // noteIndex will be incremented by one later, hence pre-substract...
-
-                if( ++scaleIt >= (int)scaleFormula.size() )
-                    scaleIt = 0;
-            }
-            else
-                noteMode = EN_NOTE_INACTIVE;
-
-            noteData[i].enNoteMode   = noteMode;
-            noteData[i].borderColour = ( EN_NOTE_ROOT == noteMode )   ? ui::Theme::highlightColour( 2 ) :
-                                       ( EN_NOTE_ACTIVE == noteMode ) ? ui::Theme::highlightColour( 1 ) :
-                                                                        ui::Theme::highlightColour( 0 );
-            noteData[i].colour       = ( EN_NOTE_ROOT == noteMode )   ? contracts::DeviceControlContracts::PadColourIds::PadColourRed :
-                                       ( EN_NOTE_ACTIVE == noteMode ) ? contracts::DeviceControlContracts::PadColourIds::padColourDarkYellow :
-                                                                        contracts::DeviceControlContracts::PadColourIds::PadColourTrans;
-
-            if( ++noteIndex >= 128 ) break;
-        }
-    }
-
-    void PadPerformContent::clearNoteData( void )
-    {
-        for( auto& note : noteData )
-            note.clear();
-    }
-
-    void PadPerformContent::pushToUI( void )
-    {
-        /*for( auto i = 0; i < 128; ++i )
-        {
-            auto& note = noteData[i];
-
-            pads->setRow1Text( i, note.noteName, juce::dontSendNotification );
-            pads->setBorderColor( i, note.borderColour, 3.0f, juce::dontSendNotification );
-            pads->setActive( i, note.enNoteMode != EN_NOTE_INACTIVE );
-        }*/
-
-        auto idx = juce::jlimit( MIDI::MIN, MIDI::MAX, bankIndex * 16 );
-        for( auto i = 0; i < 16; ++i, ++idx )
-        {
-            auto& note = noteData[idx];
-            pads->setRow1Text( idx, note.noteName, juce::dontSendNotification );
-            pads->setBorderColor( idx, note.borderColour, 3.0f, juce::dontSendNotification );
-            pads->setActive( idx, note.enNoteMode != EN_NOTE_INACTIVE );
-        }
-    }
-
-    void PadPerformContent::pushToHW( void )
-    {
-        auto             idx = juce::jlimit( MIDI::MIN, MIDI::MAX, bankIndex * 16 );
-        std::vector<int> colourId;
-        for( auto i = 0; i < 16; ++i, ++idx )
-        {
-            auto& note = noteData[idx];
-            colourId.push_back( note.colour );
-        }
-        contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                     setAllPadDataColourInfoMessage( contracts::DeviceControlContracts::PadButtonState::StateOn, colourId ) );
     }
 }

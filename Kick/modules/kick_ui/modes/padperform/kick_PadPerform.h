@@ -1,33 +1,30 @@
 #pragma once
 #include "contracts/dcl/dcl_signals.h"
 #include "contracts/dcl/dcl_contracts_helper.h"
+#include "kick_pad_mapper.h"
 
 namespace kick_ui
 {
+    // Pad Perform ("Pad Notes"): the 16 hardware pads and the on-screen pads play the SELECTED track as a pitch map.
+    // What a pad plays comes from the JUCE-free kick_pad_mapper.h (layout, chords, held-note table, 16 LEVELS).
     class PadPerformContent : public juce::Component
+        , private juce::Timer
     {
     public:
         PadPerformContent();
-        ~PadPerformContent() = default;
-        void selectionChanged();
+        ~PadPerformContent() override;
 
-        void handleCommand( CPktMgr::HWMsg_t& );
         void knobCommand( int knob, int value );
 
-        inline int              transposeNote( int Note );
-        inline std::vector<int> transpose( int Note );
+        // Hardware pad: padNo 0..15 inside the engine's current bank.
+        void hardwarePad( int padNo, bool pressed, int velocity );
+        // Every note that is still on goes off (screen hidden, panic).
+        void releaseAllNotes();
+
+        void toggleSixteenLevels();
+        bool isSixteenLevels() const { return level16_; }
 
     private:
-        enum enumNoteMode
-        {
-            EN_NOTE_NOT_AVAILABLE = 0,
-            EN_NOTE_INACTIVE,
-            EN_NOTE_ROOT,
-            EN_NOTE_ACTIVE
-        };
-
-        // Map these enums to  Controls::PadPerformType
-        //  "Off", "Chromatic", "Notes", "Chords", "Progression", "Chromatic Chords"
         enum enumNoteTypes
         {
             EN_TYPE_OFF = 0,
@@ -38,46 +35,12 @@ namespace kick_ui
             EN_TYPE_CHROMATIC_CHORDS
         };
 
-        //"Continuous", "Start on Root"
-        enum enumStartSeq
-        {
-            EN_START_SEQ_CONTINOUS = 0,
-            EN_START_SEQ_ROOT
-        };
-
-        struct noteData_t
-        {
-            int          colour{ 0 };
-            int          activeDisplayIndex{ 0 };
-            juce::String noteName{ "" };
-            juce::Colour borderColour{ juce::Colours::transparentBlack };
-            enumNoteMode enNoteMode{ EN_NOTE_NOT_AVAILABLE };
-
-            inline void clear()
-            {
-                colour             = 0;
-                activeDisplayIndex = 0;
-                noteName           = "";
-                borderColour       = juce::Colours::transparentBlack;
-                enNoteMode         = EN_NOTE_NOT_AVAILABLE;
-            }
-        };
-
         mt::MTAudioInterface& ae{ mt::getAudioInterface() };
 
-        int octaveIndex;
-        int bankIndex;
-        int activeDisplayIndex;
-        int selectedType;
-        int selectedScale;
-        int selectedOctave;
-        int selectedRootNote;
-        int selectedStartOn;
-        int selectedChord;
-        int startOfNotes{ 0 };
+        int bankIndex{ 0 };
+        int selectedType{ (int)EN_TYPE_CHROMATIC };
 
         std::unique_ptr<ui::KickPadButtonGroupComponent> pads;
-        ui::KickListBox                                  type{ ui::KickListBox::BoxType::withTitleBar, "TYPE", mt::Kick::PadPerformType };
         ui::KickLabel                                    scale_octave{ "SCALE AND OCTAVE" };
         ui::KickListBox                                  rootNote{ ui::KickListBox::BoxType::withTitleBar, "ROOT NOTE", mt::Note::rootNames(), 0, 3 };
         ui::KickListBox                                  scale{ ui::KickListBox::BoxType::withTitleBar, "SCALE", mt::ScaleAndNotes::scaleNames, 0, 3 };
@@ -94,41 +57,50 @@ namespace kick_ui
         ui::KickToggleButton chordsBtn{ "Chords", "Chords", "Chords" };
         ui::KickToggleButton progressionBtn{ "Progressions", "Progressions", "Progressions" };
 
-        noteData_t                  st_NoteData[128];
-        std::array<noteData_t, 128> noteData;
-        mt::MTIPadPerformanceData*  pPadPerform{ nullptr };
+        // 16 LEVELS: the last pad you hit on all 16 pads, one parameter stepped (Velocity or Tune).
+        ui::KickToggleButton levelBtn{ "Level16", "16 LEVELS", "16 LEVELS" };
+        ui::KickToggleButton levelParamBtn{ "LevelParam", "Velocity", "Tune" };
+        ui::KickLabel        heldLabel{ "" }; // note / chord name of the pads that are held
 
-        int pushPadInfoToUI( int id, const juce::String& text, enumNoteMode f_enNoteMode );
+        mt::MTIPadPerformanceData* pPadPerform{ nullptr };
 
-        void updateNoteData( void );
-        void clearNoteData( void );
-        void pushToUI( void );
-        void pushToHW( void );
-        void paint( juce::Graphics& g ) override;
+        padmap::Params    cur_;
+        padmap::Layout    layout_{};
+        sigslot::connection bankConn_;
+        padmap::HeldNotes held_;
+        bool              level16_{ false };
+        bool              levelParamTune_{ false };
+        int               levelBase_{ -1 };
+        int               lastBaseNote_{ -1 };
 
+        std::map<int, mt::MTSelected> keyTarget_; // held key -> the track it started on (its note-off goes there)
+        std::map<int, int>            keySlot_;   // held key -> pad slot (highlight)
+        std::vector<int>              lastHwColours_;
+        std::array<int, 128>          lastKgColours_{};
+        bool                          kgColoursValid_{ false };
+
+        padmap::Params params();
+        void           setMode( int mode );
+        void           stepMode( int direction );
+
+        void padDown( int key, int slot, int velocity );
+        void padUp( int key );
+        void sendNote( const mt::MTSelected& target, bool on, int note, int velocity );
+        void updateHeldDisplay();
+
+        void requestRefresh();
+        void timerCallback() override;
         void refresh();
+        void refreshData();
+        void pushToUI();
+        void pushToHW();
+        void pushToEngineColours();
+        void updateLevelUi();
+        static int hwColour( padmap::Mark mark );
+
+        void paint( juce::Graphics& g ) override;
         void resized() override;
         void visibilityChanged() override;
-
-        void refreshData();
-        void displayFromNote( int );
-        void updateNoteNames();
-        void pushPadInfoToDisplay();
-        void pushPadInfoToHw( int id, enumNoteMode f_enNoteMode );
-        int  convertToHwColour( int colourId );
-
-        inline void IncrementBankIndex( void )
-        {
-            // Clear all Pads
-            contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::clearAllPadsMessage() );
-            if( bankIndex > 0 )
-                bankIndex--;
-            pads->setBank( mt::Kick::padBankNames[bankIndex] );
-        }
-
-        inline void DecrementBankIndex( void )
-        {
-        }
     };
 
     class PadPerform : public kick_ui::IScreen
@@ -136,7 +108,7 @@ namespace kick_ui
     {
     public:
         PadPerform();
-        ~PadPerform() = default;
+        ~PadPerform() override = default;
 
         bool canClose() override { return true; }
         bool requiresControlBar() override { return false; }
@@ -145,8 +117,8 @@ namespace kick_ui
 
         void handleCommand( CPktMgr::HWMsg_t& ) override;
 
-        int              transposeNote( int Note );
-        std::vector<int> transpose( int Note );
+        // 16 LEVEL button (DCL EN_16LEVELS): the hardware button toggles the mode, from any screen.
+        void toggleSixteenLevels() { content.toggleSixteenLevels(); }
 
     private:
         mt::MTAudioInterface& ae{ mt::getAudioInterface() };
