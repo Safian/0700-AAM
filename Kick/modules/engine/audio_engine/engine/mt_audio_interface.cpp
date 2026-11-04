@@ -1888,6 +1888,17 @@ namespace mt
         return addLiveMidiMsg( Selection, msg );
     }
 
+    bool MTAudioInterface::getActiveNotes( const MTSelected& Selection, uint64_t& Lo, uint64_t& Hi )
+    {
+        Lo = Hi = 0;
+        if( auto t = manager->getTrack( Selection ) )
+        {
+            t->getActiveNotes( Lo, Hi );
+            return true;
+        }
+        return false;
+    }
+
     int MTAudioInterface::recallLiveMidi( const MTSelected& Selection, int WindowMs )
     {
         auto t = manager->getTrack( Selection );

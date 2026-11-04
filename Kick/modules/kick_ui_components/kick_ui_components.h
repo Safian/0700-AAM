@@ -31,6 +31,8 @@
 
     // Module include files.
     #include "source/kick_common_controls.h"
+    #include "source/kick_touch_slot.h"
+    #include "source/kick_piano_hub.h"
     #include "source/kick_KeyboardComponent.h"
     #include "source/kick_tabbedComponent.h"
     #include "source/kick_padButtonGroup.h"

@@ -36,6 +36,7 @@
 		<Image name="Sample editor" path="mainmenu/sampleeditors.svg"></Image>
 		<Image name="Program edit" path="mainmenu/program edits.svg"></Image>
 		<Image name="Padnotes" path="mainmenu/padnotes.svg"></Image>
+		<Image name="Keyboard" path="mainmenu/keyboards.svg"></Image>
 		<Image name="Looper" path="mainmenu/loopers.svg"></Image>
 		<Image name="Qlinks" path="mainmenu/qlinks.svg"></Image>
 		<Image name="Midicontrol" path="mainmenu/midicontrols.svg"></Image>

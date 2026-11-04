@@ -55,6 +55,11 @@ namespace ui
         mouseOverNotes.insertMultiple( 0, -1, 32 );
         mouseDownNotes.insertMultiple( 0, -1, 32 );
 
+        // The bridge forwards every finger move to a widget with this property (no 24 px tap slop): glissando and bend
+        // need the first pixels of the slide, the piano applies its own dead zone.
+        getProperties().set( "kickTouchNoSlop", true );
+        // Note: ui::TouchSlot (the bridge's finger slot) tells the fingers apart, not the JUCE source index.
+
         colourChanged();
         setWantsKeyboardFocus( true );
 
@@ -65,7 +70,7 @@ namespace ui
 
     void KeyboardComponent::paint( juce::Graphics& g )
     {
-        g.fillAll( findColour( whiteNoteColourId ) );
+        g.fillAll( colourOr( keySeparatorLineColourId, juce::Colour( 0xff0a0a0a ) ) );
 
         auto lineColour = findColour( keySeparatorLineColourId );
         auto textColour = findColour( textLabelColourId );
@@ -78,14 +83,13 @@ namespace ui
 
                 if( noteNum >= rangeStart && noteNum <= rangeEnd )
                     drawWhiteNote( noteNum, g, getRectangleForKey( noteNum ),
-                                   state.isNoteOnForChannels( midiInChannelMask, noteNum ),
-                                   mouseOverNotes.contains( noteNum ), lineColour, textColour );
+                                   styleOf( noteNum ).down, false, lineColour, textColour );
             }
         }
 
         float x1 = 0.0f, y1 = 0.0f, x2 = 0.0f, y2 = 0.0f;
         auto  width  = getWidth();
-        auto  height = getHeight() - 108;
+        auto  height = getHeight();
 
         if( orientation == verticalKeyboardFacingLeft )
         {
@@ -136,8 +140,7 @@ namespace ui
 
                 if( noteNum >= rangeStart && noteNum <= rangeEnd )
                     drawBlackNote( noteNum, g, getRectangleForKey( noteNum ),
-                                   state.isNoteOnForChannels( midiInChannelMask, noteNum ),
-                                   mouseOverNotes.contains( noteNum ), blackNoteColour );
+                                   styleOf( noteNum ).down, false, blackNoteColour );
             }
         }
     }
@@ -166,94 +169,164 @@ namespace ui
     bool KeyboardComponent::mouseDraggedToKey( int, const juce::MouseEvent& ) { return true; }
     void KeyboardComponent::mouseUpOnKey( int, const juce::MouseEvent& ) {}
 
+    // One finger = one slot. Through the hardware bridge (MPC) every finger has the main mouse source (index 0), so the
+    // slot comes from ui::TouchSlot; real touch input (desktop / iOS) has one JUCE source per finger (index = finger).
+    static int fingerSlotOf( const juce::MouseEvent& e )
+    {
+        const int s = TouchSlot::inBridge() ? TouchSlot::state().slot : e.source.getIndex();
+        return juce::jlimit( 0, piano::kSlots - 1, s );
+    }
+
     void KeyboardComponent::mouseDown( const juce::MouseEvent& e )
     {
-        float mousePositionVelocity;
-        auto  newNote = xyToNote( e.position, mousePositionVelocity );
+        const auto pos  = e.getEventRelativeTo( this ).position;
+        const int  slot = fingerSlotOf( e );
+        float      yFrac = 0.0f;
+        const auto note  = xyToNote( pos, yFrac );
 
-        if( newNote >= 0 && mouseDownOnKey( newNote, e ) )
-            updateNoteUnderMouse( e, true );
+        piano::Events ev;
+        if( note >= 0 && mouseDownOnKey( note, e ) )
+            touchPiano.down( slot, note, yFrac, pos.x, pos.y, e.eventTime.toMilliseconds(), ev );
+        else
+            touchPiano.down( slot, -1, 0.0f, pos.x, pos.y, e.eventTime.toMilliseconds(), ev ); // ends a stale note of this slot
+        expr.down( slot, pos.x );
+        applyEvents( ev );
+    }
+
+    void KeyboardComponent::mouseDrag( const juce::MouseEvent& e )
+    {
+        const auto pos  = e.getEventRelativeTo( this ).position;
+        const int  slot = fingerSlotOf( e );
+        float      yFrac = 0.0f;
+        const auto note  = xyToNote( pos, yFrac );
+        const auto mode  = touchPiano.cfg.dragMode;
+
+        if( mode == piano::DragMode::Bend || mode == piano::DragMode::Vibrato )
+        {
+            sendExpression( expr.move( slot, pos.x, mode ) );
+            return;
+        }
+        piano::Events ev;
+        if( note < 0 || mouseDraggedToKey( note, e ) )
+            touchPiano.move( slot, note, yFrac, pos.x, pos.y, e.eventTime.toMilliseconds(), ev );
+        applyEvents( ev );
     }
 
     void KeyboardComponent::mouseUp( const juce::MouseEvent& e )
     {
-        updateNoteUnderMouse( e, false );
-
-        float mousePositionVelocity;
-        auto  note = xyToNote( e.position, mousePositionVelocity );
-
-        if( note >= 0 )
-            mouseUpOnKey( note, e );
+        const int slot = fingerSlotOf( e );
+        const auto held = touchPiano.noteOfSlot( slot );
+        piano::Events ev;
+        touchPiano.up( slot, ev );
+        applyEvents( ev );
+        sendExpression( expr.up( slot ) );
+        if( held >= 0 ) mouseUpOnKey( held, e );
     }
 
     void KeyboardComponent::mouseEnter( const juce::MouseEvent& )
     {
-        //updateNoteUnderMouse(e, false);
     }
 
     void KeyboardComponent::mouseExit( const juce::MouseEvent& )
     {
-        //updateNoteUnderMouse(e, false);
     }
 
     void KeyboardComponent::updateNoteUnderMouse( const juce::MouseEvent& e, bool isDown )
     {
-        updateNoteUnderMouse( e.getEventRelativeTo( this ).position, isDown, e.source.getIndex() );
+        updateNoteUnderMouse( e.getEventRelativeTo( this ).position, isDown, fingerSlotOf( e ) );
     }
 
+    // Kept for source compatibility: a position-based press / release of one finger.
     void KeyboardComponent::updateNoteUnderMouse( juce::Point<float> pos, bool isDown, int fingerNum )
     {
-        float mousePositionVelocity = 0.0f;
-        auto  newNote               = xyToNote( pos, mousePositionVelocity );
-        auto  oldNote               = mouseOverNotes.getUnchecked( fingerNum );
-        auto  oldNoteDown           = mouseDownNotes.getUnchecked( fingerNum );
-        auto  eventVelocity         = useMousePositionForVelocity ? mousePositionVelocity * velocity : velocity;
+        float yFrac = 0.0f;
+        const auto note = xyToNote( pos, yFrac );
+        piano::Events ev;
+        const auto now = juce::Time::currentTimeMillis();
+        if( isDown ) touchPiano.down( fingerNum, note, yFrac, pos.x, pos.y, now, ev );
+        else touchPiano.up( fingerNum, ev );
+        applyEvents( ev );
+    }
 
-        if( newNote != oldNoteDown )
+    void KeyboardComponent::applyEvents( const piano::Events& ev )
+    {
+        for( const auto& x : ev )
         {
-            repaintNote( oldNote );
-            repaintNote( newNote );
-            mouseOverNotes.set( fingerNum, newNote );
-            if( noteSelectionChanged )
-                noteSelectionChanged( newNote );
+            if( x.type == piano::Event::NoteOn ) lastVelocity[(size_t)x.note] = (uint8_t)x.velocity;
+            repaintNote( x.note );
+            if( x.type == piano::Event::NoteOn && noteSelectionChanged ) noteSelectionChanged( x.note );
+            if( onKeyEvent ) onKeyEvent( x );
         }
+    }
 
-        else
+    void KeyboardComponent::sendExpression( const piano::ExpressionTracker::Out& o )
+    {
+        if( o.vibChanged && onVibrato ) onVibrato( o.vibrato );
+        if( o.bendChanged && onPitchBend ) onPitchBend( o.bend );
+    }
+
+    void KeyboardComponent::setVisibleOctaves( float octaves )
+    {
+        visibleOctaves = juce::jlimit( 1.0f, 11.0f, octaves );
+        resized();
+    }
+
+    void KeyboardComponent::setKeyMarks( const std::array<uint8_t, 128>& marks )
+    {
+        if( marks == keyMarks ) return;
+        keyMarks = marks;
+        repaint();
+    }
+
+    void KeyboardComponent::setExternalNotes( uint64_t lo, uint64_t hi )
+    {
+        std::bitset<128> nb;
+        for( int i = 0; i < 64; ++i )
         {
-            if( isDown == false )
-            {
-                repaintNote( oldNote );
-                repaintNote( -1 );
-                mouseOverNotes.set( fingerNum, -1 );
-            }
+            nb[(size_t)i]        = ( lo >> i ) & 1u;
+            nb[(size_t)( i + 64 )] = ( hi >> i ) & 1u;
         }
+        const auto diff = nb ^ externalNotes;
+        if( diff.none() ) return;
+        externalNotes = nb;
+        for( int n = 0; n < 128; ++n )
+            if( diff[(size_t)n] ) repaintNote( n );
+    }
 
-        if( isDown )
-        {
-            if( newNote != oldNoteDown )
-            {
-                if( oldNoteDown >= 0 )
-                {
-                    mouseDownNotes.set( fingerNum, -1 );
+    void KeyboardComponent::setSustain( bool on )
+    {
+        piano::Events ev;
+        touchPiano.sustain( on, ev );
+        applyEvents( ev );
+        repaint();
+    }
 
-                    if( !mouseDownNotes.contains( oldNoteDown ) )
-                        state.noteOff( midiChannel, oldNoteDown, eventVelocity );
-                }
+    void KeyboardComponent::releaseAll()
+    {
+        piano::Events ev;
+        touchPiano.releaseAll( ev );
+        applyEvents( ev );
+        sendExpression( expr.up( 0 ) );
+        for( int s = 1; s < piano::kSlots; ++s ) sendExpression( expr.up( s ) );
+        repaint();
+    }
 
-                if( newNote >= 0 && !mouseDownNotes.contains( newNote ) )
-                {
-                    state.noteOn( midiChannel, newNote, eventVelocity );
-                    mouseDownNotes.set( fingerNum, newNote );
-                }
-            }
-        }
-        else if( oldNoteDown >= 0 )
-        {
-            mouseDownNotes.set( fingerNum, -1 );
+    bool KeyboardComponent::isAnyKeyDown() const
+    {
+        for( int n = 0; n < 128; ++n )
+            if( touchPiano.isSounding( n ) ) return true;
+        return false;
+    }
 
-            if( !mouseDownNotes.contains( oldNoteDown ) )
-                state.noteOff( midiChannel, oldNoteDown, eventVelocity );
-        }
+    KeyboardComponent::KeyStyle KeyboardComponent::styleOf( int note ) const
+    {
+        KeyStyle k;
+        k.down      = touchPiano.fingersOn( note ) > 0;
+        k.sustained = touchPiano.isSustained( note );
+        k.external  = note >= 0 && note < 128 && externalNotes[(size_t)note];
+        k.mark      = note >= 0 && note < 128 ? (piano::KeyMark)keyMarks[(size_t)note] : piano::KeyMark::None;
+        k.velocity  = note >= 0 && note < 128 ? lastVelocity[(size_t)note] : 0;
+        return k;
     }
 
     void KeyboardComponent::handleNoteOn( juce::MidiKeyboardState*, int /*midiChannel*/, int /*midiNoteNumber*/, float /*velocity*/ )
@@ -293,92 +366,119 @@ namespace ui
         g.fillPath( path, path.getTransformToScaleToFit( 1.0f, 1.0f, (float)w - 2.0f, (float)h - 2.0f, true ) );
     }
 
-    void KeyboardComponent::drawWhiteNote( int midiNoteNumber, juce::Graphics& g, juce::Rectangle<float> area,
-                                           bool isDown, bool isOver, juce::Colour lineColour, juce::Colour textColour )
+    // Colours of the piano-ui mock-up (docs/plans/assets/piano-ui, dark theme): graphite gap, ivory / ebony keys,
+    // velocity bands blue / turquoise / yellow / orange / red (the Kick pad LED palette), amber = held by the pedal,
+    // cyan = sounds from elsewhere. A colour set on the component (or the look and feel) wins.
+    juce::Colour KeyboardComponent::colourOr( int id, juce::Colour fallback ) const
     {
-        auto c = juce::Colours::transparentWhite;
+        return isColourSpecified( id ) || getLookAndFeel().isColourSpecified( id ) ? findColour( id ) : fallback;
+    }
 
-        if( isDown ) c = ui::Theme::backgroundColour( 6 );
-        if( isOver ) c = c.overlaidWith( findColour( mouseOverKeyOverlayColourId ) );
+    static juce::Colour velocityBandColour( int velocity )
+    {
+        static const juce::uint32 band[5] = { 0xff3daeff, 0xff1fd3a0, 0xffffd02a, 0xffff8a1a, 0xffff3b30 };
+        return juce::Colour( band[juce::jlimit( 0, 4, velocity * 5 / 128 )] );
+    }
 
-        g.setColour( c );
-        g.fillRect( area );
-
-        auto text = getWhiteNoteText( midiNoteNumber );
-
-        if( text.isNotEmpty() )
+    // Marks shared by white and black keys: scale root (amber ring), other scale notes (small dot), chord tones (amber disc).
+    void KeyboardComponent::drawMark( juce::Graphics& g, piano::KeyMark mark, juce::Rectangle<float> keyArea, float yFromBottom, bool onDarkKey )
+    {
+        if( mark == piano::KeyMark::None ) return;
+        const float d  = juce::jlimit( 5.0f, 9.0f, keyArea.getWidth() * 0.45f );
+        auto        dot = juce::Rectangle<float>( d, d ).withCentre( { keyArea.getCentreX(), keyArea.getBottom() - yFromBottom } );
+        const auto  amber = colourOr( rootMarkColourId, juce::Colour( 0xffffb608 ) );
+        switch( mark )
         {
-            auto fontHeight = juce::jmin( 12.0f, keyWidth * 0.9f );
-
-            g.setColour( textColour );
-            g.setFont( juce::Font( fontHeight ).withHorizontalScale( 0.8f ) );
-
-            switch( orientation )
-            {
-                case horizontalKeyboard: g.drawText( text, area.withTrimmedLeft( 1.0f ).withTrimmedBottom( 2.0f ), juce::Justification::centredBottom, false ); break;
-                case verticalKeyboardFacingLeft: g.drawText( text, area.reduced( 2.0f ), juce::Justification::centredLeft, false ); break;
-                case verticalKeyboardFacingRight: g.drawText( text, area.reduced( 2.0f ), juce::Justification::centredRight, false ); break;
-                default: break;
-            }
-        }
-
-        if( !lineColour.isTransparent() )
-        {
-            g.setColour( lineColour );
-
-            switch( orientation )
-            {
-                case horizontalKeyboard: g.fillRect( area.withWidth( 1.0f ) ); break;
-                case verticalKeyboardFacingLeft: g.fillRect( area.withHeight( 1.0f ) ); break;
-                case verticalKeyboardFacingRight: g.fillRect( area.removeFromBottom( 1.0f ) ); break;
-                default: break;
-            }
-
-            if( midiNoteNumber == rangeEnd )
-            {
-                switch( orientation )
-                {
-                    case horizontalKeyboard: g.fillRect( area.expanded( 1.0f, 0 ).removeFromRight( 1.0f ) ); break;
-                    case verticalKeyboardFacingLeft: g.fillRect( area.expanded( 0, 1.0f ).removeFromBottom( 1.0f ) ); break;
-                    case verticalKeyboardFacingRight: g.fillRect( area.expanded( 0, 1.0f ).removeFromTop( 1.0f ) ); break;
-                    default: break;
-                }
-            }
+            case piano::KeyMark::Root:
+                g.setColour( amber );
+                g.drawEllipse( dot, 2.0f );
+                break;
+            case piano::KeyMark::Chord:
+                g.setColour( colourOr( chordMarkColourId, amber ) );
+                g.fillEllipse( dot );
+                break;
+            case piano::KeyMark::InScale:
+                g.setColour( colourOr( scaleMarkColourId, onDarkKey ? juce::Colour( 0xff8d8d8d ) : juce::Colour( 0xff9a968c ) ) );
+                g.fillEllipse( dot.reduced( d * 0.22f ) );
+                break;
+            default: break;
         }
     }
 
-    void KeyboardComponent::drawBlackNote( int /*midiNoteNumber*/, juce::Graphics& g, juce::Rectangle<float> area,
-                                           bool isDown, bool isOver, juce::Colour noteFillColour )
+    void KeyboardComponent::drawWhiteNote( int midiNoteNumber, juce::Graphics& g, juce::Rectangle<float> area,
+                                           bool isDown, bool /*isOver*/, juce::Colour lineColour, juce::Colour textColour )
     {
-        auto c = noteFillColour;
+        const auto st   = styleOf( midiNoteNumber );
+        auto       key  = area.withTrimmedRight( 1.0f ).withTrimmedLeft( 0.0f );
+        const bool down = isDown || st.down;
 
-        if( isDown ) c = ui::Theme::backgroundColour( 6 );
-        if( isOver ) c = c.overlaidWith( findColour( mouseOverKeyOverlayColourId ) );
-
-        g.setColour( c );
-        g.fillRect( area );
-
-        if( isDown )
+        if( down )
         {
-            g.setColour( noteFillColour );
-            g.drawRect( area );
+            const auto c = velocityBandColour( st.velocity > 0 ? st.velocity : 100 );
+            g.setGradientFill( juce::ColourGradient( c, 0.0f, key.getY(), c.interpolatedWith( juce::Colours::black, 0.3f ), 0.0f, key.getBottom(), false ) );
+            g.fillRoundedRectangle( key.translated( 0.0f, 1.0f ), 3.0f );
         }
         else
         {
-            g.setColour( c.brighter() );
-            auto sideIndent = 1.0f; //1.0f / 8.0f;
-            auto topIndent  = 1.0f; // 7.0f / 8.0f;
-            auto w          = area.getWidth();
-            auto h          = area.getHeight();
-
-            switch( orientation )
-            {
-                case horizontalKeyboard: g.fillRect( area.reduced( w * sideIndent, 0 ).removeFromTop( h * topIndent ) ); break;
-                case verticalKeyboardFacingLeft: g.fillRect( area.reduced( 0, h * sideIndent ).removeFromRight( w * topIndent ) ); break;
-                case verticalKeyboardFacingRight: g.fillRect( area.reduced( 0, h * sideIndent ).removeFromLeft( w * topIndent ) ); break;
-                default: break;
-            }
+            g.setGradientFill( juce::ColourGradient( juce::Colour( 0xfff2f0ea ), 0.0f, key.getY(), juce::Colour( 0xffc9c5bb ), 0.0f, key.getBottom(), false ) );
+            g.fillRoundedRectangle( key, 3.0f );
         }
+
+        if( st.sustained )
+        {
+            const auto amber = colourOr( sustainedNoteColourId, juce::Colour( 0xffffb608 ) );
+            g.setColour( amber );
+            g.drawRoundedRectangle( key.reduced( 1.0f ), 3.0f, 2.0f );
+            g.fillRect( key.withTrimmedLeft( key.getWidth() * 0.25f ).withTrimmedRight( key.getWidth() * 0.25f ).removeFromBottom( 3.0f ) );
+        }
+        if( st.external )
+        {
+            g.setColour( colourOr( externalNoteColourId, juce::Colour( 0xff00aaee ) ) );
+            g.drawRoundedRectangle( key.reduced( 1.0f ), 3.0f, 2.0f );
+        }
+
+        drawMark( g, st.mark, key, juce::jmax( 18.0f, key.getHeight() * 0.16f ), false );
+
+        auto text = getWhiteNoteText( midiNoteNumber );
+        if( text.isNotEmpty() )
+        {
+            auto fontHeight = juce::jmin( 12.0f, juce::jmax( 9.0f, key.getWidth() * 0.55f ) );
+
+            g.setColour( down ? juce::Colours::black.withAlpha( 0.65f ) : textColour );
+            g.setFont( juce::Font( fontHeight ).withHorizontalScale( 0.8f ) );
+            g.drawText( text, key.withTrimmedLeft( 1.0f ).withTrimmedBottom( 3.0f ), juce::Justification::centredBottom, false );
+        }
+        juce::ignoreUnused( lineColour );
+    }
+
+    void KeyboardComponent::drawBlackNote( int midiNoteNumber, juce::Graphics& g, juce::Rectangle<float> area,
+                                           bool isDown, bool /*isOver*/, juce::Colour noteFillColour )
+    {
+        const auto st   = styleOf( midiNoteNumber );
+        const bool down = isDown || st.down;
+
+        if( down )
+        {
+            const auto c = velocityBandColour( st.velocity > 0 ? st.velocity : 100 );
+            g.setGradientFill( juce::ColourGradient( c, 0.0f, area.getY(), c.interpolatedWith( juce::Colours::black, 0.3f ), 0.0f, area.getBottom(), false ) );
+        }
+        else
+        {
+            g.setGradientFill( juce::ColourGradient( noteFillColour.brighter( 0.35f ), 0.0f, area.getY(), noteFillColour.darker( 0.4f ), 0.0f, area.getBottom(), false ) );
+        }
+        g.fillRoundedRectangle( area, 2.0f );
+
+        if( st.sustained )
+        {
+            g.setColour( colourOr( sustainedNoteColourId, juce::Colour( 0xffffb608 ) ) );
+            g.drawRoundedRectangle( area.reduced( 1.0f ), 2.0f, 2.0f );
+        }
+        if( st.external )
+        {
+            g.setColour( colourOr( externalNoteColourId, juce::Colour( 0xff00aaee ) ) );
+            g.drawRoundedRectangle( area.reduced( 1.0f ), 2.0f, 2.0f );
+        }
+        drawMark( g, st.mark, area, juce::jmax( 10.0f, area.getHeight() * 0.14f ), true );
     }
 
     void KeyboardComponent::setOctaveForMiddleC( int octaveNum )
@@ -428,6 +528,8 @@ namespace ui
         {
             if( orientation != horizontalKeyboard )
                 std::swap( w, h );
+
+            setKeyWidth( (float)w / ( 12.0f * visibleOctaves ) );
 
             auto kx2 = getKeyPos( rangeEnd ).getEnd();
 
@@ -486,8 +588,6 @@ namespace ui
             }
             scrollDown->setVisible( canScroll && firstKey > (float)rangeStart );
             scrollUp->setVisible( canScroll && getKeyPos( rangeEnd ).getStart() > (float)w );
-
-            setKeyWidth( w / 128 );
 
             repaint();
         }
