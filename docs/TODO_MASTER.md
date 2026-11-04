@@ -32,6 +32,20 @@
 | S-F | pad-perform, program-edit | sonnet (a W3-A után: a Keyboard/Pad Perform közös skála-forrás) |
 Mindegyik egység a dokumentum TODO-sorait csinálja, a hardvert/hangot kérő tételek az "ember kell" listába kerülnek.
 
+
+## Állapot (2026-11-04 08:00) — frissítés
+**Pusholva (`3c0b29bf`) és MPC-n ellenőrizve:** minden korábbi + W3-A érintő-zongora (három egyidejű ujj igazolva, két gyökérok javítva), S-A mixer/mute, S-C szekvencer-szerkesztők, W3-E `.kickplug`-telepítő (Plugins fül nyílik), Looper SYNC gyökérok (`MTSequence::play()` stale beat/tick: mért −1,34 s → −0,14 s), duplikált track/program javítás (W1-C + W2-B ütközés), Aura 46 perces soak.
+**Helyben mergelve, ARM+Mac+smoke fut, még nincs pusholva:** S-B minta/sampler/assign képernyők.
+**Maradék tételek (külön egységek, nem félmegoldás — mindegyik pontos oka a worker-jelentésekben):**
+| ID | Tartalom | Végrehajtó / előfeltétel |
+|---|---|---|
+| R-1 | S-B maradék: AS-03 egész-pad törlés megerősítéssel, AS-10 réteg-jelölők a rácson, AS-11/13/14, SA-04 hardver REC/STOP/PLAY képernyő-kötés a hídban, SA-07 + SA-02 lock-free hullámforma-cache és marker-FIFO (közös a Looperrel: `AudIO/Recorder`), SE-05/SE-23 Chop→asset slice + Assign, SE-07 touch hit-test, SE-11, SE-13, SE-24 stb. | sonnet; a híd és a Recorder érintése miatt egyedül fusson |
+| R-2 | Looper másodlagos: a hullámforma-pillanatkép a `gate` spinlock alatt másol (30 Hz) → eldobott blokkok, ~−0,04 s/s drift; dupla puffer / változott szakasz másolása | sonnet + MPC-s mérés |
+| R-3 | S-C maradék: Q-Link oszlopváltás és pad-LED réteg a hídban (SS-07, NS-04, SS-22, LE-24), LE-07 sor-virtualizálás, LE-22 többes kijelölés, LE-32 Go-to-playhead | sonnet, a híd egyetlen gazdájaként |
+| R-4 | S-A maradék: PM-10/11 + MU-13 automation (T35 előfeltétel), PM-14 ARM-mérés, MU-12 grid-szinkron mute (hallható ellenőrzés), a transzport-duplázás (PM-20, CM-19, MU-09: owner-döntés) | döntés után |
+| R-5 | S-D (menu, projects, file-browser, system-resources, header, sw-update), S-E (looper UI, inserts, xy-fx, knob-edit, midi-control), S-F (pad-perform, program-edit) | sonnet, fájlkör szerint egyenként |
+**Owner-döntések (új, a jelentésekből):** mixerek közös skálája (MIDI vs dB), Main Volume nem perzisztens trim, Keygroup Pad Mixer, pad-solo perzisztencia, Mixer-elrendezés/Akai-paritás, Time Division mute, transzport-duplázás helye, Song Export tartalma, CLASSIC 127 vs GRID 100 alap-velocity, NS-04 pad-LED irány, Keygroup/MIDI alapszínek, Sampler Export célja, DSP-könyvtár/licenc a Sample Edit Pitch/Time/Bit-reduce-hoz, AS-15 holt kód törlése, SE-21 PLAY-szemantika, a hivatalos plugin-aláíró kulcs (a beépített publikus kulcs helykitöltő, privát kulcs nincs: fail-closed), `assets/Default` módosítása (a "Keyboard" menü-csempe ikonja + theme.xml sor; az eszközön a Default skin fut).
+
 ---
 (Részletes egységek és sorrend alább.)
 
