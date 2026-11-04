@@ -115,6 +115,9 @@ $DATA_DIR/Kick.prev
 $DATA_DIR/Kick.version
 $DATA_DIR/Kick.version.new
 $DATA_DIR/Kick.version.prev
+$DATA_DIR/Kick.installing
+$DATA_DIR/Kick.rejected
+$DATA_DIR/Kick.rollback
 $DATA_DIR/kick_cmd
 $DATA_DIR/kick_screen.ppm
 $DATA_DIR/kick_probe.txt
