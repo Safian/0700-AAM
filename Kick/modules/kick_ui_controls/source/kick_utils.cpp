@@ -51,6 +51,16 @@ namespace mt
 
         bool isDialogOpen() { return !openDialogRegistry().empty(); }
 
+        int openDialogCount() { return (int)openDialogRegistry().size(); }
+
+        juce::Image snapshotTopDialog()
+        {
+            auto& r = openDialogRegistry();
+            if( r.empty() )
+                return {};
+            return r.back()->createComponentSnapshot( r.back()->getLocalBounds() );
+        }
+
         bool topDialogHasApply()
         {
             auto& r = openDialogRegistry();

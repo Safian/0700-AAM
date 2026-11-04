@@ -16,5 +16,6 @@ namespace ui
         ui::KickLabel       info;
         int                 startX, startY, width;
         int                 textHeight{ 22 };
+        sigslot::scoped_connection themeConn; // disconnected with the popup: a theme change must not reach a closed one
     };
 }
