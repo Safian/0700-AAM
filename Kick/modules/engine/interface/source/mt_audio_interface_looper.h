@@ -92,6 +92,24 @@ namespace mt
         void    looperSave( const juce::String& FilePath ) noexcept;
         juce::String getLooperError() const noexcept; // reason of the last failed save (empty = ok)
         double& getLooperProgress() noexcept;
+
+        // LO-11: One-shot N bars mode
+        void    setLooperOneShotRecord( bool OneShot ) noexcept;
+        bool    isLooperOneShotRecord() const noexcept;
+
+        // LO-07: Bars count for export
+        void    setLooperBars( int Bars ) noexcept;
+        int     getLooperBars() const noexcept;
+
+        // SA-02: Marker FIFO
+        void    pushLooperMarker( int Pad = -1 ) noexcept;
+        std::vector<Recorder::Marker> getLooperMarkers() noexcept;
+        void    clearLooperMarkers() noexcept;
+        double  getLooperTimeSeconds() const noexcept;
+
+        // SA-07: Waveform peaks cache
+        std::vector<Recorder::WaveformPeak> getLooperWaveformPeaks( int MaxPeaks = 1024 ) noexcept;
+        int     getLooperPeakCount() const noexcept;
     };
 
 } // namespace mt

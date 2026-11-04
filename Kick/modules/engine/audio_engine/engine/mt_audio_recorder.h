@@ -60,6 +60,16 @@ namespace mt
         void setRecorderThresholdDB( float DB );
         void setRecorderDirection( bool ForwardDirection );
         void setRecorderMode( int Mode );
+        void setRecorderOneShot( bool OneShot );
+        bool isRecorderOneShot();
+        void setRecorderBars( int Bars );
+        int  getRecorderBars();
+        void pushRecorderMarker( int Pad = -1 );
+        std::vector<Recorder::Marker> getRecorderMarkers();
+        void clearRecorderMarkers();
+        double getRecorderTimeSeconds();
+        std::vector<Recorder::WaveformPeak> getRecorderWaveformPeaks( int MaxPeaks = 1024 );
+        int getRecorderPeakCount();
 
         void startRecorder( int Mode, bool ForwardDirection, bool FromBeginging );
         void startRecorder( bool FromBeginging );

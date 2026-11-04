@@ -2173,6 +2173,12 @@ namespace mt
     void                      MTAudioInterface::startRecorderPreview( double fromStartTimeInSeconds ) { manager->startRecorderPreview( fromStartTimeInSeconds ); }
     void                      MTAudioInterface::stopRecorderPreview() { manager->stopRecorderPreview(); }
     juce::AudioBuffer<float>& MTAudioInterface::getRecorderAudioBuffer() { return manager->getRecorderAudioBuffer(); }
+    void                      MTAudioInterface::pushRecorderMarker( int Pad ) { manager->pushRecorderMarker( Pad ); }
+    std::vector<Recorder::Marker> MTAudioInterface::getRecorderMarkers() { return manager->getRecorderMarkers(); }
+    void                      MTAudioInterface::clearRecorderMarkers() { manager->clearRecorderMarkers(); }
+    double                    MTAudioInterface::getRecorderTimeSeconds() { return manager->getRecorderTimeSeconds(); }
+    std::vector<Recorder::WaveformPeak> MTAudioInterface::getRecorderWaveformPeaks( int MaxPeaks ) { return manager->getRecorderWaveformPeaks( MaxPeaks ); }
+    int                       MTAudioInterface::getRecorderPeakCount() { return manager->getRecorderPeakCount(); }
 
     void MTAudioInterface::setRecorderListener( MTRecorderListener& Listener ) { manager->setRecorderListener( Listener ); }
 
