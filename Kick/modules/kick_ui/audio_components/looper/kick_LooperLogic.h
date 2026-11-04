@@ -39,4 +39,27 @@ namespace kick_ui::looper_logic
     {
         return !LooperEmpty && OldBars != NewBars;
     }
+
+    // Number of beats for given bar count and time signature numerator (LO-09)
+    inline int calculateTotalBeats( int bars, int numerator ) noexcept
+    {
+        const int b = std::max( 1, bars );
+        const int num = std::max( 1, numerator );
+        return b * num;
+    }
+
+    // Beat width calculation for the scale area (LO-09)
+    inline float calculateBeatWidth( float totalWidth, int totalBeats ) noexcept
+    {
+        if( totalWidth <= 0.0f || totalBeats <= 0 )
+            return 0.0f;
+        return totalWidth / static_cast<float>( totalBeats );
+    }
+
+    // PPQ resolution calculation ensuring no division by zero on ARM (LO-09, LO-16)
+    inline int safePpqResolution( int denominator ) noexcept
+    {
+        const int d = std::max( 1, denominator );
+        return 960 / std::max( 1, d / 2 );
+    }
 }
