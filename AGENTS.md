@@ -42,8 +42,8 @@ team ID is `8R7QAX93QJ`. Simulator results are not evidence for audio timing –
 
 ## Known state
 - Mobile port (iOS/iPad): Full-screen DAW UI with external MIDI controller connectivity (CoreMIDI). Hardware-mimicking chassis and slide-out drawer removed (owner decision 2026-11-04): the Kick mobile port is a full-screen mobile app to which external MIDI controllers are connected.
-- macOS `Kick` target builds and runs with clean native display-only view.
-- iOS simulator (Xcode 27.1 SDK): UIScene lifecycle resolved via JUCE patch.
+- macOS `Kick` target builds and the smoke test starts the full-screen UI (verified 2026-11-04, no chassis).
+- iOS: a UIScene patch for JUCE 7.0.12 is in the tree (`Kick/patches/juce_ios_uiscene_7.0.12.patch`, commit `2ec647d7`). Launch in the iOS simulator and on a device NOT re-verified after the chassis/drawer removal.
 - Missing from the release: factory samples, Myriad Pro font, `juce_serialport`.
 
 ## Git
