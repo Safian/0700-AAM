@@ -35,6 +35,8 @@ namespace mt
 
         const juce::AudioBuffer<float>& getData();
         void                            purge();
+        /// Heap bytes of the decoded sample data.
+        inline juce::int64 getMemoryBytes() const noexcept { return (juce::int64)data.getNumChannels() * data.getNumSamples() * (juce::int64)sizeof( float ); }
 
         ///
         /// Inline functions.

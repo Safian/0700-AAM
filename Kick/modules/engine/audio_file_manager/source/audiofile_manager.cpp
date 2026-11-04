@@ -49,13 +49,40 @@ namespace mt
         aSounds.clear();
     }
 
-    void ASoundCache::purge()
+    ASoundCache::Stats ASoundCache::getStats() const
     {
         const juce::ScopedLock sl( lock );
+        Stats                  st;
         for( const auto& it : aSounds )
         {
-            return it->purge();
+            const auto bytes = it->getMemoryBytes();
+            ++st.count;
+            st.bytes += bytes;
+            if( it->getReferenceCount() == 1 ) // the cache's own reference
+            {
+                ++st.unusedCount;
+                st.unusedBytes += bytes;
+            }
         }
+        return st;
+    }
+
+    ASoundCache::Stats ASoundCache::purgeUnused()
+    {
+        const juce::ScopedLock sl( lock );
+        Stats                  freed;
+        for( int i = aSounds.size(); --i >= 0; )
+        {
+            auto* sound = aSounds.getObjectPointerUnchecked( i );
+            if( sound->getReferenceCount() != 1 )
+                continue;
+            ++freed.count;
+            freed.bytes += sound->getMemoryBytes();
+            aSounds.remove( i );
+        }
+        freed.unusedCount = freed.count;
+        freed.unusedBytes = freed.bytes;
+        return freed;
     }
 
     ASound::Ptr ASoundCache::exists( const juce::String& File )

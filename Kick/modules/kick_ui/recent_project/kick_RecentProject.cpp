@@ -23,7 +23,7 @@ namespace ui
 
         longPressComp->onLoadTriggered = [&]( int Index ) {
             if( juce::isPositiveAndBelow( Index, recentItems.size() ) )
-                recentItems[Index]->onMouseDown( Index, juce::File() );
+                recentItems[Index]->onMouseDown( Index, recentItems[Index]->getPath() );
         };
 
         longPressComp->onRemoveTriggered = [&]( int Index ) {
@@ -105,27 +105,41 @@ namespace ui
         };
     }
 
+    void RecentProject::warn( const juce::String& message )
+    {
+        auto p = new FilePopup( message, false, false );
+        mt::utils::showDialog(
+            "WARNING!", p, [p]( int ) { delete p; },
+            ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
+    }
+
     void RecentProject::createProject( juce::String value )
     {
-        auto nChild = settings.projects.getNumChildren();
+        // Same rules as a project made from a template: trimmed, a legal folder name, and not a folder that exists on the disk
+        // (the recent list does not know every folder).
+        const auto name = kick_project::trimName( value.toStdString() );
+        if( const auto problem = kick_project::checkName( name ); problem != kick_project::NameProblem::Ok )
+        {
+            warn( kick_project::describe( problem ) );
+            return;
+        }
+        const juce::String trimmedName( name );
+        const auto         nChild = settings.projects.getNumChildren();
         for( auto i = 0; i < nChild; i++ )
         {
-            juce::String childProperty = settings.projects.getProject( i );
-            juce::File   childFile     = juce::File( childProperty );
-            if( value == childFile.getFileName() )
+            if( trimmedName == juce::File( settings.projects.getProject( i ) ).getFileName() )
             {
-                auto p = new FilePopup( "A project with the same name already exists ", false, false );
-                mt::utils::showDialog(
-                    "WARNING!", p, [&, p]( int R ) {
-                        delete p;
-                    },
-                    ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
+                warn( kick_project::describe( kick_project::CreateResult::AlreadyExists ) );
                 return;
             }
         }
 
-        auto       sepratorStr = juce::File::getSeparatorString();
-        juce::File file        = getAppDirs( MTProjects ).getFullPathName() + sepratorStr + value;
+        juce::File file = getAppDirs( MTProjects ).getChildFile( trimmedName );
+        if( file.exists() )
+        {
+            warn( kick_project::describe( kick_project::CreateResult::AlreadyExists ) );
+            return;
+        }
         settings.projects.createProject( file );
         loadProject( file );
     }
@@ -158,21 +172,39 @@ namespace ui
 
     void RecentProject::copyProjIntoProjectDir( juce::String text, juce::File project )
     {
-        juce::File projDir = getAppDirs( MTProjects ).getFullPathName() + seprator + ( text );
-        projDir.createDirectory();
-        juce::String            copyFile = text + mt::__projectFileSuffix;
+        // juce::File behind the injected file system of kick_project::createFromTemplate.
+        struct TemplateFs
+        {
+            juce::File   templateProject;
+            juce::String projectFileName;
+            bool         exists( const std::string& p ) { return juce::File( juce::String( p ) ).exists(); }
+            bool         hasTemplateProject() { return templateProject != juce::File(); }
+            bool         makeFolder( const std::string& p ) { return juce::File( juce::String( p ) ).createDirectory().wasOk(); }
+            bool         copyTemplateInto( const std::string& folder ) { return templateProject.copyFileTo( juce::File( juce::String( folder ) ).getChildFile( projectFileName ) ); }
+            void         removeFolder( const std::string& p ) { juce::File( juce::String( p ) ).deleteRecursively(); }
+        };
+
+        const auto              name = juce::String( kick_project::trimName( text.toStdString() ) );
         juce::Array<juce::File> sourceFiles;
         project.findChildFiles( sourceFiles, juce::File::findFiles, false, "*.kickPrj" );
-        if( sourceFiles.isEmpty() )
+        TemplateFs fs{ sourceFiles.isEmpty() ? juce::File() : sourceFiles[0], name + mt::__projectFileSuffix };
+
+        std::string folder;
+        const auto  result = kick_project::createFromTemplate( name.toStdString(), getAppDirs( MTProjects ).getFullPathName().toStdString(), fs, &folder );
+        if( result == kick_project::CreateResult::BadName )
         {
-            const auto p = kick_startup::state().fail( kick_startup::Fault::ProjectLoad, ( "template '" + project.getFileName() + "' has no .kickPrj file" ).toStdString() );
-            kick_log( "error", "[ERROR] [PROJ] %s\n", p.cause.c_str() );
+            warn( kick_project::describe( kick_project::checkName( kick_project::trimName( text.toStdString() ) ) ) );
             return;
         }
-        juce::File destination = projDir.getChildFile( copyFile );
-        sourceFiles[0].copyFileTo( destination );
-        // Load Project file.
-        auto destinationFile = destination.getParentDirectory();
+        if( result != kick_project::CreateResult::Ok )
+        {
+            const auto p = kick_startup::state().fail( kick_startup::Fault::ProjectLoad, ( "new project '" + name + "' from template '" + project.getFileName() + "': " + kick_project::describe( result ) ).toStdString() );
+            kick_log( "error", "[ERROR] [PROJ] %s\n", p.cause.c_str() );
+            warn( kick_project::describe( result ) );
+            return;
+        }
+        // Load the new project.
+        juce::File destinationFile( juce::String::fromUTF8( folder.c_str() ) );
         loadProject( destinationFile );
     }
 
@@ -434,7 +466,7 @@ namespace ui
     {
         if( juce::isPositiveAndBelow( selectedIndex, recentItems.size() ) )
             if( recentItems[selectedIndex]->onMouseDown )
-                recentItems[selectedIndex]->onMouseDown( selectedIndex, juce::File() );
+                recentItems[selectedIndex]->onMouseDown( selectedIndex, recentItems[selectedIndex]->getPath() );
     }
 
     void RecentProject::knobRotated( double value )
@@ -728,9 +760,10 @@ namespace ui
         }
         else //mouseDown or mouseDoubleClick
         {
-            juce::Timer::callAfterDelay( 20, [&]() { //Give some delay to draw the border
-                if( onMouseDown )
-                    onMouseDown( index, path );
+            juce::Component::SafePointer<RecentItems> safe( this );
+            juce::Timer::callAfterDelay( 20, [safe]() { //Give some delay to draw the border
+                if( safe != nullptr && safe->onMouseDown )
+                    safe->onMouseDown( safe->index, safe->path );
             } );
             isDoubleClicked = false;
         }

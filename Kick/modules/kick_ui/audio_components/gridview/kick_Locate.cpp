@@ -38,22 +38,19 @@ namespace mt::ac
         : barInt( barValue ), beatInt( beatValue ), tickInt( tickvalue )
     {
         setSize( 650, 520 );
-        start.setRange( 0, 100, 1 );
-        bar.setRange( 0, 100, 1 );
-        beat.setRange( 0, 100, 1 );
-        tick.setRange( 0, 100, 1 );
+        // The UI counts bars and beats from 1 (the engine from 0); a tick is 0..95 (96 per quarter note).
+        auto& ae = getAudioInterface();
+        bar.setRange( 1, juce::jmax( 1, ae.getSequenceLength( ae.getSelectedSequence() ) ), 1 );
+        beat.setRange( 1, 16, 1 );
+        tick.setRange( 0, MTTimeSignature::defaultPPQN - 1, 1 );
+        start.setVisible( false ); // no sequence-length field: the seek does not change the sequence
 
-        start.setValue( startInt );
-        bar.setValue( barInt );
-        beat.setValue( beatInt );
-        tick.setValue( tickInt );
-
-        start.setTextValueSuffix( " dB" );
-        bar.setTextValueSuffix( " dB" );
-        beat.setTextValueSuffix( " dB" );
-        tick.setTextValueSuffix( " dB" );
+        bar.setValue( juce::jmax( 1, barInt ), juce::dontSendNotification );
+        beat.setValue( juce::jmax( 1, beatInt ), juce::dontSendNotification );
+        tick.setValue( juce::jmax( 0, tickInt ), juce::dontSendNotification );
 
         utils::addAndMakeVisible( this, start, bar, beat, tick, cancelBtn, applyBtn, startLable, barLable, beatLable, tickLable );
+        start.setVisible( false );
         start.showTitleAndValue( true, juce::Slider::TextBoxBelow, juce::Justification::centred );
         bar.showTitleAndValue( true, juce::Slider::TextBoxBelow, juce::Justification::centred );
         beat.showTitleAndValue( true, juce::Slider::TextBoxBelow, juce::Justification::centred );
@@ -72,17 +69,17 @@ namespace mt::ac
         tickLable.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
         tickLable.setValueFontHeight( 18.f );
 
-        applyBtn.onClick = [&]() {
-            startInt = start.getValue();
-            barInt   = bar.getValue();
-            beatInt  = beat.getValue();
-            tickInt  = tick.getValue();
+        applyBtn.onClick = [this]() {
+            startInt = (int)start.getValue();
+            barInt   = (int)bar.getValue();
+            beatInt  = (int)beat.getValue();
+            tickInt  = (int)tick.getValue();
             if( bbtCallBack )
                 bbtCallBack( startInt, barInt, beatInt, tickInt );
-            close();
+            utils::exitDialog( this, UI::APPLY );
         };
-        cancelBtn.onClick = [&]() {
-            close();
+        cancelBtn.onClick = [this]() {
+            utils::exitDialog( this, UI::CANCEL );
         };
 
         ui::themeChanged.connect( [&]() {
@@ -103,10 +100,9 @@ namespace mt::ac
 
     void LocateDialog::resized()
     {
-        start.setBoundsRelative( .1738f, .0576f, .6538f, .1461f );
-        bar.setBoundsRelative( .1738f, .2615f, .6538f, .1461f );
-        beat.setBoundsRelative( .1738f, .4846f, .6538f, .1461f );
-        tick.setBoundsRelative( .1738f, .7076f, .6538f, .1461f );
+        bar.setBoundsRelative( .1738f, .0576f, .6538f, .1900f );
+        beat.setBoundsRelative( .1738f, .3100f, .6538f, .1900f );
+        tick.setBoundsRelative( .1738f, .5600f, .6538f, .1900f );
         cancelBtn.setBoundsRelative( .0307f, .8980f, .2692f, .0634f );
         applyBtn.setBoundsRelative( .7f, .8980f, .2692f, .0634f );
         /* startLable.setBoundsRelative( 0.031f, 0.084f, 0.078f, 0.036f );
@@ -117,8 +113,7 @@ namespace mt::ac
 
     void LocateDialog::close()
     {
-        if( auto dw = getCurrentlyModalComponent() )
-            dw->exitModalState( 0 );
+        utils::exitDialog( this, UI::CANCEL ); // this dialog's own modal, not whichever is on top
     }
 
     void LocateDialog::buttonClicked( juce::Button* ) {}
@@ -155,17 +150,22 @@ namespace mt::ac
 
     void Locate::displayPopup()
     {
-        LocateDialog* dlg = new LocateDialog( playHeadBnB.bar, playHeadBnB.beat, playHeadBnB.tick );
+        LocateDialog* dlg = new LocateDialog( playHeadBnB.bar + 1, playHeadBnB.beat + 1, playHeadBnB.tick );
         utils::showDialog(
             "BBT SETTINGS", dlg, [this, dlg]( int ) {
                 if( dlg ) delete dlg;
             },
             dlg->getBounds(), ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
 
-        dlg->bbtCallBack = [&, this]( int startValue, int barValue, int beatValue, int tickValue ) {
-            playHeadBnB.bar  = barValue;
-            playHeadBnB.beat = beatValue;
-            playHeadBnB.tick = tickValue;
+        dlg->bbtCallBack = [this]( int /*unused*/, int barValue, int beatValue, int tickValue ) {
+            // A real locate: the engine seeks (stopped: parked for the next PLAY; playing: jumps on the next tick). The
+            // playhead snapshot is written by the tick thread only.
+            const int seq = ae.getSelectedSequence();
+            if( ae.seekToBar( seq, barValue - 1 ) < 0 )
+                return;
+            const int barStart = ae.getSequenceSeekTick( seq );
+            if( barStart >= 0 && ( beatValue > 1 || tickValue > 0 ) )
+                ae.seekToTick( seq, barStart + ( beatValue - 1 ) * MTTimeSignature::defaultPPQN + tickValue ); // beats = quarter notes
             barBeatTickLabel.setText( getBarBeatTickInfo( barValue, beatValue, tickValue ).paddedLeft( '0', 3 ), juce::dontSendNotification );
         };
     }
@@ -205,11 +205,18 @@ namespace mt::ac
         LocateSTPDialog();
         ~LocateSTPDialog();
 
+        // The dialog applies a sequence change at once (the track / program lists depend on it): any exit that is not Apply
+        // (Cancel, the X, a tap outside) puts the selection back.
+        void restoreSelection();
+
     private:
+        bool applied{ false };
+        int  trackRow{ 0 }, progRow{ 0 };
+        void updateTrackAndProgramLists();
         int               stpEnumNum = -1;
         void              resized() override;
         void              buttonClicked( juce::Button* ) override;
-        void              close();
+        void              close( int exitCode );
         void              updateList();
         MTAudioInterface& ae{ getAudioInterface() };
 
@@ -224,7 +231,9 @@ namespace mt::ac
 
     LocateSTPDialog::LocateSTPDialog()
     {
-        seqRow = ae.getSelectedSequence();
+        seqRow   = ae.getSelectedSequence();
+        trackRow = ae.getSelectedTrack();
+        progRow  = ae.getSelectedProgram();
 
         setSize( 604, 560 );
 
@@ -246,16 +255,16 @@ namespace mt::ac
             ae.setSelectedSequence( seq.getSelectedIndex() );
             ae.setSelectedTrack( track.getSelectedIndex() );
             ae.setSelectedProgram( prog.getSelectedIndex() );
-            close();
+            applied = true;
+            close( UI::APPLY );
         };
         cancelBtn.onClick = [&]() {
-            ae.setSelectedSequence( seqRow );
-            updateList();
-            close();
+            close( UI::CANCEL );
         };
 
         seq.onSelectionChanged = [&]( int row, const juce::String& ) {
             ae.setSelectedSequence( row );
+            updateTrackAndProgramLists(); // the tracks of the new sequence
         };
         updateList();
 
@@ -276,10 +285,28 @@ namespace mt::ac
         applyBtn.setBoundsRelative( .5066f, .9f, .4586f, .0596f );
     }
 
-    void LocateSTPDialog::close()
+    void LocateSTPDialog::close( int exitCode )
     {
-        if( auto dw = getCurrentlyModalComponent() )
-            dw->exitModalState( 0 );
+        utils::exitDialog( this, exitCode ); // this dialog's own modal, not whichever is on top
+    }
+
+    void LocateSTPDialog::restoreSelection()
+    {
+        if( applied )
+            return;
+        ae.setSelectedSequence( seqRow );
+        ae.setSelectedTrack( trackRow );
+        ae.setSelectedProgram( progRow );
+    }
+
+    void LocateSTPDialog::updateTrackAndProgramLists()
+    {
+        trackList = ae.getTrackList( ae.getSelectedSequence() );
+        progList  = ae.getProgramList();
+        track.setNumColumns( juce::jmax( 1, (int)trackList.size() ) );
+        track.setListOptions( trackList, ae.getSelectedTrack() );
+        prog.setNumColumns( juce::jmax( 1, (int)progList.size() ) );
+        prog.setListOptions( progList, ae.getSelectedProgram() );
     }
 
     void LocateSTPDialog::updateList()
@@ -294,10 +321,10 @@ namespace mt::ac
         seq.setNumColumns( ae.getNumSequences() );
         seq.setListOptions( seqList, ae.getSelectedSequence() );
 
-        track.setNumColumns( ae.getNumSequences() );
+        track.setNumColumns( juce::jmax( 1, (int)trackList.size() ) );
         track.setListOptions( trackList, ae.getSelectedTrack() );
 
-        prog.setNumColumns( ae.getNumSequences() );
+        prog.setNumColumns( juce::jmax( 1, (int)progList.size() ) );
         prog.setListOptions( progList, ae.getSelectedProgram() );
     }
 
@@ -360,7 +387,12 @@ namespace mt::ac
         LocateSTPDialog* dlg = new LocateSTPDialog();
         utils::showDialog(
             "PLAYHEAD CONTROL MENU", dlg, [this, dlg]( int ) {
-                if( dlg ) delete dlg;
+                if( dlg )
+                {
+                    dlg->restoreSelection(); // any exit but Apply
+                    updateSelection();
+                    delete dlg;
+                }
             },
             dlg->getBounds(), ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
 

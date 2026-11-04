@@ -28,6 +28,13 @@ namespace kick_ui
     inline static constexpr int rw = 604;
     inline static constexpr int rh = 525;
 
+    void KickModeHeader::showSystemResources()
+    {
+        auto& res = KSystemResources::Instance();
+        res.start();
+        mt::utils::showDialog( res.getTitle(), &res, []( int ) { KSystemResources::Instance().stop(); }, { rx, ry, rw, rh } );
+    }
+
     KickModeHeader::KickModeHeader( const juce::String& Name, const juce::String& Image )
     {
         setTitle( Name );
@@ -51,7 +58,15 @@ namespace kick_ui
             MetronomePopup::Instance().Show();
         };
 
-        automation.onClick = [&] {
+        // Automation: Off -> Read -> Write -> Off (the hardware AUTOMATION button toggles Read <-> Write on the same engine
+        // mode). The icon is dimmed while it is Off, and a notification names the new mode.
+        automation.onClick = [this] {
+            auto&      ae   = mt::getAudioInterface();
+            const int  next = ( ae.getAutomationMode() + 1 ) % 3; // 0 Off, 1 Read, 2 Write
+            ae.setAutomationMode( next );
+            syncAutomationButton();
+            static const char* names[] = { "Automation: Off", "Automation: Read", "Automation: Write" };
+            mt::utils::showNotification( names[next] );
         };
 
         settings.onClick = [&] {
@@ -78,24 +93,7 @@ namespace kick_ui
                 onNewProjectClick();
         };
 
-        resources.onClick = [this] {
-            auto& _sysResources = KSystemResources::Instance();
-            _sysResources.start(); // Start the timer when the dialog is shown
-
-            mt::utils::showDialog(
-                _sysResources.getTitle(),
-                &_sysResources,
-                []( int ) {
-                    // This lambda is called when the dialog is closed
-                    KSystemResources::Instance().stop();
-                },
-                { rx, ry, rw, rh } );
-
-            // Define the dialog callback for when the dialog is closed
-            auto onDialogClose = [&_sysResources]( int ) {
-                _sysResources.stop();
-            };
-        };
+        resources.onClick = [] { showSystemResources(); };
 
         ui::themeChanged.connect( [&]() {
             resources.setImages( "Resource" );
@@ -288,6 +286,13 @@ namespace kick_ui
             comp->setBoundsRelative( 0.225f, 0.f, 0.40f, 1.f );
     }
 
+    void KickModeHeader::syncAutomationButton()
+    {
+        automation.setToggleState( false, juce::dontSendNotification );
+        automation.setOpacity( mt::getAudioInterface().getAutomationMode() == 0 ? 0.35f : 1.0f );
+        automation.repaint();
+    }
+
     void KickModeHeader::visibilityChanged()
     {
         for( auto it : getChildren() )
@@ -295,6 +300,8 @@ namespace kick_ui
             it->setVisible( isVisible() );
             it->setWantsKeyboardFocus( false );
         }
+        if( isVisible() )
+            syncAutomationButton(); // the hardware button may have changed the mode while this screen was away
     }
 
     //////////////////////////////////////
@@ -304,6 +311,7 @@ namespace kick_ui
     void MetronomePopup::Show()
     {
         auto& metronomeInstance = MetronomePopup::Instance();
+        metronomeInstance.syncFromSettings();
         mt::utils::showDialog(
             "METRONOME", &metronomeInstance, [&]( int R ) {},
             ui::layout::dialog, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
@@ -328,6 +336,11 @@ namespace kick_ui
         level.setValueJustification( juce::Justification::centredBottom );
 
         mt::utils::addAndMakeVisible( this, onOffButton, level, mode, countIn, rate, style );
+        // The engine metronome reads enabled, gain, rate and source only: mode, count-in and style change nothing, so those
+        // controls are hidden until the engine uses them (kShowUnusedControls).
+        mode.setVisible( kShowUnusedControls );
+        countIn.setVisible( kShowUnusedControls );
+        style.setVisible( kShowUnusedControls );
 
         level.onValueChanged = [&]( double Value ) {
             metronome.gain = juce::jlimit<float>( 0.f, 1.f, ( MIDI::SCALER * Value ) );
@@ -353,6 +366,13 @@ namespace kick_ui
             metronome.style = ( toEnum<mt::MTMetronomeStyle>( Index ) );
         };
 
+        syncFromSettings();
+    }
+
+    // The popup is a single long-lived instance: the hardware METRONOME button and a Preferences reset change the same
+    // settings, so every opening reads them again.
+    void MetronomePopup::syncFromSettings()
+    {
         level.setValue( ( 127 * metronome.gain() ), juce::dontSendNotification );
         onOffButton.setSelected( metronome.enabled() ? 1 : 0, juce::dontSendNotification );
         countIn.setSelected( metronome.countIn(), juce::dontSendNotification );
@@ -368,14 +388,14 @@ namespace kick_ui
         mode.setBoundsRelative( 0.084f, 0.708f, 0.332f, 0.165f );
 
         countIn.setBoundsRelative( 0.583f, 0.125f, 0.332f, 0.165f );
-        rate.setBoundsRelative( 0.583f, 0.417f, 0.332f, 0.165f );
+        // Without the unused controls the rate takes the top right slot.
+        rate.setBoundsRelative( 0.583f, kShowUnusedControls ? 0.417f : 0.125f, 0.332f, 0.165f );
         style.setBoundsRelative( 0.583f, 0.708f, 0.332f, 0.165f );
     }
 
     void MetronomePopup::close()
     {
-        if( auto dw = getCurrentlyModalComponent() )
-            dw->exitModalState( 0 );
+        mt::utils::exitDialog( this, UI::CANCEL ); // this popup's own modal, not whichever is on top
     }
 
     void MetronomePopup::linkRotated( int knob, double value )

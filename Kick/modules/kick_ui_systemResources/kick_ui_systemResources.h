@@ -44,25 +44,53 @@
 #pragma once
 
 #include <kick_ui_controls/kick_ui_controls.h>
+#include <functional>
 
 namespace kick_ui
 {
+    /// System Resources dialog: CPU, RAM, internal / SD / USB storage, sample cache. The numbers are sampled once a second on
+    /// a background thread (a slow USB stick cannot freeze the UI) and shown by a timer on the message thread.
     class KSystemResources
         : public juce::Component
         , private juce::Timer
         , public juce::DeletedAtShutdown
     {
     public:
+        /// Sample cache numbers; the engine side is supplied by the owner of the dialog (no engine dependency here).
+        struct CacheStats
+        {
+            int         count       = 0;
+            juce::int64 bytes       = 0;
+            int         unusedCount = 0;
+            juce::int64 unusedBytes = 0;
+        };
+        std::function<CacheStats()> getCacheStats;
+        std::function<CacheStats()> purgeUnused; // returns what was freed
+
         static KSystemResources& Instance();
         KSystemResources();
+        ~KSystemResources() override;
         void start();
         void stop();
 
     private:
+        class Sampler;
+        struct Snapshot
+        {
+            bool   haveCpu = false, haveRam = false;
+            double cpu = 0.0;
+            int    ramPercent = 0;
+            double ramUsedMb = 0.0, ramTotalMb = 0.0, processMb = 0.0;
+            bool   haveInternal = false, haveSd = false, haveUsb = false;
+            int    internalPercent = 0, sdPercent = 0, usbPercent = 0;
+            double internalFreeMb = 0.0, sdFreeMb = 0.0, usbFreeMb = 0.0;
+        };
+
         void timerCallback() override;
         void paint( juce::Graphics& g ) override;
         void resized() override;
-        void visibilityChanged() override;
+        void applySnapshot( const Snapshot& s );
+        void refreshCache();
 
     private:
         ui::KickLabel storage{ "STORAGE" };
@@ -72,24 +100,12 @@ namespace kick_ui
         ui::KickSlider flash{ "INTERNAL MEMORY" };
         ui::KickSlider sdcard{ "SDCARD" };
         ui::KickSlider usb{ "USB DRIVE" };
+        ui::KickLabel  info{ "" };
 
-        ui::KickImageButton purgeAll{ "Purge All", "purge" };
-        ui::KickImageButton purgeUnused{ "Purge Unused", "purgeused" };
+        ui::KickImageButton purgeUnused_{ "Purge Unused", "purgeused" };
         ui::KickImageButton ok{ "OK", "ok_resource" };
-        std::string         internalPath = "/home/Kick";
-        std::string         sdCardPath   = "/dev/mmcblk1p1";
-        std::string         usbDiskPath  = "/dev/sda1";
+
+        std::unique_ptr<Sampler> sampler;
+        Snapshot                 last;
     };
-
-    class KickSysResources
-        : public KSystemResources
-        , public IScreen
-    {
-    public:
-        KickSysResources()
-            : IScreen( Screen::SystemResources ){};
-
-    private:
-    };
-
 }

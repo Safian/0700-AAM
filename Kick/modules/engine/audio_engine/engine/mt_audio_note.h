@@ -22,6 +22,7 @@
 #pragma once
 #include <set>
 #include "mt_timing_correct.h"
+#include "mt_humanize.h"
 
 namespace mt
 {

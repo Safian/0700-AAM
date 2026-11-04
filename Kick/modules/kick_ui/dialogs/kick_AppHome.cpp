@@ -195,13 +195,27 @@ namespace kick_ui
         // Setup default look and feel.
         setLookAndFeel( ui::KickLooknFeel::getLnf() );
 
+        // The System Resources dialog (header module, no engine dependency) shows and purges the sample cache through these.
+        {
+            auto convert = []( const mt::ASoundCache::Stats& st ) {
+                KSystemResources::CacheStats out;
+                out.count       = st.count;
+                out.bytes       = st.bytes;
+                out.unusedCount = st.unusedCount;
+                out.unusedBytes = st.unusedBytes;
+                return out;
+            };
+            auto& res         = KSystemResources::Instance();
+            res.getCacheStats = [convert] { return convert( mt::getAudioSoundCache().getStats() ); };
+            res.purgeUnused   = [convert] { return convert( mt::getAudioSoundCache().purgeUnused() ); };
+        }
+
         // Connect sceeen signals.
         // Open screen as passed in Argument.
         signals::sigScreenOpen.connect( [&]( Screen Scrn ) {
-            if( !( ( currentScreen == Screen::HomeOptions ) || ( currentScreen == Screen::HomeListView ) || ( currentScreen == Screen::Invalid ) ) )
-            {
-                stack.push( currentScreen );
-            }
+            if( !isScreenAllowed( Scrn ) )
+                return;
+            nav_.open( currentScreen );
 
             juce::MessageManager::callAsync( [Scrn, this]() {
                 load( Scrn );
@@ -210,23 +224,9 @@ namespace kick_ui
 
         // Close existing screen and open screen as passed in argument.
         signals::sigScreenClose.connect( [&]( Screen NewScrn ) {
-            Screen loadScreen = NewScrn;
-            while( !stack.empty() && ( stack.top() == currentScreen || stack.top() == Screen::Invalid ) )
-            {
-                stack.pop();
-            }
-            if( !stack.empty() )
-            {
-                if( NewScrn == Screen::Invalid )
-                {
-                    loadScreen = stack.top();
-                    stack.pop();
-                }
-            }
-            else if( loadScreen == Screen::Invalid )
-            {
-                loadScreen = Screen::HomeListView;
-            }
+            if( !isScreenAllowed( NewScrn ) )
+                return;
+            const Screen loadScreen = nav_.close( currentScreen, NewScrn );
 
             juce::MessageManager::callAsync( [loadScreen, this]() {
                 load( loadScreen );
@@ -315,6 +315,7 @@ namespace kick_ui
                 screenAdder( Screen::MenuAssignSample, std::make_unique<AppAssignSample>() );
                 screenAdder( Screen::SWUpdateView, std::make_unique<SWUpdateView>() );
                 screenAdder( Screen::SWUpdateWindow, std::make_unique<SWUpdateScreen>() );
+                screenAdder( Screen::KickUpdate, std::make_unique<KickUpdateScreen>() );
                 screenAdder( Screen::ProcessEdit, std::make_unique<SampleProcess>() );
                 screenAdder( Screen::CVClib, std::make_unique<CVClib>() );
                 screenAdder( Screen::Inserts, std::make_unique<Inserts>() );
@@ -354,9 +355,26 @@ namespace kick_ui
         ctrlBar_.reset();
     }
 
+    bool KickHome::isScreenAllowed( Screen screen )
+    {
+        // The editors, mixers, sampler, grid ... assume a loaded project; the hardware buttons and the top bar used to open them
+        // regardless (no project after a failed load / a missing demo).
+        // The headless screenshot run (KICK_SMOKE_SCREENS) has no project and photographs every screen.
+        static const bool smokeScreens = juce::SystemStats::getEnvironmentVariable( "KICK_SMOKE_SCREENS", {} ).isNotEmpty();
+        if( !smokeScreens && ui::menu_logic::screenNeedsProject( screen ) && !mt::getAudioInterface().isProjectLoaded() )
+        {
+            kick_log( "info", "[INFO] [HOME] screen %d needs a loaded project: request ignored\n", (int)screen );
+            return false;
+        }
+        return true;
+    }
+
     IScreen* KickHome::getScreen( Screen screen )
     {
-        return screens_[screen].get();
+        // find, not operator[]: a lookup of a screen that does not exist must not insert a null entry (load() would then
+        // select it and show an empty display).
+        jassert( findScreen( screen ) != nullptr );
+        return findScreen( screen );
     }
 
     IScreen* KickHome::findScreen( Screen screen ) const
@@ -378,6 +396,7 @@ namespace kick_ui
 
         // Emit signal...
         signals::onScreenClosed( currentScreen );
+        nav_.noteLeaving( currentScreen );
 
         // Bounds check...
         currentScreen = ( screens_.end() != screens_.find( screen ) ) ? screen : Screen::HomeListView;
@@ -455,7 +474,8 @@ namespace kick_ui
 
     void KickHome::AssignSampleStartUp()
     {
-        dynamic_cast<AppAssignSample*>( screens_[Screen::MenuAssignSample].get() )->startup();
+        if( auto* assign = dynamic_cast<AppAssignSample*>( findScreen( Screen::MenuAssignSample ) ) )
+            assign->startup();
     }
 
     void KickHome::setHardwareDrawerVisible( bool isVisible )
@@ -518,7 +538,8 @@ namespace kick_ui
         {
             log += " In Recent Prj";
             juce::Logger::writeToLog( log );
-            if( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) && ( contracts::DclContractsHelper::getButtonState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED ) )
+            // While a dialog is open the buttons do not switch screens behind it (the dialog's own keys: bridge, modal_dialog_keys.h).
+            if( !mt::utils::isDialogOpen() && contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) && ( contracts::DclContractsHelper::getButtonState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED ) )
             {
                 log += " In is button";
                 juce::Logger::writeToLog( log );
@@ -574,7 +595,8 @@ namespace kick_ui
                             break;
 
                         case contracts::DeviceControlContracts::EN_LINK:
-                            dynamic_cast<KnobEdit*>( screens_[Screen::MenuKnobEdit].get() )->knobLongPress();
+                            if( auto* knobEdit = dynamic_cast<KnobEdit*>( findScreen( Screen::MenuKnobEdit ) ) )
+                                knobEdit->knobLongPress();
                             break;
                         case contracts::DeviceControlContracts::EN_SAVE:
                             if (!ae.saveProject())
@@ -601,7 +623,8 @@ namespace kick_ui
                 juce::Logger::writeToLog( log );
                 auto knob  = contracts::DclContractsHelper::getKnobCode( f_HwMsg );
                 auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
-                getScreen( Screen::MenuKnobEdit )->knobCommand( knob, value );
+                if( auto* knobScreen = findScreen( Screen::MenuKnobEdit ) )
+                    knobScreen->knobCommand( knob, value );
                 return;
             }
 

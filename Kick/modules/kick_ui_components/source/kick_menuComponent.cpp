@@ -93,6 +93,13 @@ namespace ui
             entry->items.add( new KickImageButton{ menuItem.Name, menuItem.Icon } );
             auto item = entry->items.getLast();
             item->setEnabled( menuItem.enabled );
+            if( menuItem.Icon.isEmpty() )
+            {
+                // No icon: the tile shows its name.
+                item->setValueColour( ui::Theme::textColour( 2 ) );
+                item->setValueFontHeight( 22 );
+                item->setBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+            }
             auto index = entry->items.size() - 1;
 
             mt::utils::addAndMakeVisible( this, item );
@@ -161,42 +168,60 @@ namespace ui
         }
     }
 
+    void KickMenuComponent::refreshHighlight()
+    {
+        if( navGroup < 0 || navGroup >= model.size() )
+            return;
+        for( int i = 0; i < model[navGroup]->items.size(); i++ )
+            model[navGroup]->items[i]->setState( i == navSelect ? juce::Button::buttonOver : juce::Button::buttonNormal );
+    }
+
     void KickMenuComponent::visibilityChanged()
     {
         if( isVisible() || isShowing() )
-        {
-            for( int i = 0; i < model[navGroup]->items.size(); i++ )
-            {
-                model[navGroup]->items[i]->setState( i == navSelect ? juce::Button::buttonOver : juce::Button::buttonNormal );
-            }
-        }
+            refreshHighlight();
+    }
+
+    void KickMenuComponent::setHighlight( int Index )
+    {
+        if( navGroup < 0 || navGroup >= model.size() || Index < 0 || Index >= model[navGroup]->items.size() )
+            return;
+        navSelect = Index;
+        refreshHighlight();
+    }
+
+    void KickMenuComponent::setItemEnabled( int Index, bool Enabled )
+    {
+        if( navGroup < 0 || navGroup >= model.size() || Index < 0 || Index >= model[navGroup]->items.size() )
+            return;
+        auto* item = model[navGroup]->items[Index];
+        item->setEnabled( Enabled );
+        item->setAlpha( Enabled ? 1.0f : 0.35f );
     }
 
     void KickMenuComponent::knobRotated( double delta )
     {
-        if( 0 < model.size() && 0 < model[0]->items.size() )
-        {
-            navSelect = juce::jlimit( 0, model[navGroup]->items.size() - 1, (int)( navSelect + delta ) );
-            for( int i = 0; i < model[navGroup]->items.size(); i++ )
-            {
-                model[navGroup]->items[i]->setState( i == navSelect ? juce::Button::buttonOver : juce::Button::buttonNormal );
-            }
-        }
+        if( navGroup < 0 || navGroup >= model.size() || model[navGroup]->items.isEmpty() )
+            return;
+        // One detent = one tile, Shift + dial = one row; wraps around the ends.
+        navSelect = menu_logic::stepTile( navSelect, (int)delta, contracts::DclContractsHelper::isShiftPressed(), model[navGroup]->items.size(), noOfColumns );
+        refreshHighlight();
     }
 
     void KickMenuComponent::knobClicked()
     {
-        if( 0 < model.size() && 0 < model[navGroup]->items.size() )
-        {
-            model[navGroup]->items[navSelect]->triggerClick();
-        }
+        if( navGroup < 0 || navGroup >= model.size() || navSelect < 0 || navSelect >= model[navGroup]->items.size() )
+            return;
+        if( auto* item = model[navGroup]->items[navSelect]; item->isEnabled() )
+            item->triggerClick();
     }
 
-    void KickMenuComponent::padPressed( int PadNo, int State, int Velocity, int AfterTouch )
+    void KickMenuComponent::padPressed( int PadNo, int State, int /*Velocity*/, int /*AfterTouch*/ )
     {
-        auto idx = PadNo % 16;
-        idx      = 15 - idx;
-        if( contracts::DeviceControlContracts::BtnState::BTN_PRESSED == State )
+        if( contracts::DeviceControlContracts::BtnState::BTN_PRESSED != State || navGroup < 0 || navGroup >= model.size() )
+            return;
+        const int idx = menu_logic::padToTile( PadNo, model[navGroup]->items.size() );
+        if( idx >= 0 && model[navGroup]->items[idx]->isEnabled() )
             model[navGroup]->items[idx]->triggerClick();
     }
 
