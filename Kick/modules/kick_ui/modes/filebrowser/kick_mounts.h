@@ -7,6 +7,7 @@
 
 #include <cerrno>
 #include <functional>
+#include <set>
 #include <string>
 #include <vector>
 #if defined( __linux__ )
@@ -186,5 +187,45 @@ namespace kick_mounts
         if( k == FsKind::ExFat )
             return { tool, "-n", l, device }; // mkfs.exfat / mkexfatfs
         return { tool, "-F", "32", "-n", l, device };
+    }
+
+    // ---- Keeping the browser's drive list in step with the mount table (1 Hz).
+    struct Diff
+    {
+        std::vector<Volume>      add;            // new drives to show
+        std::vector<std::string> removeDevices;  // drives that went away
+    };
+
+    // `known` = devices the browser shows now, `ejected` = drives the user ejected: they stay hidden (an automounter may mount them
+    // again at once) until they have left the mount table once (unplugged); then they may appear again.
+    inline Diff reconcile( const std::vector<Volume>& now, const std::vector<std::string>& known, std::set<std::string>& ejected )
+    {
+        Diff d;
+        for( const auto& v : now )
+        {
+            if( ejected.count( v.device ) )
+                continue;
+            bool isKnown = false;
+            for( const auto& k : known )
+                isKnown = isKnown || k == v.device;
+            if( !isKnown )
+                d.add.push_back( v );
+        }
+        for( const auto& k : known )
+        {
+            bool still = false;
+            for( const auto& v : now )
+                still = still || v.device == k;
+            if( !still )
+                d.removeDevices.push_back( k );
+        }
+        for( auto it = ejected.begin(); it != ejected.end(); )
+        {
+            bool still = false;
+            for( const auto& v : now )
+                still = still || v.device == *it;
+            it = still ? std::next( it ) : ejected.erase( it );
+        }
+        return d;
     }
 }

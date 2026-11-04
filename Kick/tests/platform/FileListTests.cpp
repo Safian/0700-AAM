@@ -65,6 +65,7 @@ int main()
 
     CHECK( !list( ( root / "nope" ).string() ).ok );
 
+
     std::atomic<bool> no{ false };
     auto s = search( root.string(), "alpha", false, 100, no );
     CHECK( s.entries.size() == 3 && !s.truncated );
@@ -79,6 +80,22 @@ int main()
     // never into a hidden folder
     write( root / ".git/secret.wav", 1 );
     CHECK( search( root.string(), "secret", true, 100, no ).entries.empty() );
+
+
+    // project folders + project data folders
+    write( root / "Beat/Beat.kickPrj", 5 );
+    write( root / "Beat/samples/k.wav", 5 );
+    write( root / "Beat/Export/x.wav", 5 );
+    ListOptions po;
+    po.detectProjects = true;
+    int projects = 0;
+    for( auto& e : list( root.string(), po ).entries )
+        if( e.isProject ) { ++projects; CHECK( e.name == "Beat" ); }
+    CHECK( projects == 1 );
+    ListOptions hd;
+    hd.hideProjectData = true;
+    CHECK( list( ( root / "Beat" ).string(), hd ).entries.size() == 1 ); // only the project file
+    CHECK( list( ( root / "Beat" ).string() ).entries.size() == 3 );
 
     fs::remove_all( root );
     std::printf( g_fail ? "FAILED %d\n" : "PASS file list\n", g_fail );

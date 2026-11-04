@@ -160,44 +160,85 @@ Függőségek: FB-26 ← FB-02, FB-18, FB-10; FB-14 ← kick_table változtatás
 - [ ] **FB-01** (P0, S) Delete megerősítés: lebegő `popup` hivatkozás megszüntetése (érték szerinti capture, törlés a modális callback `APPLY` ágán) — `FB/kick_fileBrowser.cpp:1390-1409`.
 - [ ] **FB-02** (P0, M) Place-enkénti gyökér: a Back / `exitDirectory` / keresés ne léphessen ki a Place-ből; védett útvonal-lista (`/`, `/data`, `/data/projects`, `/data/sounds`, `/data/demos`, a jelenlegi projektmappa és ősei) a Delete / Cut / Rename / Paste előtt; `checkIsCurrProj` útvonal-alapú (ős/leszármazott is) — `:16, 1133, 1145-1158, 1323-1338, 453-466`.
 - [ ] **FB-03** (P0, M) Paste / Rename / New: létező cél felülírásának tiltása vagy megerősítése („(2)” utótag), mappa önmagába másolásának tiltása, névvalidáció (`/`, `..`, vezérlőkarakter, FAT-tiltott karakterek, hossz, kiterjesztés-duplázás) — `:292-329, 975-1029`.
-- [ ] **FB-04** (P0, L) Fájlműveletek (copy / move / delete) háttérszálon, folyamatjelzővel, megszakítással, lezáró `sync`-kel; UI szál mentesítése. Függ: FB-03.
-- [ ] **FB-05** (P1, M) Eject = valódi `sync` + `umount` (platform-réteg mögött), „busy” hiba visszajelzés, a sor csak siker után tűnjön el; az `isSdCardEject` stat. bool a fejlécben (`kick_fileUtils.h:20-21`) megszüntetése — `:408-443, 1501-1518`.
-- [ ] **FB-06** (P1, S) HW pad felengedés: a `noteOff` elérhetővé tétele (a külső `getPadState` feltétel helyett pad-üzenet + állapot szerinti ág) — `:1178-1202`.
-- [ ] **FB-07** (P1, S) `addAsset` státusz-leképezés (`AssetAdded` / `AlreadyExists` / `Invalid` külön üzenettel), `sampleLoaded` atomic, dekódolás az UI szálról le — `kick_fileUtils.cpp:239-278`.
-- [ ] **FB-08** (P1, M) Rendezés (név / dátum / méret, mappák elöl), rejtett és rendszerfájlok szűrése, oszlopfejléc-koppintás — engine `mt_audio_asset_manager.cpp:445` vagy FB-oldal; G-240.
-- [ ] **FB-09** (P1, M) Szűrő / keresés aszinkron (generációs lemondás), korlátos találati szám; Project/Sample szűrő alapból az aktuális mappában — `:1078-1106`.
-- [ ] **FB-10** (P1, M) Tábla-virtualizáció (csak látható sorok), a soronkénti stat lusta — `M/kick_ui_controls/source/kick_table.cpp:340-366`, `FB/kick_fileBrowser.cpp:522-621`. (Közös komponens: ListEdit, Song, NextSeq, PadMixer is érintett.)
-- [ ] **FB-11** (P1, S) Előhallgatás-mód reset: rejtéskor `clearSelection()` + `incrementSelection()` (OFF), vagy a mód megőrzése — `:1258-1261`.
-- [ ] **FB-12** (P1, M) Load: projektfájl → projektként (kérdéssel), mappa → belépés; minta-Load csak betöltött projektnél (a Dial/dupla koppintás ágon is); cél-pad kijelzése + „első szabad pad” mód; Load All = a látható (szűrt) lista, pool-ba, nem csak az első padra — `:210-216, 625-646, 1276-1279`, `kick_fileUtils.cpp:191-236`.
-- [ ] **FB-13** (P1, M) Kedvencek: Place-azonosító útvonal-prefix alapján (nem sorindex), nem létező útvonalra figyelmeztetés, Shift+érintés rendel / hosszú nyomás töröl (G-244) — `:889-973`.
-- [ ] **FB-14** (P1, M) Select mód: a programozott kijelölés elválasztása a toggle-tól (`setSelection(rows)` API), Dial-forgatás ne kapcsolgasson, Select-ből kilépéskor a kijelölés törlése, Delete látható Select módban, Select All — `kick_table.cpp:300-306, 426-455`, `FB/kick_fileBrowser.cpp:365-384, 650-675`. Függ: közös tábla.
-- [ ] **FB-15** (P1, M) Betöltés közbeni verseny: `isProjectLoading` őr a dupla koppintás ágon, `enterDirectory` ne fusson `loadProject` közben; az engine `curDir`/`dirList` védelme (mutex vagy üzenetszálra marshal) — `:186-188, 636-642`, `mt_audio_asset_manager.cpp:38-47, 445`. Kapcsolódik: PRJ-01.
-- [ ] **FB-16** (P1, S) New Project: a Projects képernyő ellenőrzött útjának használata (üres név, lemezen létező név, érvénytelen karakter); a halott `FileBrowser::createProject` törlése — `:171-193, 1421-1443`. Kapcsolódik: PRJ-08.
-- [ ] **FB-17** (P2, S) Rename: ütközés a *célmappában*, a `renameProject` csak sikeres mozgatás után, előtöltött név, helyes popup-cím — `:975-1056`.
-- [ ] **FB-18** (P2, S) SD/USB lista: `-1` index UB, a `size()==4` trükk kiváltása (`Place` modell), több USB / partíció, a timer csak látható képernyőn — `:403-406, 428-439, 1463-1561`, `kick_fileUtils.cpp:15-60`.
-- [ ] **FB-19** (P2, S) Hangerő-popup bezárása: lokális koordináták (`e.getEventRelativeTo(this)`) — `:1311-1321`.
-- [ ] **FB-20** (P2, S) `onFirstLaunch` jelző megbízhatóvá tétele (explicit „skip next load” token) — `:485-488, 1223-1228`.
-- [ ] **FB-21** (P2, S) Halott kód törlése (`FolderSizeCalculator`, `startFolderSizeCalculation`, `FileBrowser::addMultipleAssets`, `fileList`, `static int c`) és az egyetlen `sampleFileList` konstans (a tényleges dekóder-támogatás szerint) — `kick_fileBrowser.h:241, 293-310`, `kick_fileUtils.h:48`.
+- [x] **FB-04** (P0, L) Fájlműveletek (copy / move / delete) háttérszálon, folyamatjelzővel, megszakítással, lezáró `sync`-kel; UI szál mentesítése. Függ: FB-03.  
+  **R-6:** `kick_fileOps.h` (copy / move / delete, byte progress, cancel, partial target removed, sync at the end) on a `BackgroundTask` with a progress dialog; Paste, Delete, Duplicate and Save As all use it. Host tests with temp folders.
+- [x] **FB-05** (P1, M) Eject = valódi `sync` + `umount` (platform-réteg mögött), „busy” hiba visszajelzés, a sor csak siker után tűnjön el; az `isSdCardEject` stat. bool a fejlécben (`kick_fileUtils.h:20-21`) megszüntetése — `:408-443, 1501-1518`.  
+  **R-6:** Eject = `sync` + `umount2` (no lazy unmount) in a background task; busy / not mounted / failed answers; the row stays when it fails; an ejected drive stays hidden until it was unplugged (automounter). Needs the MPC: umount permission and the automounter reaction.
+- [x] **FB-06** (P1, S) HW pad felengedés: a `noteOff` elérhetővé tétele (a külső `getPadState` feltétel helyett pad-üzenet + állapot szerinti ág) — `:1178-1202`.  
+  **R-6:** Pad press and release both handled; `HeldPads` ends the note that was started (also after a bank change); screen exit ends held notes.
+- [x] **FB-07** (P1, S) `addAsset` státusz-leképezés (`AssetAdded` / `AlreadyExists` / `Invalid` külön üzenettel), `sampleLoaded` atomic, dekódolás az UI szálról le — `kick_fileUtils.cpp:239-278`.  
+  **R-6:** `mapAssetResult` (AlreadyExists / Added / Removed / Invalid / no project / no program), decoding and copying on the worker, `sampleLoaded` atomic, the status line says what happened.
+- [x] **FB-08** (P1, M) Rendezés (név / dátum / méret, mappák elöl), rejtett és rendszerfájlok szűrése, oszlopfejléc-koppintás — engine `mt_audio_asset_manager.cpp:445` vagy FB-oldal; G-240.  
+  **R-6:** Own listing (`kick_fileList.h`): folders first, natural name / date / size order (column header tap), hidden / system files filtered (option).
+- [x] **FB-09** (P1, M) Szűrő / keresés aszinkron (generációs lemondás), korlátos találati szám; Project/Sample szűrő alapból az aktuális mappában — `:1078-1106`.  
+  **R-6:** Listing and search run on a worker, newest request wins, results capped at 500; filters work in the current folder; sub-folder search is an option.
+- [x] **FB-10** (P1, M) Tábla-virtualizáció (csak látható sorok), a soronkénti stat lusta — `M/kick_ui_controls/source/kick_table.cpp:340-366`, `FB/kick_fileBrowser.cpp:522-621`. (Közös komponens: ListEdit, Song, NextSeq, PadMixer is érintett.)  
+  **R-6:** `KickTableView::enableVirtualRows` (opt-in): only visible rows get components; no per-row stat (the listing carries size / date); painting only the clip.
+- [x] **FB-11** (P1, S) Előhallgatás-mód reset: rejtéskor `clearSelection()` + `incrementSelection()` (OFF), vagy a mód megőrzése — `:1258-1261`.  
+  **R-6:** Audition mode is reset consistently when the screen hides.
+- [x] **FB-12** (P1, M) Load: projektfájl → projektként (kérdéssel), mappa → belépés; minta-Load csak betöltött projektnél (a Dial/dupla koppintás ágon is); cél-pad kijelzése + „első szabad pad” mód; Load All = a látható (szűrt) lista, pool-ba, nem csak az első padra — `:210-216, 625-646, 1276-1279`, `kick_fileUtils.cpp:191-236`.  
+  **R-6:** Load: project folder / .kickPrj opens as a project, folder is entered, sample goes to the target pad (last pressed pad, else first free pad; shown in the status line), no project = message; Load All = the visible samples into the pool; Open enters a folder.
+- [x] **FB-13** (P1, M) Kedvencek: Place-azonosító útvonal-prefix alapján (nem sorindex), nem létező útvonalra figyelmeztetés, Shift+érintés rendel / hosszú nyomás töröl (G-244) — `:889-973`.  
+  **R-6:** Favourites keep a path; the place that holds it is selected whatever its row; a missing folder is reported; Shift+tap re-assigns, a long press clears (the double tap no longer clears).
+- [x] **FB-14** (P1, M) Select mód: a programozott kijelölés elválasztása a toggle-tól (`setSelection(rows)` API), Dial-forgatás ne kapcsolgasson, Select-ből kilépéskor a kijelölés törlése, Delete látható Select módban, Select All — `kick_table.cpp:300-306, 426-455`, `FB/kick_fileBrowser.cpp:365-384, 650-675`. Függ: közös tábla.  
+  **R-6:** Select mode with a cursor (`enableSelectCursor`): the Dial moves it, Dial press marks, Select All, Delete visible, leaving Select clears the marks.
+- [x] **FB-15** (P1, M) Betöltés közbeni verseny: `isProjectLoading` őr a dupla koppintás ágon, `enterDirectory` ne fusson `loadProject` közben; az engine `curDir`/`dirList` védelme (mutex vagy üzenetszálra marshal) — `:186-188, 636-642`, `mt_audio_asset_manager.cpp:38-47, 445`. Kapcsolódik: PRJ-01.  
+  **R-6:** The browser lists the file system itself (the engine's curDir / dirList are not used any more) and every project open goes through the one load path with its `isProjectLoading` guard.
+- [x] **FB-16** (P1, S) New Project: a Projects képernyő ellenőrzött útjának használata (üres név, lemezen létező név, érvénytelen karakter); a halott `FileBrowser::createProject` törlése — `:171-193, 1421-1443`. Kapcsolódik: PRJ-08.  
+  **R-6:** New project uses `project_actions::createProject` (checked name, disk check); the dead `createProject` is gone.
+- [x] **FB-17** (P2, S) Rename: ütközés a *célmappában*, a `renameProject` csak sikeres mozgatás után, előtöltött név, helyes popup-cím — `:975-1056`.  
+  **R-6:** Rename checks the target folder, keeps / does not double the extension, renames a project as a whole, updates the Recent list; the keyboard starts with the current name.
+- [x] **FB-18** (P2, S) SD/USB lista: `-1` index UB, a `size()==4` trükk kiváltása (`Place` modell), több USB / partíció, a timer csak látható képernyőn — `:403-406, 428-439, 1463-1561`, `kick_fileUtils.cpp:15-60`.  
+  **R-6:** `Place` model, `kick_mounts::parse` / `reconcile` (several drives / partitions), timer only on the visible screen, no `-1` erase.
+- [x] **FB-19** (P2, S) Hangerő-popup bezárása: lokális koordináták (`e.getEventRelativeTo(this)`) — `:1311-1321`.  
+  **R-6:** Volume popup closes by local coordinates.
+- [x] **FB-20** (P2, S) `onFirstLaunch` jelző megbízhatóvá tétele (explicit „skip next load” token) — `:485-488, 1223-1228`.  
+  **R-6:** No `onFirstLaunch` flag: places are selected silently (`selectRow(..., dontSendNotification)`).
+- [x] **FB-21** (P2, S) Halott kód törlése (`FolderSizeCalculator`, `startFolderSizeCalculation`, `FileBrowser::addMultipleAssets`, `fileList`, `static int c`) és az egyetlen `sampleFileList` konstans (a tényleges dekóder-támogatás szerint) — `kick_fileBrowser.h:241, 293-310`, `kick_fileUtils.h:48`.  
+  **R-6:** Dead code removed (`FolderSizeCalculator`, `addMultipleAssets`, `fileList`, `NewProjectPopupData`), one `sampleExtensions()` list in the browser.
 
 *Hiányzó funkciók*
-- [ ] **FB-22** (P1, M) Format: megvalósítás (külső eszköz, kétlépcsős megerősítés, `mkfs` felmérése MPC-n) vagy a halott popup kód eltávolítása — `:1830-1836, 1870`.
-- [ ] **FB-23** (P1, M) Content / Expansion fülek: gyorsparancsok (Drums / Instruments / Samples / Demos / My Files) vagy elrejtés (ma „halott gombok”); G-234/235/266-270.
-- [ ] **FB-24** (P2, M) Browser Options (oszlop-kapcsolók, rekurzív keresés kapcsoló, adatmappák elrejtése), Open gomb, Drive Info, további szűrők (pattern, kit, plugin preset) — G-242, G-256, G-258 – G-265.
-- [ ] **FB-25** (P2, M) Előhallgatás: tartott Play, Sync, Warp; nagy fájl háttérbetöltés — G-250, G-254, G-255.
-- [ ] **FB-26** (P1, L) `FileBrowserSource` absztrakció + `LocalFolderSource` (a mostani logika átemelve) + `ListingCache`/`ContentCache` + konfigurálható helyi gyökerek (desktop `~/Splice`); hálózati szálmodell váz — `cloud-sources.md` §3. Függ: FB-02, FB-10, FB-18.
+- [x] **FB-22** (P1, M) Format: megvalósítás (külső eszköz, kétlépcsős megerősítés, `mkfs` felmérése MPC-n) vagy a halott popup kód eltávolítása — `:1830-1836, 1870`.  
+  **R-6:** Format: two confirmations, drive re-checked, unmount, `mkfs.exfat` / `mkfs.vfat` without a shell, background task. Linux only; needs a hardware test on the MPC (tool present? permission?) before it is trusted.
+- [x] **FB-23** (P1, M) Content / Expansion fülek: gyorsparancsok (Drums / Instruments / Samples / Demos / My Files) vagy elrejtés (ma „halott gombok”); G-234/235/266-270.  
+  **R-6:** Places / Content / Expansion tabs filter the left list (Content = factory library top folders, My Projects, Demos).
+- [~] **FB-24** (P2, M) Browser Options (oszlop-kapcsolók, rekurzív keresés kapcsoló, adatmappák elrejtése), Open gomb, Drive Info, további szűrők (pattern, kit, plugin preset) — G-242, G-256, G-258 – G-265.  
+  **R-6:** Browser Options (columns, sub-folder search, hide system files / project data folders, copy samples into the project, MIDI filter), Open button, Drive Info. Not done: filters for kits and plugin presets (Kick has no such file format).
+- [~] **FB-25** (P2, M) Előhallgatás: tartott Play, Sync, Warp; nagy fájl háttérbetöltés — G-250, G-254, G-255.  
+  **R-6:** Held Play (MAN mode) auditions while the finger is on the button. Not done: Sync / Warp (the engine preview has no tempo sync / time stretch: an audio feature, needs a decision) and background loading of a big file (the engine's `previewOn` call; needs a measurement on the MPC).
+- [x] **FB-26** (P1, L) `FileBrowserSource` absztrakció + `LocalFolderSource` (a mostani logika átemelve) + `ListingCache`/`ContentCache` + konfigurálható helyi gyökerek (desktop `~/Splice`); hálózati szálmodell váz — `cloud-sources.md` §3. Függ: FB-02, FB-10, FB-18.  
+  **R-6:** W2-C source layer + `+ Folder` (local folder location, e.g. `~/Splice`) next to `+ WebDAV`.
 - [ ] **FB-27** (P2, L) WebDAV forrás (M1: PROPFIND, Range GET, TLS, `.part` folytatás); HTTP-kliens döntés (libcurl vs. más; `JUCE_USE_CURL=0`), ARMv7 keresztfordítás. Függ: FB-26. Jogi átnézés (libcurl/TLS licenc) előfeltétel.
 - [ ] **FB-28** (P2, L) Nyilvános Drive-mappa + BYO API-kulcs (M2); OneDrive eszköz-folyam (M3). **Blokkoló: jogi átnézés** (Google ToS 4(b)(1) vs. AGPL, Splice ToS) — `cloud-sources.md` §3.6. Függ: FB-27.
 
 *Javaslatok*
-- [ ] **FB-29** (P1, S) Hardveres ergonómia: feljebb (Shift+Dial / `−`), modális ablakok HW-zárása (ENTER/MAIN) Delete/Rename/Eject/Format-ra — `bridge:893-905`, `A/hardware/modal_dialog_keys.h`.
-- [ ] **FB-30** (P2, S) Mappaméret: láthatók elöl, részeredmény-megőrzés, szülőlánc-invalidálás fájlművelet után, SD-gyökéren kézi „számolás” — `FB/kick_folderSizeHelper.h`, `:738-789`.
-- [ ] **FB-31** (P2, S) Üres mappa / hozzáférési hiba / „kártya eltávolítva” üzenet a státuszsorban; Load eredmény-üzenet.
-- [ ] **FB-32** (P2, M) Külső minta másolása a projekt `Samples` mappájába betöltéskor (kapcsolóval) — `kick_xml_manager.cpp:273-292`.
+- [x] **FB-29** (P1, S) Hardveres ergonómia: feljebb (Shift+Dial / `−`), modális ablakok HW-zárása (ENTER/MAIN) Delete/Rename/Eject/Format-ra — `bridge:893-905`, `A/hardware/modal_dialog_keys.h`.  
+  **R-6:** BACK / Shift+ENTER = folder up, +/- = page, Shift+Dial press; dialogs close from the hardware through the bridge keys (S-D).
+- [x] **FB-30** (P2, S) Mappaméret: láthatók elöl, részeredmény-megőrzés, szülőlánc-invalidálás fájlművelet után, SD-gyökéren kézi „számolás” — `FB/kick_folderSizeHelper.h`, `:738-789`.  
+  **R-6:** Sizes only for rows on screen, sub-folder sizes cached while scanning (partial work survives a cancel), caches invalidated after file operations, drive roots compute the selected folder only.
+- [x] **FB-31** (P2, S) Üres mappa / hozzáférési hiba / „kártya eltávolítva” üzenet a státuszsorban; Load eredmény-üzenet.  
+  **R-6:** Status line: empty folder, unreadable folder, search results / cap, load results, drive removed.
+- [x] **FB-32** (P2, M) Külső minta másolása a projekt `Samples` mappájába betöltéskor (kapcsolóval) — `kick_xml_manager.cpp:273-292`.  
+  **R-6:** Load copies a sample from outside the project into `<project>/samples` (option, default on; an identical copy is reused).
 
 *Tesztek*
 - [ ] **FB-33** (P1, S) `FolderSizeTests.cpp` felvétele a `Kick/tests/platform/CMakeLists.txt`-be (`add_test`), + a `calculateFolderSize` tmp-könyvtár-teszt (üres, mély, lemondás, symlink).
-- [ ] **FB-34** (P1, M) `mountPointOf` / SD-USB felismerés tiszta függvénybe + egységteszt (`/proc/mounts` minták: SD `/sdcard`, USB `/media/PenDrive`, `\040`, EFI, több partíció, hiányzó eszköz).
+- [x] **FB-34** (P1, M) `mountPointOf` / SD-USB felismerés tiszta függvénybe + egységteszt (`/proc/mounts` minták: SD `/sdcard`, USB `/media/PenDrive`, `\040`, EFI, több partíció, hiányzó eszköz).  
+  **R-6:** `kick_mounts.h` + `MountsTests.cpp` (SD, USB, several partitions, `\040`, EFI, duplicates, reconcile).
 - [ ] **FB-35** (P1, M) Fájlművelet-logika (védett útvonalak, névvalidáció, felülírás-döntés) tiszta modulba + tmp-könyvtár egységteszt. Függ: FB-02, FB-03.
-- [ ] **FB-36** (P2, S) `addAsset`-státusz leképezés és pad-felengedés host-teszt. Függ: FB-06, FB-07.
-- [ ] **FB-37** (P2, S) AppSmoke: `MenuFileBrowser` képernyőkép fixture-könyvtárral (rendezett lista, rejtett fájlok nélkül).
+- [x] **FB-36** (P2, S) `addAsset`-státusz leképezés és pad-felengedés host-teszt. Függ: FB-06, FB-07.  
+  **R-6:** `FbLogicTests.cpp`: asset status mapping, held pads / release, pad text, listing status.
+- [x] **FB-37** (P2, S) AppSmoke: `MenuFileBrowser` képernyőkép fixture-könyvtárral (rendezett lista, rejtett fájlok nélkül).  
+  **R-6:** `ProjectsBrowserSmoke.py browser` (`kick-browser-smoke`): fixture folder, expected sorted rows without hidden files, screenshots.
 - [ ] **FB-38** (P1, M) MPC hardveres ellenőrzőlista végrehajtása (6. szakasz) — a hardveres session végezze.
+
+## 8. R-6 hardware checklist (what only the MPC can show)
+1. SD + USB: `/proc/mounts` shows up as places (several partitions, a name with a space); pull a drive while it is shown.
+2. Eject: the row disappears only after a successful `umount`; with a project open on the drive: refused; a drive in use answers "busy"; the automounter does not bring it back.
+3. Format (SD / USB): `mkfs.exfat` or `mkfs.vfat` exists? permission? The drive shows up again afterwards (or must be re-plugged).
+4. Copy / move a few hundred MB between internal and SD: the screen and the Data Dial stay alive, progress moves, Cancel removes the unfinished item, no half file is left.
+5. A folder with thousands of files: scrolling speed, memory; sorting by column tap; folder sizes only for visible rows; SD root sizes on selection.
+6. Pad press / release in the browser with a Keygroup / looped program: no stuck note; bank change while a pad is held.
+7. Load a wav (target pad shown in the status line), an empty / broken file (message), mp3 / wma (decoder support unknown), Load All; copy-into-project option with the stick pulled afterwards.
+8. Favourites: assign with Shift+tap, recall with an SD card in a different row, long press clears.
+9. Select mode with the Data Dial (cursor, press marks, All, Delete).

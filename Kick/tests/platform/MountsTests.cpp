@@ -57,6 +57,25 @@ int main()
     CHECK( argv.size() == 6 && argv[4] == "ARMRF" && argv[5] == "/dev/sdb1" );
     CHECK( formattable( v[0] ) && !formattable( Volume{ "/dev/", "/x", "vfat", Kind::Usb } ) );
 
+    // Reconcile: new drive shows, vanished one goes, an ejected one stays hidden until it was unplugged.
+    {
+        std::set<std::string> ejected;
+        std::vector<Volume>   now = { { "/dev/sdb1", "/media/A", "vfat", Kind::Usb } };
+        auto                  d   = reconcile( now, {}, ejected );
+        CHECK( d.add.size() == 1 && d.removeDevices.empty() );
+        d = reconcile( now, { "/dev/sdb1" }, ejected );
+        CHECK( d.add.empty() && d.removeDevices.empty() );
+        d = reconcile( {}, { "/dev/sdb1" }, ejected );
+        CHECK( d.add.empty() && d.removeDevices.size() == 1 );
+        ejected.insert( "/dev/sdb1" );
+        d = reconcile( now, {}, ejected ); // remounted by the automounter after the eject: stays hidden
+        CHECK( d.add.empty() && ejected.count( "/dev/sdb1" ) == 1 );
+        d = reconcile( {}, {}, ejected ); // unplugged
+        CHECK( ejected.empty() );
+        d = reconcile( now, {}, ejected ); // plugged in again: shows
+        CHECK( d.add.size() == 1 );
+    }
+
     std::printf( g_fail ? "FAILED %d\n" : "PASS mounts\n", g_fail );
     return g_fail ? 1 : 0;
 }
