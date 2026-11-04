@@ -126,6 +126,7 @@
     #include "modes/knobedit/kick_KnobGrid.h"
     #include "modes/knobedit/kick_KnobTabs.h"
     #include "modes/knobedit/kick_KnobEdit.h"
+    #include "modes/midicontrol/kick_MidiControlLogic.h"
     #include "modes/midicontrol/kick_MidiControlTabs.h"
     #include "modes/midicontrol/kick_MidiControl.h"
     #include "modes/padperform/kick_PadPerform.h"

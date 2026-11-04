@@ -34,6 +34,7 @@ namespace kick_ui
         MidiMonitor();
 
         void addMidiMessage( juce::MidiMessage& Msg, juce::String& Port );
+        void addMidiInMessage( const juce::MidiMessage& Msg, const juce::String& Port ); // what the MIDI Learn input received
         void refresh()
         {
             tableView.refresh();
@@ -93,15 +94,18 @@ namespace kick_ui
         ui::KickButton       clear{ "CLEAR" };
         ui::KickButton       close{ "CLOSE" };
 
+        MidiMessageDisplay::MessageData describe( const juce::MidiMessage& Msg, const juce::String& Port );
+
         std::vector<MidiMessageDisplay::MessageData> midiOutData;
         std::vector<MidiMessageDisplay::MessageData> midiInData;
     };
 
+    // Same order as midictl::buttons() / the Hardware tab list (the list used to be one position off from this table).
     const static std::vector<int> controlEnums = {
         contracts::DeviceControlContracts::BtnLedSequence::EN_STEP_SEQ, contracts::DeviceControlContracts::BtnLedSequence::EN_NEXT_SEQ, contracts::DeviceControlContracts::BtnLedSequence::EN_TRACK_MUTE,
         contracts::DeviceControlContracts::BtnLedSequence::EN_SAMPLE_EDIT, contracts::DeviceControlContracts::BtnLedSequence::EN_PROG_EDIT, contracts::DeviceControlContracts::BtnLedSequence::EN_BROWSE,
-        contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO, contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER,
-        contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS, contracts::DeviceControlContracts::BtnLedSequence::EN_ERASE, contracts::DeviceControlContracts::BtnLedSequence::EN_TRACK_MIX,
+        contracts::DeviceControlContracts::BtnLedSequence::EN_TAP_TEMPO, contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_ENTER, contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS,
+        contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS, contracts::DeviceControlContracts::BtnLedSequence::EN_ERASE, contracts::DeviceControlContracts::BtnLedSequence::EN_TRACK_MIX,
         contracts::DeviceControlContracts::BtnLedSequence::EN_TC, contracts::DeviceControlContracts::BtnLedSequence::EN_PAD_MUTE, contracts::DeviceControlContracts::BtnLedSequence::EN_COPY,
         contracts::DeviceControlContracts::BtnLedSequence::EN_PAD_MIX, contracts::DeviceControlContracts::BtnLedSequence::EN_SAMPLER, contracts::DeviceControlContracts::BtnLedSequence::EN_FX
     };
