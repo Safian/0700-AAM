@@ -618,6 +618,12 @@ namespace mt
         void        setRecorderListener( MTRecorderListener& Listener );
 
         juce::AudioBuffer<float>& getRecorderAudioBuffer();
+        void pushRecorderMarker( int Pad = -1 );
+        std::vector<Recorder::Marker> getRecorderMarkers();
+        void clearRecorderMarkers();
+        double getRecorderTimeSeconds();
+        std::vector<Recorder::WaveformPeak> getRecorderWaveformPeaks( int MaxPeaks = 1024 );
+        int getRecorderPeakCount();
 
         // MIDI device and utilities...
         int                                                     getNumMIDIDevices( bool isInputOrOutput ) const noexcept;
