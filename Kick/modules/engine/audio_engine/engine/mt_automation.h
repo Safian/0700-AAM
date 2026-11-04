@@ -23,16 +23,25 @@ namespace mt::automation
 
     // Automatable parameters. LEVEL is the track's level. PAN is the pan of the PROGRAM the track plays (the track's
     // own pan has no consumer in the engine; the program's pan is what the mixer knobs write and what the drum/clip/
-    // keygroup voices and the MIDI program's CC10 path consume). The numeric ids are persisted (autoParam): never reorder.
+    // keygroup voices and the MIDI program's CC10 path consume). MUTE is the track's mute state (0 = off, 1 = muted).
+    // PadLevel, PadPan, PadMute provide pad-level automation (PM-10, PM-11, MU-13).
+    // The numeric ids are persisted (autoParam): never reorder.
     enum Param : int
     {
-        Level = 0, // MTTrack level 0..127 (velocity scaler)
-        Pan   = 1, // program pan, fixed point: -kPanScale..kPanScale (= PAN::MIN..PAN::MAX = -1..1)
+        Level    = 0, // MTTrack level 0..127 (velocity scaler)
+        Pan      = 1, // program pan, fixed point: -kPanScale..kPanScale (= PAN::MIN..PAN::MAX = -1..1)
+        Mute     = 2, // track mute: 0 = unmuted, 1 = muted
+        PadLevel = 3, // pad level 0..127
+        PadPan   = 4, // pad pan, fixed point: -kPanScale..kPanScale
+        PadMute  = 5, // pad mute: 0 = unmuted, 1 = muted
         Count
     };
 
     constexpr int kPanScale = 1000; // lane value = round( pan * kPanScale ); 1 unit = 0.001, finer than PAN::STEP (0.01)
     constexpr int kNoValue  = INT32_MIN; // "nothing" for atomics that carry a lane value
+
+    inline int32_t muteToValue( bool Muted ) { return Muted ? 1 : 0; }
+    inline bool    valueToMute( int32_t Value ) { return Value > 0; }
 
     inline int32_t panToValue( double Pan )
     {

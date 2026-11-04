@@ -109,7 +109,17 @@ int main()
     // --- PAN lane ---
     CHECK_EQ( (int)Level, 0 ); // persisted ids: never reorder
     CHECK_EQ( (int)Pan, 1 );
-    CHECK_EQ( (int)Count, 2 );
+    CHECK_EQ( (int)Mute, 2 );
+    CHECK_EQ( (int)PadLevel, 3 );
+    CHECK_EQ( (int)PadPan, 4 );
+    CHECK_EQ( (int)PadMute, 5 );
+    CHECK_EQ( (int)Count, 6 );
+    CHECK_EQ( muteToValue( false ), 0 );
+    CHECK_EQ( muteToValue( true ), 1 );
+    CHECK_EQ( valueToMute( 0 ), false );
+    CHECK_EQ( valueToMute( 1 ), true );
+    CHECK_EQ( valueToMute( 5 ), true );
+    CHECK_EQ( valueToMute( -1 ), false );
     CHECK_EQ( panToValue( 0.0 ), 0 );
     CHECK_EQ( panToValue( -1.0 ), -1000 );
     CHECK_EQ( panToValue( 1.0 ), 1000 );
@@ -129,7 +139,11 @@ int main()
     CHECK_EQ( paramFromStored( false, 1 ), (int)Level ); // value ignored when the property is absent
     CHECK_EQ( paramFromStored( true, 0 ), (int)Level );
     CHECK_EQ( paramFromStored( true, 1 ), (int)Pan );
-    CHECK_EQ( paramFromStored( true, 2 ), -1 );  // unknown (future) param: not ours
+    CHECK_EQ( paramFromStored( true, 2 ), (int)Mute );
+    CHECK_EQ( paramFromStored( true, 3 ), (int)PadLevel );
+    CHECK_EQ( paramFromStored( true, 4 ), (int)PadPan );
+    CHECK_EQ( paramFromStored( true, 5 ), (int)PadMute );
+    CHECK_EQ( paramFromStored( true, 6 ), -1 );  // unknown (future) param: not ours
     CHECK_EQ( paramFromStored( true, -1 ), -1 );
 
     // negative pan values survive the text form; interpolation through the centre
