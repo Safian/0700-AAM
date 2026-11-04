@@ -287,8 +287,35 @@ static void testTransposeAndMarks()
     check( markFor( 62, 0, {}, -1, {} ) == KeyMark::None, "no scale: no marks" );
 }
 
+static void testWhiteKeyGeometry()
+{
+    // The white keys tile the octave: contiguous, no gap, no overlap (the old hit test covered only 1 unit of 1.5 / 2).
+    const int pcs[7] = { 0, 2, 4, 5, 7, 9, 11 };
+    float prevEnd = 0.0f;
+    for( int pc : pcs )
+    {
+        float s = -1, e = -1;
+        check( whiteKeyUnits( pc, s, e ), "white pitch class" );
+        check( std::fabs( s - prevEnd ) < 1e-6f, "white keys are contiguous" );
+        check( e - s >= 1.5f - 1e-6f && e - s <= 2.0f + 1e-6f, "white key is 1.5 or 2 units wide" );
+        prevEnd = e;
+    }
+    check( std::fabs( prevEnd - 12.0f ) < 1e-6f, "the seven white keys span the 12 units" );
+    float s, e;
+    check( ! whiteKeyUnits( 1, s, e ) && ! whiteKeyUnits( 6, s, e ), "black keys are not white keys" );
+    // Every x of the octave hits a white key (below the black keys); the old 1-unit cells left holes.
+    int holes = 0;
+    for( float u = 0.0f; u < 12.0f; u += 0.05f )
+        if( whitePcAtUnit( u ) < 0 ) ++holes;
+    check( holes == 0, "no hole in the white key row" );
+    check( whitePcAtUnit( 14.6f - 12.0f ) == 2, "x = 14.6 units (the MPC second-finger touch) is D, not a miss" );
+    check( whitePcAtUnit( 2.9f ) == 2 && whitePcAtUnit( 3.4f ) == 2 && whitePcAtUnit( 3.5f ) == 4, "D owns 1.5..3.5" );
+    check( whitePcAtUnit( 12.0f ) == -1 && whitePcAtUnit( -0.1f ) == -1, "outside the octave" );
+}
+
 int main()
 {
+    testWhiteKeyGeometry();
     testTwoFingers();
     testSameNoteTwoFingers();
     testLostTouchUp();

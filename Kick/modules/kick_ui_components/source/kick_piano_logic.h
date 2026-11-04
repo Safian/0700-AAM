@@ -88,6 +88,39 @@ namespace ui::piano
         float   m_speed = -1.0f;
     };
 
+    // ---- key geometry (units: one unit = one keyWidth of the KeyboardComponent, an octave is 12 units) -------------
+
+    // A white key is drawn 1.5 or 2 units wide (C D E F G A B start at 0, 1.5, 3.5, 5, 6.5, 8.5, 10.5 and end where the next one
+    // starts; B ends at 12). KeyboardComponent::getKeyPos() only knows the 1-unit START cell of a key, so a hit test built on it
+    // misses the rest of every white key (33 - 50 % of its width).
+    // pc = pitch class (0 = C) of a white key; returns false for black keys.
+    inline bool whiteKeyUnits( int pc, float& start, float& end )
+    {
+        static const float starts[7] = { 0.0f, 1.5f, 3.5f, 5.0f, 6.5f, 8.5f, 10.5f };
+        static const int   pcs[7]    = { 0, 2, 4, 5, 7, 9, 11 };
+        for( int i = 0; i < 7; ++i )
+            if( pcs[i] == pc )
+            {
+                start = starts[i];
+                end   = i == 6 ? 12.0f : starts[i + 1];
+                return true;
+            }
+        return false;
+    }
+
+    // Pitch class of the white key under a position inside one octave (0 <= u < 12), -1 if outside.
+    inline int whitePcAtUnit( float u )
+    {
+        static const int pcs[7] = { 0, 2, 4, 5, 7, 9, 11 };
+        for( int i = 0; i < 7; ++i )
+        {
+            float s = 0, e = 0;
+            whiteKeyUnits( pcs[i], s, e );
+            if( u >= s && u < e ) return pcs[i];
+        }
+        return -1;
+    }
+
     // ---- bend / vibrato -----------------------------------------------------------------------------------------
 
     constexpr int kBendCentre = 8192;
