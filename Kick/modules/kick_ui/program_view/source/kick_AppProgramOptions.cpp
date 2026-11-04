@@ -66,6 +66,9 @@ namespace kick_ui
                 case 3: // Pad Colour
                     signals::sigScreenOpen( Screen::MenuColorEdit );
                     break;
+                case 4: // MIDI Settings
+                    openMidiSettingsPopup();
+                    break;
             }
         };
 
@@ -199,13 +202,39 @@ namespace kick_ui
         }
     }
 
+    void AppProgramOptions::openMidiSettingsPopup()
+    {
+        auto& ae = mt::getAudioInterface();
+        auto progIdx = ae.getSelectedProgram();
+        auto prog = ae.getProgram( progIdx );
+        if( !prog || prog->type.get() != mt::MTProgramType::Midi )
+        {
+            auto p = new WarningPopUp( "Selected program is not a MIDI program" );
+            mt::utils::showDialog(
+                "MIDI SETTINGS", p, [p]( int ) { delete p; },
+                ui::layout::warningPopup );
+            return;
+        }
+
+        midiSettings.setProgram( progIdx );
+        mt::utils::showOptions( "MIDI PROGRAM SETTINGS", &midiSettings, [this]( int R ) {
+            if( R == UI::APPLY )
+            {
+                midiSettings.applySettings();
+                if( onClose )
+                    onClose();
+            }
+        } );
+    }
+
     AppProgramOptionsMenu::AppProgramOptionsMenu()
-        : KickMenuComponent( "ProgramOptions", 4 )
+        : KickMenuComponent( "ProgramOptions", 5 )
     {
         addOption( { "Copy Pads", "COPY Pads" }, "" );
         addOption( { "Duplicate Program", "Duplicate_Program" }, "" );
         addOption( { "Duplicate Program To Track", "Duplicate Program To Track" }, "" );
         addOption( { "Pad Colour", "Pad Colour" }, "" );
+        addOption( { "MIDI Settings", "MIDI Settings" }, "" );
 
         setVisible( true );
         setSelectionEnabled( false );
@@ -308,5 +337,108 @@ namespace kick_ui
             fromProgram.setListOptions( samplePrograms );
             toProgram.setListOptions( samplePrograms );
         }
+    }
+
+    //==============================================================================
+    // MidiProgramSettings
+    //==============================================================================
+    MidiProgramSettings::MidiProgramSettings()
+    {
+        mt::utils::addAndMakeVisible( this, noteMin, noteMax, learnBtn, velMin, velMax, transpose,
+                                      filterModWheel, filterPitchBend, filterAftertouch, filterProgChange, filterSustain, filterAllCC );
+
+        mt::utils::setTitleFontHeight( 16, noteMin, noteMax, velMin, velMax, transpose );
+        mt::utils::setValueFontHeight( 18, noteMin, noteMax, velMin, velMax, transpose );
+
+        learnBtn.setValueFontHeight( 16 );
+        mt::utils::setValueFontHeight( 14, filterModWheel, filterPitchBend, filterAftertouch, filterProgChange, filterSustain, filterAllCC );
+
+        learnBtn.onClick = [this]() {
+            auto& ae = mt::getAudioInterface();
+            auto prog = ae.getProgram( currentProgIndex );
+            if( prog )
+            {
+                if( learnBtn.getToggleState() )
+                    prog->startNoteLearn();
+                else
+                    prog->stopNoteLearn();
+            }
+        };
+    }
+
+    void MidiProgramSettings::setProgram( int progIndex )
+    {
+        currentProgIndex = progIndex;
+        auto& ae = mt::getAudioInterface();
+        auto prog = ae.getProgram( currentProgIndex );
+        auto midiData = dynamic_cast<mt::MTIMidiProgramData*>( prog );
+        if( prog && midiData )
+        {
+            noteMin.setSelected( midiData->noteMin.get(), juce::dontSendNotification );
+            noteMax.setSelected( midiData->noteMax.get(), juce::dontSendNotification );
+            velMin.setSelected( midiData->velMin.get() - 1, juce::dontSendNotification );
+            velMax.setSelected( midiData->velMax.get() - 1, juce::dontSendNotification );
+            transpose.setSelected( prog->transpose.get() + 36, juce::dontSendNotification );
+
+            filterModWheel.setToggleState( midiData->filterModWheel.get(), juce::dontSendNotification );
+            filterPitchBend.setToggleState( midiData->filterPitchBend.get(), juce::dontSendNotification );
+            filterAftertouch.setToggleState( midiData->filterAftertouch.get(), juce::dontSendNotification );
+            filterProgChange.setToggleState( midiData->filterProgramChange.get(), juce::dontSendNotification );
+            filterSustain.setToggleState( midiData->filterSustain.get(), juce::dontSendNotification );
+            filterAllCC.setToggleState( midiData->filterAllCC.get(), juce::dontSendNotification );
+
+            learnBtn.setToggleState( false, juce::dontSendNotification );
+            prog->stopNoteLearn();
+        }
+    }
+
+    void MidiProgramSettings::applySettings()
+    {
+        auto& ae = mt::getAudioInterface();
+        auto prog = ae.getProgram( currentProgIndex );
+        auto midiData = dynamic_cast<mt::MTIMidiProgramData*>( prog );
+        if( prog && midiData )
+        {
+            prog->stopNoteLearn();
+            midiData->noteMin = noteMin.getSelectedIndex();
+            midiData->noteMax = noteMax.getSelectedIndex();
+            midiData->velMin = velMin.getSelectedIndex() + 1;
+            midiData->velMax = velMax.getSelectedIndex() + 1;
+            prog->transpose = transpose.getSelectedIndex() - 36;
+
+            midiData->filterModWheel = filterModWheel.getToggleState();
+            midiData->filterPitchBend = filterPitchBend.getToggleState();
+            midiData->filterAftertouch = filterAftertouch.getToggleState();
+            midiData->filterProgramChange = filterProgChange.getToggleState();
+            midiData->filterSustain = filterSustain.getToggleState();
+            midiData->filterAllCC = filterAllCC.getToggleState();
+        }
+    }
+
+    void MidiProgramSettings::visibilityChanged()
+    {
+        if( isVisible() && currentProgIndex >= 0 )
+        {
+            setProgram( currentProgIndex );
+        }
+    }
+
+    void MidiProgramSettings::resized()
+    {
+        noteMin.setBoundsRelative( .05f, .06f, .26f, .24f );
+        noteMax.setBoundsRelative( .37f, .06f, .26f, .24f );
+        learnBtn.setBoundsRelative( .69f, .10f, .26f, .16f );
+
+        velMin.setBoundsRelative( .05f, .34f, .26f, .24f );
+        velMax.setBoundsRelative( .37f, .34f, .26f, .24f );
+        transpose.setBoundsRelative( .69f, .34f, .26f, .24f );
+
+        filterPitchBend.setBoundsRelative( .05f, .64f, .26f, .14f );
+        filterModWheel.setBoundsRelative( .37f, .64f, .26f, .14f );
+        filterAftertouch.setBoundsRelative( .69f, .64f, .26f, .14f );
+
+        filterProgChange.setBoundsRelative( .05f, .81f, .26f, .14f );
+        filterSustain.setBoundsRelative( .37f, .81f, .26f, .14f );
+        filterAllCC.setBoundsRelative( .69f, .81f, .26f, .14f );
     }
 }

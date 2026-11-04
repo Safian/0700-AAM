@@ -112,7 +112,7 @@ namespace kick_ui
     {
         if( isVisible() )
         {
-            auto& outPorts = mt::getAudioInterface().getMidiDeviceNames( true );
+            auto& outPorts = mt::getAudioInterface().getMidiDeviceNames( false );
             auto  it       = std::find( outPorts.begin(), outPorts.end(), hardWareTab.getOutput() );
             auto  selIndex = it != outPorts.end() ? std::distance( outPorts.begin(), it ) : 0;
             output.setListOptions( outPorts, selIndex );

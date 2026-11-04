@@ -34,11 +34,13 @@ namespace mt
 
     MTAudioProgramManager::~MTAudioProgramManager()
     {
+        vTree.removeListener( this );
         programs.clear();
     }
 
     void MTAudioProgramManager::close()
     {
+        vTree.removeListener( this );
         vTree       = juce::ValueTree{ IDs::PROGRAMS };
         undoManager = nullptr;
 
@@ -50,6 +52,7 @@ namespace mt
 
     void MTAudioProgramManager::setup( juce::ValueTree VT, juce::UndoManager* UM )
     {
+        vTree.removeListener( this );
         vTree       = VT;
         undoManager = UM;
 
@@ -61,6 +64,7 @@ namespace mt
                 createProgram( it, false );
             }
         }
+        vTree.addListener( this );
         std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
         updateProgramList();
     }
@@ -95,6 +99,46 @@ namespace mt
     //// Program
     ////////////////////////////
 
+    juce::String MTAudioProgramManager::getDefaultProgramName( MTProgramType type )
+    {
+        juce::String prefix = "Program ";
+        switch( type )
+        {
+            case MTProgramType::Drum:     prefix = "Drum "; break;
+            case MTProgramType::Keygroup: prefix = "Keygroup "; break;
+            case MTProgramType::Clip:     prefix = "Clip "; break;
+            case MTProgramType::Midi:     prefix = "MIDI "; break;
+            case MTProgramType::Cv:       prefix = "CV "; break;
+            case MTProgramType::Audio:    prefix = "Audio "; break;
+            case MTProgramType::Plugin:   prefix = "Plugin "; break;
+            default:                      prefix = "Program "; break;
+        }
+
+        int count = 1;
+        while( true )
+        {
+            auto candidate = prefix + juce::String( count );
+            if( getProgramByName( candidate ) == nullptr )
+                return candidate;
+            ++count;
+        }
+    }
+
+    juce::String MTAudioProgramManager::getUniqueProgramName( const juce::String& baseName )
+    {
+        if( getProgramByName( baseName ) == nullptr )
+            return baseName;
+
+        int count = 2;
+        while( true )
+        {
+            auto candidate = baseName + " " + juce::String( count );
+            if( getProgramByName( candidate ) == nullptr )
+                return candidate;
+            ++count;
+        }
+    }
+
     MTIProgram* MTAudioProgramManager::createProgram( juce::ValueTree& VT, bool addToTree )
     {
         MTIProgram* prog = nullptr;
@@ -120,6 +164,11 @@ namespace mt
             // Update list and call listener...
             updateProgramList();
         }
+        else
+        {
+            kick_log( "error", "[ERROR] [PROJ] Unknown or unsupported program type %d for program '%s'\n",
+                      (int)type, progName.toRawUTF8() );
+        }
         kick_log( "info", "[INFO] [PROJ] Program load end: '%s' (took %llu ms, success=%d)\n",
                   progName.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ),
                   prog != nullptr );
@@ -128,13 +177,15 @@ namespace mt
 
     MTIProgram* MTAudioProgramManager::createProgram( MTProgramType Type, const juce::String& Name )
     {
-        // Return program if it already exists...
-        if( auto prg = getProgramByName( Name ) )
-            return prg;
+        juce::String progName = Name.trim();
+        if( progName.isEmpty() )
+            progName = getDefaultProgramName( Type );
+        else
+            progName = getUniqueProgramName( progName );
 
         // Create new program...
         juce::ValueTree vt = createVTree( IDs::PROGRAM,
-                                          IDs::name, Name,
+                                          IDs::name, progName,
                                           IDs::type, toInt( Type ) );
 
         auto prog = createProgram( vt, true );
@@ -152,12 +203,15 @@ namespace mt
 
             auto& ptr = programs[(size_t)Index];
             programBeingDeleted( ptr.get() );
-            vTree.removeChild( ptr->getState(), undoManager );
+            auto vt = ptr->getState();
             programs.erase( programs.begin() + Index );
+            vTree.removeChild( vt, undoManager );
 
-            // If we are deleting currently selected program.
+            // If we are deleting currently selected program or an earlier program.
             if( selectedProgram == Index )
-                setSelectedProgram( --selectedProgram );
+                setSelectedProgram( juce::jlimit( -1, (int)programs.size() - 1, selectedProgram > 0 ? selectedProgram - 1 : 0 ) );
+            else if( Index < selectedProgram )
+                setSelectedProgram( selectedProgram - 1 );
 
             // Update list and call listener...
             updateProgramList();
@@ -176,7 +230,7 @@ namespace mt
         if( auto prog = getProgram( program ) )
         {
             if (!prog->prepareToSave()) return -1;
-            auto name = prog->getName() + "_copy";
+            auto name = getUniqueProgramName( prog->getName() + "_copy" );
             auto vt   = prog->getState().createCopy();
 
             vt.setProperty( IDs::name, name, nullptr );
@@ -187,6 +241,40 @@ namespace mt
             return 0;
         }
         return -1;
+    }
+
+    void MTAudioProgramManager::valueTreeChildAdded( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenAdded )
+    {
+        if( parentTree == vTree && childWhichHasBeenAdded.hasType( IDs::PROGRAM ) )
+        {
+            auto id = childWhichHasBeenAdded.getProperty( IDs::id ).toString();
+            if( id.isNotEmpty() && getProgramById( id ) != nullptr )
+                return; // Already present in programs list
+
+            // Re-instantiate from undo/redo
+            createProgram( childWhichHasBeenAdded, false );
+        }
+    }
+
+    void MTAudioProgramManager::valueTreeChildRemoved( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenRemoved, int /*index*/ )
+    {
+        if( parentTree == vTree && childWhichHasBeenRemoved.hasType( IDs::PROGRAM ) )
+        {
+            auto id = childWhichHasBeenRemoved.getProperty( IDs::id ).toString();
+            for( size_t i = 0; i < programs.size(); ++i )
+            {
+                if( programs[i]->getID() == id )
+                {
+                    auto ptr = std::move( programs[i] );
+                    programBeingDeleted( ptr.get() );
+                    programs.erase( programs.begin() + static_cast<std::ptrdiff_t>( i ) );
+                    updateProgramList();
+                    if( selected.program >= (int)programs.size() )
+                        setSelectedProgram( (int)programs.size() - 1 );
+                    break;
+                }
+            }
+        }
     }
 
     int MTAudioProgramManager::getProgramIndex( MTIProgram* program )

@@ -39,6 +39,14 @@ namespace mt
         inline int          getProgramChannel() const { return programCh.get(); }
         inline int          getMidiChannel() const { return midiCh.get(); }
 
+        // Note Learn state
+        void startNoteLearn() override { learningNotes = true; learnStep = 0; }
+        void stopNoteLearn() override { learningNotes = false; learnStep = 0; }
+        bool isNoteLearning() const noexcept override { return learningNotes.load(); }
+        void processNoteLearn( int noteNumber );
+
+        void sendPanCC10();
+
         // IMidiMsgProcessor
         void noteProcess( juce::Array<juce::MidiMessage>& Msgs, bool live = false ) override;
 
@@ -55,5 +63,7 @@ namespace mt
 
         MTMidiMeter outMidiMeter{ 40 };
         int         lastPanCC{ -1 }; // last CC10 value sent (message thread only), avoids duplicate CC for the 0.01 pan steps
+        std::atomic<bool> learningNotes{ false };
+        int               learnStep{ 0 };
     };
 } // namespace MT

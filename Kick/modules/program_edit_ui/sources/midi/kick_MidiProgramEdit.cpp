@@ -85,10 +85,10 @@ namespace kick_ui
         };
 
         ui::themeChanged.connect( [&]() {
-            auto id = 0;
+            auto id = 1;
             for( auto& it : selectors )
             {
-                auto name = juce::String( id );
+                auto name = juce::String( id++ );
                 it.setImages( "progedit/default/" + name + ".svg" );
             }
         } );

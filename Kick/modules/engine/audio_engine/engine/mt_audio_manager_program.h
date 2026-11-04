@@ -23,7 +23,7 @@
 
 namespace mt
 {
-    class MTAudioProgramManager
+    class MTAudioProgramManager : private juce::ValueTree::Listener
     {
     public:
         explicit MTAudioProgramManager( MTSelected& Selected, AudIO::DawEngine& Engine );
@@ -40,6 +40,10 @@ namespace mt
 
         void close();
         void setup( juce::ValueTree VT, juce::UndoManager* UM );
+
+        // Name helpers
+        juce::String getDefaultProgramName( MTProgramType type );
+        juce::String getUniqueProgramName( const juce::String& baseName );
 
         // Program APIs...
         MTIProgram* createProgram( MTProgramType Type, const juce::String& Name );
@@ -72,6 +76,12 @@ namespace mt
     private:
         void        updateProgramList() noexcept;
         MTIProgram* createProgram( juce::ValueTree& vt, bool addToTree );
+
+        void valueTreePropertyChanged( juce::ValueTree&, const juce::Identifier& ) override {}
+        void valueTreeChildAdded( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenAdded ) override;
+        void valueTreeChildRemoved( juce::ValueTree& parentTree, juce::ValueTree& childWhichHasBeenRemoved, int index ) override;
+        void valueTreeChildOrderChanged( juce::ValueTree&, int, int ) override {}
+        void valueTreeParentChanged( juce::ValueTree& ) override {}
 
     private:
         MTSelected&        selected;

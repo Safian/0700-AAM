@@ -92,6 +92,7 @@ namespace mt
     static const std::vector<juce::String>         emptyList;
 
     sigslot::signal<>                                     signals::midiInputsChanged = {};
+    sigslot::signal<>                                     signals::midiOutputsChanged = {};
     sigslot::signal<int /*index*/, juce::String /*Bank*/> signals::bankChanged       = {};
     sigslot::signal<TransportState /*State*/>             signals::playStateChanged  = {};
     sigslot::signal<int /*State*/, int /*State*/>         signals::padColourChanged  = {};

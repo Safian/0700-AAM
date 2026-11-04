@@ -591,6 +591,20 @@ namespace mt
         CachedValue<int>                    bankMsb;
         CachedValue<int>                    bankLsb;
         CachedValue<MidiChannelConstrainer> midiCh;
+
+        // Program-level Note & Velocity Range (Akai D-165, D-176, D-178)
+        CachedValue<int>                    noteMin;
+        CachedValue<int>                    noteMax;
+        CachedValue<int>                    velMin;
+        CachedValue<int>                    velMax;
+
+        // MIDI Filters (Akai D-175, D-179)
+        CachedValue<bool>                   filterPitchBend;
+        CachedValue<bool>                   filterModWheel;
+        CachedValue<bool>                   filterAftertouch;
+        CachedValue<bool>                   filterProgramChange;
+        CachedValue<bool>                   filterSustain;
+        CachedValue<bool>                   filterAllCC;
     };
 
     struct MTIAudioProgramData
