@@ -334,3 +334,7 @@ set_tests_properties(kick-sampler-logic PROPERTIES TIMEOUT 10)
 add_executable(kick-sample-editor-actions-tests SampleEditorActionsTests.cpp)
 add_test(NAME kick-sample-editor-actions COMMAND kick-sample-editor-actions-tests)
 set_tests_properties(kick-sample-editor-actions PROPERTIES TIMEOUT 10)
+
+add_executable(kick-menu-logic-tests MenuLogicTests.cpp)
+add_test(NAME kick-menu-logic COMMAND kick-menu-logic-tests)
+set_tests_properties(kick-menu-logic PROPERTIES TIMEOUT 10)

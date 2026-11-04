@@ -38,7 +38,8 @@ namespace kick_ui
         static KickHome& Instance();
 
         inline Screen getCurrentScreen() const { return currentScreen; }
-        inline Screen getPreviousScreen() const { return stack.empty() ? Screen::HomeListView : stack.top(); }
+        inline Screen getPreviousScreen() const { return nav_.previous(); }
+        inline Screen getLastNonMenuScreen() const { return nav_.lastNonMenu(); }
         IScreen*      getScreen( Screen screen );
         IScreen*      findScreen( Screen screen ) const; // null when not (yet) created; never inserts
         bool          areLazyScreensReady() const { return lazyScreensReady_; }
@@ -52,6 +53,7 @@ namespace kick_ui
         KickHome();
         ~KickHome();
 
+        bool                 isScreenAllowed( Screen screen );
         void                 load( Screen screen );
         void                 handleCommand( CPktMgr::HWMsg_t& );
         void                 knobCommand( int knob, int value );
@@ -63,7 +65,7 @@ namespace kick_ui
         juce::Rectangle<int> getScreenBounds( IScreen* pScreen );
 
     private:
-        std::stack<Screen>                         stack;
+        ui::menu_logic::ScreenNav<Screen>          nav_;
         std::map<Screen, std::unique_ptr<IScreen>> screens_;
 
         std::unique_ptr<Component>                 ctrlBar_;

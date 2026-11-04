@@ -29,7 +29,6 @@ namespace kick_ui
     public:
         AppMenuOptions();
         ~AppMenuOptions();
-        int getSelectedId() { return selectedId; }
 
         bool requiresControlBar() override { return true; }
         bool requiresStatusBar() override { return true; }
@@ -38,7 +37,6 @@ namespace kick_ui
         void handleCommand( CPktMgr::HWMsg_t& ) override;
 
     private:
-        int  selectedId = -1;
         void visibilityChanged() override;
         void loadScreen( int index );
     };
