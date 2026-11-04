@@ -111,16 +111,16 @@ Alap: statikus kódolvasás, 2026-11-04, `claude/kick-plans`. Hardveren nem mér
 ## 7. TODO
 
 Hibák / alap:
-- [ ] **XY-01** (P0, L) `TouchFx` natív DSP-objektum (szűrő, tempó-szinkron LFO, beat repeat, phaser, wet/dry ramp) — `AudIO/AudIO` új fájl; függ: XY-06.
-- [ ] **XY-02** (P0, M) Befűzés: állandó, bypass-olt `TouchFx` példány minden cél-buszon / dedikált Touch FX slot a `DawInserts`-ban — `DawInserts.h:15`, `Design.cpp:338`. Függ: INS-01 (Out/Return/Submix cél), XY-01.
-- [ ] **XY-03** (P0, M) `MTAudioInterface::setTouchFx` és lock-free atomi paraméterút, tempó-szinkron — függ: XY-01, XY-02.
-- [ ] **XY-04** (P0, M) `XyFxView` bekötés: rács → engine, touch-down/up gate, On/Off, Latch, Attack/Release/Wet-Dry, Destination — `X:119-131`, `G:91-107`. Függ: XY-03.
-- [ ] **XY-05** (P1, S) Q-Link: látható érték zárt panelnél, Data Dial és ± preset-léptetés, Enter = Latch — `X:151`, `X:179-199`.
-- [ ] **XY-06** (P1, S) `xy_fx_map.h` tiszta leképező header + preset/beat-osztás tábla + host-teszt.
-- [ ] **XY-07** (P1, M) Perzisztencia: `TOUCHFX` csomópont a projekt fájában, undo-val.
-- [ ] **XY-08** (P1, M) Destination modell (Track/Return/Submix/Output) az `Output 1/2` lista helyett — függ: INS-01.
-- [ ] **XY-09** (P1, S) Rács-javítások: `mouseUp`/Latch kirajzolás, induláskori NaN, találat és rajz összehangolása, enum a string-összehasonlítás helyett — `G:40-45`, `G:97-101`, `G:183-198`.
-- [ ] **XY-10** (P2, S) Állapot-visszaállítás képernyő-elhagyáskor (gate zárás, Latch tartása szándék szerint) — `X:154-156`.
+- [x] **XY-01** (P0, L) `TouchFx` natív DSP-objektum (szűrő, tempó-szinkron LFO, beat repeat, phaser, wet/dry ramp) — `AudIO/AudIO` új fájl; függ: XY-06.
+- [x] **XY-02** (P0, M) Befűzés: állandó, bypass-olt `TouchFx` példány minden cél-buszon / dedikált Touch FX slot a `DawInserts`-ban — `DawInserts.h:15`, `Design.cpp:338`. Függ: INS-01 (Out/Return/Submix cél), XY-01.
+- [x] **XY-03** (P0, M) `MTAudioInterface::setTouchFx` és lock-free atomi paraméterút, tempó-szinkron — függ: XY-01, XY-02.
+- [x] **XY-04** (P0, M) `XyFxView` bekötés: rács → engine, touch-down/up gate, On/Off, Latch, Attack/Release/Wet-Dry, Destination — `X:119-131`, `G:91-107`. Függ: XY-03.
+- [x] **XY-05** (P1, S) Q-Link: látható érték zárt panelnél, Data Dial és ± preset-léptetés, Enter = Latch — `X:151`, `X:179-199`.
+- [x] **XY-06** (P1, S) `xy_fx_map.h` tiszta leképező header + preset/beat-osztás tábla + host-teszt.
+- [x] **XY-07** (P1, M) Perzisztencia: `TOUCHFX` csomópont a projekt fájában, undo-val.
+- [x] **XY-08** (P1, M) Destination modell (Track/Return/Submix/Output) az `Output 1/2` lista helyett — függ: INS-01.
+- [x] **XY-09** (P1, S) Rács-javítások: `mouseUp`/Latch kirajzolás, induláskori NaN, találat és rajz összehangolása, enum a string-összehasonlítás helyett — `G:40-45`, `G:97-101`, `G:183-198`.
+- [x] **XY-10** (P2, S) Állapot-visszaállítás képernyő-elhagyáskor (gate zárás, Latch tartása szándék szerint) — `X:154-156`.
 
 Hiányzó funkciók:
 - [ ] **XY-11** (P1, M) Strip `kTouchFx` mód, TOUCH FX = azonnali mód, pozíció → Y/Assigned Parameter, érintés → gate — `strip_modes.h`, `B:1111`, `B:1637-1660`. Függ: XY-04.
@@ -135,3 +135,11 @@ Javaslatok:
 Tesztek:
 - [ ] **XY-17** (P1, M) Host-tesztek: `xy_fx_map`, DSP, gate-állapotgép, strip-mód, perzisztencia (6. pont).
 - [ ] **XY-18** (P1, S) MPC-ellenőrzőlista (6. pont) a `HW_TEST_CHECKLIST`-be, CPU-mérés ARMv7-n.
+
+## 8. Állapot (S-E kör, 2026-11-04)
+
+Kész (host-teszt: `TouchFxTests` ASan alatt, `XyFxMapTests`, `BusInsertsTests` a láncon át; Mac build + smoke): **XY-01** (`AudIO/AudIO/Dsp/TouchFx.h`: kézi szűrő, tempó-szinkron szűrő-söprés, beat repeat, 4 fokozatú phaser, wet/dry és attack/release, bit-pontos átengedés zárt kapunál), **XY-02** (a `DawInserts` Touch FX slotja a négy insert után; minden program, a looper és minden busz megkapja a hosztolt lánccal), **XY-03** (`MTIInsertsInterface::setTouchFx`, lock-free atomok, a tempót az UI adja a szekvenciából), **XY-04** (rács -> motor, touch-down/up kapu, On/Off, Latch, Attack/Release/Wet), **XY-05** (Q-Link zárt panelnél a státuszsorban mutatja az értéket, Data Dial és +/- preset, ENTER = Latch), **XY-06** (`kick_xy_fx_map.h`), **XY-07** (`TOUCHFX` csomópont a projekt fájában, undo nélkül), **XY-08** (cél: Track / Return / Submix / Output buszok valódi nevekkel), **XY-09** (találat és rajz egy geometria, Latch kirajzolás, induláskori NaN, `mouseUp` esemény, enum a string helyett), **XY-10** (képernyő elhagyásakor a kapu zár, a rács sötét).
+
+Részben: **XY-15** (az Attack/Release ms/s, a koordináták Hz/Q/% szöveggel; cella-feliratok nincsenek), **XY-13** (a fejléc Automation-ikon elrejtve; a gesztus-lane NYITOTT), **XY-17** (a gate-állapotgép és a leképezés tesztelt; strip-mód, perzisztencia-körút nem).
+
+Nyitott: **XY-11** (Touch FX strip-mód: `strip_modes.h`, híd), **XY-12** (hosszú nyomás / Shift+TOUCH FX: híd), **XY-14** (közös XY-motor a MIDI CC módhoz), **XY-16** (Custom Q-Link jelzés), **XY-18** (MPC-lista: checklist 40.; CPU-mérés ARMv7-n: ember). Hang: a hatás Mac-hoszt-teszttel igazolt, MPC-n és fülre nem hallgatva.
