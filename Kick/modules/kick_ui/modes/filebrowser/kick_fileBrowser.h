@@ -64,6 +64,7 @@ namespace ui
     class FileBrowserLeftPanel : public juce::Component
     {
     public:
+        KickButton                     sourceButton{ "Sources", "+ WebDAV" }; // add / edit a WebDAV location
         KickImageButton                places{ "Places", "Places" };
         KickImageButton                content{ "Content", "Content" };
         KickImageButton                expansion{ "Expansion", "Expansion" };
@@ -240,6 +241,32 @@ namespace ui
         juce::String                                  projectFileList{ ".kickPrj" };
         juce::String                                  sampleFileList{ ".wav;bwf;aif;aiff;flac;ogg;mp3;wmv;asf;wm;wma" };
 
+        // ---- extra locations (FileBrowserSource): WebDAV / local-folder sources; the Internal/SD/USB rows keep the legacy path
+        static constexpr const char*                   sourceRowPrefix = "src:";
+        std::unique_ptr<fileSource::SourceHub>         hub;
+        int                                            sourceRowCount{ 0 };
+        bool                                           remoteActive{ false };
+        std::shared_ptr<fileSource::FileBrowserSource> activeSource;
+        std::string                                    remotePath{ "/" };
+        std::vector<fileSource::Entry>                 remoteEntries, remoteShown;
+        juce::String                                   remoteSearch;
+        uint64_t                                       remoteReq{ 0 };
+        uint64_t                                       remoteDownloadId{ 0 };
+        int                                            lastDownloadPercent{ -1 };
+        bool isSourceRow( int row ) const;
+        void refreshSourceRows();
+        void openSource( int row );
+        void leaveSource();
+        void listRemote( const std::string& path );
+        void onRemoteListed( uint64_t gen, const std::string& path, const fileSource::ListResult& lr );
+        void applyRemoteFilter();
+        void remoteActivate( int row );
+        void remoteBack();
+        void remoteFetchAndLoad( const fileSource::Entry& e );
+        void editWebDavSource();
+        void askText( const juce::String& title, const juce::String& initial, std::function<void( juce::String )> done );
+        juce::Component* remoteCell( int row, juce::Component* existing );
+
         ui::fileUtils::GenerationTracker              generationTracker;
         std::unordered_set<std::string>               pendingPaths;
         juce::ThreadPool                              folderSizeThreadPool{ 1 };
@@ -264,7 +291,7 @@ namespace ui
         void showAuditionComponent();
         void addMultipleAssets( juce::Array<juce::File> assetFile );
         void createProject( juce::String value );
-        void loadSample( const juce::Array<juce::File>& assetFiles, bool IsMultiple );
+        void loadSample( const juce::Array<juce::File>& assetFiles, bool IsMultiple, std::function<void()> onFinished = {} );
         void mouseDown( const juce::MouseEvent& e ) override;
         void timerCallback() override;
 
