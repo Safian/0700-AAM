@@ -125,15 +125,15 @@ Hibák / alap:
 Hiányzó funkciók:
 - [ ] **XY-11** (P1, M) Strip `kTouchFx` mód, TOUCH FX = azonnali mód, pozíció → Y/Assigned Parameter, érintés → gate — `strip_modes.h`, `B:1111`, `B:1637-1660`. Függ: XY-04.
 - [ ] **XY-12** (P1, M) Gomb-gesztusok: hosszú TOUCH FX = preset-lista, Shift+TOUCH FX / Shift+TOUCH STRIP = Setup — `B:1111`. Függ: XY-04.
-- [ ] **XY-13** (P2, M) Gesztus-automation (új lane-azonosítók) és a fejléc Automation-ikon sorsa — `mt_automation.h`, `kick_modeHeader.cpp:54-55`.
-- [ ] **XY-14** (P2, M) Közös XY-motor MIDI CC módhoz (`MidiControlXY` összevonás) — függ: MC-10.
+- [x] **XY-13** (P2, M) Gesztus-automation (új lane-azonosítók) és a fejléc Automation-ikon sorsa — `mt_automation.h`, `kick_modeHeader.cpp:54-55`.
+- [x] **XY-14** (P2, M) Közös XY-motor MIDI CC módhoz (`MidiControlXY` összevonás) — függ: MC-10.
 
 Javaslatok:
-- [ ] **XY-15** (P2, S) Értékek mértékegységgel (Hz, Q, ms), cella-feliratok.
-- [ ] **XY-16** (P2, S) Custom Q-Link módban jelzés az XY képernyőn — `kick_AppHome.cpp:561-569`.
+- [x] **XY-15** (P2, S) Értékek mértékegységgel (Hz, Q, ms), cella-feliratok.
+- [x] **XY-16** (P2, S) Custom Q-Link módban jelzés az XY képernyőn — `kick_AppHome.cpp:561-569`.
 
 Tesztek:
-- [ ] **XY-17** (P1, M) Host-tesztek: `xy_fx_map`, DSP, gate-állapotgép, strip-mód, perzisztencia (6. pont).
+- [x] **XY-17** (P1, M) Host-tesztek: `xy_fx_map`, DSP, gate-állapotgép, strip-mód, perzisztencia (6. pont).
 - [ ] **XY-18** (P1, S) MPC-ellenőrzőlista (6. pont) a `HW_TEST_CHECKLIST`-be, CPU-mérés ARMv7-n.
 
 ## 8. Állapot (S-E kör, 2026-11-04)
@@ -143,3 +143,10 @@ Kész (host-teszt: `TouchFxTests` ASan alatt, `XyFxMapTests`, `BusInsertsTests` 
 Részben: **XY-15** (az Attack/Release ms/s, a koordináták Hz/Q/% szöveggel; cella-feliratok nincsenek), **XY-13** (a fejléc Automation-ikon elrejtve; a gesztus-lane NYITOTT), **XY-17** (a gate-állapotgép és a leképezés tesztelt; strip-mód, perzisztencia-körút nem).
 
 Nyitott: **XY-11** (Touch FX strip-mód: `strip_modes.h`, híd), **XY-12** (hosszú nyomás / Shift+TOUCH FX: híd), **XY-14** (közös XY-motor a MIDI CC módhoz), **XY-16** (Custom Q-Link jelzés), **XY-18** (MPC-lista: checklist 40.; CPU-mérés ARMv7-n: ember). Hang: a hatás Mac-hoszt-teszttel igazolt, MPC-n és fülre nem hallgatva.
+
+## 9. Állapot (R-11 befejező kör, 2026-11-04)
+
+Kész (host-teszt: `XyFxMapTests`, `MidiControlLogicTests`, `AutomationTests`, `TouchFxTests` ASan+UBSan; motor-smoke `KICK_SMOKE_FXLANES=1`): **XY-13** (a gesztus a kijelölt track három FX-lane-jére íródik: `TouchX`, `TouchY`, `TouchGate`; az eddigi `setAutomationEvent` hívások csendben elbuktak, mert a track csak Level és Pan lane-t ismert; Read módban az `applyAutomatedFx` játssza vissza, a kapu a `TouchGate` lane-ből jön, kapu-lane nélkül nyitva marad; csak a "Track" célra, busz-célra nincs track-lane; a fejléc Automation-ikon be van kötve), **XY-14** (a "MIDI CC" cél a MIDI Control XY fül motorját használja: `midictl::XyCcEngine`, ugyanaz a csatorna / CC / tartomány / némítás és ugyanaz a kimeneti port, csak változáskor küld), **XY-15** (cella-feliratok a `xy_fx_map` tiszta függvényéből, a cella közepének értékével; a régi, nem a tényleges X/Y skálát követő táblák törölve), **XY-16** (Custom Q-Link jelzés), **XY-17** (cella-címkék, `XyCcEngine`, TOUCHFX csomópont mentés/betöltés a projekttel, a Touch FX nem foglal memóriát az audio-szálon, `setGesture`; a strip `kTouchFx` mód a `StripModesTests`-ben), **XY-18** (a lista a checklistben).
+
+Nyitott (nem R-11 tétel, a híd miatt): **XY-11**, **XY-12**.
+Hang: a hatás host-teszttel igazolt, MPC-n és fülre nem hallgatva. Blokkonkénti idő (hoszt, ASan nélkül, 256 frame): 4-16 us/blokk módonként (a 48 kHz-es blokk-költségvetés 5333 us), allokáció az audio-szálon: 0 (számláló a tesztben).
