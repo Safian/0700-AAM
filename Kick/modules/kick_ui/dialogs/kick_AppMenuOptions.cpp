@@ -49,7 +49,7 @@ namespace kick_ui
         setVisible( true );
         setSelectionEnabled( false );
 
-        onMenuOptionClicked = [&]( const juce::String& /*Option*/, int Index, const juce::String& /*Group*/ ) {
+        onMenuOptionClicked = [this]( const juce::String& /*Option*/, int Index, const juce::String& /*Group*/ ) {
             loadScreen( Index );
         };
     }
@@ -79,33 +79,23 @@ namespace kick_ui
     void AppMenuOptions::visibilityChanged()
     {
         KickMenuComponent::visibilityChanged();
+        if( !isVisible() )
+            return;
+
+        // Tiles of the screens that need a loaded project are grayed out (and ignore touch, dial and pad) without one.
+        const bool hasProject = mt::getAudioInterface().isProjectLoaded();
+        for( int i = 0; i < ui::menu_logic::kTileCount; ++i )
+            setItemEnabled( i, hasProject || !ui::menu_logic::screenNeedsProject( ui::menu_logic::tileScreen<Screen>( i ) ) );
+
+        // The highlight starts on the mode the Menu was opened from, so the dial and the pads work from there.
+        if( const int tile = ui::menu_logic::screenTile( KickHome::Instance().getLastNonMenuScreen() ); tile >= 0 )
+            setHighlight( tile );
     }
+
     void AppMenuOptions::loadScreen( int index )
     {
-        switch( index )
-        {
-            case 0: signals::sigScreenOpen( kick_ui::Screen::MenuFileBrowser ); break;
-            case 1: signals::sigScreenOpen( kick_ui::Screen::MenuChannelMixer ); break;
-            case 2: signals::sigScreenOpen( kick_ui::Screen::MenuTrackMute ); break;
-            case 3: signals::sigScreenOpen( kick_ui::Screen::MenuNextSequence ); break;
-
-            case 4: signals::sigScreenOpen( kick_ui::Screen::MenuListEdit ); break;
-            case 5: signals::sigScreenOpen( kick_ui::Screen::MenuPadMixer ); break;
-            case 6: signals::sigScreenOpen( kick_ui::Screen::MenuPadMute ); break;
-            case 7: signals::sigScreenOpen( kick_ui::Screen::MenuSong ); break;
-
-            case 8: signals::sigScreenOpen( kick_ui::Screen::MenuColorEdit ); break;
-            case 9: signals::sigScreenOpen( kick_ui::Screen::MenuSampler ); break;
-            case 10: signals::sigScreenOpen( kick_ui::Screen::MenuSampleEdit ); break;
-            case 11: signals::sigScreenOpen( kick_ui::Screen::MenuProgramEdit ); break;
-
-            case 12: signals::sigScreenOpen( kick_ui::Screen::MenuPadPerform ); break;
-            case 13: signals::sigScreenOpen( kick_ui::Screen::MenuLooper ); break;
-            case 14: signals::sigScreenOpen( kick_ui::Screen::MenuKnobEdit ); break;
-            case 15: signals::sigScreenOpen( kick_ui::Screen::MenuMidiControl ); break;
-
-            case 16: signals::sigScreenOpen( kick_ui::Screen::MenuPiano ); break;
-            default: break;
-        }
+        const auto target = ui::menu_logic::tileScreen<Screen>( index );
+        if( target != Screen::Invalid )
+            signals::sigScreenOpen( target );
     }
 }

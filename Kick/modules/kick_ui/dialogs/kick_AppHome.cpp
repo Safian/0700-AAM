@@ -198,10 +198,9 @@ namespace kick_ui
         // Connect sceeen signals.
         // Open screen as passed in Argument.
         signals::sigScreenOpen.connect( [&]( Screen Scrn ) {
-            if( !( ( currentScreen == Screen::HomeOptions ) || ( currentScreen == Screen::HomeListView ) || ( currentScreen == Screen::Invalid ) ) )
-            {
-                stack.push( currentScreen );
-            }
+            if( !isScreenAllowed( Scrn ) )
+                return;
+            nav_.open( currentScreen );
 
             juce::MessageManager::callAsync( [Scrn, this]() {
                 load( Scrn );
@@ -210,23 +209,9 @@ namespace kick_ui
 
         // Close existing screen and open screen as passed in argument.
         signals::sigScreenClose.connect( [&]( Screen NewScrn ) {
-            Screen loadScreen = NewScrn;
-            while( !stack.empty() && ( stack.top() == currentScreen || stack.top() == Screen::Invalid ) )
-            {
-                stack.pop();
-            }
-            if( !stack.empty() )
-            {
-                if( NewScrn == Screen::Invalid )
-                {
-                    loadScreen = stack.top();
-                    stack.pop();
-                }
-            }
-            else if( loadScreen == Screen::Invalid )
-            {
-                loadScreen = Screen::HomeListView;
-            }
+            if( !isScreenAllowed( NewScrn ) )
+                return;
+            const Screen loadScreen = nav_.close( currentScreen, NewScrn );
 
             juce::MessageManager::callAsync( [loadScreen, this]() {
                 load( loadScreen );
@@ -354,6 +339,20 @@ namespace kick_ui
         ctrlBar_.reset();
     }
 
+    bool KickHome::isScreenAllowed( Screen screen )
+    {
+        // The editors, mixers, sampler, grid ... assume a loaded project; the hardware buttons and the top bar used to open them
+        // regardless (no project after a failed load / a missing demo).
+        // The headless screenshot run (KICK_SMOKE_SCREENS) has no project and photographs every screen.
+        static const bool smokeScreens = juce::SystemStats::getEnvironmentVariable( "KICK_SMOKE_SCREENS", {} ).isNotEmpty();
+        if( !smokeScreens && ui::menu_logic::screenNeedsProject( screen ) && !mt::getAudioInterface().isProjectLoaded() )
+        {
+            kick_log( "info", "[INFO] [HOME] screen %d needs a loaded project: request ignored\n", (int)screen );
+            return false;
+        }
+        return true;
+    }
+
     IScreen* KickHome::getScreen( Screen screen )
     {
         return screens_[screen].get();
@@ -378,6 +377,7 @@ namespace kick_ui
 
         // Emit signal...
         signals::onScreenClosed( currentScreen );
+        nav_.noteLeaving( currentScreen );
 
         // Bounds check...
         currentScreen = ( screens_.end() != screens_.find( screen ) ) ? screen : Screen::HomeListView;
