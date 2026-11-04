@@ -2,7 +2,7 @@
 
 // ============================================================================
 // Relative (two's complement, 7 bit) controller values, e.g. the Akai MPC Key 61 Data Dial and Q-Links.
-// MEASURED (docs/hw-mailbox/TO_CLOUD.md): Data Dial `B0 64 01` = one step clockwise, `B0 64 7F` = one step
+// MEASURED (`git show 35fce454:docs/hw-mailbox/TO_CLOUD.md`): Data Dial `B0 64 01` = one step clockwise, `B0 64 7F` = one step
 // anticlockwise. JUCE/ALSA-free, host-testable.
 //
 //   0x01..0x3F -> +1..+63   (clockwise, N steps in one message when the dial is turned fast)
