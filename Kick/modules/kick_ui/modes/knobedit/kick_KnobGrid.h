@@ -38,13 +38,20 @@ namespace kick_ui
         void labelBounds( bool isScreenClicked );
         int  getState( int knobNum );
         void knobCommand( int knob, int value );
-        void labelInfo( int knobnum, juce::String name );
+        void labelInfo( int knobnum, juce::String name, int source = -1 ); // source: -1 built-in, 0..3 insert slot
+        void restoreAssignments();
+        void refreshAll();
+        void setRow( int row ); // highlighted row of four Q-Links (0..3)
         void setValues( int knobnum, int value );
         void setPadState( bool State );
         void setPadIndex( int bankIndex, int padIndex );
         void setIndex( int index );
 
     private:
+        void applyRange( int knobnum );
+        bool readValue( int knobnum, double& out );
+        void refreshKnob( int knobnum );
+        std::array<int, 16>                          sources{ { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
         std::vector<std::unique_ptr<ui::KickRotary>> qlinkKnobs;
         mt::KickKnobControl&                         knob{ mt::getSettings().knobControl };
 

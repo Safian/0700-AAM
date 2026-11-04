@@ -29,18 +29,26 @@ namespace kick_ui
                 setParameter( knobnum, selectedParameter );
             }
         };
+        // MIDI program CC list: the CC of the program of the track chosen in the Q-Link Edit (not the selected program).
+        // A zero step only reads: writing a CC property sends a CC message.
         knob.parameterSelection = [&]( juce::String parameter, int value ) -> int {
             auto parameterIndex = bottomControls.level.getIndex( parameter );
-            if( parameterIndex >= 0 )
-            {
-                auto& ae{ mt::getAudioInterface() };
-                auto  valueTree    = ae.getProgramVT( ae.getSelectedProgram() );
-                int   newValue     = valueTree.getProperty( "CC" + juce::String( parameterIndex ) );
-                auto  updatedValue = juce::jlimit( MIDI::MIN, MIDI::MAX, newValue + value );
-                valueTree.setProperty( "CC" + juce::String( parameterIndex ), updatedValue, nullptr );
-                return updatedValue;
-            }
-            return 0;
+            if( parameterIndex < 0 )
+                return 0;
+            auto& ae    = mt::getAudioInterface();
+            auto* pProg = ae.getProgramDataForTrack( ae.getSelectedSequence(), indexNum );
+            if( !pProg )
+                return 0;
+            auto valueTree = ae.getProgramVT( ae.getProgramIndexByName( pProg->name.get() ) );
+            if( !valueTree.isValid() )
+                return 0;
+            const juce::Identifier id( "CC" + juce::String( parameterIndex ) );
+            const int              current = valueTree.getProperty( id );
+            if( value == 0 )
+                return current;
+            auto updatedValue = juce::jlimit( MIDI::MIN, MIDI::MAX, current + value );
+            valueTree.setProperty( id, updatedValue, nullptr );
+            return updatedValue;
         };
         topControls.isPad = [&]() {
             auto padState = topControls.type.getToggleState();
@@ -66,12 +74,13 @@ namespace kick_ui
     void CustomTab::setInsertsList( int insertIndex )
     {
         auto&                     ae          = mt::getAudioInterface();
-        auto                      program     = ae.getProgram( ae.getSelectedProgram() );
-        auto                      insertsInfo = program->getInsertsInfo( insertIndex );
+        auto*                     pProg       = ae.getProgramDataForTrack( ae.getSelectedSequence(), indexNum );
+        auto*                     program     = pProg ? ae.getProgram( pProg->name.get() ) : nullptr;
         std::vector<juce::String> list;
 
-        for( auto it : insertsInfo.params )
-            list.push_back( it.name );
+        if( program )
+            for( const auto& it : program->getInsertsInfo( insertIndex ).params )
+                list.push_back( it.name );
 
         if( list.empty() )
             list.push_back( "OFF" );
@@ -86,9 +95,9 @@ namespace kick_ui
             if( !topState )
             {
                 if( buttonName == mix )
-                    bottomControls.level.setListOptions( { "OFF", "Pan", "Velocity", "Solo", "Mute", "sends01", "sends02", "sends03", "sends04" } );
+                    bottomControls.level.setListOptions( { "OFF", "Pan", "Velocity", "Solo", "Mute" } );
                 else if( buttonName == program )
-                    bottomControls.level.setListOptions( { "OFF", "GlobalSemiTune", "GlobalFineTune" } );
+                    bottomControls.level.setListOptions( { "OFF", "Polyphony", "GlobalSemiTune", "GlobalFineTune" } );
                 else if( buttonName == ins1 || buttonName == ins2 || buttonName == ins3 || buttonName == ins4 )
                 {
                     int insertIndex = ( buttonName == ins1 ) ? 0 : ( buttonName == ins2 ) ? 1 :
@@ -102,7 +111,7 @@ namespace kick_ui
                 if( buttonName == mix )
                     bottomControls.level.setListOptions( { "OFF", "Level", "Pan", "PadSolo", "PadMute" } );
                 else if( buttonName == program )
-                    bottomControls.level.setListOptions( { "OFF", "Polyphony", "Glide All", "Bend Range", "Doubling", "Doubling Detune", "Glide Time", "Osc 1 Octave", "Osc 1 Fine", "Osc 1 Shape", "Osc 1 F_Envtoshape", "Osc 1 Quard", "Quard_Detune", "Sub Osc Shape", "Osc 2 Octave", "Osc 2 Micro Detune", "Osc 2 Shape", "Osc 2 F_EnvtoShape", "Osc 2 Sync", "Osc 2 EQ Gain", " Osc 2 EQ Freq", "Osc 2 EQ Keytrack", "Osc 2 EQDrive", "Osc 1 Level", "Osc 2 Level", "Sub Osc Level", "Ring  ModLevel", "Mixer Drive", "LPF Cutoff", "LPF Reso", " LPF Slop", "LPF Saturation", "LPF Env", "LPF Keytrack", "Filter Attack", "Filter Decay", "Filter Sustain", "Filter Release", "Filter Release", "Filter Hold", "Amp Attack", "Amp Decay", "Amp Sustain", "Amp Release", "Amp Hold", "Env 3 StartLevel", "Env 3 StartTime", "Env 3 Slop Hold", "Env 3 Slop Release", " Env 3 Destination", "Lfo To Pitch", " Lfo To Filter", " Lfo To Amp ", "Lfo To PAN", "Lfo Wave", "Lfo Rate", "Layer 1 Semi", "Layer 1 PAN", "Layer 1 Fine", "Layer 1 Level", "Layer 2 Semi", "Layer 2 PAN", "Layer 2 Fine", "Layer 2 Level", "Layer 3 Semi", "Layer 3 PAN", "Layer 3 Fine", "Layer 3 Level", "Layer 4 Semi", "Layer 1 PAN", "Layer 4 Fine", "Layer 4 Level" } );
+                    bottomControls.level.setListOptions( { "OFF", "SemiTune", "FineTune" } );
                 else if( buttonName == ins1 || buttonName == ins2 || buttonName == ins3 || buttonName == ins4 )
                 {
                     int insertIndex = ( buttonName == ins1 ) ? 0 : ( buttonName == ins2 ) ? 1 :
@@ -117,9 +126,9 @@ namespace kick_ui
             if( !topState )
             {
                 if( buttonName == mix )
-                    bottomControls.level.setListOptions( { "OFF", "Pan", "Velocity", "Solo", "Mute", "sends01", "sends02", "sends03", "sends04" } );
+                    bottomControls.level.setListOptions( { "OFF", "Pan", "Velocity", "Solo", "Mute" } );
                 else if( buttonName == program )
-                    bottomControls.level.setListOptions( { "OFF", "GlobalSemiTune", "GlobalFineTune", "Launch Quantize" } );
+                    bottomControls.level.setListOptions( { "OFF", "Polyphony", "GlobalSemiTune", "GlobalFineTune" } );
                 else if( buttonName == ins1 || buttonName == ins2 || buttonName == ins3 || buttonName == ins4 )
                 {
                     int insertIndex = ( buttonName == ins1 ) ? 0 : ( buttonName == ins2 ) ? 1 :
@@ -131,9 +140,9 @@ namespace kick_ui
             else
             {
                 if( buttonName == mix )
-                    bottomControls.level.setListOptions( { "OFF", "Level", "Pan", "PadSolo", "PadMute", "sends01", "sends02", "sends03", "sends04" } );
+                    bottomControls.level.setListOptions( { "OFF", "Level", "Pan", "PadSolo", "PadMute" } );
                 else if( buttonName == program )
-                    bottomControls.level.setListOptions( { "OFF", "SemiTune", "FineTune", "Reverse", "Wrap", "Fade" } );
+                    bottomControls.level.setListOptions( { "OFF", "SemiTune", "FineTune" } );
                 else if( buttonName == ins1 || buttonName == ins2 || buttonName == ins3 || buttonName == ins4 )
                 {
                     int insertIndex = ( buttonName == ins1 ) ? 0 : ( buttonName == ins2 ) ? 1 :
@@ -148,9 +157,9 @@ namespace kick_ui
             if( !topState )
             {
                 if( buttonName == mix )
-                    bottomControls.level.setListOptions( { "OFF", "Pan", "Velocity", "Solo", "Mute", "sends01", "sends02", "sends03", "sends04" } );
+                    bottomControls.level.setListOptions( { "OFF", "Pan", "Velocity", "Solo", "Mute" } );
                 else if( buttonName == program )
-                    bottomControls.level.setListOptions( { "OFF", "Program Polyphony", "Global SemiTune", "Global FineTune", "Portamento Time", "PortLegato", "PortQuantize" } );
+                    bottomControls.level.setListOptions( { "OFF", "Program Polyphony", "Global SemiTune", "Global FineTune" } );
                 else if( buttonName == ins1 || buttonName == ins2 || buttonName == ins3 || buttonName == ins4 )
                 {
                     int insertIndex = ( buttonName == ins1 ) ? 0 : ( buttonName == ins2 ) ? 1 :
@@ -183,13 +192,17 @@ namespace kick_ui
         auto  pProg    = ae.getProgramDataForTrack( ae.getSelectedSequence(), indexNum );
         auto  type     = pProg ? pProg->type.get() : mt::MTProgramType::Unknown;
         bool  topState = topControls.type.getToggleState();
+        currentButton  = buttonName;
         setListInfo( type, buttonName, topState );
     }
 
     void CustomTab::setParameter( int Knobnum, juce::String parameter )
     {
-        auto param = parameter;
-        knob.labelInfo( Knobnum, parameter );
+        // Ins 1..4 parameters stay bound to their insert slot; everything else is a built-in parameter.
+        int source = -1;
+        if( currentButton >= ins1 && currentButton <= ins4 )
+            source = currentButton - ins1;
+        knob.labelInfo( Knobnum, parameter, source );
     }
 
     TopContent::TopContent()

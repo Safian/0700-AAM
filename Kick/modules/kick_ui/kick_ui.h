@@ -122,6 +122,7 @@
     #include "modes/kick_nextSequence.h"
     #include "modes/kick_song.h"
     #include "modes/mixers/kick_PadMixer.h"
+    #include "modes/knobedit/kick_KnobLogic.h"
     #include "modes/knobedit/kick_KnobGrid.h"
     #include "modes/knobedit/kick_KnobTabs.h"
     #include "modes/knobedit/kick_KnobEdit.h"

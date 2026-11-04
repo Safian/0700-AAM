@@ -574,7 +574,11 @@ namespace kick_ui
                             break;
 
                         case contracts::DeviceControlContracts::EN_LINK:
-                            dynamic_cast<KnobEdit*>( screens_[Screen::MenuKnobEdit].get() )->knobLongPress();
+                            // Q-LINK button: next row of four Q-Links in the Custom Q-Link mode (Q-Link Edit grid). No
+                            // other function: it used to arm a 5 s timer that closed any open dialog.
+                            if( mt::getSettings().knobControl.getMode() == 0 )
+                                if( auto* knobEdit = dynamic_cast<KnobEdit*>( findScreen( Screen::MenuKnobEdit ) ) )
+                                    knobEdit->nextQLinkRow();
                             break;
                         case contracts::DeviceControlContracts::EN_SAVE:
                             if (!ae.saveProject())
@@ -593,34 +597,40 @@ namespace kick_ui
                     case contracts::DeviceControlContracts::EN_PREF: signals::sigScreenClose( Screen::HomePreferencesView ); break;
                 }
             }
-            auto mode = mt::getSettings().knobControl.getMode();
-
-            if( !mode && contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) && contracts::DclContractsHelper::getKnobCode( f_HwMsg ) != contracts::DeviceControlContracts::KnobSequence::EN_KNOB_CENTER )
-            {
-                log += " knob message ";
-                juce::Logger::writeToLog( log );
-                auto knob  = contracts::DclContractsHelper::getKnobCode( f_HwMsg );
-                auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
-                getScreen( Screen::MenuKnobEdit )->knobCommand( knob, value );
-                return;
-            }
-
-            // Q-Link 1..16 belong to the screen, never to the touched control: a control drops them
-            // ("Nothing to be done for link knobs"), which made the Q-Link dead after any touch on the MPC.
+            // One decision function (knob_logic::routeHardwareMessage, host-tested): Custom Q-Link mode -> Knob Edit grid;
+            // data dial / +/- / ENTER / slider -> the touched control; everything else, Q-Link 1..16 included
+            // (a control drops them: "Nothing to be done for link knobs"), -> the current screen.
             const bool isQLinkMsg = contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) && contracts::DclContractsHelper::getKnobCode( f_HwMsg ) != contracts::DeviceControlContracts::KnobSequence::EN_KNOB_CENTER;
-            if( contracts::DclContractsHelper::isNavigationMessage( f_HwMsg ) && ui::getComponentInFocus() && !contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) && !isQLinkMsg )
-            {
-                log += " is Navigation message";
-                juce::Logger::writeToLog( log );
-                ui::getComponentInFocus()->handleCommand( f_HwMsg );
-            }
+            auto*      cur        = findScreen( getCurrentScreen() );
 
-            else if( auto* cur = findScreen( getCurrentScreen() ); cur && ( cur->requiresHandleCommand() || getCurrentScreen() == Screen::RecentProject ) )
+            knob_logic::RouteInput in;
+            in.isQLink              = isQLinkMsg;
+            in.isNavigation         = contracts::DclContractsHelper::isNavigationMessage( f_HwMsg );
+            in.isPadButton          = contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg );
+            in.hasFocusedControl    = ui::getComponentInFocus() != nullptr;
+            in.qlinkMode            = mt::getSettings().knobControl.getMode();
+            in.screenHandlesCommands = cur && ( cur->requiresHandleCommand() || getCurrentScreen() == Screen::RecentProject );
+
+            switch( knob_logic::routeHardwareMessage( in ) )
             {
-                // The Projects list takes the dial, +/-, arrows and ENTER also while a project is open.
-                log += " register handle command";
-                juce::Logger::writeToLog( log );
-                cur->handleCommand( f_HwMsg );
+                case knob_logic::Route::KnobEditCustom:
+                    log += " knob message ";
+                    juce::Logger::writeToLog( log );
+                    if( auto* knobEdit = findScreen( Screen::MenuKnobEdit ) )
+                        knobEdit->knobCommand( contracts::DclContractsHelper::getKnobCode( f_HwMsg ), contracts::DclContractsHelper::getKnobValue( f_HwMsg ) );
+                    return;
+                case knob_logic::Route::FocusedControl:
+                    log += " is Navigation message";
+                    juce::Logger::writeToLog( log );
+                    ui::getComponentInFocus()->handleCommand( f_HwMsg );
+                    break;
+                case knob_logic::Route::Screen:
+                    // The Projects list takes the dial, +/-, arrows and ENTER also while a project is open.
+                    log += " register handle command";
+                    juce::Logger::writeToLog( log );
+                    cur->handleCommand( f_HwMsg );
+                    break;
+                case knob_logic::Route::None: break;
             }
         }
         else if( !ui::RecentProject::isProjectLoading && contracts::DclContractsHelper::isCenterKnobMessage( f_HwMsg ) )
