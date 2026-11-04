@@ -60,14 +60,8 @@ namespace kick_ui
 
         fwUpdate.onClick = [&]() {
             auto& ps = mt::PlatformServices::getInstance();
-            if( !ps.isHardwareControlAvailable() )
-            {
-                auto p = new ConfirmationPopup{ "Firmware update unavailable on this platform.", false, true };
-                mt::utils::showOptions( "INFO", p, [p]( int ) { delete p; },
-                                        ui::layout::warningPopup, ui::Theme::backgroundColour( 1 ), ui::Theme::titleColour( 1 ), ui::Theme::backgroundColour( 2 ) );
-                return;
-            }
-            signals::sigScreenOpen( kick_ui::Screen::SWUpdateView );
+            // The Behringer image updater needs the Behringer hardware; everywhere else the Kick Update screen applies.
+            signals::sigScreenOpen( ps.isHardwareControlAvailable() ? kick_ui::Screen::SWUpdateView : kick_ui::Screen::KickUpdate );
         };
         fReset.onClick   = [&]() {
             auto p = new ConfirmationPopup{ "Factory Reset will erase all projects, settings, and WiFi credentials. Continue?", false, false };
@@ -107,11 +101,6 @@ namespace kick_ui
         cVer.value.setText( ControlSurfaceVersion, juce::dontSendNotification );
         fVer.value.setText( firmWareVersion, juce::dontSendNotification );
         date.value.setText( buildStamp, juce::dontSendNotification );
-
-        if( !ps.isHardwareControlAvailable() )
-        {
-            fwUpdate.setEnabled( false );
-        }
     }
 
     void SettingsInfo::refresh()
