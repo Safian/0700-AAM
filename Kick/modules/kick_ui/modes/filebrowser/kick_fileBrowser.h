@@ -1,4 +1,5 @@
 #pragma once
+#include <unordered_set>
 #include "kick_ui/recent_project/kick_RecentProject.h"
 constexpr int   numButtonWidth = 44;
 constexpr float cornerSizeX    = 6.0f;
@@ -157,6 +158,7 @@ namespace ui
     };
 
     class FolderSizeCalculator;
+    class FileRightEntry;
     class FileBrowser : public KickControlBase<juce::Component>
         , juce::Timer
         , public kick_ui::IScreen
@@ -188,6 +190,9 @@ namespace ui
         void visibilityChanged() override;
 
         void startFolderSizeCalculation( const juce::File& folder, std::function<void( juce::int64 )> callback );
+        void cancelFolderSizeCalculations();
+        void queueFolderSizeCalculation( const juce::File& folder, int64_t mtimeMs, FileRightEntry* comp );
+        bool isGenerationCancelled( uint64_t gen ) const noexcept;
 
         bool sdCardOn{ false }, usbOn{ false };
         int  sdCardRow{ -1 }, USBRow{ -1 };
@@ -234,6 +239,10 @@ namespace ui
         std::vector<std::unique_ptr<KickImageButton>> grpNum;
         juce::String                                  projectFileList{ ".kickPrj" };
         juce::String                                  sampleFileList{ ".wav;bwf;aif;aiff;flac;ogg;mp3;wmv;asf;wm;wma" };
+
+        ui::fileUtils::GenerationTracker              generationTracker;
+        std::unordered_set<std::string>               pendingPaths;
+        juce::ThreadPool                              folderSizeThreadPool{ 1 };
 
         void paint( juce::Graphics& g ) override;
         void resized() override;
@@ -285,15 +294,15 @@ namespace ui
     {
     public:
         FolderSizeCalculator( const juce::File& folder, std::function<void( juce::int64 )> callback )
-            : juce::Thread( "FolderSizeCalculator" ), folderToCalculate( folder ), resultCallback( callback )
+            : juce::Thread( "FolderSizeCalculator" ), folderToCalculate( folder ), resultCallback( std::move( callback ) )
         {
-            calculateFolderSize();
+            startThread();
         }
-        ~FolderSizeCalculator()
+        ~FolderSizeCalculator() override
         {
-            stopThread( 5000 );
+            stopThread( 2000 );
         }
-        void run() override{};
+        void run() override;
         void calculateFolderSize();
 
     private:
@@ -331,10 +340,14 @@ namespace ui
         FileRightEntry();
         ~FileRightEntry() {}
         void setProperties( const juce::String& imageButtonFile, bool, const float Width, const float Height, const juce::String& File, const juce::String& Date, const juce::String& Time, const juce::String& Size );
+        void setSizeText( const juce::String& Size );
+        void setCurrentPath( const juce::String& path ) { currentPath = path; }
+        const juce::String& getCurrentPath() const noexcept { return currentPath; }
 
     private:
         float width{ 0.0f }, height{ 0.0f };
         bool  isFolder{ false };
+        juce::String currentPath;
 
         KickImageButton imageBtn;
         KickLabel       file;

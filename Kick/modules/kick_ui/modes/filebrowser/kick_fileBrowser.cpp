@@ -520,67 +520,101 @@ namespace ui
         };
 
         right.provider.cellComponent = [&]( int Row, Component* Existing ) -> juce::Component* {
-            auto t1 = juce::Time::currentTimeMillis();
-
             auto comp = static_cast<FileRightEntry*>( Existing );
             if( comp == nullptr )
             {
                 comp = new FileRightEntry();
                 comp->setInterceptsMouseClicks( false, true );
             }
-            auto t3 = juce::Time::currentTimeMillis();
-            if( tempList[Row].exists() )
+
+            if( !juce::isPositiveAndBelow( Row, tempList.size() ) )
+                return comp;
+
+            const juce::File file = tempList[Row];
+            if( !file.exists() )
+                return comp;
+
+            const bool isDir = file.isDirectory();
+            juce::String imageButtonFile;
+            bool isFolderFlag = false;
+            float iconWidth = 14.0f;
+            float iconHeight = 16.0f;
+
+            if( bottom.allButton.getToggleState() )
             {
-                auto t5 = juce::Time::currentTimeMillis();
-
-                std::vector<std::pair<juce::File, int>> fileWithNumbers;
-
-                for( const auto& file : tempList )
+                if( isDir )
                 {
-                    int num = file.getFileName().retainCharacters( "0123456789" ).getIntValue();
-                    fileWithNumbers.emplace_back( file, num );
+                    imageButtonFile = "Vector";
+                    isFolderFlag = true;
+                    iconWidth = 22.0f;
+                    iconHeight = 16.0f;
                 }
+                else if( file.hasFileExtension( projectFileList ) )
+                {
+                    imageButtonFile = "Icon_ProjectFile";
+                    isFolderFlag = false;
+                    iconWidth = 14.0f;
+                    iconHeight = 16.0f;
+                }
+                else if( file.hasFileExtension( sampleFileList ) )
+                {
+                    imageButtonFile = "Icon_SampleFile";
+                    isFolderFlag = false;
+                    iconWidth = 14.0f;
+                    iconHeight = 16.0f;
+                }
+                else
+                {
+                    imageButtonFile = "Icon_DefaultFile";
+                    isFolderFlag = true;
+                    iconWidth = 22.0f;
+                    iconHeight = 16.0f;
+                }
+            }
+            else if( bottom.sampleButton.getToggleState() )
+            {
+                imageButtonFile = "Icon_SampleFile";
+                isFolderFlag = false;
+                iconWidth = 14.0f;
+                iconHeight = 16.0f;
+            }
+            else if( bottom.projectButton.getToggleState() )
+            {
+                imageButtonFile = "Icon_ProjectFile";
+                isFolderFlag = false;
+                iconWidth = 14.0f;
+                iconHeight = 16.0f;
+            }
 
-                // Sort based on the precomputed numeric values
-                std::sort( fileWithNumbers.begin(), fileWithNumbers.end(),
-                           []( const auto& a, const auto& b ) {
-                               return a.second < b.second;
-                           } );
+            const auto modTime = file.getLastModificationTime();
+            const juce::String dateStr = modTime.toString( true, false, false, false );
+            const juce::String timeStr = modTime.toString( false, true, false, true );
+            const juce::String filePathStr = file.getFullPathName();
 
-                auto t6       = juce::Time::currentTimeMillis();
-                auto callback = [this, comp, Row]( juce::int64 totalSize ) {
-                    auto         t1         = juce::Time::currentTimeMillis();
-                    juce::String sizeString = juce::File::descriptionOfSizeInBytes( totalSize );
-                    if( comp )
-                    {
-                        if( bottom.allButton.getToggleState() )
-                        {
-                            if( tempList[Row].isDirectory() )
-                                comp->setProperties( "Vector", true, 22.0f, 16.0f, tempList[Row].getFileName(), tempList[Row].getLastModificationTime().toString( true, false, false, false ), tempList[Row].getLastModificationTime().toString( false, true, false, true ), sizeString );
-                            else if( tempList[Row].hasFileExtension( projectFileList ) )
-                                comp->setProperties( "Icon_ProjectFile", false, 14.0f, 16.0f, tempList[Row].getFileName(), tempList[Row].getLastModificationTime().toString( true, false, false, false ), tempList[Row].getLastModificationTime().toString( false, true, false, true ), sizeString );
-                            else if( tempList[Row].hasFileExtension( sampleFileList ) )
-                                comp->setProperties( "Icon_SampleFile", false, 14.0f, 16.0f, tempList[Row].getFileName(), tempList[Row].getLastModificationTime().toString( true, false, false, false ), tempList[Row].getLastModificationTime().toString( false, true, false, true ), sizeString );
-                            else
-                                comp->setProperties( "Icon_DefaultFile", true, 22.0f, 16.0f, tempList[Row].getFileName(), tempList[Row].getLastModificationTime().toString( true, false, false, false ), tempList[Row].getLastModificationTime().toString( false, true, false, true ), sizeString );
-                        }
-                        else if( bottom.sampleButton.getToggleState() )
-                            comp->setProperties( "Icon_SampleFile", false, 14.0f, 16.0f, tempList[Row].getFileName(), tempList[Row].getLastModificationTime().toString( true, false, false, false ), tempList[Row].getLastModificationTime().toString( false, true, false, true ), sizeString );
+            comp->setCurrentPath( filePathStr );
 
-                        else if( bottom.projectButton.getToggleState() )
-                            comp->setProperties( "Icon_ProjectFile", false, 14.0f, 16.0f, tempList[Row].getFileName(), tempList[Row].getLastModificationTime().toString( true, false, false, false ), tempList[Row].getLastModificationTime().toString( false, true, false, true ), sizeString );
+            if( !isDir )
+            {
+                const juce::String sizeStr = juce::File::descriptionOfSizeInBytes( file.getSize() );
+                comp->setProperties( imageButtonFile, isFolderFlag, iconWidth, iconHeight, file.getFileName(), dateStr, timeStr, sizeStr );
+            }
+            else
+            {
+                const int64_t mtimeMs = modTime.toMilliseconds();
+                int64_t cachedSize = 0;
+                auto& cache = fileUtils::getFolderSizeCache();
 
-                        DBG( "Num Rows " << numRows << " temp size  " << tempList.size() );
-                        if( numRows++ == tempList.size() )
-                        {
-                            DBG( "sizeCalculationEnd" );
-                            numRows = 1;
-                            if( sizeCalculationEnd )
-                                sizeCalculationEnd();
-                        }
-                    }
-                };
-                startFolderSizeCalculation( tempList[Row], callback );
+                if( cache.get( filePathStr.toStdString(), mtimeMs, cachedSize ) )
+                {
+                    const juce::String sizeStr = juce::File::descriptionOfSizeInBytes( cachedSize );
+                    comp->setProperties( imageButtonFile, isFolderFlag, iconWidth, iconHeight, file.getFileName(), dateStr, timeStr, sizeStr );
+                }
+                else
+                {
+                    static const juce::String pendingStr = juce::CharPointer_UTF8( "\xe2\x80\xa6" );
+                    comp->setProperties( imageButtonFile, isFolderFlag, iconWidth, iconHeight, file.getFileName(), dateStr, timeStr, pendingStr );
+                    queueFolderSizeCalculation( file, mtimeMs, comp );
+                }
             }
 
             return comp;
@@ -641,12 +675,173 @@ namespace ui
         };
     }
 
+    namespace
+    {
+        class FolderSizeJob : public juce::ThreadPoolJob
+        {
+        public:
+            FolderSizeJob( juce::File folder,
+                           int64_t mtimeMs,
+                           uint64_t gen,
+                           std::function<bool( uint64_t )> isCancelledFn,
+                           std::function<void( const juce::File&, int64_t, int64_t, uint64_t )> onCompleteFn )
+                : juce::ThreadPoolJob( "FolderSizeJob" )
+                , folderToCalculate( std::move( folder ) )
+                , mtime( mtimeMs )
+                , generation( gen )
+                , isCancelled( std::move( isCancelledFn ) )
+                , onComplete( std::move( onCompleteFn ) )
+            {
+            }
+
+            JobStatus runJob() override
+            {
+                if( shouldExit() || ( isCancelled && isCancelled( generation ) ) )
+                    return jobHasFinished;
+
+                auto totalSize = fileUtils::calculateFolderSize( folderToCalculate, [this]() {
+                    return shouldExit() || ( isCancelled && isCancelled( generation ) );
+                } );
+
+                if( shouldExit() || ( isCancelled && isCancelled( generation ) ) || totalSize < 0 )
+                    return jobHasFinished;
+
+                if( onComplete )
+                    onComplete( folderToCalculate, totalSize, mtime, generation );
+
+                return jobHasFinished;
+            }
+
+        private:
+            juce::File                                                            folderToCalculate;
+            int64_t                                                               mtime{ 0 };
+            uint64_t                                                              generation{ 0 };
+            std::function<bool( uint64_t )>                                       isCancelled;
+            std::function<void( const juce::File&, int64_t, int64_t, uint64_t )> onComplete;
+        };
+    }
+
+    void FileBrowser::cancelFolderSizeCalculations()
+    {
+        generationTracker.nextGeneration();
+        pendingPaths.clear();
+        folderSizeThreadPool.removeAllJobs( false, 0 );
+        if( sizeCalculationEnd )
+            sizeCalculationEnd();
+    }
+
+    bool FileBrowser::isGenerationCancelled( uint64_t gen ) const noexcept
+    {
+        return generationTracker.isCancelled( gen );
+    }
+
+    void FileBrowser::queueFolderSizeCalculation( const juce::File& folder, int64_t mtimeMs, FileRightEntry* comp )
+    {
+        const juce::String pathStr = folder.getFullPathName();
+        const std::string  pathStd = pathStr.toStdString();
+
+        if( pendingPaths.count( pathStd ) > 0 )
+            return;
+
+        pendingPaths.insert( pathStd );
+        const uint64_t gen = generationTracker.getGeneration();
+
+        juce::Component::SafePointer<FileBrowser>     safeThis( this );
+        juce::Component::SafePointer<FileRightEntry> safeComp( comp );
+
+        folderSizeThreadPool.addJob(
+            new FolderSizeJob(
+                folder,
+                mtimeMs,
+                gen,
+                [safeThis]( uint64_t g ) -> bool {
+                    if( safeThis == nullptr )
+                        return true;
+                    return safeThis->isGenerationCancelled( g );
+                },
+                [safeThis, safeComp, pathStr]( const juce::File& f, int64_t totalSize, int64_t mtime, uint64_t g ) {
+                    const std::string pStd = f.getFullPathName().toStdString();
+                    fileUtils::getFolderSizeCache().put( pStd, totalSize, mtime );
+
+                    const juce::String sizeString = juce::File::descriptionOfSizeInBytes( totalSize );
+
+                    juce::MessageManager::callAsync( [safeThis, safeComp, pathStr, sizeString, g, pStd]() {
+                        if( safeThis == nullptr )
+                            return;
+
+                        safeThis->pendingPaths.erase( pStd );
+
+                        if( safeThis->isGenerationCancelled( g ) )
+                            return;
+
+                        if( safeComp != nullptr && safeComp->getCurrentPath() == pathStr )
+                        {
+                            safeComp->setSizeText( sizeString );
+                        }
+
+                        if( safeThis->pendingPaths.empty() && safeThis->sizeCalculationEnd )
+                        {
+                            safeThis->sizeCalculationEnd();
+                        }
+                    } );
+                } ),
+            true );
+    }
+
     void FileBrowser::startFolderSizeCalculation( const juce::File& folder, std::function<void( juce::int64 )> callback )
     {
-        auto totalSize = fileUtils::calculateFolderSize( folder );
+        const int64_t     mtimeMs = folder.getLastModificationTime().toMilliseconds();
+        const std::string pathStd = folder.getFullPathName().toStdString();
+        int64_t           cachedSize = 0;
 
-        juce::MessageManager::callAsync( [=]() {
-            callback( totalSize );
+        if( fileUtils::getFolderSizeCache().get( pathStd, mtimeMs, cachedSize ) )
+        {
+            if( callback )
+                callback( cachedSize );
+            return;
+        }
+
+        const uint64_t                            gen = generationTracker.getGeneration();
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+
+        folderSizeThreadPool.addJob(
+            new FolderSizeJob(
+                folder,
+                mtimeMs,
+                gen,
+                [safeThis]( uint64_t g ) -> bool {
+                    if( safeThis == nullptr )
+                        return true;
+                    return safeThis->isGenerationCancelled( g );
+                },
+                [safeThis, callback]( const juce::File& f, int64_t totalSize, int64_t mtime, uint64_t g ) {
+                    const std::string pStd = f.getFullPathName().toStdString();
+                    fileUtils::getFolderSizeCache().put( pStd, totalSize, mtime );
+
+                    juce::MessageManager::callAsync( [safeThis, callback, totalSize, g]() {
+                        if( safeThis != nullptr && safeThis->isGenerationCancelled( g ) )
+                            return;
+                        if( callback )
+                            callback( totalSize );
+                    } );
+                } ),
+            true );
+    }
+
+    void FolderSizeCalculator::run()
+    {
+        totalSize = fileUtils::calculateFolderSize( folderToCalculate, [this]() {
+            return threadShouldExit();
+        } );
+
+        if( threadShouldExit() || totalSize < 0 )
+            return;
+
+        auto cb   = resultCallback;
+        auto size = totalSize;
+        juce::MessageManager::callAsync( [cb, size]() {
+            if( cb )
+                cb( size );
         } );
     }
 
@@ -654,8 +849,11 @@ namespace ui
     {
         totalSize = fileUtils::calculateFolderSize( folderToCalculate );
 
-        juce::MessageManager::callAsync( [=]() {
-            resultCallback( totalSize );
+        auto cb   = resultCallback;
+        auto size = totalSize;
+        juce::MessageManager::callAsync( [cb, size]() {
+            if( cb )
+                cb( size );
         } );
     }
 
@@ -859,6 +1057,7 @@ namespace ui
 
     void FileBrowser::updateTemp( int num )
     {
+        cancelFolderSizeCalculations();
         switch( num )
         {
             default:
@@ -878,6 +1077,7 @@ namespace ui
 
     void FileBrowser::searchImplementation()
     {
+        cancelFolderSizeCalculations();
         juce::File              currentDirectory = juce::File( pwd );
         juce::Array<juce::File> foundFiles;
         currentDirectory.findChildFiles( foundFiles, juce::File::findFilesAndDirectories, true, "*" );
@@ -913,9 +1113,13 @@ namespace ui
     }
 
     FileBrowser::~FileBrowser()
-    {}
+    {
+        cancelFolderSizeCalculations();
+        folderSizeThreadPool.removeAllJobs( true, 2000 );
+    }
     void FileBrowser::enterDirectory( int index )
     {
+        cancelFolderSizeCalculations();
         ae.dirEnter( index );
         juce::File pth = ae.getCurrentDir().getFullPathName();
         if( pth.existsAsFile() )
@@ -940,6 +1144,7 @@ namespace ui
 
     void FileBrowser::exitDirectory()
     {
+        cancelFolderSizeCalculations();
         ae.dirGoUp();
         pwd                   = ae.getCurrentDir().getFullPathName();
         juce::String filePath = fileUtils::getFilePath( pwd, replacementPath );
@@ -1011,6 +1216,7 @@ namespace ui
     void FileBrowser::visibilityChanged()
     {
         numRows = 1;
+        cancelFolderSizeCalculations();
 
         if( isShowing() || isVisible() )
         {
@@ -1767,6 +1973,11 @@ namespace ui
         size.setText( Size, juce::dontSendNotification );
         mt::utils::addAndMakeVisible( this, imageBtn, file, date, time, size );
         resized();
+    }
+
+    void FileRightEntry::setSizeText( const juce::String& Size )
+    {
+        size.setText( Size, juce::dontSendNotification );
     }
 
     ///////////////////////////////////////

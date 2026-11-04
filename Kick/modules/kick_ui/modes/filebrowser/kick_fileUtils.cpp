@@ -60,7 +60,13 @@ namespace ui
             return false;
         }
 
-        juce::int64 calculateFolderSize( juce::File filePath )
+        FolderSizeCache& getFolderSizeCache()
+        {
+            static FolderSizeCache cache;
+            return cache;
+        }
+
+        juce::int64 calculateFolderSize( juce::File filePath, std::function<bool()> shouldExit )
         {
             juce::int64 totalSize = 0;
 
@@ -69,10 +75,16 @@ namespace ui
             if( filePath.isDirectory() )
             {
                 for( const auto& entry : juce::RangedDirectoryIterator( filePath, true, "*", juce::File::findFiles ) )
+                {
+                    if( shouldExit && shouldExit() )
+                        return -1;
                     totalSize += entry.getFileSize();
+                }
             }
             else
+            {
                 totalSize = filePath.getSize();
+            }
             return totalSize;
         }
         void setSdCardEjectStatus( bool status )

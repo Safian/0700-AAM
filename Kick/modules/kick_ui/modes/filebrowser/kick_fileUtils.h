@@ -1,4 +1,5 @@
 #pragma once
+#include "kick_folderSizeHelper.h"
 #if defined( LINUX ) || defined( __linux__ )
     #include <unistd.h>
 #endif
@@ -10,7 +11,7 @@ namespace ui
         juce::String getUsbMountedPath();
         bool         getSdCardStatus();
         bool         getUsbStatus();
-        juce::int64  calculateFolderSize( juce::File filePath );
+        juce::int64  calculateFolderSize( juce::File filePath, std::function<bool()> shouldExit = nullptr );
         void         setSdCardEjectStatus( bool );
         void         setUsbEjectStatus( bool );
         bool         getSdCardEjectStatus();
@@ -22,6 +23,8 @@ namespace ui
         bool         hasSampleAssignedToPad( int LastPressedPad );
 
         extern int lastPressedPad;
+
+        FolderSizeCache& getFolderSizeCache();
     }
 
     class LoadSamplesAndAnimation
