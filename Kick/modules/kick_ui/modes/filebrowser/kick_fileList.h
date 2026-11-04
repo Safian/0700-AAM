@@ -24,6 +24,7 @@ namespace kick_filelist
         std::string name;
         std::string path;
         bool        isDir{ false };
+        bool        isProject{ false }; // a folder that holds <name>.kickPrj (only set when ListOptions::detectProjects)
         int64_t     size{ -1 }; // files only; folders are sized later, asynchronously
         int64_t     mtimeMs{ 0 };
     };
@@ -125,6 +126,8 @@ namespace kick_filelist
     {
         bool        hideSystem{ true };
         std::string extensions; // empty = everything; folders are always kept (they are how the user navigates)
+        bool        detectProjects{ false };
+        bool        hideProjectData{ false }; // inside a project folder: no samples / export / imported folders
         SortKey     key{ SortKey::Name };
         bool        ascending{ true };
     };
@@ -181,6 +184,17 @@ namespace kick_filelist
             auto e = makeEntry( *it );
             if( !e.isDir && !o.extensions.empty() && !hasExtension( e.name, o.extensions ) )
                 continue;
+            if( e.isDir && o.hideProjectData )
+            {
+                const auto n = lower( e.name );
+                if( n == "samples" || n == "export" || n == "imported" || n == "exports" )
+                    continue;
+            }
+            if( e.isDir && o.detectProjects )
+            {
+                std::error_code pe;
+                e.isProject = fs::is_regular_file( it->path() / ( e.name + ".kickPrj" ), pe );
+            }
             l.entries.push_back( std::move( e ) );
         }
         sortEntries( l.entries, o.key, o.ascending );

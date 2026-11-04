@@ -301,6 +301,22 @@ namespace ui
     {
         if( enableRowSelectionFlag )
         {
+            if( bSelectCursor && bEnableSelectMode )
+            {
+                // Select mode with a cursor: move it, never toggle (the Data Dial used to mark every row it passed).
+                const int num = getNumRows();
+                if( num <= 0 )
+                    return;
+                const int from = cursorRow < 0 ? juce::jmax( 0, getSelectedRowOrNone() ) : cursorRow;
+                cursorRow        = juce::jlimit( 0, num - 1, from + static_cast<int>( value ) );
+                canvas.cursorRow = cursorRow;
+                const auto rb    = canvas.getRowBounds( cursorRow );
+                const auto va    = viewPort.getViewArea();
+                if( !va.contains( rb ) )
+                    viewPort.setViewPosition( va.getX(), va.getY() > rb.getY() ? rb.getY() : rb.getBottom() - viewPort.getHeight() );
+                canvas.repaint();
+                return;
+            }
             selectRow( getSelectedRow() + value );
             setViewPosition();
         }
@@ -326,7 +342,7 @@ namespace ui
             return;
         if( ( rowComponents.size() > 0 ) )
         {
-            const auto rb = rowComponents[getSelectedRow()]->getBounds();
+            const auto rb = canvas.getRowBounds( row );
             const auto va = viewPort.getViewArea();
             if( !va.contains( rb ) )
             {
@@ -360,8 +376,28 @@ namespace ui
         auto num = getNumRows();
         rowComponents.ensureStorageAllocated( num );
 
-        // Get the components...
-        for( auto i = 0; i < num; i++ )
+        // Get the components... (virtual rows: only the visible window; the rest are null)
+        int first = 0, last = num - 1;
+        if( bVirtualRows )
+        {
+            const auto stride = juce::jmax( 1, canvas.rowHeight + canvas.rowSpacing );
+            const auto va     = viewPort.getViewArea();
+            first             = juce::jmax( 0, va.getY() / stride - 6 );
+            last              = juce::jmin( num - 1, ( va.getBottom() ) / stride + 6 );
+            if( viewPort.getHeight() <= 0 ) last = juce::jmin( num - 1, first + 24 );
+            firstBuilt = first;
+            lastBuilt  = last;
+            while( rowComponents.size() > num )
+                rowComponents.remove( rowComponents.size() - 1 );
+            while( rowComponents.size() < num )
+                rowComponents.add( nullptr ); // rows outside the window have no component
+            for( int i = 0; i < num; ++i )
+                if( ( i < first || i > last ) && rowComponents[i] != nullptr )
+                    rowComponents.set( i, nullptr );
+        }
+        while( rowComponents.size() > num && ! bVirtualRows )
+            rowComponents.remove( rowComponents.size() - 1 ); // rows that are gone (the list got shorter) leave with their components
+        for( auto i = first; i <= last && i < num; i++ )
             if( provider.cellComponent )
                 rowComponents.set( i, provider.cellComponent( i, rowComponents[i] ) );
 
@@ -380,7 +416,7 @@ namespace ui
             hdrComponents[0]->setBounds( hdrBounds );
         }
 
-        for( auto i = 0; i < num; i++ )
+        for( auto i = 0; i < juce::jmin( num, rowComponents.size() ); i++ )
         {
             if( auto comp = rowComponents[i] )
             {
@@ -429,7 +465,7 @@ namespace ui
         {
             auto prevSel     = canvas.selectedRow.getLast();
             auto selectedRow = juce::jlimit( 0, ( rowComponents.size() - 1 ), Row );
-            if( rowComponents[selectedRow]->isEnabled() )
+            if( rowComponents[selectedRow] == nullptr || rowComponents[selectedRow]->isEnabled() )
             {
                 if( !bEnableSelectMode )
                 {
@@ -467,7 +503,8 @@ namespace ui
         {
             for( int i = 0; i < num; ++i )
             {
-                Func( rowComponents[i] );
+                if( i < rowComponents.size() && rowComponents[i] != nullptr )
+                    Func( rowComponents[i] );
             }
         }
     }
@@ -630,7 +667,12 @@ namespace ui
     {
         juce::Rectangle<int> rowBounds;
         juce::Rectangle<int> knobBounds;
-        for( auto i = 0; i < numRows; ++i )
+        // Only the rows inside the clip (a folder with thousands of entries is not painted row by row).
+        const auto clip   = g.getClipBounds();
+        const auto stride = juce::jmax( 1, rowHeight + rowSpacing );
+        const int  from   = juce::jlimit( 0, juce::jmax( 0, numRows ), ( clip.getY() - margin.getY() ) / stride - 1 );
+        const int  to     = juce::jlimit( 0, juce::jmax( 0, numRows ), ( clip.getBottom() - margin.getY() ) / stride + 2 );
+        for( auto i = from; i < to; ++i )
         {
             rowBounds = getRowBounds( i ).reduced( 1 );
 
@@ -640,6 +682,8 @@ namespace ui
                 rowBounds = rowBounds.expanded( 1 );
             mt::utils::renderRoundedRect( g, rowBounds, ( isSelected ? selOutlineColor : outlineColor ), 2 );
         }
+        if( cursorRow >= 0 && cursorRow < numRows )
+            mt::utils::renderRoundedRect( g, getRowBounds( cursorRow ).reduced( 3 ), ui::Theme::textColour( 1 ), 2 );
         knobBounds = getRowBounds( trackNum ).reduced( 1 );
         if( knobHighlight )
             mt::utils::renderRoundedRect( g, knobBounds, ui::Theme::backgroundColour( 6 ), 2 );
@@ -669,6 +713,72 @@ namespace ui
     juce::Rectangle<int> KickTableView::KickComponent::getRowBounds( int Row )
     {
         return { getRowX( Row ), getRowY( Row ), rowWidth, rowHeight };
+    }
+
+
+    void KickTableView::enableVirtualRows( bool Enable )
+    {
+        if( bVirtualRows == Enable )
+            return;
+        bVirtualRows = Enable;
+        if( Enable )
+            viewPort.addListener( this );
+        else
+            viewPort.removeListener( this );
+    }
+
+    void KickTableView::enableSelectCursor( bool Enable )
+    {
+        bSelectCursor = Enable;
+        cursorRow = canvas.cursorRow = -1;
+    }
+
+    void KickTableView::updateOnViewPositionChange( KickViewport* )
+    {
+        if( bVirtualRows )
+            refreshVirtualWindow();
+    }
+
+    // The visible window moved: build the rows that came into view (and drop those that left) when it left the built range.
+    void KickTableView::refreshVirtualWindow()
+    {
+        const auto stride = juce::jmax( 1, canvas.rowHeight + canvas.rowSpacing );
+        const auto va     = viewPort.getViewArea();
+        const int  need0  = juce::jmax( 0, va.getY() / stride - 1 );
+        const int  need1  = va.getBottom() / stride + 1;
+        if( firstBuilt >= 0 && need0 >= firstBuilt && need1 <= lastBuilt )
+            return;
+        refresh();
+    }
+
+    void KickTableView::setSelectedRows( const juce::Array<int>& Rows )
+    {
+        canvas.selectedRow = Rows;
+        canvas.repaint();
+    }
+
+    void KickTableView::toggleRow( int Row, juce::NotificationType notify )
+    {
+        if( !juce::isPositiveAndBelow( Row, getNumRows() ) )
+            return;
+        if( canvas.selectedRow.contains( Row ) )
+            canvas.selectedRow.removeAllInstancesOf( Row );
+        else
+            canvas.selectedRow.add( Row );
+        canvas.repaint();
+        if( notify == juce::sendNotification && provider.onRowSelected )
+            provider.onRowSelected( Row );
+    }
+
+    void KickTableView::selectAll()
+    {
+        canvas.selectedRow.clear();
+        const int num = getNumRows();
+        for( int i = 0; i < num; ++i )
+            canvas.selectedRow.add( i );
+        canvas.repaint();
+        if( provider.onRowSelected && num > 0 )
+            provider.onRowSelected( 0 );
     }
 
     void KickTableView::setTableEndInfo( const juce::String& Info, juce::Colour ValueColour, float Font, bool bEnable )

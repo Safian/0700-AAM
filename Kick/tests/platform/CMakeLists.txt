@@ -138,6 +138,16 @@ if(TARGET Kick AND TARGET kick-clap-fixture-normal)
         $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}" $<TARGET_FILE:kick-clap-fixture-normal> --startup-only)
     set_tests_properties(kick-app-startup PROPERTIES TIMEOUT 55)
 endif()
+if(TARGET Kick)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    # Projects / file browser: sorted list without hidden files; project operations (Save As, Don't save, demo, load queue).
+    add_test(NAME kick-browser-smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ProjectsBrowserSmoke.py"
+        $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}" browser)
+    set_tests_properties(kick-browser-smoke PROPERTIES TIMEOUT 110)
+    add_test(NAME kick-projects-smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ProjectsBrowserSmoke.py"
+        $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}" projects)
+    set_tests_properties(kick-projects-smoke PROPERTIES TIMEOUT 110)
+endif()
 # Timing correct (note quantize) logic; JUCE-free, header only.
 add_executable(kick-timing-correct-tests TimingCorrectTests.cpp)
 add_test(NAME kick-timing-correct COMMAND kick-timing-correct-tests)
@@ -415,3 +425,8 @@ set_tests_properties(kick-project-ops PROPERTIES TIMEOUT 30)
 add_executable(kick-unsaved-gate-tests UnsavedGateTests.cpp)
 add_test(NAME kick-unsaved-gate COMMAND kick-unsaved-gate-tests)
 set_tests_properties(kick-unsaved-gate PROPERTIES TIMEOUT 10)
+
+# File browser decisions (asset status, held pads / pad release, pad text, listing status); JUCE-free header only.
+add_executable(kick-fblogic-tests FbLogicTests.cpp)
+add_test(NAME kick-fblogic COMMAND kick-fblogic-tests)
+set_tests_properties(kick-fblogic PROPERTIES TIMEOUT 10)

@@ -121,31 +121,56 @@ Függőségek: PRJ-05, PRJ-06, PRJ-07 ← PRJ-01 (közös betöltési belépési
 - [ ] **PRJ-01** (P0, S) `LoadProjectAndAnimation::startLoading`: újrabelépés-védelem (`isProjectLoading` esetén elutasít / sorba tesz), a `proj` mező átadása a szálnak zár alatt; a hívók (FB dupla koppintás, csempék, autoload, long-press Load) közös belépési ponton át — `RP/kick_RecentProject_Utils.cpp:20-48`. Kapcsolódik: FB-15.
 - [ ] **PRJ-02** (P0, S) Sablon → projekt: a cél létezésének ellenőrzése a *lemezen* (nincs felülírás), `sourceFiles.isEmpty()` védelem, üres név tiltása, hiba esetén a félkész projektmappa törlése — `RP/kick_RecentProject.cpp:158-170`.
 - [ ] **PRJ-03** (P1, S) Data Dial / long-press Load: a csempe saját `path`-ját adja át (`recentItems[selectedIndex]` útvonal), ne `juce::File()`-t — `:376-381, 23-26`.
-- [ ] **PRJ-04** (P1, S) `requiresHandleCommand() { return true; }` a `RecentProject`-ben (Data Dial / ENTER projekt betöltött állapotban) — `kick_RecentProject.h:120-135`, `kick_AppHome.cpp:580`. MPC-n ellenőrizendő.
-- [ ] **PRJ-05** (P1, M) Betöltési hiba popup / státusz (ok-kód: érvénytelen XML, mappa nem hozható létre, előző projekt mentése sikertelen); a hiányzó projekt ne támadjon fel üresen — `Utils.cpp:42-47`, `XML:186-215`, `mt_audio_manager.cpp:196-215`. Függ: PRJ-01.
-- [ ] **PRJ-06** (P1, S) `enableRecentProjVTreeEntry` globális jelző kiváltása a betöltés *forrásával* (User / Demo / Template / Bridge), hogy hiba után ne ragadjon be, és a bridge-betöltött Demo 01 ne kerüljön a recent listába / `currentProject`-be — `kick_RecentProject.cpp:3-4, 135-141, 253-256`, `FB:639-640`, `bridge:677-681`. Függ: PRJ-01.
-- [ ] **PRJ-07** (P1, M) Indítási betöltés egyesítése: a bridge kényszerített képernyőváltása + szinkron Demo-betöltés és az autoload egyetlen szolgáltatásba, animációval és `isProjectLoading`-gal — `bridge:671-691`, `RP/kick_RecentProject.cpp:441-456`; lásd `04-screen-audit.md` §1. Függ: PRJ-01, PRJ-06.
+- [x] **PRJ-04** (P1, S) `requiresHandleCommand() { return true; }` a `RecentProject`-ben (Data Dial / ENTER projekt betöltött állapotban) — `kick_RecentProject.h:120-135`, `kick_AppHome.cpp:580`. MPC-n ellenőrizendő.  
+  **R-6:** `requiresHandleCommand() { return true; }`; the Data Dial / ENTER reach the tiles with a project open. MPC check: PRJ-25.
+- [x] **PRJ-05** (P1, M) Betöltési hiba popup / státusz (ok-kód: érvénytelen XML, mappa nem hozható létre, előző projekt mentése sikertelen); a hiányzó projekt ne támadjon fel üresen — `Utils.cpp:42-47`, `XML:186-215`, `mt_audio_manager.cpp:196-215`. Függ: PRJ-01.  
+  **R-6:** `loadProject(file, createIfMissing)`: a missing project is an error (`getProjectLoadError()`), never created, the open project stays; the load path shows the reason in a dialog and offers to remove a vanished Recent entry (smoke: `kick-projects-smoke`).
+- [x] **PRJ-06** (P1, S) `enableRecentProjVTreeEntry` globális jelző kiváltása a betöltés *forrásával* (User / Demo / Template / Bridge), hogy hiba után ne ragadjon be, és a bridge-betöltött Demo 01 ne kerüljön a recent listába / `currentProject`-be — `kick_RecentProject.cpp:3-4, 135-141, 253-256`, `FB:639-640`, `bridge:677-681`. Függ: PRJ-01.  
+  **R-6:** `LoadSource` (User / Auto / Demo / Template / Bridge) travels with the request; Recent / last project are updated in `LoadProjectAndAnimation::finished` on the message thread, `enableRecentProjVTreeEntry` is gone.
+- [x] **PRJ-07** (P1, M) Indítási betöltés egyesítése: a bridge kényszerített képernyőváltása + szinkron Demo-betöltés és az autoload egyetlen szolgáltatásba, animációval és `isProjectLoading`-gal — `bridge:671-691`, `RP/kick_RecentProject.cpp:441-456`; lásd `04-screen-audit.md` §1. Függ: PRJ-01, PRJ-06.  
+  **R-6:** Start-up decision from W2-A (`requestStartupProject`), plus the "New Project" on-launch mode (PRJ-18). MPC check: PRJ-25 item 1.
 - [ ] **PRJ-08** (P1, M) New project: üres / érvénytelen karakterű / lemezen létező név tiltása (nem a recent listán); trim, hossz-korlát; közös a FB-vel — `RP/kick_RecentProject.cpp:107-130`. Kapcsolódik: FB-16.
-- [ ] **PRJ-09** (P2, S) Csempe-késleltetés: azonnali betöltés dupla-koppintás-várakozás nélkül (vagy első koppintás = kijelöl, második = betölt), a halott `isDoubleClicked` mező törlése — `:628-689`.
-- [ ] **PRJ-10** (P2, S) Hosszú-nyomás popup relatív pozíció a csempéhez — `:320-333`.
+- [x] **PRJ-09** (P2, S) Csempe-késleltetés: azonnali betöltés dupla-koppintás-várakozás nélkül (vagy első koppintás = kijelöl, második = betölt), a halott `isDoubleClicked` mező törlése — `:628-689`.  
+  **R-6:** A tap loads at once (20 ms for the border); the dead double-tap state is removed; `isDragging` is reset on every touch (a drag used to disable the tile for good).
+- [x] **PRJ-10** (P2, S) Hosszú-nyomás popup relatív pozíció a csempéhez — `:320-333`.  
+  **R-6:** Menu next to the tile, clamped inside the screen (S-D + R-6: a column of text buttons).
 - [ ] **PRJ-11** (P2, S) Csempe-élettartam: `SafePointer` a `callAfterDelay` lambdában; a `setNumOptions` sorrendje (előbb `projectList.clear()`) — `:215-226, 680-686`.
-- [ ] **PRJ-12** (P2, S) Auto Load kapcsoló: valódi „Mégse” vagy kérdés nélküli kapcsoló — `:55-74`.
-- [ ] **PRJ-13** (P2, S) Bélyegkép: ne a témából keressen user projektre; hiányzó kép esetén ikon — `:567-595`.
+- [x] **PRJ-12** (P2, S) Auto Load kapcsoló: valódi „Mégse” vagy kérdés nélküli kapcsoló — `:55-74`.  
+  **R-6:** Tap on Auto Load opens the ON LAUNCH popup (Projects screen / last project / new project from a template); Cancel changes nothing.
+- [x] **PRJ-13** (P2, S) Bélyegkép: ne a témából keressen user projektre; hiányzó kép esetén ikon — `:567-595`.  
+  **R-6:** User projects show their own `thumbnail.png` (file image); factory demos / templates keep the theme picture; no picture = icon + date; a missing folder is marked "not found".
 
 *Hiányzó funkciók*
-- [ ] **PRJ-14** (P1, L) Save As / Save Copy / Save as Template: engine `projectManager::saveAs` (+ a törött `rename()` javítása/eltávolítása), UI a Menüben / Projects fejlécben; demo / sablon szerkesztés menthetővé tétele — `XML:243-271`, `M/engine/project/project.cpp:46-59`; WP-G G-174 – G-186, G-202.
-- [ ] **PRJ-15** (P1, M) Projekt-műveletek a Projects képernyőn: Rename, Duplicate, Delete, Info (méret, dátum, programok száma) — hosszú-nyomás popup bővítés; FB Select módjától függetlenül.
-- [ ] **PRJ-16** (P1, M) Mentetlen módosítások kérdése projektváltáskor / New Project előtt (G-246); automentés beállítástól függően — `XML:321-328`.
-- [ ] **PRJ-17** (P2, M) Recent lista: eltűnt útvonalak kiszűrése / jelölése; demo / sablon sor újraolvasása megjelenéskor; üres sor placeholder — `kick_settings.cpp:167-224`, `RP/kick_RecentProject.cpp:15-16`.
-- [ ] **PRJ-18** (P2, M) New Project viselkedés és Template / Auto Load File kiválasztás (ON LAUNCH, G-154 – G-157). Függ: Settings ON LAUNCH bekötés.
-- [ ] **PRJ-19** (P2, M) Pillanatkép-generálás mentéskor a projektmappába (+ csempe-betöltés onnan).
+- [x] **PRJ-14** (P1, L) Save As / Save Copy / Save as Template: engine `projectManager::saveAs` (+ a törött `rename()` javítása/eltávolítása), UI a Menüben / Projects fejlécben; demo / sablon szerkesztés menthetővé tétele — `XML:243-271`, `M/engine/project/project.cpp:46-59`; WP-G G-174 – G-186, G-202.  
+  **R-6:** `KickXML::saveAs` / `MTAudioInterface::saveProjectAs`: folder copy (background task, progress, cancel) + live state; Save As switches (the copy is reloaded), Save a Copy / Save as Template do not; the broken `rename()` is not used (Rename is `kick_project::rename`). Demo / template: Save opens Save As. Smoke + host tests.
+- [x] **PRJ-15** (P1, M) Projekt-műveletek a Projects képernyőn: Rename, Duplicate, Delete, Info (méret, dátum, programok száma) — hosszú-nyomás popup bővítés; FB Select módjától függetlenül.  
+  **R-6:** Long press / Shift+ENTER tile menu: Load, Rename, Duplicate, Delete (confirmation, the open project and factory folders are protected), Info, Remove from list; demos: Load / Save a copy / Info; templates: New project / Info. `kick_project_ops.h` host tests.
+- [x] **PRJ-16** (P1, M) Mentetlen módosítások kérdése projektváltáskor / New Project előtt (G-246); automentés beállítástól függően — `XML:321-328`.  
+  **R-6:** `kick_unsaved.h` gate (Save / Don't save / Cancel) before a switch, New project, load and quit; asks when the engine flag is set and auto save does not cover it (a demo always asks); Don't save = `discardProjectChangesOnClose`. Smoke covers the engine side.
+- [x] **PRJ-17** (P2, M) Recent lista: eltűnt útvonalak kiszűrése / jelölése; demo / sablon sor újraolvasása megjelenéskor; üres sor placeholder — `kick_settings.cpp:167-224`, `RP/kick_RecentProject.cpp:15-16`.  
+  **R-6:** The three rows are read again each time the screen shows; a vanished folder stays as a marked tile; placeholders for an empty row.
+- [x] **PRJ-18** (P2, M) New Project viselkedés és Template / Auto Load File kiválasztás (ON LAUNCH, G-154 – G-157). Függ: Settings ON LAUNCH bekötés.  
+  **R-6:** ON LAUNCH wired on the Projects screen (the Settings screen is not touched): `onLaunch` = Selector / Last Used / New Project, `launchTemplate`; naming style / prefix from Project Defaults.
+- [x] **PRJ-19** (P2, M) Pillanatkép-generálás mentéskor a projektmappába (+ csempe-betöltés onnan).  
+  **R-6:** `project_actions::writeThumbnail` after Save / Save As (400 px PNG next to the project file); the tile loads it. MPC check: the snapshot of a hidden window.
 
 *Javaslatok*
-- [ ] **PRJ-20** (P2, S) Betöltési idő: a fix `sleep_for` (500 + 100 + 500 ms) kiváltása eseménnyel + valódi folyamatjelző — `mt_audio_manager.cpp:240, 317, 323`.
-- [ ] **PRJ-21** (P2, S) HW-ergonómia: Shift+Dial sorváltás, Shift+ENTER popup, Auto Load / Remove ablak HW-zárása (`modal_dialog_keys.h`).
+- [x] **PRJ-20** (P2, S) Betöltési idő: a fix `sleep_for` (500 + 100 + 500 ms) kiváltása eseménnyel + valódi folyamatjelző — `mt_audio_manager.cpp:240, 317, 323`.  
+  **R-6:** The three fixed sleeps are replaced by `settleAudioThread` (completed audio device callbacks, `AudioDevice::completedCallbacks`). MPC check: load time and no crash on repeated switches (PRJ-25).
+- [x] **PRJ-21** (P2, S) HW-ergonómia: Shift+Dial sorváltás, Shift+ENTER popup, Auto Load / Remove ablak HW-zárása (`modal_dialog_keys.h`).  
+  **R-6:** Shift+Dial = row switch, Shift+ENTER = tile menu, the menu takes Dial / ENTER / BACK; dialogs close from the hardware through the bridge keys (S-D).
 
 *Tesztek*
 - [ ] **PRJ-22** (P1, M) `KickProjectsDefault` recent-logika host-teszt (checkAlreadyLoadOrNot, refreshMax, remove, rename, fordított sorrend). 
 - [ ] **PRJ-23** (P1, M) Sablon-másolás / új projekt tmp-könyvtár teszt (név-ütközés, üres név, hiányzó `.kickPrj`, félkész mappa takarítása). Függ: PRJ-02, PRJ-08.
-- [ ] **PRJ-24** (P2, M) AppSmoke bővítés: hibás / hiányzó projektútvonal betöltése (hibaüzenet), kétszeri gyors betöltés (PRJ-01), Projects képernyőkép (`KICK_SMOKE_SCREENS=RecentProject`).
+- [x] **PRJ-24** (P2, M) AppSmoke bővítés: hibás / hiányzó projektútvonal betöltése (hibaüzenet), kétszeri gyors betöltés (PRJ-01), Projects képernyőkép (`KICK_SMOKE_SCREENS=RecentProject`).  
+  **R-6:** `ProjectsBrowserSmoke.py` (`kick-projects-smoke`): missing project, Save As / copy, Don't save, demo, queued double / quick loads, Recent updates, screenshots (`kick-browser-smoke`).
 - [ ] **PRJ-25** (P1, M) MPC hardveres ellenőrzőlista végrehajtása (6. szakasz) — a hardveres session végezze.
+
+## 8. R-6 hardware checklist (what only the MPC can show)
+1. Start-up: Projects screen, then the last project / Demo 01 / a new project, per ON LAUNCH (tap Auto Load); `/data/kick.log` shows one `Project load begin` per start.
+2. Load time of a big project and ten project switches in a row (the fixed sleeps are gone; `settleAudioThread` waits for the audio callbacks): no crash, no stuck audio.
+3. Tile menu: long press and Shift+ENTER; Dial / ENTER / BACK inside the menu; Rename, Duplicate (progress dialog on an SD project), Delete (the open project and demos are refused), Info.
+4. Unsaved changes: edit, switch project -> Save / Don't save / X; same on a demo (Save = Save As); same when quitting; auto save on = no question.
+5. Save As on the MPC (name keyboard, progress, the copy opens); thumbnail.png appears next to the project and the tile shows it (snapshot of the hidden window).
+6. Project on an SD card: pull the card, open the Projects screen: the tile says "not found"; tap offers to remove it.

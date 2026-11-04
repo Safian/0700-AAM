@@ -78,6 +78,21 @@ namespace ui
                 return true;
             }
 
+            // Adds or replaces a local-folder source (no secret).
+            bool upsertLocal( SourceConfig c )
+            {
+                c.type = "local";
+                if( !isValidSourceId( c.id ) || c.location.empty() || webdav::hasLineBreak( c.location ) || webdav::hasLineBreak( c.name ) ) return false;
+                std::vector<SourceConfig> next  = allConfigs();
+                bool                      found = false;
+                for( auto& x : next )
+                    if( x.id == c.id ) { x = c; found = true; }
+                if( !found ) next.push_back( c );
+                if( !saveSources( configFile, next ) ) return false;
+                reload();
+                return true;
+            }
+
             void removeSource( const std::string& id )
             {
                 if( auto s = find( id ) ) s->signOut();
