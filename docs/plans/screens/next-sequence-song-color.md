@@ -15,7 +15,7 @@ S-C: NS-01..03, 06..09 (`dec5d617`, `d2d51ce2`), SG-01..08 (`10217009`), CE-01, 
 | NSC-01 Akai-összevetés | alább |
 | **SG-09** Convert > Seq | NINCS motor-függvény (`songToSequence`): a dal lépések listája, a sorozat-lánc eseményekkel való egyesítése (sávonként a jegyzetek másolása eltolással, ütemmutató / tempó kezelés, „Track Status: Exclude / Include Muted Tracks”) a motor önálló munkája. A gomb nincs megjelenítve. Jelentve |
 | SG Export | owner-döntés (a kézikönyv: Audio Mixdown ablak — az audió-exportot az R-2 / a mixdown-tervek kezelik) |
-| CE (Color Edit) saját logika | KÉSZ: Shift + színgomb = minden pad ezt a színt kapja, Shift + pad (érintés vagy hardver) = a pad színét választja ki (kézikönyv), Make Default kérdez (kézikönyv: Do It / Cancel) + UNDO a státuszsávban, All Pads UNDO-val. CE-02 / CE-08: a híd (R-3) |
+| CE (Color Edit) saját logika | KÉSZ: Shift + színgomb = minden pad ezt a színt kapja, Shift + pad (érintés vagy hardver) = a pad színét választja ki (kézikönyv), Make Default a kézikönyv szerint (tartós típus-alapérték) + Reset gomb (S-C Make Default jelentése), kérdéssel, UNDO a státuszsávban, All Pads UNDO-val. CE-02 / CE-08: a híd (R-3) |
 
 ### Akai-összevetés, WP-B / WP-C (kézikönyv 316–317., 326–328., 336–337. o.) — NSC-01
 **Next Sequence**
@@ -55,7 +55,7 @@ S-C: NS-01..03, 06..09 (`dec5d617`, `d2d51ce2`), SG-01..08 (`10217009`), CE-01, 
 | Single Pad / All Pads; Shift + színgomb = minden pad | KÉSZ (R-8) |
 | 18 színgomb; Shift + pad = a pad színét választja | KÉSZ (R-8) |
 | Pad-nyomás (hardver) / érintés = a szín ráállítása | KÉSZ (S-C) |
-| Make Default = az aktuális színek lesznek a program-típus alapértékei (Do It / Cancel) | **Eltérés:** a Kick „Make Default” gombja a program típusának alapszíneire **állít vissza** (S-C), a kézikönyv szerint viszont az aktuális elrendezést **menti** alapértéknek. Megvalósítva: kérdés Do It / Cancel szerint. Nincs: a mentett per-típus alapérték (tartós tároló a KickSettings-ben + migráció, a program-létrehozás átvétele): owner-döntés (melyik jelentés legyen a gomb), javaslat: két gomb, „Make Default” (ment) és „Reset” (gyári) |
+| Make Default = az aktuális színek lesznek a program-típus alapértékei (Do It / Cancel) | KÉSZ (R-8): a gomb a program aktuális színeit és pad-szín módjait **eltárolja** a program típus-csoportjának (Drum / Clip / egyéb) alapértékeként a beállítások fájlban (`KickSettings::padColours`, régi fájloknál magától létrejön), kérdez (Do It / Cancel); az új programok ezzel indulnak. Új **Reset** gomb: a program minden padja a típus alapértékére áll (az eltárolt Make Default, ennek híján a gyári szín), egy undo-lépés, kérdez, UNDO a státuszsávban (ez volt S-C-ben a „Make Default” jelentése). Host-teszt: `PadColourDefaultsTests`; smoke: új program / Reset az eltárolt értéket használja. A meglévő programok nem változnak Make Default-ra (csak Reset-re) |
 | Keygroup / plugin / MIDI / CV sávok **alapból a Pad Perform pad-szín kiosztását** használják; egyedi kiosztás a pad-terület megérintésével | JAVASLAT (owner-döntés): a Keygroup / MIDI programok alapszíne a Pad Perform színei: gyökér = piros, skála-hang = sötétsárga, a többi halvány (S-F: ugyanez a pad-LED logika); ma `defaultPadColours` = { Red } (csak az első pad piros, a többi 0 = sötétpiros). Ezt a `mt_audio_iprogram.h` tömbje cseréli, a program-típusonként |
 
 
