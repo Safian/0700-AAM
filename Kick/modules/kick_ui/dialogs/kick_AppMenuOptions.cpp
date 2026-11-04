@@ -104,9 +104,7 @@ namespace kick_ui
         {
             case ui::menu_logic::kCommandSave:
             {
-                auto& ae = mt::getAudioInterface();
-                if( !ae.saveProject() )
-                    AppStatusbar::Instance().setBoxInfo( "UNSAVED: " + ae.getProjectSaveError() );
+                ui::project_actions::saveProject(); // a demo / template opens Save As; a save writes the thumbnail too
                 return;
             }
             case ui::menu_logic::kCommandResources: KickModeHeader::showSystemResources(); return;

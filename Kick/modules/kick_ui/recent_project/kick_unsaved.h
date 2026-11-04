@@ -34,8 +34,8 @@ namespace kick_unsaved
         std::function<void()>                           discard;         // the next close of the project must not write it
     };
 
-    // Runs `proceed` when leaving is allowed: nothing to save, saved, or the user chose not to save. Cancel / failed save: not.
-    inline void leaveProject( const Env& env, std::function<void()> proceed )
+    // Runs `proceed` when leaving is allowed: nothing to save, saved, or the user chose not to save. Cancel / failed save: `cancelled`.
+    inline void leaveProject( const Env& env, std::function<void()> proceed, std::function<void()> cancelled = {} )
     {
         const auto s = env.state();
         if( !needsPrompt( s ) )
@@ -43,10 +43,13 @@ namespace kick_unsaved
             proceed();
             return;
         }
-        env.ask( [env, s, proceed]( Choice c ) {
+        env.ask( [env, s, proceed, cancelled]( Choice c ) {
             switch( c )
             {
-                case Choice::Cancel: return;
+                case Choice::Cancel:
+                    if( cancelled )
+                        cancelled();
+                    return;
                 case Choice::DontSave:
                     env.discard();
                     proceed();
@@ -54,14 +57,18 @@ namespace kick_unsaved
                 case Choice::Save:
                     if( s.readOnlyLocation )
                     {
-                        env.saveAs( [proceed]( bool saved ) {
+                        env.saveAs( [proceed, cancelled]( bool saved ) {
                             if( saved )
                                 proceed();
+                            else if( cancelled )
+                                cancelled();
                         } );
                         return;
                     }
                     if( env.save() )
                         proceed();
+                    else if( cancelled )
+                        cancelled();
                     return;
             }
         } );

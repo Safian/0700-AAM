@@ -92,4 +92,28 @@ namespace kick_project
             *folderOut = folder;
         return CreateResult::Ok;
     }
+
+    // Name of the project made at start-up ("New Project" on launch): "<prefix> <stamp>", stamp like "2026-11-04 15.30" (no ':' so
+    // it is legal on FAT). An empty prefix gives "Project". Cut to the length limit and made free with " 2", " 3" ...
+    template<class Exists>
+    std::string launchProjectName( const std::string& prefix, const std::string& stamp, Exists exists )
+    {
+        std::string base = trimName( prefix.empty() ? "Project " + stamp : prefix + " " + stamp );
+        std::string clean;
+        for( unsigned char c : base )
+            clean += ( c < 0x20 || c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|' ) ? '-' : static_cast<char>( c );
+        if( clean.size() > kMaxNameLength - 4 )
+            clean.resize( kMaxNameLength - 4 );
+        clean = trimName( clean );
+        while( !clean.empty() && clean.back() == '.' )
+            clean.pop_back();
+        if( clean.empty() )
+            clean = "Project";
+        if( !exists( clean ) )
+            return clean;
+        for( int n = 2; n < 1000; ++n )
+            if( !exists( clean + " " + std::to_string( n ) ) )
+                return clean + " " + std::to_string( n );
+        return clean;
+    }
 }
