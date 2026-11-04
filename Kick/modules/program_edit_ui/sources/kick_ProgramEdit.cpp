@@ -44,13 +44,16 @@ namespace kick_ui
         if( isVisible() )
         {
             auto pProg = mt::getAudioInterface().getSelectedProgramData();
-            programs.setValues( pProg ? pProg->name.get() : "", pProg ? pProg->type.get() : mt::MTProgramType::Unknown, juce::sendNotification );
+            // Display only: the program is loaded once, by ProgramEdit::visibilityChanged (one source: the track's program).
+            programs.setValues( pProg ? pProg->name.get() : "", pProg ? pProg->type.get() : mt::MTProgramType::Unknown, juce::dontSendNotification );
         }
     }
 
     AudioHeaderTools::AudioHeaderTools()
     {
-        mt::utils::addAndMakeVisible( this, bars, selectAll, selectSample, pencil, erase, paste, cut, copy, settings, magnify );
+        // Copy / Paste buttons: no handler and no clipboard behind them, so they are not shown (paste was hidden already).
+        mt::utils::addAndMakeVisible( this, bars, selectAll, selectSample, pencil, erase, paste, cut, settings, magnify );
+        copy.setVisible( false );
         mt::utils::setRadioGroupID( (int)RadioGroupId::AudioHeader, selectAll, selectSample, pencil, erase, magnify, cut );
         paste.setVisible( false );
         pencil.triggerClick();
@@ -94,7 +97,13 @@ namespace kick_ui
             it->setVisible( false );
 
         // Add child components...
-        mt::utils::addChildComponents( this, selectedPadLabel, header, infoLabel, audioHdrTools, tracks, audioheader );
+        mt::utils::addChildComponents( this, selectedPadLabel, header, infoLabel, audioHdrTools, tracks, audioheader, pluginOpen, padSelect );
+        padSelect.setVisible( false );
+        padSelect.onSelectionChanged = [this]( int Index, const juce::String& ) {
+            if( Index >= 0 ) selectPad( Index );
+        };
+        pluginOpen.onClick = [this]() { openPlugin( mt::getAudioInterface().getSelectedProgram() ); };
+        pluginOpen.setVisible( false );
         header.onBackButtonPressed = [this]( bool ) { closeScreen(); };
         audioHdrTools.setVisible( false );
         tracks.setVisible( false );
@@ -130,6 +139,7 @@ namespace kick_ui
                     }
                     else
                     {
+                        ae.setSelectedTrack( Index ); // the grid reads the selected track: keep it with the program
                         ae.setSelectedProgram( ae.getProgramIndexByName( pProg->name.get() ) );
                         loadProgram( pProg->type.get(), ae.getProgramIndexByName( pProg->name.get() ) );
                     }
@@ -142,7 +152,8 @@ namespace kick_ui
         };
 
         ui::themeChanged.connect( [&]() {
-            selectedProgram->setupHeader( header );
+            if( selectedProgram ) // a theme change before the first program was loaded has nothing to set up
+                selectedProgram->setupHeader( header );
         } );
     }
 
@@ -162,6 +173,9 @@ namespace kick_ui
             selectedProgram = nullptr;
         }
 
+        pluginMode_ = false;
+        pluginOpen.setVisible( false );
+        padSelect.setVisible( false );
         switch( Type )
         {
             case mt::MTProgramType::Cv: selectedProgram = programs[0].get(); break;
@@ -185,6 +199,8 @@ namespace kick_ui
                 selectedPadLabel.setVisible( true );
             else
                 selectedPadLabel.setVisible( false );
+            padSelect.setVisible( isVisible() && ( Type == mt::MTProgramType::Drum || Type == mt::MTProgramType::Clip || Type == mt::MTProgramType::Keygroup ) );
+            padSelect.toFront( false );
             if( Type == mt::MTProgramType::Audio )
             {
                 header.setVisible( false );
@@ -217,7 +233,16 @@ namespace kick_ui
         {
             for( const auto& it : programs )
                 it->setVisible( false );
-            if( Type == mt::MTProgramType::Audio )
+            if( Type == mt::MTProgramType::Plugin )
+            {
+                // A plugin program has no editor page of its own: the CLAP panel is its editor (same one the Program tab opens).
+                infoLabel.setText( "Plugin program: edited in the plugin panel", juce::dontSendNotification );
+                pluginMode_ = true;
+                pluginOpen.setVisible( isVisible() );
+                pluginOpen.toFront( false );
+                openPlugin( Index );
+            }
+            else if( Type == mt::MTProgramType::Audio )
                 infoLabel.setText( "Program Edit is not available for Audio Program", juce::dontSendNotification );
             else
                 infoLabel.setText( "No Programs Available", juce::dontSendNotification );
@@ -225,36 +250,117 @@ namespace kick_ui
         }
     }
 
+    void ProgramEdit::openPlugin( int Index )
+    {
+        auto& ae = mt::getAudioInterface();
+        if( auto& open = pluginOpener() )
+            open( ae.getProgram( Index ) );
+    }
+
+    // Live note of a pad on the selected track. The note-off ends the note of the PRESS (the bank may have changed since).
+    void ProgramEdit::padNote( int padNo, bool pressed, int velocity )
+    {
+        auto& ae = mt::getAudioInterface();
+        if( ! juce::isPositiveAndBelow( padNo, 16 ) ) return;
+        if( pressed )
+        {
+            const int bankOffset = ae.getBankOffset();
+            selectedPadLabel.setText( ae.getBank() + juce::String::formatted( "%02d", padNo + 1 ), juce::dontSendNotification );
+            padSelect.setSelected( juce::jlimit( 0, 127, bankOffset + padNo ), juce::dontSendNotification );
+            if( heldPad[padNo].note >= 0 ) // a lost release: end the old note first
+                ae.addLiveMidiMsg( heldPad[padNo].target, juce::MidiMessage::noteOff( 1, heldPad[padNo].note ) );
+            heldPad[padNo].note   = juce::jlimit( 0, 127, padNo + bankOffset );
+            heldPad[padNo].target = ae.getSelected();
+            ae.addLiveMidiMsg( heldPad[padNo].target, juce::MidiMessage::noteOn( 1, heldPad[padNo].note, (juce::uint8)juce::jlimit( 1, 127, velocity ) ) );
+        }
+        else if( heldPad[padNo].note >= 0 )
+        {
+            ae.addLiveMidiMsg( heldPad[padNo].target, juce::MidiMessage::noteOff( 1, heldPad[padNo].note ) );
+            heldPad[padNo].note = -1;
+        }
+    }
+
+    // The value controls of the showing page in reading order (top to bottom, left to right): rotaries and number boxes.
+    static void collectValueControls( juce::Component* parent, juce::Component* root, std::vector<std::pair<juce::Point<int>, ui::KickControlsProcessor*>>& out )
+    {
+        for( auto* child : parent->getChildren() )
+        {
+            if( child == nullptr || ! child->isVisible() ) continue;
+            const bool isValue = dynamic_cast<ui::KickSlider*>( child ) || dynamic_cast<ui::KickNumberT<int>*>( child ) || dynamic_cast<ui::KickNumberT<float>*>( child )
+                                 || dynamic_cast<ui::KickNumberT<double>*>( child ) || dynamic_cast<ui::KickNumberT<juce::int64>*>( child );
+            if( isValue && child->isEnabled() )
+            {
+                if( auto* proc = dynamic_cast<ui::KickControlsProcessor*>( child ) )
+                {
+                    out.push_back( { root->getLocalPoint( child, juce::Point<int>() ), proc } );
+                    continue;
+                }
+            }
+            collectValueControls( child, root, out );
+        }
+    }
+
+    bool ProgramEdit::qLinkToPage( int knob, int value )
+    {
+        if( ! selectedProgram || value == 0 ) return false;
+        std::vector<std::pair<juce::Point<int>, ui::KickControlsProcessor*>> controls;
+        collectValueControls( selectedProgram, this, controls );
+        std::stable_sort( controls.begin(), controls.end(), []( const auto& a, const auto& b ) {
+            const int ra = a.first.y / 24, rb = b.first.y / 24; // same row within 24 px
+            return ra != rb ? ra < rb : a.first.x < b.first.x;
+        } );
+        if( knob < 0 || knob >= (int)controls.size() ) return false;
+        auto* c = controls[(size_t)knob].second;
+        c->knobRotated( value * c->getIncrement() );
+        return true;
+    }
+
+    // Touch selection of a pad: the bank of the pad becomes the engine bank, the page then gets what a hardware pad press gives it.
+    void ProgramEdit::selectPad( int padIndex )
+    {
+        if( ! selectedProgram || ! juce::isPositiveAndBelow( padIndex, 128 ) ) return;
+        auto& ae = mt::getAudioInterface();
+        if( ae.getBankOffset() / 16 != padIndex / 16 )
+            ae.setBank( mt::Kick::padBankNames[(size_t)( padIndex / 16 )] );
+        CPktMgr::HWMsg_t msg;
+        msg.pktType = CPktMgr::EN_PKT_TYPE_PAD;
+        msg.pktCmd  = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
+        msg.data    = { padIndex % 16, (int)contracts::DeviceControlContracts::BTN_PRESSED, 0, 0 };
+        selectedProgram->handleCommand( msg );
+        selectedPadLabel.setText( ae.getBank() + juce::String::formatted( "%02d", padIndex % 16 + 1 ), juce::dontSendNotification );
+    }
+
+    void ProgramEdit::releaseHeldPads()
+    {
+        for( int i = 0; i < 16; ++i )
+            padNote( i, false, 0 );
+    }
+
+    // Hardware input. Only a real PAD message plays a note: Data Dial / Q-Link turns used to share this branch and were
+    // read as pad-number / state / velocity (a turn to the right sounded note-on, to the left note-off).
     void ProgramEdit::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
     {
         if( selectedProgram )
         {
-            if( contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) || contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )
+            if( contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) )
             {
-                auto&            ae         = mt::getAudioInterface();
-                int              bankOffset = ae.getBankOffset();
-                juce::String     selBank    = ae.getBank();
-                auto             padNo      = contracts::DclContractsHelper::getPadNumber( f_HwMsg );
-                auto             padState   = contracts::DclContractsHelper::getPadState( f_HwMsg );
-                auto             velocity   = contracts::DclContractsHelper::getPadVelocity( f_HwMsg );
-                std::vector<int> pads;
-                selectedPadLabel.setText( selBank + juce::String::formatted( "%02d", padNo + 1 ), juce::dontSendNotification );
-
-                padNo += bankOffset;
-                pads.push_back( padNo );
-
-                for( auto& it : pads )
+                const auto padNo    = contracts::DclContractsHelper::getPadNumber( f_HwMsg );
+                const auto padState = contracts::DclContractsHelper::getPadState( f_HwMsg );
+                const auto velocity = contracts::DclContractsHelper::getPadVelocity( f_HwMsg );
+                if( padState == contracts::DeviceControlContracts::BTN_PRESSED ) padNote( padNo, true, velocity );
+                else if( padState == contracts::DeviceControlContracts::BTN_RELEASED ) padNote( padNo, false, 0 );
+            }
+            else if( contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )
+            {
+                // Q-Link 1..4 drive the first four rotaries / numbers of the page that is showing (a Q-Link used to be read as a pad
+                // hit here). Audio programs keep their own Q-Link use (nudge / edit start / end in the grid), the Data Dial goes on to
+                // the page like before.
+                const auto knob = contracts::DclContractsHelper::getKnobCode( f_HwMsg );
+                if( knob >= contracts::DeviceControlContracts::EN_KNOB_1 && knob <= contracts::DeviceControlContracts::EN_KNOB_4 && selectedProgram->getType() != mt::MTProgramType::Audio )
                 {
-                    juce::MidiMessage Msg;
-
-                    if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
-                        Msg = juce::MidiMessage::noteOn( 1, it, (juce::uint8)velocity );
-                    else if( padState == contracts::DeviceControlContracts::BTN_RELEASED )
-                        Msg = juce::MidiMessage::noteOff( 1, it );
-
-                    ae.addLiveMidiMsg( ae.getSelected(), Msg );
+                    qLinkToPage( knob - contracts::DeviceControlContracts::EN_KNOB_1, contracts::DclContractsHelper::getKnobValue( f_HwMsg ) );
+                    return;
                 }
-                pads.clear();
             }
             else if( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) && ( contracts::DclContractsHelper::getButtonState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED ) )
             {
@@ -280,6 +386,8 @@ namespace kick_ui
         //audioHdrTools.setBoundsRelative( .4567f, .0f, .489f, .1423f );
         infoLabel.setBoundsRelative( .1f, .45f, .8f, .2f );
         selectedPadLabel.setBounds( 600, 30, 140, 20 );
+        padSelect.setBounds( 750, 8, 120, 44 );
+        pluginOpen.setBoundsRelative( .35f, .68f, .3f, .1f );
         for( const auto& it : programs )
             it->setBounds( b );
     }
@@ -292,16 +400,19 @@ namespace kick_ui
             if( it )
                 it->setVisible( isVisible() );
         }
+        pluginOpen.setVisible( isVisible() && pluginMode_ );
 
         if( isVisible() )
         {
-            if( selectedProgram )
-            {
-                auto& ae    = mt::getAudioInterface();
-                auto  pProg = ae.getProgramDataForTrack( ae.getSelectedSequence(), ae.getSelectedTrack() );
-                hdrComp.programs.setValues( pProg ? pProg->name.get() : ae.getProgramNameByIndex( ae.getSelectedProgram() ), selectedProgram->getType(), juce::sendNotification );
-            }
+            // The one place a program is loaded on opening: the program of the selected track (else the selected program).
+            auto& ae    = mt::getAudioInterface();
+            auto  pProg = ae.getProgramDataForTrack( ae.getSelectedSequence(), ae.getSelectedTrack() );
+            const auto name = pProg ? pProg->name.get() : ae.getProgramNameByIndex( ae.getSelectedProgram() );
+            auto       type = pProg ? pProg->type.get() : ( selectedProgram ? selectedProgram->getType() : ae.getProgramType( name ) );
+            hdrComp.programs.setValues( name, type, juce::sendNotification );
         }
+        else
+            releaseHeldPads();
     }
 
 }

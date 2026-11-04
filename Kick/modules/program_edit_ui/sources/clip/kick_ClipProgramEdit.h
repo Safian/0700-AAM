@@ -57,7 +57,8 @@ namespace kick_ui
 
     private:
         int                                selectedPad{ 0 }; //Default
-        std::shared_ptr<mt::MTClipProgram> pClip{ nullptr };
+        // NOT an owner: the programs belong to the engine (a shared_ptr here deleted the engine's program when another Clip program was selected).
+        mt::MTClipProgram* pClip{ nullptr };
 
         ui::KickToggleButton programSelector{ "Program", "Program", "Program" };
         ui::KickToggleButton padSelector{ "Pad", "Pad", "Pad" };

@@ -775,10 +775,17 @@ namespace kick_ui
         }
     }
 
+    // Fade In / Fade Out, Semi, Fine, TC and Don't Snap have no model field and no audio processing behind them (no handler at
+    // all): they are not shown instead of being dead controls. Fades / pitch of an audio clip need a model property and the
+    // clip player to apply it first (an MPC listening test: docs/plans/screens/program-edit.md PE-10). true brings them back.
+    static constexpr bool kAudioStubControlsVisible = false;
+
     AudioProgramGrid::AudioProgramGrid( mt::MTAudioProgram*& Audio )
         : pAudio( Audio ), gridComponent( audiogridViewport )
     {
-        mt::utils::addAndMakeVisible( this, audiogridViewport, scaleViewport, paramViewport, phViewport, playhead, /*gridComponent, scaleComp, paramComp,*/ warp, reverse, mute, sampleList, fadeIn, fadeOut, bpm, level, semi, fine, tc, dontSnap, nudge, editStart, editEnd, split, duplicate, clearAuto, automation, ecBtn, plusButton, minusButton, zoomLabel /*, sampleComp */ );
+        mt::utils::addAndMakeVisible( this, audiogridViewport, scaleViewport, paramViewport, phViewport, playhead, /*gridComponent, scaleComp, paramComp,*/ warp, reverse, mute, sampleList, bpm, level, nudge, editStart, editEnd, split, duplicate, clearAuto, automation, ecBtn, plusButton, minusButton, zoomLabel /*, sampleComp */ );
+        if( kAudioStubControlsVisible )
+            mt::utils::addAndMakeVisible( this, fadeIn, fadeOut, semi, fine, tc, dontSnap );
 
         mt::utils::setRadioGroupID( (int)RadioGroupId::ParamViewControl, nudge, editStart, editEnd );
         mt::utils::setValueColour( ui::Theme::textColour( 1 ), warp, reverse, mute, sampleList, tc, dontSnap, nudge, editStart, editEnd, split, duplicate, clearAuto );
@@ -879,38 +886,69 @@ namespace kick_ui
         } );
 
         mute.onClick = [&]() {
+            if( ! pAudio ) return;
             bool isMuted = mute.getToggleState();
             pAudio->setSelectedAudioSampleMute( isMuted );
             gridComponent.refresh();
         };
 
         warp.onClick = [&]() {
+            if( ! pAudio ) return;
             bool isWarp = warp.getToggleState();
             pAudio->setSelectedAudioSampleWarp( isWarp );
 
             mt::utils::setEnabled( isWarp, semi, fine, bpm );
         };
 
-        bpm.onValueChanged = [&]( int value ) {
-            pAudio->setSelectedAudioSampleBPM( value );
+        bpm.onValueChanged = [&]( float value ) { // KickNumberf: an int parameter truncated the value
+            if( ! pAudio ) return;
+            pAudio->setSelectedAudioSampleBPM( (int)std::lround( value ) );
         };
 
         reverse.onClick = [&]() {
+            if( ! pAudio ) return;
             bool isReverse = reverse.getToggleState();
             pAudio->setSelectedAudioSampleReverse( isReverse );
             gridComponent.refresh();
         };
 
+        // SPLIT: every selected sample that the playhead is inside is cut there in two (the Cut tool's maths, kick_audio_split.h).
         split.onClick = [&]() {
-            if( pAudio )
+            if( ! pAudio ) return;
+            juce::Array<juce::ValueTree> sel = pAudio->getSelectedAudioSampleList(); // a copy: the selection changes below
+            const int                    cutTick = gridData.getTimeFromX( (int)( gridData.playHead.normized * gridComponent.getWidth() ), false );
+            auto                         pSeqData = ae.getSequenceData( aeSel.sequence );
+            const double                 tempo    = pSeqData ? pSeqData->tempo.get() : BPM::DEFAULT;
+            const double                 ticksPerSecond = gridData.getTicksPerBeat( 0 ) / ( BPM::TOSEC / tempo );
+            int                          lastNew = -1;
+            for( auto& sample : sel )
             {
-                auto& selSample       = pAudio->getSelectedAudioSampleList();
-                auto  playHeadPos     = gridData.playHead.normized * gridComponent.getWidth();
-                auto  playHeadPosTick = gridData.getTimeFromX( playHeadPos, false );
-                for( auto& sample : selSample )
+                mt::MTIAudio audioSample( sample, &ae.getUndoManager() );
+                if( ! audioSample.src ) continue;
+                const auto r = audiosplit::compute( audioSample.startTime.get(), audioSample.length.get(), audioSample.start.get(), audioSample.end.get(),
+                                                    (int)audioSample.src->getSourceLength(), audioSample.src->getSourceSampleRate() / ticksPerSecond, cutTick );
+                if( ! r.ok ) continue;
+                const int    startTime = audioSample.startTime.get();
+                const double loopStart = audioSample.start.get();
+
+                pAudio->addSample( audioSample.source.get(), r.newStartTime, r.newLength, audioSample.slice.get() );
+                auto vt = pAudio->getClipTree( r.newStartTime );
+                for( int i = 0; i < sample.getNumProperties(); ++i ) // level, mute, reverse, warp, bpm ... of the original
                 {
-                    //Check the Sample and validate the loopstart and update the selected sample and split the sample at playhead position
+                    const auto name = sample.getPropertyName( i );
+                    if( name != mt::IDs::source && name != mt::IDs::startTime && name != mt::IDs::length && name != mt::IDs::start && name != mt::IDs::end )
+                        vt.setProperty( name, sample.getProperty( name ), &ae.getUndoManager() );
                 }
+                pAudio->setLoopPointsForSample( r.newStartTime, r.prevLoopEnd, r.newLoopEnd );
+                pAudio->setLoopPointsForSample( startTime, loopStart, r.prevLoopEnd );
+                pAudio->setSampleLength( startTime, r.prevLength );
+                lastNew = r.newStartTime;
+            }
+            if( lastNew >= 0 )
+            {
+                pAudio->selectAllSamples( false );
+                pAudio->setSelectAudioSample( lastNew, true );
+                gridComponent.refresh();
             }
         };
 
@@ -938,6 +976,7 @@ namespace kick_ui
         };
 
         level.onValueChanged = [&]( int value ) {
+            if( ! pAudio ) return;
             pAudio->setSelectedAudioSampleLevel( value );
             gridComponent.refresh();
         };
@@ -1037,6 +1076,7 @@ namespace kick_ui
 
     void AudioProgramGrid::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
     {
+        if( ! pAudio ) return;
         auto tempMgr = ae.getTempoMgr( ae.getSelectedSequence() );
 
         if( tempMgr != nullptr && contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )

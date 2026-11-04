@@ -42,6 +42,11 @@ namespace kick_ui
         std::array<ui::KickRotary, 4> fine;
         std::array<ui::KickRotary, 4> amp;
         std::array<ui::KickRotary, 4> pan;
+        // Velocity range of each layer (Layer Play: Velocity). Closed range 1..127; start never above end.
+        ui::KickNumberT<int> vs0{ "VEL START", 1, 127, 1 }, vs1{ "VEL START", 1, 127, 1 }, vs2{ "VEL START", 1, 127, 1 }, vs3{ "VEL START", 1, 127, 1 };
+        ui::KickNumberT<int> ve0{ "VEL END", 1, 127, 127 }, ve1{ "VEL END", 1, 127, 127 }, ve2{ "VEL END", 1, 127, 127 }, ve3{ "VEL END", 1, 127, 127 };
+        std::array<ui::KickNumberT<int>*, 4> velStart{ &vs0, &vs1, &vs2, &vs3 };
+        std::array<ui::KickNumberT<int>*, 4> velEnd{ &ve0, &ve1, &ve2, &ve3 };
 
         void visibilityChanged() override;
     };

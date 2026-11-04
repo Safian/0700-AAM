@@ -74,7 +74,6 @@ namespace kick_ui
         ui::KickToggleButton envelopesButton{ "Envelopes", "Envelopes", "Envelopes" };
         ui::KickToggleButton lfoButton{ "LFO", "LFO", "LFO" };
 
-        int                                           sIdx{ 0 };
         mt::MTDrumProgram*                            pDrum{ nullptr };
         std::vector<int>                              pads;
         std::vector<std::unique_ptr<juce::Component>> comps;

@@ -22,6 +22,7 @@
 // module include files...
 
 #include "audio_voice.h"
+#include "layer_play_select.h"
 
 namespace mt
 {
@@ -94,20 +95,19 @@ namespace mt
             if( root < 0 || root > 127 ) root = Note;
         }
 
-        // Layer: by velocity range when the clip plays its layers by velocity (the layers already carry the dynamics, so
-        // the voice then plays at full gain, as the sampler does), else the first layer with a sound.
+        // Layer: by Layer Play among the layers with a sound (layer_play_select.h). By velocity the layers already carry
+        // the dynamics, so the voice then plays at full gain, as the sampler does.
         const bool byVelocity = pNote->layerPlay.get() == LayerPlayType::VELOCITY;
-        int        layer      = -1;
+        std::vector<layerplay::Candidate> candidates;
         for( auto l = 0; l < MAX_LAYERS; ++l )
-        {
-            if( pNote->getSource( l ).isEmpty() || pNote->getSourceSlice( l ) == nullptr ) continue;
-            if( layer < 0 ) layer = l;
-            if( byVelocity && (int)pNote->layers[l]->velStart.get() <= Velocity && Velocity <= (int)pNote->layers[l]->velEnd.get() )
-            {
-                layer = l;
-                break;
-            }
-        }
+            if( pNote->getSource( l ).isNotEmpty() && pNote->getSourceSlice( l ) != nullptr )
+                candidates.push_back( { l, (int)pNote->layers[l]->velStart.get(), (int)pNote->layers[l]->velEnd.get() } );
+        auto mode = pNote->layerPlay.get() == LayerPlayType::RANDOM ? layerplay::Mode::Random :
+                    pNote->layerPlay.get() == LayerPlayType::CYCLE  ? layerplay::Mode::Cycle :
+                                                                       layerplay::Mode::Velocity;
+        const int layer = layerplay::select( mode, candidates, Velocity, noteLayerIdx.try_emplace( Note, -1 ).first->second,
+                                             mode == layerplay::Mode::Random ? (unsigned)AudIO::utils::random<int>( 0, 1 << 20 ) : 0u );
+        if( layer < 0 ) return;
 
         auto notePoly = pNote->polyPhony.get();
         if( auto soundSlice = pNote->getSourceSlice( layer ) )
