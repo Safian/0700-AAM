@@ -112,9 +112,12 @@
 
     // modes
     #include "modes/kick_ListEdit.h"
+    #include "modes/kick_PadColorLogic.h"
     #include "modes/kick_PadColor.h"
     #include "modes/kick_trackMute.h"
     #include "modes/kick_padMute.h"
+    #include "modes/kick_SequenceLogic.h"
+    #include "modes/kick_SongLogic.h"
     #include "modes/kick_nextSequence.h"
     #include "modes/kick_song.h"
     #include "modes/mixers/kick_MixerTabView.h"
