@@ -83,6 +83,17 @@ int main()
     CHECK( !diskUsage( "/definitely/not/here" ).ok );
     CHECK( !diskUsage( "" ).ok );
 
+    // Status bar warnings (SR-11): storage at 95 % used, memory at 92 % used; unreadable values never warn.
+    {
+        using namespace kick_sysinfo;
+        CHECK( resourceWarnings( true, 94, 500.0, true, 91 ).disk.empty() && resourceWarnings( true, 94, 500.0, true, 91 ).ram.empty() );
+        CHECK( resourceWarnings( true, 95, 123.7, false, 0 ).disk == "Low storage: 123 MB free" );
+        CHECK( resourceWarnings( true, 100, -1.0, false, 0 ).disk == "Low storage: 0 MB free" );
+        CHECK( resourceWarnings( false, 99, 1.0, false, 99 ).disk.empty() && resourceWarnings( false, 99, 1.0, false, 99 ).ram.empty() );
+        CHECK( resourceWarnings( false, 0, 0.0, true, 92 ).ram == "Low memory: 92 % used" );
+        CHECK( resourceWarnings( true, 96, 10.0, true, 97 ).disk != "" && resourceWarnings( true, 96, 10.0, true, 97 ).ram != "" );
+    }
+
     if( g_fail == 0 ) std::printf( "SysInfoTests: all passed\n" );
     return g_fail == 0 ? 0 : 1;
 }

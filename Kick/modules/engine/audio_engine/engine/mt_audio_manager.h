@@ -133,6 +133,9 @@ namespace mt
         void                seqRecPressed();
         void                seqOverdubPressed();
         seqrec::Control     getSeqRecControl() const;
+        // Audio callback load (0..1 of the callback budget, JUCE AudioDeviceManager::getCpuUsage) and the device xrun count (-1 when
+        // the driver does not count). False without a running device. Message thread.
+        bool getAudioLoad( double& Cpu, int& XRuns ) const;
         void                seqRecBeforePlay( int Seq ); // called by MTAudioInterface::setSequencePlay before the transport starts
         // Set by MTAudioInterface: applies the global timing correct to the notes a flush added (ids in the set).
         std::function<void( MTTrack*, const std::set<int>& )> recordedNotesHook;
