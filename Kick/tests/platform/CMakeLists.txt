@@ -164,6 +164,10 @@ if(TARGET Kick)
     add_test(NAME kick-dialogs-smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ProjectsBrowserSmoke.py"
         $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}" dialogs)
     set_tests_properties(kick-dialogs-smoke PROPERTIES TIMEOUT 110)
+    # Power window + shutdown sequence (dirty project: Cancel, Shut Down / Cancel, Restart / Save); the desktop only logs the power off.
+    add_test(NAME kick-power-smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/PowerSmoke.py"
+        $<TARGET_FILE:Kick> "${CMAKE_BINARY_DIR}")
+    set_tests_properties(kick-power-smoke PROPERTIES TIMEOUT 80)
 endif()
 # Timing correct (note quantize) logic; JUCE-free, header only.
 add_executable(kick-timing-correct-tests TimingCorrectTests.cpp)
