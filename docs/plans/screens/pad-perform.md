@@ -116,16 +116,16 @@ Alap: **statikus kódolvasás** (build, futtatás, hardver nélkül), ág `claud
 
 Sorrend: hibák → hiányzó funkciók → javaslatok → tesztek. „Függ” = előfeltétel.
 
-- [ ] **PP-01** (P1, S) Akkord-képletek javítása: `1-3-5-7` = `{4,7,11}`, `1-3-5-7b` = `{4,7,10}`; 127 fölötti hangok eldobása a küldés előtt — `kick_scales.h:132-138`, `PP.cpp:461-474,52-62`.
-- [ ] **PP-02** (P1, S) Bank-szinkron: `bankInc/bankDec` és a lista-alapú bank-választás hívja az `ae.setBank`-ot (egy igazságforrás), a `bankChanged` visszahívás ne duplázzon — `PP.cpp:114-141`, minta: `kick_PadColor.cpp:77`.
-- [ ] **PP-03** (P1, S) Q-Link kiosztás a 4 gombra (Scale, Root, Oktáv, Akkord/Mód), a láthatatlan `type` lista eltávolítása; Custom/Screen módban a viselkedés dokumentálása — `PP.cpp:373-402,329-349`, `kick_AppHome.cpp:561-571`.
-- [ ] **PP-04** (P1, S) Held-note tábla: a note-off a lenyomáskor küldött hangokra megy — `PP.cpp:39-64`. Függ: –
-- [ ] **PP-05** (P1, S) Mód-inicializálás megjelenéskor: `OFF`/`CHROMATIC_CHORDS` tárolt módnál is épüljön `noteData` (vagy a mód normalizálása Chromatic-ra) — `PP.cpp:425-451`.
-- [ ] **PP-06** (P1, M) Progression: megvalósítás (skála-fokok akkordjai) **vagy** a gomb és a `chord` lista elrejtése Progression alatt — `PP.cpp:171-178,462,494-495,740`. Owner dönt.
-- [ ] **PP-07** (P2, S) Octave kapu javítása (`bankIndex < 7` feltétel kivétele) — `PP.cpp:282-292`.
-- [ ] **PP-08** (P2, S) MIDI-csatorna: a kijelölt track/program csatornája a fix 1 helyett (pad-note és aftertouch) — `PP.cpp:57,59`, `A/kick/kick_hardware_bridge.h:1696`.
-- [ ] **PP-09** (P2, M) A régi leképezés-implementáció és a halott kód törlése (`pushPadInfoToDisplay`, `displayFromNote`, `st_NoteData`, `setKeyGroupPadColour` hívás, `PadPerformContent::handleCommand`, kikommentezett oktáv-kód, `Increment/DecrementBankIndex`) **owner jóváhagyásával** — `PP.cpp:180-271,351-372,503-616,667-711`, `PP.h:97,120-132`. Függ: PP-30 (tesztek előbb).
-- [ ] **PP-20** (P1, L) 16 LEVEL: pad-üzemmód (utolsó pad 16 másolata, léptetett paraméter: Velocity, Tune, Layer azonnal; Filter/Attack/Decay a hang-motor kötése után); KickHome-ág `EN_16LEVELS`-re, LED, kilépés — `kick_AppHome.cpp:507-540`, `bridge:1143-1144`, `KEY61_DOC_VS_KICK.md` #30 vezérlő-sor. Függ: PP-30; Filter/Attack/Decay → `program-edit.md` PE-02, PE-21.
+- [x] **PP-01** (P1, S) Akkord-képletek javítása: `1-3-5-7` = `{4,7,11}`, `1-3-5-7b` = `{4,7,10}`; 127 fölötti hangok eldobása a küldés előtt — `kick_scales.h:132-138`, `PP.cpp:461-474,52-62`.
+- [x] **PP-02** (P1, S) Bank-szinkron: `bankInc/bankDec` és a lista-alapú bank-választás hívja az `ae.setBank`-ot (egy igazságforrás), a `bankChanged` visszahívás ne duplázzon — `PP.cpp:114-141`, minta: `kick_PadColor.cpp:77`.
+- [x] **PP-03** (P1, S) Q-Link kiosztás a 4 gombra (Scale, Root, Oktáv, Akkord/Mód), a láthatatlan `type` lista eltávolítása; Custom/Screen módban a viselkedés dokumentálása — `PP.cpp:373-402,329-349`, `kick_AppHome.cpp:561-571`.
+- [x] **PP-04** (P1, S) Held-note tábla: a note-off a lenyomáskor küldött hangokra megy — `PP.cpp:39-64`. Függ: –
+- [x] **PP-05** (P1, S) Mód-inicializálás megjelenéskor: `OFF`/`CHROMATIC_CHORDS` tárolt módnál is épüljön `noteData` (vagy a mód normalizálása Chromatic-ra) — `PP.cpp:425-451`.
+- [x] **PP-06** (P1, M) Progression: megvalósítás (skála-fokok akkordjai) **vagy** a gomb és a `chord` lista elrejtése Progression alatt — `PP.cpp:171-178,462,494-495,740`. Owner dönt.
+- [x] **PP-07** (P2, S) Octave kapu javítása (`bankIndex < 7` feltétel kivétele) — `PP.cpp:282-292`.
+- [x] **PP-08** (P2, S) MIDI-csatorna: a kijelölt track/program csatornája a fix 1 helyett (pad-note és aftertouch) — `PP.cpp:57,59`, `A/kick/kick_hardware_bridge.h:1696`.
+- [x] **PP-09** (P2, M) A régi leképezés-implementáció és a halott kód törlése (`pushPadInfoToDisplay`, `displayFromNote`, `st_NoteData`, `setKeyGroupPadColour` hívás, `PadPerformContent::handleCommand`, kikommentezett oktáv-kód, `Increment/DecrementBankIndex`) **owner jóváhagyásával** — `PP.cpp:180-271,351-372,503-616,667-711`, `PP.h:97,120-132`. Függ: PP-30 (tesztek előbb).
+- [x] **PP-20** (P1, L) 16 LEVEL: pad-üzemmód (utolsó pad 16 másolata, léptetett paraméter: Velocity, Tune, Layer azonnal; Filter/Attack/Decay a hang-motor kötése után); KickHome-ág `EN_16LEVELS`-re, LED, kilépés — `kick_AppHome.cpp:507-540`, `bridge:1143-1144`, `KEY61_DOC_VS_KICK.md` #30 vezérlő-sor. Függ: PP-30; Filter/Attack/Decay → `program-edit.md` PE-02, PE-21.
 - [ ] **PP-21** (P1, L) Keyboard Control menü — új képernyő (`Screen::MenuKeyboardControl`) + beállítás-tároló; KEYBOARD CONTROL gomb átkötése, Pad Notes marad Shift+16 LEVEL. **Owner-döntés** szükséges (Akai-réteg, `MORNING_DECISIONS.md:93-96`; a gomb-kiosztás változik). Részei:
   - [ ] **PP-21a** (P1, M) Transpose + MIDI Channel + Aftertouch be/ki — `bridge:1817-1843,1694-1698`, `key_transpose.h`. Függ: PP-21.
   - [ ] **PP-21b** (P1, M) Note On Velocity (fix/változó) + Velocity Response/Curve/Gain + Black/White Key Sensitivity — `KeybedProcessor` a `on_keybed_note_on` előtt. Függ: PP-21, PP-30b.
@@ -133,11 +133,18 @@ Sorrend: hibák → hiányzó funkciók → javaslatok → tesztek. „Függ” 
   - [ ] **PP-21d** (P2, M) Internal/External Keyboard Routing (belső track vs külső MIDI-port) — `midi-program-add.md` MIDI-kimenet adatverseny-javításával (04 §5.1). Függ: PP-21.
   - [ ] **PP-21e** (P2, M) Pedal Settings (polaritás, funkció) — `bridge:1596-1609,1691`. Függ: PP-21.
 - [ ] **PP-22** (P2, M) Pad-nyomás (aftertouch) használata Notes/Chords módban — `kSendPadAftertouchPackets` megoldása (`bridge:1777`) a screen-oldali „csak nyomás” megkülönböztetővel. Függ: R2 „reggeli teendő”.
-- [ ] **PP-23** (P2, M) Képernyős pad-játék érintéssel (velocity hely alapján) — `04-screen-audit.md` §4 per-ujj touch előfeltétellel.
+- [x] **PP-23** (P2, M) Képernyős pad-játék érintéssel (velocity hely alapján) — `04-screen-audit.md` §4 per-ujj touch előfeltétellel.
 - [ ] **PP-24** (P2, M) Touch strip „Notes” mód (a Pad Perform közös skála-forrásával) — `known-issues-and-roadmap.md` §3.2.
 - [ ] **PP-25** (P2, M) ARP/Latch UI a Notes leképezéssel (arp a skála hangjain). Függ: arp-UI terv.
 - [ ] **PP-40** (P2, M) Vizuális visszajelzés: nyomva tartott padok, akkord-név, skála-fokszámok; HW pad-LED nyomva tartáskor.
-- [ ] **PP-41** (P2, S) Q-Link léptetés debounce + DCL pad-szín csomag csak változáskor — `PP.cpp:479-501,810-821`.
-- [ ] **PP-30** (P1, M) `PadMapper` kiemelése (JUCE-/DCL-függetlenül) és egységtesztek a 6. fejezet 1–7. pontjaira — `Kick/tests/platform/` (CMake-bővítés).
+- [x] **PP-41** (P2, S) Q-Link léptetés debounce + DCL pad-szín csomag csak változáskor — `PP.cpp:479-501,810-821`.
+- [x] **PP-30** (P1, M) `PadMapper` kiemelése (JUCE-/DCL-függetlenül) és egységtesztek a 6. fejezet 1–7. pontjaira — `Kick/tests/platform/` (CMake-bővítés).
 - [ ] **PP-30b** (P1, M) `KeybedProcessor` (csatorna, velocity-görbe/gain, scale filter) tiszta egységtesztekkel — minta: `KeyTransposeTests.cpp`. Függ: PP-21b.
-- [ ] **PP-31** (P1, S) MPC hardveres ellenőrzőlista (6. fejezet) a `HW_TEST_CHECKLIST.md`-be + lefuttatás; különösen B1/B3/B4/B7.
+- [x] **PP-31** (P1, S) MPC hardveres ellenőrzőlista (6. fejezet) a `HW_TEST_CHECKLIST.md`-be + lefuttatás; különösen B1/B3/B4/B7.
+
+### Állapot (S-F, `sonnet/s-f-padperform`)
+
+Kész és host-teszttel (`Kick/tests/platform/PadMapperTests.cpp`, `kick-pad-mapper`) + Mac smoke (`KICK_SMOKE_PROGRAMEDIT=1`, `MenuPadPerform`):
+PP-01 (akkord-képletek: terc, 127 fölötti hang eldobva), PP-02 (a motor bankja az egyetlen igazság), PP-03 (Q-Link 1-4 = Scale, Root, Oktáv, Akkord/Mód; `type` lista törölve), PP-04 (held-note tábla, a note-off a lenyomáskor küldött hangokra megy), PP-05 (tárolt Off / Chromatic Chords mód Chromatic-ként játszik), PP-06 (Progression: diatonikus akkordok a skála fokain), PP-07 (az Octave minden bankon érvényes), PP-08 (a pad-note a track kimeneti csatornájára íródik át az engine-ben; az aftertouch ugyanígy, `mt_audio_track.cpp`), PP-09 (a régi leképezés és a halott kód törölve — a Progression/leképezés átírása miatt egyben), PP-20 (16 LEVEL: Velocity és Tune; a Layer / Filter / Attack / Decay a hangmotor hook-ja nélkül nem valósítható meg), PP-23 (képernyős pad-játék per ujj, velocity a pad-on belüli helyből), PP-30 (PadMapper + tesztek), PP-31 (ellenőrzőlista: `AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` 20-29; lefuttatása MPC-n: ember kell), PP-41 (Q-Link debounce 40 ms, a DCL pad-szín csomag csak változáskor).
+PP-40 részben: akkord-/hangnév a képernyőn kész; a skála-fokszám a pad-feliraton és a hardver pad-LED nyomva tartáskor nincs.
+Nyitva (nem kóddal dönthető / más hatókör): PP-21, PP-21a-e, PP-30b (Keyboard Control menü: owner-döntés a gomb-kiosztásról), PP-22 (pad-aftertouch: a híd `kSendPadAftertouchPackets` döntése), PP-24 (touch strip Notes mód: híd), PP-25 (ARP UI: terv).

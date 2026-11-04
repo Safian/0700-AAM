@@ -151,32 +151,39 @@ A kézikönyv nincs a repóban (`docs/akai_mpc_hardware/manuals` üres); az Akai
 
 Sorrend: hibák → hiányzó funkciók → javaslatok → tesztek. (P0/P1/P2; méret S/M/L)
 
-- [ ] **PE-01** (P0, S) Clip: a `shared_ptr<MTClipProgram>` helyett nem-tulajdonos hivatkozás (nyers pointer vagy `WeakReference`), `ClipProgramTab/PadTab` aláírás igazítása — `PE/clip/kick_ClipProgramEdit.cpp:90-91`, `.h:63`, `EN/audio_engine/engine/mt_audio_manager_program.h:82`.
+- [x] **PE-01** (P0, S) Clip: a `shared_ptr<MTClipProgram>` helyett nem-tulajdonos hivatkozás (nyers pointer vagy `WeakReference`), `ClipProgramTab/PadTab` aláírás igazítása — `PE/clip/kick_ClipProgramEdit.cpp:90-91`, `.h:63`, `EN/audio_engine/engine/mt_audio_manager_program.h:82`.
 - [ ] **PE-02** (P0, M) Drum envelope/LFO/szűrő kötése a hanghoz: a clip-fa átadása a `DrumVoice`-nak (`attachToAndReset` meghívása vagy helyette közvetlen csatolás), `IDs::TYPE`/`type` egységesítése, a szűrő-env `type` ütközés feloldása, enable-jelzők alapértéke/UI — `drum_voice.h:37`, `DrumProgram.cpp:36-39`, `mt_audio_interface_types.cpp:219,234,249`, `mt_audio_iprogram_atomics.h:86,114,139,158,159,186`. **MPC hallgatásos igazolás kötelező.**
-- [ ] **PE-03** (P1, S) A knob-csomag ne fusson a pad-ágon: `isKnobMessage` kivétele a note-küldő ágból (`kick_ProgramEdit.cpp:232`), Q-Link/Data Dial külön kezelés — `dcl_contracts.h:138-142,215-217`.
-- [ ] **PE-04** (P1, S) MIDI Program Edit: `state` beállítása `setProgram`-ban (`pIProg->getState()`), a selector-ikon index javítása — `PE/kick_ProgramEditInterface.h:36-45,54`, `PE/midi/kick_MidiProgramEdit.cpp:76-94`. Függ: PE-30 (teszt).
-- [ ] **PE-05** (P1, S) Drum: `comps[sIdx]` → `comps[tIndex]`, a `sIdx` megszüntetése — `PE/drum/kick_DrumProgramEdit.cpp:124`, `.h:77`.
-- [ ] **PE-06** (P1, M) Motor Layer Play javítása: CYCLE körbejár, RANDOM/CYCLE a valódi réteg-indexre, VELOCITY zárt tartomány (127), Keygroup CYCLE/RANDOM — `EN/audio_program/synth/DrumProgram.cpp:94-122`, `KeygroupProgram.cpp:99`. Függ: –; teszt PE-31.
-- [ ] **PE-07** (P1, S) Keygroup Main: `double` lambdák (pan), `semi` lépés, Sample Play címkék (közös lista a Drummal), KEY TRACK bekötése vagy elrejtése — `PE/keygroup/kick_KeyGroupMaster.cpp:39,57-60`, `.h:20,25`.
-- [ ] **PE-08** (P1, S) Keygroup Samples 2: `slice` bekötése, `layerPan` `KickRotary`/`KickNumberf` típusra, Start/End vs Loop Start/End szétválasztása — `kick_KeyGroupProgramEdit.cpp:276-386`, `.h:102,112`.
-- [ ] **PE-09** (P1, S) Clip pad fül: mute group oda-vissza, null-ellenőrzés, start/end visszatöltése, `nameLabel` szöveg — `PE/clip/kick_ClipProgramEdit_padTab.cpp:110,142-157`.
+- [x] **PE-03** (P1, S) A knob-csomag ne fusson a pad-ágon: `isKnobMessage` kivétele a note-küldő ágból (`kick_ProgramEdit.cpp:232`), Q-Link/Data Dial külön kezelés — `dcl_contracts.h:138-142,215-217`.
+- [x] **PE-04** (P1, S) MIDI Program Edit: `state` beállítása `setProgram`-ban (`pIProg->getState()`), a selector-ikon index javítása — `PE/kick_ProgramEditInterface.h:36-45,54`, `PE/midi/kick_MidiProgramEdit.cpp:76-94`. Függ: PE-30 (teszt).
+- [x] **PE-05** (P1, S) Drum: `comps[sIdx]` → `comps[tIndex]`, a `sIdx` megszüntetése — `PE/drum/kick_DrumProgramEdit.cpp:124`, `.h:77`.
+- [x] **PE-06** (P1, M) Motor Layer Play javítása: CYCLE körbejár, RANDOM/CYCLE a valódi réteg-indexre, VELOCITY zárt tartomány (127), Keygroup CYCLE/RANDOM — `EN/audio_program/synth/DrumProgram.cpp:94-122`, `KeygroupProgram.cpp:99`. Függ: –; teszt PE-31.
+- [x] **PE-07** (P1, S) Keygroup Main: `double` lambdák (pan), `semi` lépés, Sample Play címkék (közös lista a Drummal), KEY TRACK bekötése vagy elrejtése — `PE/keygroup/kick_KeyGroupMaster.cpp:39,57-60`, `.h:20,25`.
+- [x] **PE-08** (P1, S) Keygroup Samples 2: `slice` bekötése, `layerPan` `KickRotary`/`KickNumberf` típusra, Start/End vs Loop Start/End szétválasztása — `kick_KeyGroupProgramEdit.cpp:276-386`, `.h:102,112`.
+- [x] **PE-09** (P1, S) Clip pad fül: mute group oda-vissza, null-ellenőrzés, start/end visszatöltése, `nameLabel` szöveg — `PE/clip/kick_ClipProgramEdit_padTab.cpp:110,142-157`.
 - [ ] **PE-10** (P1, M) Audio szerkesztő stubok: Split (`:904-915`), ruler-seek (`:830-835`), Fade In/Out, Semi, Fine, TC, Don't Snap, Copy/Paste bekötése **vagy** elrejtése; `pAudio` null-ellenőrzés (`:1045`); TRACK-lista `setSelectedTrack` (`kick_ProgramEdit.cpp:131-135`).
-- [ ] **PE-11** (P1, S) Plugin típus kezelése a Program Edit-ben: HW EDIT Plugin programnál nyissa a CLAP-panelt (vagy értelmes üzenet) — `kick_ProgramEdit.cpp:165-173,216-224`, `A/kick/kick_hardware_bridge.h:1220-1227`.
-- [ ] **PE-12** (P2, S) Envelope-lapok frissítése ne írjon a modellbe (`dontSendNotification` + külön láthatóság-frissítés); DEPTH minden típusnál látható a pitch/filter soron — `kick_DrumProgramEnvelopes.cpp:68-71,115`, `kick_FilterEnvEdit.cpp:194`.
-- [ ] **PE-13** (P2, S) `themeChanged` null-védelem — `kick_ProgramEdit.cpp:144-146`.
-- [ ] **PE-14** (P2, S) Megjelenítéskor egy forrásból töltsön programot (B16) — `kick_ProgramEdit.cpp:39-49,296-304`.
-- [ ] **PE-15** (P2, S) Kisebb: Layer 1–4 felirat, Poly reset 16, Mute Group „Off/1..32” egységesen — `kick_DrumProgramSampleTab.cpp:33`, `kick_MasterDrumProgramEdit.cpp:72`.
+- [x] **PE-11** (P1, S) Plugin típus kezelése a Program Edit-ben: HW EDIT Plugin programnál nyissa a CLAP-panelt (vagy értelmes üzenet) — `kick_ProgramEdit.cpp:165-173,216-224`, `A/kick/kick_hardware_bridge.h:1220-1227`.
+- [x] **PE-12** (P2, S) Envelope-lapok frissítése ne írjon a modellbe (`dontSendNotification` + külön láthatóság-frissítés); DEPTH minden típusnál látható a pitch/filter soron — `kick_DrumProgramEnvelopes.cpp:68-71,115`, `kick_FilterEnvEdit.cpp:194`.
+- [x] **PE-13** (P2, S) `themeChanged` null-védelem — `kick_ProgramEdit.cpp:144-146`.
+- [x] **PE-14** (P2, S) Megjelenítéskor egy forrásból töltsön programot (B16) — `kick_ProgramEdit.cpp:39-49,296-304`.
+- [x] **PE-15** (P2, S) Kisebb: Layer 1–4 felirat, Poly reset 16, Mute Group „Off/1..32” egységesen — `kick_DrumProgramSampleTab.cpp:33`, `kick_MasterDrumProgramEdit.cpp:72`.
 - [ ] **PE-16** (P2, S) Halott kód takarítása (B15) **az owner jóváhagyásával** — `program_edit_ui.cpp:15-21,35-41`, a nem fordított .cpp-k, `KeyGroupInserts`, `PanVelocityEditKG`.
 - [ ] **PE-20** (P1, L) Réteg 2–4 mintakezelés + velocity-tartomány UI (Samples lap réteg-gombjai mintát fogadjanak; start/end velocity) — `PE/drum/kick_DrumProgramSampleTab.cpp:138-163`, `EN/audio_program/source/mt_audio_iprogram.cpp:760-767`. Függ: PE-06; az Assign Sample réteg-választóval (AS-10) együtt tervezendő.
 - [ ] **PE-21** (P1, L) Szűrő (típus/cutoff/rezonancia) modell-API + UI Drumra (és Keygroupra a motor kész állapotában). Függ: PE-02.
 - [ ] **PE-22** (P1, L) Keygroup Envelopes/LFO/Layer Mix motor-bekötés — a zongora-terv (02) motorjával egyesítve; addig PE-23. Függ: `plans/02-piano-clap.md` döntés.
-- [ ] **PE-23** (P1, S) Keygroup Envelopes/LFO addig jelezze „nem aktív”-ként (szürke + felirat) vagy rejtse — `04-screen-audit.md` §2.3. (Owner dönt PE-22 vs PE-23.)
-- [ ] **PE-24** (P1, M) Zóna-szerkesztés (min/max/root) Keygroupra — `mt_audio_interface_types.cpp:133-134`; Drum Flatten/Convert (döntés).
-- [ ] **PE-25** (P1, M) Q-Link→paraméter leképezés a Program Edit lapjain (`knobCommand`, 4 Q-Link/lap) — `M/kick_ui_common/source/kick_IScreen.h:106`, mintának `PadMixer::knobCommand` (`kick_PadMixer.cpp:628`).
-- [ ] **PE-26** (P2, M) Pad-kiválasztás érintéssel (pad-rács/lista a fejlécben) + `selectedPadLabel` érintésre is.
-- [ ] **PE-27** (P2, M) Samples lap hullámforma háttérszálon / cache; `refresh` ScopeTracker újracsatlakozás csökkentése — `kick_DrumProgramSampleTab.cpp:172`.
+- [x] **PE-23** (P1, S) Keygroup Envelopes/LFO addig jelezze „nem aktív”-ként (szürke + felirat) vagy rejtse — `04-screen-audit.md` §2.3. (Owner dönt PE-22 vs PE-23.)
+- [x] **PE-24** (P1, M) Zóna-szerkesztés (min/max/root) Keygroupra — `mt_audio_interface_types.cpp:133-134`; Drum Flatten/Convert (döntés).
+- [x] **PE-25** (P1, M) Q-Link→paraméter leképezés a Program Edit lapjain (`knobCommand`, 4 Q-Link/lap) — `M/kick_ui_common/source/kick_IScreen.h:106`, mintának `PadMixer::knobCommand` (`kick_PadMixer.cpp:628`).
+- [x] **PE-26** (P2, M) Pad-kiválasztás érintéssel (pad-rács/lista a fejlécben) + `selectedPadLabel` érintésre is.
+- [x] **PE-27** (P2, M) Samples lap hullámforma háttérszálon / cache; `refresh` ScopeTracker újracsatlakozás csökkentése — `kick_DrumProgramSampleTab.cpp:172`.
 - [ ] **PE-28** (P2, M) CLAP-panel MPC-s érintő-ergonómia + Add folder alternatíva + dedup (`PluginPanel.cpp:101-111`); a panel MPC-s megjelenésének igazolása (H5).
-- [ ] **PE-30** (P1, M) Egységteszt: MIDI-editor CC-kötés, Clip pad mute group, knob-csomag ≠ note (`Kick/tests/platform/`).
-- [ ] **PE-31** (P1, M) Motor-egységteszt: Layer Play (Cycle/Random/Velocity 127), Sample Play enum↔címke, DrumVoice-kötés (modell→atom→renderelt eltérés).
-- [ ] **PE-32** (P1, M) ASAN-os Clip programváltó smoke (az `AppSmoke.py` bővítése Clip/Drum/Keygroup programokkal és a Program Edit megnyitásával).
-- [ ] **PE-33** (P1, M) MPC hardveres ellenőrzőlista bővítése a 6. fejezet pontjaival (`docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md`), eredmény-rögzítés a jegyzőkönyvben.
+- [x] **PE-30** (P1, M) Egységteszt: MIDI-editor CC-kötés, Clip pad mute group, knob-csomag ≠ note (`Kick/tests/platform/`).
+- [x] **PE-31** (P1, M) Motor-egységteszt: Layer Play (Cycle/Random/Velocity 127), Sample Play enum↔címke, DrumVoice-kötés (modell→atom→renderelt eltérés).
+- [x] **PE-32** (P1, M) ASAN-os Clip programváltó smoke (az `AppSmoke.py` bővítése Clip/Drum/Keygroup programokkal és a Program Edit megnyitásával).
+- [x] **PE-33** (P1, M) MPC hardveres ellenőrzőlista bővítése a 6. fejezet pontjaival (`docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md`), eredmény-rögzítés a jegyzőkönyvben.
+
+### Állapot (S-F, `sonnet/s-f-padperform`)
+
+Kész (host-teszt: `LayerPlayTests.cpp`, `AudioSplitTests.cpp`; Mac smoke: `KICK_SMOKE_PROGRAMEDIT=1`, ProgramEditSmoke.h):
+PE-01 (Clip: nem-tulajdonos pointer, a smoke Clip A/B váltást ellenőriz), PE-03 (a knob-csomag nem pad), PE-04 (MIDI CC-csúszkák a program fájára kötve, smoke), PE-05, PE-06 (Layer Play: Cycle körbejár, valódi réteg-szám, zárt velocity tartomány, Keygroup Cycle/Random), PE-07 (Keygroup Main: double pan/semi/fine, Sample Play címkék közös lista + `static_assert`, KEY TRACK elrejtve), PE-08 (layerPan float, Slice bekötve; a Start/End és Loop Start/End ugyanaz a modell-pár, az engine-nek csak egy van), PE-09, PE-10 (Split megvalósítva; Fade/Semi/Fine/TC/Don't Snap/Copy elrejtve, mert nincs mögöttük modell/motor; `pAudio` null-védelem, TRACK-lista `setSelectedTrack`), PE-11 (HW EDIT Plugin programnál megnyitja a CLAP-panelt), PE-12, PE-13, PE-14, PE-15, PE-20 részben (réteg velocity-tartomány a Layer Mix lapon; minta-hozzárendelés a 2-4. rétegre az Assign Sample réteg-választójával együtt: másik worker fájljai), PE-23 (a Keygroup Envelopes/LFO/Layer Mix rejtve marad, nem kapcsoltam vissza), PE-24 részben (Keygroup zóna min/max; Flatten/Convert döntés), PE-25 (Q-Link 1-4 = az oldal első négy forgatója), PE-26 (PAD lista érintéses kiválasztáshoz), PE-27 (háttérszálas hullámforma-betöltés, a hangcache zárolva), PE-30/31/32/33.
+Drum Envelopes + LFO: elrejtve (`kDrumEnginePagesVisible = false`), mert a `DrumVoice` atomjai sosem kapcsolódnak a modellhez (B2).
+Nyitva: PE-02 és PE-21 (hang-kötés és szűrő: hallgatásos MPC-teszt kell), PE-16 (halott kód törlése: owner jóváhagyás), PE-22 (Keygroup-motor: owner-döntés), PE-28 (`Kick/clap_host/*`: másik hatókör).

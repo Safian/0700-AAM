@@ -117,3 +117,21 @@ Next Sequence / Song / Color Edit
 17. Next Sequence: PLAY, queue a pad, STOP (touch header or hardware), change bank; repeat with STOP on another screen and coming back: no crash (`/data/kick.crash` must stay absent). PLAY vs PLAY START; header Play/Stop button.
 18. Song: create (empty / duplicate / "create new song" names are refused), Insert 3 steps, PLAY from step 2, wait for the end (UI unlocks, transport stops), Clear / Delete + UNDO, rename and delete a song, delete a sequence used by a step (step turns red, PLAY refuses).
 19. Color Edit: press a hardware pad: it plays and takes the colour, the hardware pad LED follows; Data Dial steps the colours; +/- change the bank; Make Default gives the program type's defaults in all banks; the Pad Off / Pad On / Empty controls still have NO hardware effect on the MPC (bridge does not implement the colour mode).
+
+Pad Perform (Pad Notes) and Program Edit (S-F)
+20. KEYBOARD CONTROL and Shift+16 LEVEL open Pad Notes. Chromatic / Notes (Major, Minor) / Chords: the 16 pad names match what you hear; pad LED root = red, scale note = dark yellow.
+21. Chords, `1-3-5-7`: C-major root pad must sound C E G B (a major third, not a fourth); `1-3-5-7b` = C E G Bb. A chord near the top of the range (octave 8) plays fewer notes, never a wrong high note.
+22. Progression: the pads are the scale degrees; with C major `1-3-5` pad 2 = D F A (minor), pad 7 = B D F (diminished); `1-3-5-7` pad 5 = G B D F.
+23. Q-Link 1-4 (Screen mode, default): 1 Scale, 2 Root, 3 Octave, 4 Chord list (Chords / Progression) or the mode (Chromatic > Notes > Chords > Progression). Fast turns do not lag the pad LEDs (the colour packet is sent once per burst).
+24. Hold a pad, then turn Q-Link 1 / 2 or change bank, release the pad: the note ends (no stuck note). Hide the screen (MAIN) while holding pads: all notes end.
+25. Touch the on-screen pads: one note per finger (try 3 fingers), velocity higher towards the bottom of the pad, note ends on lift; the pad highlights while held; the hardware pads do NOT sound twice.
+26. Touch the +/- bank buttons, then hit the hardware pads: they must play the notes of the bank that the screen shows (and the LEDs show that bank). Octave list on bank H changes the pads too.
+27. 16 LEVEL button: Pad Notes opens with the last pad on all 16 pads, velocity 8..127 rising; the LED lights; the Tune switch plays pad 9 = the note, others +-semitones; pressing 16 LEVEL again (or leaving the screen) ends it and the LED goes out. Check the LED really follows (DCL LED packet).
+28. Held pads show the note / chord name next to the 16 LEVELS buttons ("Cmaj7"). Pad LED while held: NOT implemented (needs a look at what the bridge already does on a hit).
+29. Keyboard aftertouch on a MIDI-program track arrives on the track's output channel (not always channel 1).
+30. Program Edit, EDIT button: Clip A <-> Clip B switching does not crash and keeps both programs; Data Dial turn without a touched control plays NO note; Q-Link 1-4 move the first four rotaries of the page (Drum Main: Master Level / Pan / Semi / Fine). Touch the PAD list and pick a pad: the page shows that pad, the bank follows.
+31. Program Edit on a Plugin program: the CLAP panel opens (button OPEN PLUGIN EDITOR re-opens it).
+32. MIDI program: moving a CC slider sends the CC to the external synth / appears in the project.
+33. Drum Layer Play: Cycle goes round all layers with a sound (repeat 8 hits), Random uses only loaded layers, Velocity with a 127 hit (Full Level) plays the layer whose range includes 127; layer velocity ranges are edited on Layer Mix (VEL START / VEL END).
+34. Keygroup: Sample Play "Note On" holds the sound while the key is held; "Note Off" starts it on release; Layer Pan / Pan give fine values; ZONE LOW / HIGH change which sample plays a key when the keygroup has several samples.
+35. Audio program: SPLIT with a sample selected and the playhead inside it cuts it in two at the playhead; Fade / Semi / Fine / TC / Don't Snap / Copy are hidden by design (nothing behind them yet).
