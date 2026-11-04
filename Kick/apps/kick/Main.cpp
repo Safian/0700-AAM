@@ -24,10 +24,6 @@
 #include "kick_device_adapter.h"
 #include "kick_audio_engine_adapter.h"
 #include "kick_audio_interface.h"
-#include "kick_mobile_t_layout.h"
-#if JUCE_MAC
- #include "kick_hardware_chassis.h"
-#endif
 #if KICK_APP_SMOKE_TEST
  #include "../../tests/platform/AppSmoke.h"
 #endif
@@ -158,11 +154,13 @@ public:
         // Initialize User Interface...
         w = std::make_unique<HomeWindow>( getApplicationName() );
 
-#if ! JUCE_MAC
+#if JUCE_MAC
+        w->setUsingNativeTitleBar( true );
+        w->centreWithSize( 1024, 600 );
+#else
         // Title bar ...
         w->setUsingNativeTitleBar( false );
         w->setTitleBarHeight( 0 );
-#endif
 
 #if defined( ENABLE_X11_FULLSCREEN ) && ( 0 < ENABLE_X11_FULLSCREEN )
     #if( JUCE_LINUX || __linux__ )
@@ -171,7 +169,6 @@ public:
     #endif
 #endif
 
-#if ! JUCE_MAC
         // Dimension ...
         juce::Rectangle<int> bounds = ui::layout::screen;
 #if JUCE_IOS
@@ -198,13 +195,6 @@ public:
             if (error.isNotEmpty()) {
                 std::cerr << "FAIL: " << error << std::endl;
                 setApplicationReturnValue(3);
-            }
-#endif
-#if JUCE_MAC
-            if (juce::SystemStats::getEnvironmentVariable("KICK_TEST_DISPLAY_ONLY", {}).isNotEmpty())
-            {
-                if (auto* hw = dynamic_cast<HomeWindow*>(w.get()))
-                    hw->setViewMode(kick_mac::KickHardwareChassis::ViewMode::DisplayOnly);
             }
 #endif
             const auto path = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_SNAPSHOT", {});
@@ -265,313 +255,72 @@ public:
 
     //==============================================================================
     // This class implements the desktop window that contains an instance of our MainComponent class.
-#if JUCE_MAC
-    class HomeWindow : public juce::DocumentWindow, public juce::KeyListener
+#if JUCE_IOS
+    class KickMobileView : public juce::Component
     {
     public:
-        explicit HomeWindow( const juce::String& name )
-            : juce::DocumentWindow( name, juce::Colours::black, juce::DocumentWindow::allButtons )
+        KickMobileView()
         {
-            setUsingNativeTitleBar( true );
-            setResizable( true, true );
-
-            chassisComponent = std::make_unique<kick_mac::KickHardwareChassis>();
-            setContentNonOwned( chassisComponent.get(), false );
-
-            addKeyListener( this );
-#if defined( KICK_KEYBOARD_PANEL )
-            addKeyListener( &contracts::getKeypressDetector() );
-#endif
-
-            menuModel = std::make_unique<kick_mac::KickMacMenuModel>( [this]( int cmd ) {
-                handleMenuCommand( cmd );
-            } );
-            juce::MenuBarModel::setMacMainMenu( menuModel.get() );
-
-            // Start in Hardware Chassis view by default
-            setViewMode( kick_mac::KickHardwareChassis::ViewMode::HardwareChassis );
+            setOpaque( true );
+            kickHome = &kick_ui::KickHome::Instance();
+            addAndMakeVisible( kickHome );
         }
 
-        ~HomeWindow() override
+        ~KickMobileView() override
         {
-            removeKeyListener( this );
-            juce::MenuBarModel::setMacMainMenu( nullptr );
-            menuModel.reset();
-            clearContentComponent();
-            chassisComponent.reset();
-        }
-
-        void closeButtonPressed() override
-        {
-            juce::JUCEApplication::getInstance()->systemRequestedQuit();
-        }
-
-        void inputAttemptWhenModal() override
-        {
-            auto numModal = getNumCurrentlyModalComponents();
-            auto index    = juce::jmax( 0, numModal - 1 );
-            if( auto p = getCurrentlyModalComponent( index ) )
-                p->toFront( true );
-        }
-
-        void handleMenuCommand( int cmd )
-        {
-            switch( cmd )
+            if( kickHome != nullptr )
             {
-                case kick_mac::KickMacMenuModel::idHardwareView:
-                    setViewMode( kick_mac::KickHardwareChassis::ViewMode::HardwareChassis );
-                    break;
-                case kick_mac::KickMacMenuModel::idDisplayOnlyView:
-                    setViewMode( kick_mac::KickHardwareChassis::ViewMode::DisplayOnly );
-                    break;
-                case kick_mac::KickMacMenuModel::idMobileView:
-                    setViewMode( kick_mac::KickHardwareChassis::ViewMode::MobileTLayout );
-                    break;
-                case kick_mac::KickMacMenuModel::idMobileBottomPads:
-                    if( chassisComponent != nullptr && chassisComponent->getMobileLayout() != nullptr )
-                        chassisComponent->getMobileLayout()->setPanelState( kick_mobile::KickMobileTLayout::PanelState::BottomPads );
-                    break;
-                case kick_mac::KickMacMenuModel::idMobileMasterStrip:
-                    if( chassisComponent != nullptr && chassisComponent->getMobileLayout() != nullptr )
-                        chassisComponent->getMobileLayout()->setPanelState( kick_mobile::KickMobileTLayout::PanelState::MasterStrip );
-                    break;
-                case kick_mac::KickMacMenuModel::idMobileQLinkStrip:
-                    if( chassisComponent != nullptr && chassisComponent->getMobileLayout() != nullptr )
-                        chassisComponent->getMobileLayout()->setPanelState( kick_mobile::KickMobileTLayout::PanelState::QLinkStrip );
-                    break;
-                case kick_mac::KickMacMenuModel::idMobileReturnDaw:
-                    if( chassisComponent != nullptr && chassisComponent->getMobileLayout() != nullptr )
-                        chassisComponent->getMobileLayout()->setPanelState( kick_mobile::KickMobileTLayout::PanelState::DAW );
-                    break;
-                case kick_mac::KickMacMenuModel::idToggleView:
-                    toggleViewMode();
-                    break;
-                case kick_mac::KickMacMenuModel::idToggleDrawer:
-                    kick_ui::KickHome::Instance().setHardwareDrawerVisible( !kick_ui::KickHome::Instance().isHardwareDrawerVisible() );
-                    if( menuModel ) menuModel->menuItemsChanged();
-                    break;
-                case kick_mac::KickMacMenuModel::idScale100:
-                    setWindowScale( 1.0f );
-                    break;
-                case kick_mac::KickMacMenuModel::idScale120:
-                    setWindowScale( 1.2f );
-                    break;
-                case kick_mac::KickMacMenuModel::idScale140:
-                    setWindowScale( 1.4f );
-                    break;
-                case kick_mac::KickMacMenuModel::idScaleFit:
-                    fitToScreen();
-                    break;
-                case kick_mac::KickMacMenuModel::idProjectDemo1:
-                    loadDemoProject( 1 );
-                    break;
-                case kick_mac::KickMacMenuModel::idProjectBrowser:
-                    kick_ui::signals::sigScreenClose( kick_ui::Screen::RecentProject );
-                    break;
-                case kick_mac::KickMacMenuModel::idProjectPlayPause:
-                    if( chassisComponent != nullptr )
-                        chassisComponent->sendButtonMessage( contracts::DeviceControlContracts::EN_PLAY, true );
-                    break;
-                default:
-                    break;
+                kickHome->setTransform( juce::AffineTransform() );
+                removeChildComponent( kickHome );
             }
         }
 
-        void loadDemoProject( int demoNumber )
+        void paint( juce::Graphics& g ) override
         {
-            auto demoName = juce::String( "Demo " ) + juce::String::formatted( "%02d", demoNumber );
-            auto demoDir = getAppDirs( MTDemos ).getChildFile( demoName );
-            auto demoFile = demoDir.getChildFile( demoName + ".kickPrj" );
-            if( !demoFile.existsAsFile() )
+            g.fillAll( juce::Colour( 0xff121215 ) );
+        }
+
+        void resized() override
+        {
+            int w = getWidth();
+            int h = getHeight();
+            if( w <= 0 || h <= 0 ) return;
+
+            const float targetAspect = 1024.0f / 600.0f;
+            const float currentAspect = (float)w / (float)h;
+
+            float dawW = 0.0f;
+            float dawH = 0.0f;
+            if( currentAspect > targetAspect )
             {
-                demoFile = juce::File( "Kick/demos" ).getChildFile( demoName ).getChildFile( demoName + ".kickPrj" );
-            }
-            if( !demoFile.existsAsFile() )
-            {
-                demoFile = juce::File( "build/demos" ).getChildFile( demoName ).getChildFile( demoName + ".kickPrj" );
-            }
-            if( demoFile.existsAsFile() )
-            {
-                ui::LoadProjectAndAnimation::getInstance().startLoading( demoFile );
+                dawH = (float)h;
+                dawW = (float)h * targetAspect;
             }
             else
             {
-                std::cerr << "Demo project not found: " << demoFile.getFullPathName().toStdString() << std::endl;
+                dawW = (float)w;
+                dawH = (float)w / targetAspect;
             }
-        }
 
-        void toggleViewMode()
-        {
-            if( chassisComponent == nullptr ) return;
-            auto nextMode = ( chassisComponent->getViewMode() == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis )
-                                ? kick_mac::KickHardwareChassis::ViewMode::DisplayOnly
-                                : kick_mac::KickHardwareChassis::ViewMode::HardwareChassis;
-            setViewMode( nextMode );
-        }
+            float scale = dawW / 1024.0f;
+            float dawX = ( (float)w - dawW ) * 0.5f;
+            float dawY = ( (float)h - dawH ) * 0.5f;
 
-        void setViewMode( kick_mac::KickHardwareChassis::ViewMode mode )
-        {
-            if( chassisComponent == nullptr ) return;
-
-            chassisComponent->setViewMode( mode );
-
-            if( mode == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis )
+            if( kickHome != nullptr )
             {
-                getConstrainer()->setFixedAspectRatio( 700.0 / 710.0 );
-                setResizeLimits( 500, 507, 1600, 1622 );
-
-                auto userArea = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
-                int targetH = juce::jmin( 852, (int)( userArea.getHeight() * 0.90f ) );
-                int targetW = (int)std::round( targetH * ( 700.0f / 710.0f ) );
-                setContentComponentSize( targetW, targetH );
-                centreWithSize( getWidth(), getHeight() );
-                setName( juce::String::fromUTF8( "Behringer Kick - Hardver nézet" ) );
+                kickHome->setBounds( 0, 0, 1024, 600 );
+                kickHome->setTransform(
+                    juce::AffineTransform::scale( scale, scale )
+                                         .translated( dawX, dawY )
+                );
             }
-            else if( mode == kick_mac::KickHardwareChassis::ViewMode::DisplayOnly )
-            {
-                getConstrainer()->setFixedAspectRatio( 1024.0 / 600.0 );
-                setResizeLimits( 512, 300, 2048, 1200 );
-
-                setContentComponentSize( 1024, 600 );
-                centreWithSize( getWidth(), getHeight() );
-                setName( juce::String::fromUTF8( "Behringer Kick - Kijelző nézet" ) );
-            }
-            else // MobileTLayout
-            {
-                getConstrainer()->setFixedAspectRatio( 852.0 / 393.0 );
-                setResizeLimits( 500, 230, 1704, 786 );
-
-                setContentComponentSize( 852, 393 );
-                centreWithSize( getWidth(), getHeight() );
-                setName( juce::String::fromUTF8( "Behringer Kick - Mobil nézet (iPhone)" ) );
-            }
-
-            if( menuModel != nullptr )
-            {
-                int modeIdx = ( mode == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis ) ? 0
-                            : ( mode == kick_mac::KickHardwareChassis::ViewMode::DisplayOnly ) ? 1 : 2;
-                menuModel->setActiveViewMode( modeIdx );
-            }
-        }
-
-        void setWindowScale( float scaleFactor )
-        {
-            if( chassisComponent == nullptr ) return;
-            if( chassisComponent->getViewMode() == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis )
-            {
-                int w = (int)std::round( 700.0f * scaleFactor );
-                int h = (int)std::round( 710.0f * scaleFactor );
-                setContentComponentSize( w, h );
-                centreWithSize( getWidth(), getHeight() );
-            }
-            else
-            {
-                int w = (int)std::round( 1024.0f * scaleFactor );
-                int h = (int)std::round( 600.0f * scaleFactor );
-                setContentComponentSize( w, h );
-                centreWithSize( getWidth(), getHeight() );
-            }
-        }
-
-        void fitToScreen()
-        {
-            if( chassisComponent == nullptr ) return;
-            auto userArea = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
-            if( chassisComponent->getViewMode() == kick_mac::KickHardwareChassis::ViewMode::HardwareChassis )
-            {
-                int maxH = (int)( userArea.getHeight() * 0.92f );
-                int maxW = (int)( userArea.getWidth() * 0.92f );
-                float scale = juce::jmin( (float)maxW / 700.0f, (float)maxH / 710.0f );
-                int w = (int)std::round( 700.0f * scale );
-                int h = (int)std::round( 710.0f * scale );
-                setContentComponentSize( w, h );
-                centreWithSize( getWidth(), getHeight() );
-            }
-            else
-            {
-                int maxH = (int)( userArea.getHeight() * 0.92f );
-                int maxW = (int)( userArea.getWidth() * 0.92f );
-                float scale = juce::jmin( (float)maxW / 1024.0f, (float)maxH / 600.0f );
-                int w = (int)std::round( 1024.0f * scale );
-                int h = (int)std::round( 600.0f * scale );
-                setContentComponentSize( w, h );
-                centreWithSize( getWidth(), getHeight() );
-            }
-        }
-
-        bool handleKeyPress( const juce::KeyPress& key )
-        {
-            // Cmd+1 or F1 -> Hardware Chassis View
-            if( ( key.isKeyCode( '1' ) && key.getModifiers().isCommandDown() ) || key.isKeyCode( juce::KeyPress::F1Key ) )
-            {
-                setViewMode( kick_mac::KickHardwareChassis::ViewMode::HardwareChassis );
-                return true;
-            }
-
-            // Cmd+2 or F2 -> Display Only View
-            if( ( key.isKeyCode( '2' ) && key.getModifiers().isCommandDown() ) || key.isKeyCode( juce::KeyPress::F2Key ) )
-            {
-                setViewMode( kick_mac::KickHardwareChassis::ViewMode::DisplayOnly );
-                return true;
-            }
-
-            // Cmd+3 or F3 -> Mobile T-Layout View
-            if( ( key.isKeyCode( '3' ) && key.getModifiers().isCommandDown() ) || key.isKeyCode( juce::KeyPress::F3Key ) )
-            {
-                setViewMode( kick_mac::KickHardwareChassis::ViewMode::MobileTLayout );
-                return true;
-            }
-
-            // Arrow Keys in Mobile mode (Up = Bottom Pads, Down = DAW, Right = Master, Left = Q-Links)
-            if( chassisComponent != nullptr && chassisComponent->getViewMode() == kick_mac::KickHardwareChassis::ViewMode::MobileTLayout )
-            {
-                if( auto* ml = chassisComponent->getMobileLayout() )
-                {
-                    if( ml->handleKeyboardNav( key ) ) return true;
-                }
-            }
-
-            // F5 -> Toggle View
-            if( key.isKeyCode( juce::KeyPress::F5Key ) )
-            {
-                toggleViewMode();
-                return true;
-            }
-
-            // Cmd+D -> Load Demo 01 (Drum & Bass Kit)
-            if( ( key.isKeyCode( 'd' ) || key.isKeyCode( 'D' ) ) && key.getModifiers().isCommandDown() )
-            {
-                loadDemoProject( 1 );
-                return true;
-            }
-
-            // Cmd+O -> Open Projects / Demos List
-            if( ( key.isKeyCode( 'o' ) || key.isKeyCode( 'O' ) ) && key.getModifiers().isCommandDown() )
-            {
-                kick_ui::signals::sigScreenClose( kick_ui::Screen::RecentProject );
-                return true;
-            }
-
-            return false;
-        }
-
-        bool keyPressed( const juce::KeyPress& key ) override
-        {
-            if( handleKeyPress( key ) ) return true;
-            return juce::DocumentWindow::keyPressed( key );
-        }
-
-        bool keyPressed( const juce::KeyPress& key, juce::Component* /*originatingComponent*/ ) override
-        {
-            return handleKeyPress( key );
         }
 
     private:
-        std::unique_ptr<kick_mac::KickHardwareChassis> chassisComponent;
-        std::unique_ptr<kick_mac::KickMacMenuModel>    menuModel;
+        kick_ui::KickHome* kickHome{ nullptr };
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( KickMobileView )
     };
-#else
-#if JUCE_IOS
+
     class HomeWindow : public juce::DocumentWindow
     {
     public:
@@ -579,14 +328,14 @@ public:
             : juce::DocumentWindow( name, juce::Colours::black, 0 )
         {
             setTitle( name );
-            mobileLayout = std::make_unique<kick_mobile::KickMobileTLayout>();
-            setContentNonOwned( mobileLayout.get(), false );
+            mobileView = std::make_unique<KickMobileView>();
+            setContentNonOwned( mobileView.get(), false );
         }
 
         ~HomeWindow() override
         {
             clearContentComponent();
-            mobileLayout.reset();
+            mobileView.reset();
         }
 
         void closeButtonPressed() override
@@ -603,7 +352,41 @@ public:
         }
 
     private:
-        std::unique_ptr<kick_mobile::KickMobileTLayout> mobileLayout;
+        std::unique_ptr<KickMobileView> mobileView;
+    };
+#elif JUCE_MAC
+    class HomeWindow : public juce::DocumentWindow
+    {
+    public:
+        explicit HomeWindow( const juce::String& name )
+            : juce::DocumentWindow( name, juce::Colours::black, juce::DocumentWindow::closeButton )
+        {
+            setUsingNativeTitleBar( true );
+            setTitle( name );
+            setContentNonOwned( &kick_ui::KickHome::Instance(), true );
+            setResizable( false, false );
+#if defined( KICK_KEYBOARD_PANEL )
+            addKeyListener( &contracts::getKeypressDetector() );
+#endif
+        }
+
+        ~HomeWindow() override
+        {
+            clearContentComponent();
+        }
+
+        void closeButtonPressed() override
+        {
+            juce::JUCEApplication::getInstance()->systemRequestedQuit();
+        }
+
+        void inputAttemptWhenModal() override
+        {
+            auto numModal = getNumCurrentlyModalComponents();
+            auto index    = juce::jmax( 0, numModal - 1 );
+            if( auto p = getCurrentlyModalComponent( index ) )
+                p->toFront( true );
+        }
     };
 #else
     class HomeWindow : public juce::DocumentWindow
@@ -636,7 +419,6 @@ public:
                 p->toFront( true );
         }
     };
-#endif
 #endif
 
 private:

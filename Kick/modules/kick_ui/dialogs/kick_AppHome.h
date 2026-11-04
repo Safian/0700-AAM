@@ -27,7 +27,6 @@ namespace kick_ui
 {
     class KickLEDs;
     class AppStatusbar;
-    class MobileHardwareDrawer;
 
     class KickHome : public juce::Component
         , private juce::AsyncUpdater
@@ -41,9 +40,6 @@ namespace kick_ui
         IScreen*      getScreen( Screen screen );
 
         void AssignSampleStartUp( void );
-
-        void setHardwareDrawerVisible( bool isVisible );
-        bool isHardwareDrawerVisible() const;
 
     private:
         KickHome();
@@ -65,7 +61,6 @@ namespace kick_ui
 
         std::unique_ptr<Component>                 ctrlBar_;
         std::unique_ptr<KickLEDs>                  ledControl_;
-        std::unique_ptr<MobileHardwareDrawer>      hardwareDrawer_;
         juce::Component::SafePointer<AppStatusbar> statusBar_;
         int                                        page{ 0 };
 

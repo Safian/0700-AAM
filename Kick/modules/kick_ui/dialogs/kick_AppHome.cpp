@@ -203,10 +203,7 @@ namespace kick_ui
 
         // Global components
         ctrlBar_ = std::make_unique<AppTopbar>();
-        hardwareDrawer_ = std::make_unique<MobileHardwareDrawer>();
         mt::utils::addChildComponents( this, ctrlBar_.get(), statusBar_ );
-        addChildComponent( hardwareDrawer_.get() );
-        hardwareDrawer_->setVisible( false );
         // First launch screen.
         screenAdder( Screen::RecentProject, std::make_unique<ui::RecentProject>() );
 
@@ -365,30 +362,11 @@ namespace kick_ui
         if( auto p = screens_[currentScreen].get() )
             if( auto pScr = dynamic_cast<juce::Component*>( p ) )
                 pScr->setBounds( getScreenBounds( p ) );
-        if( hardwareDrawer_ && hardwareDrawer_->isVisible() )
-        {
-            hardwareDrawer_->setBounds( getLocalBounds() );
-            hardwareDrawer_->toFront( false );
-        }
     }
 
     void KickHome::AssignSampleStartUp()
     {
         dynamic_cast<AppAssignSample*>( screens_[Screen::MenuAssignSample].get() )->startup();
-    }
-
-    void KickHome::setHardwareDrawerVisible( bool isVisible )
-    {
-        if( hardwareDrawer_ )
-        {
-            hardwareDrawer_->setVisible( isVisible );
-            resized();
-        }
-    }
-
-    bool KickHome::isHardwareDrawerVisible() const
-    {
-        return hardwareDrawer_ ? hardwareDrawer_->isVisible() : false;
     }
 
     void KickHome::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
