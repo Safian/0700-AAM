@@ -448,6 +448,57 @@ private:
     // true), so a finger is a real touch source and Button::mouseDrag/mouseUp use its own position. The first call still
     // probes whether JUCE made a touch source; if not (unpatched JUCE), finger 0 is delivered as InputSourceType::mouse (source 0) from then on. Real XI
     // touch on a display, macOS and iOS keep the touch type. Message thread only.
+    // Popups, dropdowns and modal dialogs are their own desktop windows. On the X-less MPC their peers do not know their
+    // position, so Desktop::findComponentAt() / getLocalPoint(nullptr, ..) miss them and the touch fell through to the screen
+    // BEHIND a modal dialog (Power, BPM Selector buttons did not react). Like the compositing in timerCallback() these use the
+    // window's own position, in the UI space the touch is already converted to.
+    bool isMainWindowTop(const juce::Component* c) const { return c == m_window || c == m_root; }
+
+    juce::Component* findDesktopPopupAt(int ix, int iy) const
+    {
+        // Modal dialogs (fsPopup: Power, BPM Selector, confirmations) are added as another child of the main window next to
+        // its content component, so the hit test on the content alone never reaches them and the touch landed on the screen
+        // behind the dialog (measured 2026-11-04: window children=2, target=AppTrack).
+        if (m_window != nullptr)
+        {
+            auto* content = m_window->getContentComponent();
+            for (int i = m_window->getNumChildComponents(); --i >= 0;)
+            {
+                auto* c = m_window->getChildComponent(i);
+                if (c == nullptr || c == content || !c->isVisible()) continue;
+                bool onThis = true, onChildren = true;
+                c->getInterceptsMouseClicks(onThis, onChildren);
+                if (!onThis && !onChildren) continue;
+                const auto rel = c->getLocalPoint(nullptr, juce::Point<int>(ix, iy));
+                if (!c->getLocalBounds().contains(rel)) continue;
+                auto* t = c->getComponentAt(rel);
+                return t != nullptr ? t : c;
+            }
+        }
+        auto& desk = juce::Desktop::getInstance();
+        for (int i = desk.getNumComponents(); --i >= 0;)
+        {
+            auto* c = desk.getComponent(i);
+            if (c == nullptr || isMainWindowTop(c) || !c->isVisible()) continue;
+            bool onThis = true, onChildren = true;
+            c->getInterceptsMouseClicks(onThis, onChildren);
+            if (!onThis && !onChildren) continue; // a click-through window (tooltip, overlay)
+            const auto rel = juce::Point<int>(ix, iy) - c->getPosition();
+            if (!c->getLocalBounds().contains(rel)) continue;
+            auto* t = c->getComponentAt(rel);
+            return t != nullptr ? t : c;
+        }
+        return nullptr;
+    }
+
+    juce::Point<int> screenToLocal(juce::Component* comp, int ix, int iy) const
+    {
+        auto* top = comp->getTopLevelComponent();
+        if (top != nullptr && !isMainWindowTop(top) && top->isOnDesktop())
+            return comp->getLocalPoint(top, juce::Point<int>(ix, iy) - top->getPosition());
+        return comp->getLocalPoint(nullptr, juce::Point<int>(ix, iy));
+    }
+
     void deliverPeerTouch(juce::ComponentPeer* peer, int ix, int iy, juce::ModifierKeys mods, int slot, bool log)
     {
         using ST = juce::MouseInputSource::InputSourceType;
@@ -519,7 +570,8 @@ private:
             kick_hw::probe::fbToUi(x, y, kFbW, kFbH, root->getWidth(), root->getHeight(), ix, iy);
 
             // Search desktop components first (modal dialogs, popups, dropdowns)
-            auto* target = juce::Desktop::getInstance().findComponentAt(juce::Point<int>(ix, iy));
+            auto* target = findDesktopPopupAt(ix, iy);
+            if (!target) target = juce::Desktop::getInstance().findComponentAt(juce::Point<int>(ix, iy));
             if (!target) target = hitRoot->getComponentAt(hitRoot->getLocalPoint(nullptr, juce::Point<int>(ix, iy)));
             if (!target) target = root;
             // A slider's value box (a Label child) hands its mouse events to the slider through a MouseListener (LinearBar
@@ -576,7 +628,7 @@ private:
                 return;
             }
 
-            auto localPt = target->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
+            auto localPt = screenToLocal(target, ix, iy).toFloat();
             int clicks = 1;
             if (slot >= 0 && slot < 10)
             {
@@ -626,7 +678,7 @@ private:
                 auto* downTarget = (slot >= 0 && slot < 10) ? m_touch_targets[slot].getComponent() : nullptr;
                 auto* effectiveTarget = downTarget ? downTarget : target;
                 if (effectiveTarget) {
-                    auto downLocalPt = effectiveTarget->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
+                    auto downLocalPt = screenToLocal(effectiveTarget, ix, iy).toFloat();
                     const bool wasDragged = slot >= 0 && slot < 10 && m_touch_dragging[slot];
                     juce::MouseEvent downE(mouseSrc,
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
@@ -674,8 +726,8 @@ private:
                 } else if (downTarget) {
                     // A real drag event carries where the press began and that the mouse moved since: JUCE sliders
                     // (LinearBar with an editable value box) treat a drag with mouseWasClicked() as a click and ignore it.
-                    auto downLocalPt = downTarget->getLocalPoint(nullptr, juce::Point<int>(ix, iy)).toFloat();
-                    auto pressLocalPt = inSlot ? downTarget->getLocalPoint(nullptr, juce::Point<int>(m_touch_down_x[slot], m_touch_down_y[slot])).toFloat()
+                    auto downLocalPt = screenToLocal(downTarget, ix, iy).toFloat();
+                    auto pressLocalPt = inSlot ? screenToLocal(downTarget, m_touch_down_x[slot], m_touch_down_y[slot]).toFloat()
                                                : downLocalPt;
                     juce::MouseEvent downE(mouseSrc,
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
@@ -2250,6 +2302,11 @@ public:
                 on_encoder_turn(a1, a2);
             }
         } else if (sscanf(cmd.c_str(), "%63s %127s", op, sval) == 2) {
+            if (strcmp(op, "log") == 0) { // log <categories>: switches the kick_logger categories at run time (e.g. "log info,error,touch")
+                kick_logger::Logger::instance().set_categories(sval);
+                kick_log("cmd", "[CMD] log categories %s\n", sval);
+                return;
+            }
             if (strcmp(op, "btn") == 0) {
                 kick_log("cmd", "[CMD] btn %s\n", sval);
                 HardwareButton b = HW_BTN_NONE;
