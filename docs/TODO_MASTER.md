@@ -11,7 +11,7 @@ Az, ami ember vagy hardveres hallgatás nélkül nem igazolható, a B. szakaszba
 - **Owner-döntések** (indok: termékdöntés, nem műszaki): lista a lenti "Owner-döntések" sorban és a MORNING.md 4. pontjában (köztük a transzport-duplázás, a hivatalos plugin-aláíró kulcs, `assets/Default`, SW-00).
 - **Jogi átnézés**: Salamander CC BY 3.0 ↔ AGPL, Google API ToS, Splice ToS, libcurl/TLS licenc.
 - **iOS**: szimulátor/eszköz indulás és külső MIDI a mobil ágon (nem ellenőrzött).
-- **Nyitott mérés**: a Looper loop-óra ~0,3 s kezdeti vesztése/drift újramérése az MPC-n a lock-free pillanatkép után (a `[LOOP]` nyomkövető build kell).
+- A Looper loop-óra drift az MPC-n újramérve és megszűnt (KEY61_HW_BEHAVIOUR.md); csak a fülre hallgatás marad a Hallgatás pontban.
 
 
 ## Állapot (2026-11-04 03:50) és a képernyő-review backlog (docs/plans/screens/*.md, 22 dokumentum)

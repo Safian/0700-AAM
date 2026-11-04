@@ -27,7 +27,7 @@ Minden "kész" tétel: merge-elve `safian/main`-re (`0c15cf9a`), **ARM-build 0 h
 6. **iOS**: szimulátor/eszköz indulás és külső MIDI a mobil ágon.
 
 ## Hibás / nyitott
-- **Looper**: a felvétel elején mért ~0,3 s loop-óra-vesztés és lassú drift okát az R-2 a hullámforma-pillanatkép spinlock alatti másolásában vélte; a lock-free pillanatkép bent van, **az MPC-n nincs újramérve** (a [LOOP] nyomkövető build kell; nem hallgatás-függő, de külön ARM-build és mérés).
+- **Looper drift**: MPC-n újramérve a lock-free pillanatkép után: eltérés medián +0,04 s, lejtés ≤0,006 s/s (előtte ~0,3 s vesztés, −0,04 s/s): **megoldva**, csak fülre kell ellenőrizni.
 - **Nem javított, owner-döntés nélkül**: transzport-duplázás; Step Automation (L méretű egység), Convert > Seq (nincs motor-függvény), Song végtelen ismétlés, LE-21 többi eseménytípus (nincs modell).
 - **Ismert korlát**: WebDAV https az MPC-n nem működik (nincs TLS-könyvtár); a jelszó bevitele nyílt szövegben látszik; a `KT_KickEM` szimulátor target Mac-en nem fordul (`config.h` hiányzik, a mi változtatásainktól független).
 - `kick_hardware_bridge.h` Linux-kód: Mac-en csak `-fsyntax-only` (stubolt device_factory); a teljes forgatás az ARM-build és az MPC.
