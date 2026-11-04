@@ -81,6 +81,9 @@ namespace kick_ui
         void  startRecording();
         void  knobCommand( int knob, int value );
 
+        // Called on the message thread when the recorder preview (Play) ran to its end or was stopped.
+        std::function<void()> onPreviewStopped;
+
     private:
         float gain      = -20.0;
         bool  recording = false;

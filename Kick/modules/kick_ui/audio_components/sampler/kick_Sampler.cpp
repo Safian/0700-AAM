@@ -46,40 +46,27 @@ namespace kick_ui
 
         recorder.recordingStarted.connect( [this]( bool on ) {
             if( on )
-            {
-                exportt.setEnabled( on );
-                clear.setEnabled( on );
-            }
-            //recorder.recording = on;
+                clear.setEnabled( true );
         } );
 
-        exportt.onClick = [&]() {
-            if( mode == SamplerRecorder::RecordMode::recordModeStopped )
-            {
-                // Export The Current Sample
-            }
-            exportt.setToggleState( false, juce::dontSendNotification );
-        };
+        exportt.setEnabled( false );
+        exportt.onClick = [&]() { exportt.setToggleState( false, juce::dontSendNotification ); };
+        clear.setEnabled( false );
         clear.onClick = [&]() {
-            //Clear All and Reset The Recording
             clear.setToggleState( false, juce::dontSendNotification );
+            discardRecordingWithConfirm();
         };
+
+        recorder.onPreviewStopped = [this]() { play.setToggleState( false, juce::dontSendNotification ); };
+
+        // Monitor level reaches the recorder (default 80 % like the slider; the engine default of 100 % invited feedback).
+        options.monitorLevelChanged.connect( [this]( double level ) { ae.setRecorderMonitorGain( (float)level ); } );
+        ae.setRecorderMonitorGain( (float)options.getMonitorLevelNormalized() );
+        options.showInserts( false ); // no Sampler insert chain in the engine (Looper only)
 
         /// Sampler Actions
 
-        cancel.onClick = [&]() {
-            auto p = new ui::FilePopup( "Do you want to cancel this Process " );
-            mt::utils::showDialog(
-                "WARNING!", p, [p, this]( int R ) {
-                    if( R == UI::APPLY )
-                    {
-                        recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeNone );
-                        recorder.clearRecording();
-                    }
-                    delete p;
-                },
-                ui::layout::warningPopup );
-        };
+        cancel.onClick = [&]() { discardRecordingWithConfirm(); };
 
         slicePlus.onClick = [&]() {
             if( samplePoints.size() == 0 )
@@ -99,10 +86,7 @@ namespace kick_ui
                 ae.stopRecorderPreview();
         };
 
-        discard.onClick = [&]() {
-            recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeNone );
-            recorder.clearRecording();
-        };
+        discard.onClick = [&]() { discardRecordingWithConfirm(); };
 
         edit.onClick = [&]() {
             openSaveFilePopUp( true );
@@ -154,6 +138,7 @@ namespace kick_ui
     void Sampler::recordModeChanged( SamplerRecorder::RecordMode newMode )
     {
         mode = newMode;
+        clear.setEnabled( mode != SamplerRecorder::RecordMode::recordModeNone );
         if( mode == SamplerRecorder::RecordMode::recordModeNone )
         {
             startSamplePoints.clear();
@@ -180,16 +165,37 @@ namespace kick_ui
         }
     }
 
-    juce::String Sampler::saveSample( const juce::String& sampleName )
+    void Sampler::discardRecordingWithConfirm()
     {
-        juce::File filename;
-        if( sampleName.isEmpty() )
-            filename = ae.getProjectDir().getSiblingFile( "/newSample.wav" );
-        else
-            filename = ae.getProjectDir().getSiblingFile( "/" + sampleName + ".wav" );
-        juce::File f = filename.getNonexistentSibling();
-        recorder.getRecordFile().copyFileTo( f );
-        return f.getFullPathName();
+        auto p = new ui::FilePopup( "Do you want to discard this recording?" );
+        mt::utils::showDialog(
+            "WARNING!", p, [p, this]( int R ) {
+                if( R == UI::APPLY )
+                {
+                    recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeNone );
+                    recorder.clearRecording();
+                }
+                delete p;
+            },
+            ui::layout::warningPopup );
+    }
+
+    void Sampler::showSaveError( const juce::String& message )
+    {
+        kick_log( "Sampler", "save failed: %s", message.toRawUTF8() );
+        ui::KickAlertWindow::showCancelAlert( ui::KickAlertWindow::KickAlertWindowType::Warning, message, "Sampler", []( int ) {} );
+    }
+
+    // Recordings live in the project: <project>/samples (the project saver already treats that folder as the project's own).
+    juce::File Sampler::getSamplesDir() const { return ae.getProjectDir().getChildFile( "samples" ); }
+
+    bool Sampler::programAcceptsPadSamples( int program ) const
+    {
+        auto* p = ae.getProgram( program );
+        if( p == nullptr )
+            return false;
+        const auto t = p->getType();
+        return t == mt::MTProgramType::Drum || t == mt::MTProgramType::Clip || t == mt::MTProgramType::Keygroup;
     }
 
     void Sampler::openSaveFilePopUp( bool isEditing )
@@ -205,11 +211,13 @@ namespace kick_ui
 
                 delete process;
                 auto sampleFileName = saveAndLoadRecordedSample( fileName, padIndex, selPrg, sliceSave );
-                if( isEditing )
+                if( isEditing && sampleFileName.isNotEmpty() )
                 {
                     if( juce::File( sampleFileName ).exists() )
                     {
                         kick_ui::sigSampleEditLoadFileForEditing( sampleFileName, SampleEditorMode::modeChop );
+                        for( auto marker : lastMarkerSeconds )
+                            kick_ui::sigSampleEditAddRegionAt( marker );
                         kick_ui::signals::sigScreenOpen( kick_ui::Screen::MenuSampleEdit );
                     }
                 }
@@ -221,107 +229,99 @@ namespace kick_ui
 
     juce::String Sampler::saveAndLoadRecordedSample( const juce::String& fileName, int PadIndex, int SelProgram, int SliceSaveType )
     {
-        auto filePath   = getValidFileName( ae.getProjectDir().getSiblingFile( fileName + ".wav" ).getFullPathName().toStdString() );
-        auto sampleFile = ae.getProjectDir().getSiblingFile( filePath ).getFullPathName().toStdString();
-        ae.saveRecording( sampleFile );
-        recorder.clearRecording();
-        ae.addAsset( sampleFile, mt::AssetTypes::Samples );
-        addSlicesToSample( sampleFile );
-        if( SelProgram != 0 && buttonState == SAMPLE )
+        // 1. Where: <project>/samples/<unique name>.wav
+        const auto samplesDir = getSamplesDir();
+        if( !samplesDir.createDirectory() )
         {
-            auto progType = ae.getProgram( ae.getSelectedProgram() )->getType();
-            if( progType == mt::MTProgramType::Drum || progType == mt::MTProgramType::Keygroup || progType == mt::MTProgramType::Clip || progType == mt::MTProgramType::Audio )
-                ae.addSampleToProgram( ae.getSelectedProgram(), PadIndex, sampleFile );
+            showSaveError( "Cannot create the folder " + samplesDir.getFullPathName() );
+            return {};
         }
-        if( buttonState == SLICE && SliceSaveType != 0 )
+        const auto uniqueName = sampler_logic::uniqueFileName( fileName.toStdString(), ".wav", [&]( const std::string& n ) { return samplesDir.getChildFile( n ).existsAsFile(); } );
+        const auto file       = samplesDir.getChildFile( uniqueName );
+
+        // 2. Write, then verify what landed on disk (the engine call has no result): the saved file gives the real rate and length.
+        ae.saveRecording( file.getFullPathName().toStdString() );
+        double rate        = 0.0;
+        int    totalFrames = 0;
         {
-            auto progIndex = ae.createProgram( mt::MTProgramType::Drum, juce::File( sampleFile ).getFileNameWithoutExtension() );
-            if( SliceSaveType == 2 )
+            juce::WavAudioFormat                    wav;
+            std::unique_ptr<juce::AudioFormatReader> reader( file.existsAsFile() ? wav.createReaderFor( file.createInputStream().release(), true ) : nullptr );
+            if( reader != nullptr )
             {
-                if( samplePoints.size() > 1 )
-                    addSlicesToSample( progIndex, sampleFile, true );
-                else
-                    ae.addSampleToProgram( progIndex, 0, sampleFile );
+                rate        = reader->sampleRate;
+                totalFrames = (int)juce::jmin<juce::int64>( reader->lengthInSamples, 0x7fffffff );
             }
         }
-        else if( buttonState == PADTAP )
+        if( rate <= 0.0 || totalFrames <= 0 )
         {
-            addSlicesToPads( sampleFile );
+            file.deleteFile();
+            showSaveError( "The recording could not be saved to " + file.getFullPathName() );
+            return {};
         }
-        else if( buttonState == PADHOLD )
+        const auto sampleFile = file.getFullPathName();
+
+        // 3. Markers were taken against the recording; capture them before the recorder is reset.
+        const std::vector<double> markers( samplePoints.begin(), samplePoints.end() );
+        lastMarkerSeconds = markers;
+
+        recorder.clearRecording();
+        ae.addAsset( sampleFile, mt::AssetTypes::Samples );
+
+        if( SelProgram != 0 )
+            ae.setSelectedProgram( SelProgram - 1 ); // only now: choosing a program in the dialog and cancelling changes nothing
+
+        if( buttonState == SAMPLE )
         {
-            addSlicesToPads( sampleFile );
+            if( SelProgram != 0 && programAcceptsPadSamples( ae.getSelectedProgram() ) )
+                ae.addSampleToProgram( ae.getSelectedProgram(), PadIndex, sampleFile );
+        }
+        else if( buttonState == SLICE )
+        {
+            const auto slices = sampler_logic::sliceModeSlices( markers, totalFrames / rate, rate, totalFrames );
+            for( size_t i = 0; i < slices.size(); ++i )
+                addAssetSlice( sampleFile, slices[i].start, slices[i].end, (int)i + 1 );
+
+            if( SliceSaveType != 0 )
+            {
+                // "Slices To Pads": a new Drum program, slice i on pad i (whole sample on pad 0 when nothing was sliced).
+                auto progIndex = ae.createProgram( mt::MTProgramType::Drum, juce::File( sampleFile ).getFileNameWithoutExtension() );
+                if( slices.empty() )
+                    ae.addSampleToProgram( progIndex, 0, sampleFile );
+                else
+                    for( size_t i = 0; i < slices.size(); ++i )
+                        ae.addSampleToProgram( progIndex, slices[i].pad, sampleFile, (int)i + 1 );
+            }
+        }
+        else // PADTAP, PADHOLD
+        {
+            addSlicesToPads( sampleFile, rate, totalFrames );
         }
 
         recordModeChanged( SamplerRecorder::RecordMode::recordModeNone );
-
+        samplePoints.clear();
         return sampleFile;
     }
 
-    void Sampler::addSlicesToPads( const juce::String& SampleFile )
+    void Sampler::addSlicesToPads( const juce::String& SampleFile, double sampleRate, int totalFrames )
     {
-        int index = 0;
-        for( auto samplePoint : startSamplePoints )
+        const auto slices = sampler_logic::padSlices( startSamplePoints, endSamplePoints, totalFrames / sampleRate, sampleRate, totalFrames );
+        const bool assign = programAcceptsPadSamples( ae.getSelectedProgram() );
+        for( size_t i = 0; i < slices.size(); ++i )
         {
-            auto loopStart = (int)( samplePoint.second * 44100 );
-            auto loopEnd   = (int)( endSamplePoints[samplePoint.first] * 44100 );
-            if( index == startSamplePoints.size() - 1 && buttonState == 2 )
-                loopEnd = (int)( recorder.getCurrentRecordTime() * 44100 );
-
-            addAssetSlice( SampleFile, loopStart, loopEnd, index + 1 );
-            ae.addSampleToProgram( ae.getSelectedProgram(), samplePoint.first, SampleFile, index + 1 );
-            ++index;
+            addAssetSlice( SampleFile, slices[i].start, slices[i].end, (int)i + 1 );
+            if( assign )
+                ae.addSampleToProgram( ae.getSelectedProgram(), slices[i].pad, SampleFile, (int)i + 1 );
         }
+        if( !assign )
+            kick_log( "Sampler", "pad slices stored as sample slices only: the selected program takes no pad samples" );
     }
 
     juce::String Sampler::getValidFileName( const std::string& filePath )
     {
-        std::filesystem::path path( filePath );
-        std::string           base      = path.parent_path().string();
-        std::string           file      = path.stem().string();
-        std::string           extension = path.extension().string();
-        int                   counter   = 1;
-
-        while( std::filesystem::exists( path ) )
-        {
-            path = base + "\\" + file + " " + std::to_string( counter ) + extension;
-            counter++;
-        }
-        return path.filename().string();
-    }
-
-    void Sampler::addSlicesToSample( const juce::String& SampleFile )
-    {
-        if( juce::File( SampleFile ).exists() )
-        {
-            sigSampleEditLoadFileForEditing( SampleFile, SampleEditorMode::modeChop );
-
-            for( auto it = samplePoints.begin(); it != samplePoints.end(); it++ )
-                sigSampleEditAddRegionAt( *it );
-
-            addSlicesToSample( ae.getSelectedProgram(), SampleFile, false );
-        }
-    }
-
-    void Sampler::addSlicesToSample( int Program, const juce::String& SampleFile, bool IsSliceToPad )
-    {
-        std::list<double>::iterator it    = samplePoints.begin();
-        auto                        index = 0;
-        if( samplePoints.size() > 1 )
-        {
-            for( ; index < samplePoints.size() - 1; ++index )
-            {
-                auto loopStart = (int)*it * 44100; // Default Sampling rate
-                std::advance( it, 1 );
-                auto loopEnd = (int)*it * 44100; // Default Sampling rate
-
-                IsSliceToPad ? ae.addSampleToProgram( Program, index, SampleFile, index + 1 ) : addAssetSlice( SampleFile, loopStart, loopEnd, index + 1 );
-            }
-            auto loopStart = (int)*it * 44100; // Default Sampling rate
-            auto loopEnd   = (int)( recorder.getCurrentRecordTime() * 44100 ); // Default Sampleing rate
-
-            IsSliceToPad ? ae.addSampleToProgram( Program, index, SampleFile, index + 1 ) : addAssetSlice( SampleFile, loopStart, loopEnd, index + 1 );
-        }
+        const juce::File f( filePath );
+        const auto       dir = f.getParentDirectory();
+        return juce::String( sampler_logic::uniqueFileName( f.getFileNameWithoutExtension().toStdString(), f.getFileExtension().toStdString(),
+                                                            [&]( const std::string& n ) { return dir.getChildFile( n ).existsAsFile(); } ) );
     }
 
     void Sampler::addAssetSlice( const juce::String& SampleFile, int LoopStart, int LoopEnd, int Index )
@@ -363,7 +363,6 @@ namespace kick_ui
         {
             int padNum   = contracts::DclContractsHelper::getPadNumber( f_HwMsg );
             int padState = contracts::DclContractsHelper::getPadState( f_HwMsg );
-            DBG( "PadState " << padState );
             int padVelocity = contracts::DclContractsHelper::getPadVelocity( f_HwMsg );
 
             if( sample.getToggleState() )
@@ -371,7 +370,7 @@ namespace kick_ui
             }
             else if( slice.getToggleState() )
             {
-                if( padState == PAD_PRESSED )
+                if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
                 {
                     if( ae.isRecorderRunning() )
                         samplePoints.push_back( recorder.getCurrentRecordTime() );
@@ -383,106 +382,66 @@ namespace kick_ui
                     }
                 }
             }
-            else if( padTap.getToggleState() ) // TODO Need to clarify whether recording start at the moment the pad clicks or it need to be wait for threshold meets
+            else if( padTap.getToggleState() ) // pad tap: 1st tap on a pad starts its slice, the next tap (same pad) ends it, another pad ends the previous and starts its own
             {
-                if( padState == PAD_PRESSED )
+                if( padState == contracts::DeviceControlContracts::BTN_PRESSED && juce::isPositiveAndBelow( padNum, _NUM_PADS_IN_COMPONENT ) )
                 {
-                    auto padIndex = padNum + ae.getBankOffset();
-                    if( juce::isPositiveAndBelow( padNum, _NUM_PADS_IN_COMPONENT ) )
+                    const auto padIndex = padNum + ae.getBankOffset();
+                    if( !ae.isRecorderRunning() )
+                        recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeRecord );
+                    const auto now = recorder.getCurrentRecordTime();
+
+                    if( lastPressedPad == padNum )
                     {
-                        if( !ae.isRecorderRunning() )
+                        if( !isSliceRecorded )
                         {
-                            recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeRecord );
-                            startSamplePoints[padIndex] = recorder.getCurrentRecordTime();
+                            isSliceRecorded           = true;
+                            endSamplePoints[padIndex] = now;
+                            padLeds[(size_t)padNum]   = contracts::DeviceControlContracts::padColourlightGreen1;
                         }
-
-                        if( lastPressedPad == padNum )
+                        else
                         {
-                            if( !isSliceRecorded )
-                            {
-                                isSliceRecorded           = true;
-                                endSamplePoints[padIndex] = recorder.getCurrentRecordTime();
-                            }
-                            else if( isSliceRecorded )
-                            {
-                                startSamplePoints[padIndex] = recorder.getCurrentRecordTime();
-                                isSliceRecorded             = false;
-                            }
-                            //TODO--> Need PadButton Colour from GD side nthen we can toggle Red/Green
-                            if( 0 )
-                            {
-                                contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                             setPadDataMessage( lastPressedPad,
-                                                                                                contracts::DeviceControlContracts::PadButtonState::StateOn,
-                                                                                                contracts::DeviceControlContracts::padColourDarkRed ) );
-                            }
-                            else
-                            {
-                                contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                             setPadDataMessage( lastPressedPad,
-                                                                                                contracts::DeviceControlContracts::PadButtonState::StateOn,
-                                                                                                contracts::DeviceControlContracts::padColourlightGreen1 ) );
-                            }
-                        }
-
-                        else if( lastPressedPad < 0 ) // If First time Pad Pressed
-                        {
+                            startSamplePoints[padIndex] = now;
                             isSliceRecorded             = false;
-                            lastPressedPad              = padNum;
-                            startSamplePoints[padIndex] = recorder.getCurrentRecordTime();
-                            //Need to add Pad Blinking in GD side and trigger from here using( Controls::InputEvents::setPadBlinking)
-                            contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                         setPadDataMessage( padNum, contracts::DeviceControlContracts::PadButtonState::StateOn, contracts::DeviceControlContracts::padColourDarkRed ) );
-                        }
-
-                        else if( lastPressedPad != padNum )
-                        {
-                            if( !isSliceRecorded )
-                            {
-                                endSamplePoints[lastPressedPad + ae.getBankOffset()] = recorder.getCurrentRecordTime();
-                                startSamplePoints[padIndex]                          = recorder.getCurrentRecordTime();
-                                isSliceRecorded                                      = false;
-                            }
-                            else if( isSliceRecorded )
-                            {
-                                startSamplePoints[padIndex] = recorder.getCurrentRecordTime();
-                                isSliceRecorded             = false;
-                            }
-                            contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                         setPadDataMessage( lastPressedPad, contracts::DeviceControlContracts::PadButtonState::StateOn, contracts::DeviceControlContracts::padColourlightGreen1 ) );
-
-                            contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                         setPadDataMessage( padNum, contracts::DeviceControlContracts::PadButtonState::StateOn, contracts::DeviceControlContracts::padColourDarkRed ) );
-
-                            lastPressedPad = padNum;
+                            padLeds[(size_t)padNum]     = contracts::DeviceControlContracts::padColourDarkRed;
                         }
                     }
+                    else
+                    {
+                        if( lastPressedPad >= 0 )
+                        {
+                            const auto lastIndex = lastPressedPad + ae.getBankOffset();
+                            if( !isSliceRecorded )
+                                endSamplePoints[lastIndex] = now; // the previous slice ends where this one starts
+                            padLeds[(size_t)lastPressedPad] = contracts::DeviceControlContracts::padColourlightGreen1;
+                        }
+                        startSamplePoints[padIndex] = now;
+                        isSliceRecorded             = false;
+                        lastPressedPad              = padNum;
+                        padLeds[(size_t)padNum]     = contracts::DeviceControlContracts::padColourDarkRed;
+                    }
+                    sendPadLeds();
                 }
             }
             else if( padHold.getToggleState() )
             {
-                auto padIndex = padNum + ae.getBankOffset();
-
-                auto track = ae.getSelected();
-                if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
+                if( juce::isPositiveAndBelow( padNum, _NUM_PADS_IN_COMPONENT ) )
                 {
-                    if( !ae.isRecorderRunning() )
-                        recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeRecord );
-                    startSamplePoints[padIndex] = recorder.getCurrentRecordTime();
-
-                    contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                 setPadDataMessage( padNum,
-                                                                                    contracts::DeviceControlContracts::PadButtonState::StateOn,
-                                                                                    contracts::DeviceControlContracts::padColourDarkRed ) );
-                }
-                else if( padState == contracts::DeviceControlContracts::BTN_RELEASED )
-                {
-                    endSamplePoints[padIndex] = recorder.getCurrentRecordTime();
-
-                    contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                                 setPadDataMessage( padNum,
-                                                                                    contracts::DeviceControlContracts::PadButtonState::StateOn,
-                                                                                    contracts::DeviceControlContracts::padColourlightGreen1 ) );
+                    auto padIndex = padNum + ae.getBankOffset();
+                    if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
+                    {
+                        if( !ae.isRecorderRunning() )
+                            recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeRecord );
+                        startSamplePoints[padIndex] = recorder.getCurrentRecordTime();
+                        padLeds[(size_t)padNum]     = contracts::DeviceControlContracts::padColourDarkRed;
+                        sendPadLeds();
+                    }
+                    else if( padState == contracts::DeviceControlContracts::BTN_RELEASED && startSamplePoints.count( padIndex ) )
+                    {
+                        endSamplePoints[padIndex] = recorder.getCurrentRecordTime();
+                        padLeds[(size_t)padNum]   = contracts::DeviceControlContracts::padColourlightGreen1;
+                        sendPadLeds();
+                    }
                 }
             }
         }
@@ -496,6 +455,9 @@ namespace kick_ui
                 {
                     case contracts::DeviceControlContracts::EN_KNOB_3:
                         options.knobRotated( value );
+                        break;
+                    case contracts::DeviceControlContracts::EN_KNOB_4:
+                        options.monitorKnobRotated( value );
                         break;
                 }
                 recorder.knobCommand( knob, value );
@@ -518,32 +480,28 @@ namespace kick_ui
     void Sampler::refreshPadsLED()
     {
         std::vector<mt::MTISample*> samples;
-        std::vector<int>            padDataList;
-
-        auto bankOffset = ae.getBankOffset();
+        const auto                  bankOffset = ae.getBankOffset();
 
         ae.getProgramSamples( ae.getSelectedProgram(), samples );
-        padDataList.clear();
-        for( auto colourIndex = bankOffset; colourIndex < bankOffset + NUM_PADS_IN_BANK; colourIndex++ )
+        for( int hw = 0; hw < NUM_PADS_IN_BANK; hw++ )
         {
-            bool pushedToColourData = false;
-
+            bool assigned = false;
             for( auto it : samples )
-            {
-                auto index = it->keyNote.get() - bankOffset;
-                if( juce::isPositiveAndBelow( index, 16 ) && it->getSource( 0 ).length() && colourIndex == it->keyNote.get() )
-                {
-                    padDataList.push_back( contracts::DeviceControlContracts::padColourDarkYellow );
-                    pushedToColourData = true;
-                    break;
-                }
-            }
-            if( !pushedToColourData )
-                padDataList.push_back( contracts::DeviceControlContracts::PadColourTrans );
+                if( it && (int)it->keyNote.get() == bankOffset + hw && it->getSource( 0 ).length() )
+                    assigned = true;
+            padLeds[(size_t)hw] = assigned ? contracts::DeviceControlContracts::padColourDarkYellow : contracts::DeviceControlContracts::PadColourTrans;
         }
-        contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
-                                                     setAllPadDataColourInfoMessage( contracts::DeviceControlContracts::PadButtonState::StateOn, padDataList ) );
+        sendPadLeds();
     }
+
+    // One full-bank colour message: the only pad-LED message the MPC bridge processes (single-pad commands are dropped there).
+    void Sampler::sendPadLeds()
+    {
+        std::vector<int> colours( padLeds.begin(), padLeds.end() );
+        contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::
+                                                     setAllPadDataColourInfoMessage( contracts::DeviceControlContracts::PadButtonState::StateOn, colours ) );
+    }
+
     void Sampler::visibilityChanged()
     {
         auto handle_sampler = [this]( CPktMgr::HWMsg_t& f_HwMsg ) {
@@ -568,6 +526,15 @@ namespace kick_ui
         else
         {
             ae.stopRecorderPreview();
+            // Leaving the screen ends a running recording instead of re-arming (= restarting) it on return: the take is kept (stopped),
+            // an armed-but-empty recorder is simply disarmed.
+            if( mode == SamplerRecorder::RecordMode::recordModeRecording )
+                recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeStopped );
+            else if( mode == SamplerRecorder::RecordMode::recordModeRecord )
+            {
+                recorder.setRecordMode( SamplerRecorder::RecordMode::recordModeNone );
+                recorder.clearRecording();
+            }
 
             contracts::DclSignals::sendCommandToDcl( contracts::DclContractsHelper::clearAllPadsMessage() );
             contracts::DclSignals::refreshPadLeds();
@@ -575,6 +542,7 @@ namespace kick_ui
 
         for( auto it : getChildren() )
             it->setVisible( visible );
+        exportt.setVisible( kShowExportButton && visible );
         recorder.setRecordMode( mode );
     }
 

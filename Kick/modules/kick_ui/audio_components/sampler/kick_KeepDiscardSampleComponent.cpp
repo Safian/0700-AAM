@@ -44,19 +44,22 @@ namespace kick_ui
             progList.push_back( prog );
         programs.setListOptions( progList, progList.size() > 1 ? 1 : 0 );
 
+        // The chosen program is applied by the Sampler on Apply (not here), so Cancel leaves the selection untouched.
         programs.onSelectionChanged = [&]( int Index, const juce::String& Program ) {
             mt::utils::setEnabled( !( Index == 0 ), assignPad, padLabel );
-            if( Index != 0 )
-                ae.setSelectedProgram( Index - 1 );
         };
 
-        if( programs.getSize() == 1 || buttonState == 1 )
+        // Root Note has no effect on the saved sample: not offered.
+        mt::utils::makeHidden( rootNote, rootNoteLabel );
+        if( buttonState == 1 ) // Slice: optionally create a new program from the slices
         {
             mt::utils::makeVisible( createNewPgmLabel, createNewProgram );
-            mt::utils::makeHidden( programs, assignPad, rootNote, programLabel, padLabel, rootNoteLabel );
+            mt::utils::makeHidden( programs, assignPad, programLabel, padLabel );
         }
-        else if( buttonState == 2 || buttonState == 3 )
-            mt::utils::makeHidden( programs, assignPad, rootNote, programLabel, padLabel, rootNoteLabel, createNewPgmLabel, createNewProgram );
+        else if( buttonState == 0 && programs.getSize() > 1 ) // Sample: program + pad choice (only if there is a program)
+            mt::utils::makeHidden( createNewPgmLabel, createNewProgram );
+        else // Sample without a program, Pad Tap, Pad Hold: only the name
+            mt::utils::makeHidden( programs, assignPad, programLabel, padLabel, createNewPgmLabel, createNewProgram );
     }
 
     void KeepDiscardSampleComponent::resized()
