@@ -321,6 +321,7 @@ private:
         for (int l = 0; l < NUM_HW_LEDS; ++l) setLed((HardwareLed)l, kick_hw::kLedOff);
         setLed(HW_LED_STOP, kick_hw::kLedFullA);
         updateBankLeds();
+        updateOctaveLeds();
         updateModeLeds(kick_ui::KickHome::Instance().getCurrentScreen());
         updateShiftLed();
         updateArpLeds();
@@ -333,6 +334,8 @@ private:
         if (m_hw && m_hw->control_surface()) {
             m_hw->control_surface()->set_led(HW_LED_OCTAVE_DOWN, m_key_transpose.octave() < 0);
             m_hw->control_surface()->set_led(HW_LED_OCTAVE_UP, m_key_transpose.octave() > 0);
+            for (int pos = -3; pos <= 3; ++pos)
+                m_hw->control_surface()->set_led_level(kick_hw::octaveBarLed(pos), kick_hw::octaveBarLevel(m_key_transpose.octave(), pos));
         }
     }
 

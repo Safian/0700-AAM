@@ -111,6 +111,14 @@ enum HardwareLed {
     HW_LED_METRONOME,
     HW_LED_TAP_TEMPO,
     HW_LED_QLINK,
+    // Octave indicator row under the OCT buttons, -3 .. +3 (append only)
+    HW_LED_OCTAVE_M3,
+    HW_LED_OCTAVE_M2,
+    HW_LED_OCTAVE_M1,
+    HW_LED_OCTAVE_ZERO,
+    HW_LED_OCTAVE_P1,
+    HW_LED_OCTAVE_P2,
+    HW_LED_OCTAVE_P3,
     NUM_HW_LEDS
 };
 
