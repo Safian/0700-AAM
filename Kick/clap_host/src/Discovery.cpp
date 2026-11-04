@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <kick_clap/Discovery.h>
+#include <kick_clap/PluginManager.h>
 #include "Internal.h"
 #include <algorithm>
 #include <chrono>
@@ -67,6 +68,9 @@ std::vector<fs::path> defaultSearchPaths() {
     paths.emplace_back("/usr/lib/clap"); paths.emplace_back("/usr/local/lib/clap");
     paths.emplace_back("/opt/kick/plugins/clap");
 #endif
+    for (const auto& p : PluginManager::getInstance().getPluginSearchPaths()) {
+        paths.push_back(p);
+    }
     return paths;
 }
 std::vector<fs::path> findBinaries(const std::vector<fs::path>& roots) {

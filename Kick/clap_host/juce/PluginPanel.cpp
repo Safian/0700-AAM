@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PluginPanel.h"
 #include <clap/ext/params.h>
+#include <kick_clap/PluginManager.h>
 
 namespace kick::clap {
 struct PluginPanel::ParameterRow : juce::Component {
@@ -154,6 +155,11 @@ void PluginPanel::timerCallback() {
         catalog.clear();
         for (auto& p : scanJob->result.plugins)
             if (std::find(p.features.begin(), p.features.end(), CLAP_PLUGIN_FEATURE_INSTRUMENT) != p.features.end()) catalog.push_back(std::move(p));
+        for (const auto& p : PluginManager::getInstance().getInstrumentDescriptors()) {
+            if (std::find_if(catalog.begin(), catalog.end(), [&](const Descriptor& d){ return d.id == p.id; }) == catalog.end()) {
+                catalog.push_back(p);
+            }
+        }
         pluginList.clear(juce::dontSendNotification);
         for (size_t i = 0; i < catalog.size(); ++i) {
             pluginList.addItem(catalog[i].name + " - " + catalog[i].vendor, static_cast<int>(i + 1));
