@@ -23,6 +23,7 @@
 
 #include "mt_audio_timebase_types.h"
 #include "mt_audio_inserts_types.h"
+#include "mt_track_monitor.h"
 
 ///
 /// Macro definitions; VariantConverter
@@ -637,6 +638,7 @@ namespace mt
         CachedValue<MidiChannelConstrainer>   midiOutChannel;
         CachedValue<MidiConstrainer>          level;
         CachedValue<PanConstrainer>           pan;
+        CachedValue<int>                      monitor; // 0 Off, 1 In (default), 2 Auto; see mt_track_monitor.h
 
         MTIProgramData* prog{ nullptr };
     };

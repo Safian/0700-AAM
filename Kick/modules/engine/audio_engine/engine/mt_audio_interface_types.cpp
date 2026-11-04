@@ -509,6 +509,7 @@ namespace mt
         midiChannel.referTo( state, IDs::midiCh, UM, MIDI_CH::DEFAULT );
         midiOutChannel.referTo( state, IDs::midiChOut, UM, MIDI_CH::DEFAULT );
         route.referTo( state, IDs::route, UM, "" );
+        monitor.referTo( state, IDs::monitor, UM, 1 );
     }
 
     // MTNoteRO::

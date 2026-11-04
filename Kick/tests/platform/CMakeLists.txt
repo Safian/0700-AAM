@@ -149,6 +149,18 @@ set_tests_properties(kick-hw-targets PROPERTIES TIMEOUT 10)
 add_executable(kick-mute-filter-tests MuteFilterTests.cpp)
 add_test(NAME kick-mute-filter COMMAND kick-mute-filter-tests)
 set_tests_properties(kick-mute-filter PROPERTIES TIMEOUT 10)
+# Track Monitor (Off / In / Auto): which live MIDI input reaches the program; JUCE-free, header only.
+add_executable(kick-track-monitor-tests TrackMonitorTests.cpp)
+add_test(NAME kick-track-monitor COMMAND kick-track-monitor-tests)
+set_tests_properties(kick-track-monitor PROPERTIES TIMEOUT 10)
+# Sequence time signature change: bar count / loop / track length re-mapping; JUCE-free, header only.
+add_executable(kick-time-signature-tests TimeSignatureTests.cpp)
+add_test(NAME kick-time-signature COMMAND kick-time-signature-tests)
+set_tests_properties(kick-time-signature PROPERTIES TIMEOUT 10)
+# Engine list vs ValueTree reconcile (undo/redo of sequence/track/program create+delete); JUCE-free, header only.
+add_executable(kick-tree-sync-tests TreeSyncTests.cpp)
+add_test(NAME kick-tree-sync COMMAND kick-tree-sync-tests)
+set_tests_properties(kick-tree-sync PROPERTIES TIMEOUT 10)
 # Touch coordinate chain raw -> framebuffer 1280x800 -> UI 1024x600; JUCE-free, header only.
 add_executable(kick-touch-space-tests TouchSpaceTests.cpp)
 add_test(NAME kick-touch-space COMMAND kick-touch-space-tests)

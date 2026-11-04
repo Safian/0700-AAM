@@ -95,13 +95,10 @@ namespace mt
     //// Program
     ////////////////////////////
 
-    MTIProgram* MTAudioProgramManager::createProgram( juce::ValueTree& VT, bool addToTree )
+    std::unique_ptr<MTIProgram> MTAudioProgramManager::makeProgram( juce::ValueTree& VT )
     {
         MTIProgram* prog = nullptr;
         auto        type = toEnum<MTProgramType>( (int)VT.getProperty( IDs::type ) );
-        const auto  progName = VT.getProperty( IDs::name, "" ).toString();
-        const auto  start_ms = kick_logger::get_uptime_ms();
-        kick_log( "info", "[INFO] [PROJ] Program load begin: '%s' (type: %d)\n", progName.toRawUTF8(), (int)type );
 
         if( type == MTProgramType::Drum ) prog = new MTDrumProgram( engine, VT, undoManager );
         if( type == MTProgramType::Keygroup ) prog = new MTKeygroupProgram( engine, VT, undoManager );
@@ -110,6 +107,55 @@ namespace mt
         if( type == MTProgramType::Cv ) prog = new MTCVProgram( engine, VT, undoManager );
         if( type == MTProgramType::Audio ) prog = new MTAudioProgram( engine, VT, undoManager );
         if( type == MTProgramType::Plugin ) prog = new MTClapProgram( engine, VT, undoManager );
+        return std::unique_ptr<MTIProgram>( prog );
+    }
+
+    void MTAudioProgramManager::reconcileWithTree()
+    {
+        std::vector<juce::ValueTree> nodes;
+        for( auto it : vTree )
+            if( it.hasType( IDs::PROGRAM ) )
+                nodes.push_back( it );
+
+        const auto prevName = ( juce::isPositiveAndBelow( selected.program, (int)programs.size() ) ) ? programs[(size_t)selected.program].get() : nullptr;
+        const int  prevSel  = selected.program;
+
+        const bool changed = treesync::reconcile(
+            programs, nodes,
+            []( MTIProgram& P, const juce::ValueTree& N ) { return P.getState() == N; },
+            [&]( const juce::ValueTree& N ) -> std::unique_ptr<MTIProgram> {
+                juce::ValueTree vt = N;
+                kick_log( "info", "[INFO] [PROJ] Program rebuilt from the project tree (undo/redo): '%s'\n", vt.getProperty( IDs::name, "" ).toString().toRawUTF8() );
+                return makeProgram( vt );
+            },
+            []( MTIProgram& P ) { programBeingDeleted( &P ); } );
+
+        if( !changed )
+            return;
+
+        // Selection: the same program if it survived, else the nearest index.
+        int sel = -1;
+        for( int i = 0; i < (int)programs.size(); ++i )
+            if( programs[(size_t)i].get() == prevName ) sel = i;
+        if( sel < 0 && !programs.empty() )
+            sel = juce::jlimit<int>( 0, (int)programs.size() - 1, prevSel );
+        selected.program = sel;
+        sprog            = sel >= 0 ? programs[(size_t)sel]->getName() : juce::String( "--" );
+
+        updateProgramList();
+        if( progSelectionChanged )
+            progSelectionChanged();
+    }
+
+    MTIProgram* MTAudioProgramManager::createProgram( juce::ValueTree& VT, bool addToTree )
+    {
+        MTIProgram* prog = nullptr;
+        auto        type = toEnum<MTProgramType>( (int)VT.getProperty( IDs::type ) );
+        const auto  progName = VT.getProperty( IDs::name, "" ).toString();
+        const auto  start_ms = kick_logger::get_uptime_ms();
+        kick_log( "info", "[INFO] [PROJ] Program load begin: '%s' (type: %d)\n", progName.toRawUTF8(), (int)type );
+
+        prog = makeProgram( VT ).release();
 
         if( prog )
         {
@@ -132,7 +178,8 @@ namespace mt
         if( auto prg = getProgramByName( Name ) )
             return prg;
 
-        // Create new program...
+        // Create new program... (one undo step)
+        if( undoManager ) undoManager->beginNewTransaction( "Create program" );
         juce::ValueTree vt = createVTree( IDs::PROGRAM,
                                           IDs::name, Name,
                                           IDs::type, toInt( Type ) );
@@ -150,6 +197,7 @@ namespace mt
         {
             auto selectedProgram = getSelectedProgram();
 
+            if( undoManager ) undoManager->beginNewTransaction( "Delete program" );
             auto& ptr = programs[(size_t)Index];
             programBeingDeleted( ptr.get() );
             vTree.removeChild( ptr->getState(), undoManager );
@@ -176,6 +224,7 @@ namespace mt
         if( auto prog = getProgram( program ) )
         {
             if (!prog->prepareToSave()) return -1;
+            if( undoManager ) undoManager->beginNewTransaction( "Duplicate program" );
             auto name = prog->getName() + "_copy";
             auto vt   = prog->getState().createCopy();
 
