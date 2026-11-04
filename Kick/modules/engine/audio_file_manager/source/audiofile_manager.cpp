@@ -45,11 +45,13 @@ namespace mt
 
     void ASoundCache::clear()
     {
+        const juce::ScopedLock sl( lock );
         aSounds.clear();
     }
 
     void ASoundCache::purge()
     {
+        const juce::ScopedLock sl( lock );
         for( const auto& it : aSounds )
         {
             return it->purge();
@@ -58,6 +60,7 @@ namespace mt
 
     ASound::Ptr ASoundCache::exists( const juce::String& File )
     {
+        const juce::ScopedLock sl( lock );
         for( auto it : aSounds )
         {
             if( 0 == File.compare( it->getFilePath() ) )
@@ -78,7 +81,9 @@ namespace mt
 
     void ASoundCache::remove( const juce::String& File )
     {
-        aSounds.removeObject( exists( File ) );
+        auto found = exists( File );
+        const juce::ScopedLock sl( lock );
+        aSounds.removeObject( found );
     }
 
 #define ASOUND_UPSAMPLE_RATIO ( 1 )
@@ -89,10 +94,15 @@ namespace mt
         {
             if( juce::File( File ).existsAsFile() )
             {
-                if( auto ptr = new ASound( File, fmtMgr, ASOUND_UPSAMPLE_RATIO, LengthInSeconds ) )
+                ASound::Ptr ptr = new ASound( File, fmtMgr, ASOUND_UPSAMPLE_RATIO, LengthInSeconds ); // decode: outside the lock
                 {
-                    return aSounds.add( ptr );
+                    const juce::ScopedLock sl( lock );
+                    for( auto it : aSounds ) // another thread may have loaded the same file meanwhile
+                        if( 0 == File.compare( it->getFilePath() ) )
+                            return it;
+                    aSounds.add( ptr );
                 }
+                return ptr;
             }
         }
         return nullptr;
@@ -100,6 +110,7 @@ namespace mt
 
     ASound::Ptr ASoundCache::getOrLoadMetronomeSound( const juce::String& File )
     {
+        const juce::ScopedLock sl( lock );
         for( auto it : metronomeSounds )
         {
             if( 0 == File.compare( it->getFilePath() ) )
