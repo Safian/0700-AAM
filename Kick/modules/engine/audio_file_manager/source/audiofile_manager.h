@@ -42,6 +42,9 @@ namespace mt
         ASound::Ptr getOrLoadMetronomeSound( const juce::String& File );
 
     private:
+        // The list is read from the UI and loaded into from a background thread (the Program Edit waveform pages load off the
+        // message thread), so every access to it takes this lock. The decode itself runs outside the lock.
+        juce::CriticalSection               lock;
         juce::AudioFormatManager            fmtMgr;
         juce::ReferenceCountedArray<ASound> aSounds;
         juce::ReferenceCountedArray<ASound> metronomeSounds;
