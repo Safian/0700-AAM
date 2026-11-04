@@ -33,6 +33,8 @@ namespace mt
         juce::String unit{ "" };
         juce::String displayValue{ "" };
         float        value{ 0.f };
+        bool         isStepped{ false };
+        float        step{ 0.001f };
     };
 
     using InsertsParams = std::vector<MTInsertsParamInfo>;

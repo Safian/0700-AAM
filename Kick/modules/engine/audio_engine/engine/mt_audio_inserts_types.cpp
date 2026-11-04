@@ -156,7 +156,7 @@ namespace mt
         const auto& insParams = synth->getEffectParameters( Position );
         for( const auto& it : insParams )
         {
-            Info.params.emplace_back( MTInsertsParamInfo{ juce::String( it.name ), juce::String( it.unit ), juce::String( it.displayValue ), it.value } );
+            Info.params.emplace_back( MTInsertsParamInfo{ juce::String( it.name ), juce::String( it.unit ), juce::String( it.displayValue ), it.value, it.isStepped, it.step } );
         }
 
         auto* obj = synth->getEffectObject( Position );

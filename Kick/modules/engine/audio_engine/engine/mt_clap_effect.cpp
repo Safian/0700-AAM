@@ -135,6 +135,16 @@ const std::vector<AudIO::ParamInfo>& ClapEffect::getParameters() {
         const double val = host.parameterValue(p.id);
         _parameters[i].value = static_cast<float>(val);
         _parameters[i].displayValue = host.parameterText(p.id, val);
+        const bool stepped = ( p.flags & CLAP_PARAM_IS_STEPPED ) != 0;
+        _parameters[i].isStepped = stepped;
+        if( stepped && p.maximum > p.minimum )
+        {
+            _parameters[i].step = static_cast<float>( 1.0 / ( p.maximum - p.minimum ) );
+        }
+        else
+        {
+            _parameters[i].step = 0.001f;
+        }
     }
     return _parameters;
 }

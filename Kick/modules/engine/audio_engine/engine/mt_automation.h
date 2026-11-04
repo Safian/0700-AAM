@@ -26,8 +26,14 @@ namespace mt::automation
     // keygroup voices and the MIDI program's CC10 path consume). The numeric ids are persisted (autoParam): never reorder.
     enum Param : int
     {
-        Level = 0, // MTTrack level 0..127 (velocity scaler)
-        Pan   = 1, // program pan, fixed point: -kPanScale..kPanScale (= PAN::MIN..PAN::MAX = -1..1)
+        Level        = 0, // MTTrack level 0..127 (velocity scaler)
+        Pan          = 1, // program pan, fixed point: -kPanScale..kPanScale (= PAN::MIN..PAN::MAX = -1..1)
+        TouchX       = 2, // XY FX Touch X 0..1000
+        TouchY       = 3, // XY FX Touch Y 0..1000
+        InsertParam0 = 4, // Insert slot 0 primary param 0..1000
+        InsertParam1 = 5, // Insert slot 1 primary param 0..1000
+        InsertParam2 = 6, // Insert slot 2 primary param 0..1000
+        InsertParam3 = 7, // Insert slot 3 primary param 0..1000
         Count
     };
 
