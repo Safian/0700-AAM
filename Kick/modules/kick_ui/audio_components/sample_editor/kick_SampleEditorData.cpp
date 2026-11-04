@@ -1107,17 +1107,14 @@ namespace mt
             regions.createEqualRegions( slices );
         }
 
-        void SampleEditorData::performAction( unsigned int actionId, const std::list<juce::var>& params )
+        bool SampleEditorData::performAction( unsigned int actionId, const std::list<juce::var>& params )
         {
             const Region& selRegion = getSelectedRegion();
             if( !selRegion.isValid() )
-            {
-                jassertfalse; //there should always be a valid selection
-                return;
-            }
+                return false; // no valid selection: nothing to process
 
             MTSampleRegion smpRegion( selRegion.getStart(), selRegion.getEnd() );
-            sei->performAction( smpRegion, MTSampleEditorAction( actionId ), params );
+            return sei->performAction( smpRegion, MTSampleEditorAction( actionId ), params );
         }
 
         juce::int64 SampleEditorData::getNextZeroSnapPos( juce::int64 pos, bool forward )

@@ -1,5 +1,6 @@
 #include "mt_sample_editor_actions.h"
 #include "mt_sample_player.h"
+#include "mt_sample_dsp.h"
 
 namespace mt
 {
@@ -224,6 +225,13 @@ namespace mt
             if( !actionObject )
                 return false;
 
+            if( actionObject->canUndo() && !sample_dsp::isEditableExtension( sourceFile.getFileExtension().toStdString() ) )
+            {
+                kick_log( "SampleEditor", "only WAV samples can be edited, not %s", sourceFile.getFileName().toRawUTF8() );
+                delete actionObject;
+                return false;
+            }
+
             actionObject->initialize( region, params, sourceFile );
             bool performed = true;
             if( actionObject->canUndo() )
@@ -232,17 +240,23 @@ namespace mt
                 auto action = new MTSampleEditUndoAction( actionObject );
                 undoActions.push_back( action );
                 performed = getAudioInterface().getUndoManager().perform( action );
+                if( performed && actionObject->failed() )
+                {
+                    kick_log( "SampleEditor", "edit failed, the sample is unchanged" );
+                    return false;
+                }
             }
             else
             {
                 performed = actionObject->execute();
+                // Extract / Copy / Stereo>Mono results become samples of the project pool (and thus show up in the editor list).
+                if( performed )
+                    for( const auto& created : actionObject->getCreatedFiles() )
+                        getAudioInterface().addAsset( created.getFullPathName(), AssetTypes::Samples );
                 delete actionObject;
             }
 
-            if( performed )
-                return true;
-
-            return false;
+            return performed;
         }
 
         void resetThumbnail()

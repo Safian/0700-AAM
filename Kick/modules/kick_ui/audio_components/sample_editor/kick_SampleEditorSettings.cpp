@@ -42,7 +42,7 @@ namespace mt
                                                                                                                                                                                                              2 );
             autoScrollList.setSelected( seData.getAutoScroll() == SampleEditorData::AutoScroll::autoScrollOff ? 0 : seData.getAutoScroll() == SampleEditorData::AutoScroll::autoScrollFollow ? 1 :
                                                                                                                                                                                                2 );
-            timeLineUnitsList.setSelected( seData.getTimeLineUnits() == SampleEditorData::TimeLineUnits::unitsTime ? 0 : seData.getTimeLineUnits() == SampleEditorData::TimeLineUnits::unitsTime ? 1 :
+            timeLineUnitsList.setSelected( seData.getTimeLineUnits() == SampleEditorData::TimeLineUnits::unitsTime ? 0 : seData.getTimeLineUnits() == SampleEditorData::TimeLineUnits::unitsSamples ? 1 :
                                                                                                                                                                                                    2 );
         }
 
