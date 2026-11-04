@@ -21,6 +21,15 @@
 
 namespace kick_ui
 {
+    namespace
+    {
+        // Controls without a function behind them are not shown (they used to look usable and did nothing).
+        constexpr bool kFilterAvailable = false; // FILTER list: no handler, no entries
+        constexpr bool kSnapAvailable   = false; // Snap button: no handler
+    }
+
+    bool ListEntry::useNoteNames = false;
+
     /////////////////////////////////////////////////////////////////////////////////////
     ///////////////               List Edit Mode
     /////////////////////////////////////////////////////////////////////////////////////
@@ -37,6 +46,7 @@ namespace kick_ui
         tableView->setRowBackgroundColour( ui::Theme::backgroundColour( 3 ) );
         tableView->setMargin( 0, 0, 4, 0 );
         tableView->enableSelectMode( false );
+        tableView->addMouseListener( this, true ); // a touch pauses auto scroll
         for( int i = 0; i < headerTitles.size(); ++i )
         {
             tableHeaderData.emplace_back( std::make_unique<ui::KickLabel>( headerTitles[i] ) );
@@ -82,7 +92,7 @@ namespace kick_ui
 
         provider.onRowSelected = [&]( int Row ) {
             auto isEnable = tableView->getSelectMode();
-            if( !isEnable )
+            if( !isEnable && noteList.isValid() && juce::isPositiveAndBelow( Row, noteList.getNumChildren() ) )
             {
                 mt::MTNoteRO note( noteList.getChild( Row ) );
                 ae.selectNote( sel, false );
@@ -92,12 +102,14 @@ namespace kick_ui
 
         provider.cellComponent = [&]( int Row, juce::Component* Existing ) -> juce::Component* {
             auto comp = dynamic_cast<ListEntry*>( Existing );
-            if( juce::isPositiveAndBelow( Row, numNotes ) )
+            if( juce::isPositiveAndBelow( Row, numNotes ) && noteList.isValid() && Row < noteList.getNumChildren() )
             {
                 if( comp == nullptr )
                     comp = new ListEntry( Row, noteList.getChild( Row ) );
                 comp->setInterceptsMouseClicks( true, true );
                 comp->setValues( Row, noteList.getChild( Row ) );
+                comp->onPadTapped  = [this]( ListEntry* E ) { editPad( E ); };
+                comp->onTimeTapped = [this]( ListEntry* E ) { editTime( E ); };
                 return comp;
             }
             return nullptr;
@@ -111,19 +123,29 @@ namespace kick_ui
                     {
                         auto& data     = p->getData();
                         auto& gridData = GridData::Instance();
-                        auto  startPos = 0, startBeat = 0, startTick = 0;
-                        auto  startBar       = p->getStartBar();
-                        auto  startBeatValue = p->getStartBeat();
-                        auto  startTickValue = p->getStartTick();
-                        if( startBar != 1 )
+                        // BAR / BEAT are 1-based, TICK 0-based: the grid position 1:1:0 is tick 0 of the bar.
+                        const int bar0      = juce::jmax( 0, p->getStartBar() - 1 );
+                        const int barStart  = (int)gridData.getTicksUptoBar( (unsigned int)bar0 );
+                        const int beats     = juce::jmax( 1, gridData.getBeatsPerBar( bar0 ) );
+                        const int tpb       = juce::jmax( 1, gridData.getTicksPerBar( bar0 ) / beats );
+                        const int start     = list_edit_logic::bbtToTicks( barStart, tpb, { p->getStartBar(), p->getStartBeat(), p->getStartTick() } );
+                        const int length    = juce::jmax( 1, gridData.getTicksPerQuantization( bar0 ) );
                         {
-                            startPos = gridData.getTicksUptoBar( startBar - 1 );
+                            mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Insert note" );
+                            ae.addOrModifyNote( data.padIndex, start, length );
                         }
-                        startBeat  = gridData.getTicksPerBar( startBar - 1 );
-                        auto total = ( startPos + ( ( startBeat / gridData.getBeatsPerBar( startBar - 1 ) ) * ( startBeatValue - 1 ) ) ) + startTickValue;
-                        ae.addOrModifyNote( data.padIndex, total, gridData.getTicksPerQuantization( data.bar ) );
-                        visibilityChanged();
-                        tableView->refresh();
+                        reloadNotes();
+                        // select the inserted note
+                        for( int i = 0; i < noteList.getNumChildren(); ++i )
+                        {
+                            mt::MTNoteRO n( noteList.getChild( i ) );
+                            if( n.number() == data.padIndex && n.start() == start )
+                            {
+                                tableView->selectRow( i );
+                                break;
+                            }
+                        }
+                        mt::utils::showNotification( "Note inserted (UNDO takes it back)" );
                     }
                     insertButton.setToggleState( false, juce::dontSendNotification );
                     if( p ) delete p;
@@ -131,24 +153,29 @@ namespace kick_ui
         };
 
         deleteButton.onClick = [&]() {
-            if( noteList.isValid() && noteList.getNumChildren() )
+            deleteButton.setToggleState( false, juce::dontSendNotification ); // always, also when nothing is deleted
+            const int row = tableView->getSelectedRowOrNone();
+            if( !noteList.isValid() || !list_edit_logic::canDeleteRow( noteList.getNumChildren(), row ) )
+                return;
             {
-                mt::MTNote n( noteList.getChild( tableView->getSelectedRow() ), &mt::getAudioInterface().getUndoManager() );
-                ae.eraseNote( n.number.get(), n.start.get(), -1 );
-                numNotes = noteList.isValid() ? noteList.getNumChildren() : 0;
-                if( tableView->getNumRows() == 1 )
-                    tableView->selectRow( 0 );
-                tableView->refresh();
-                deleteButton.setToggleState( false, juce::dontSendNotification );
+                // The selected row's own note, matched exactly (start AND length): never a longer note of an earlier step.
+                mt::MTNoteRO              n( noteList.getChild( row ) );
+                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Delete note" );
+                ae.eraseNote( n.number(), n.start(), n.length() );
             }
+            const int before = numNotes;
+            reloadNotes( list_edit_logic::selectionAfterDelete( before, row, 1 ) );
+            mt::utils::showNotification( "Note deleted (UNDO takes it back)" );
         };
 
         trackSelector.tracks.onSelectionChanged = [&]( int Sel, const juce::String& ) {
             ae.setSelectedTrack( Sel );
-            noteList = mt::getAudioInterface().getNoteList();
-            numNotes = noteList.isValid() ? noteList.getNumChildren() : 0;
-            refreshData();
+            noteWatcher.rebind();
+            reloadNotes( -1 );
         };
+
+        // Undo / redo, live recording and edits made on other screens show up while this screen is open.
+        noteWatcher.onChanged = [this]() { externalNotesChanged(); };
 
         tcButton.onClick = [&]() {
             // Only one Timing Correct window at a time: a second one would overwrite the open-window
@@ -215,8 +242,8 @@ namespace kick_ui
         tableHeaderData[4]->setBoundsRelative( 0.493f, 0.172f, 0.0782f, 0.0735f );
         tableHeaderData[5]->setBoundsRelative( 0.590f, 0.172f, 0.1448f, 0.0735f );
         tableHeaderData[6]->setBoundsRelative( 0.755f, 0.172f, 0.0587f, 0.0735f );
-        tableHeaderData[7]->setBoundsRelative( 0.8375f, 0.172f, 0.0587f, 0.0735f );
-        tableHeaderData[8]->setBoundsRelative( 0.9158f, 0.172f, 0.049f, 0.0735f );
+        tableHeaderData[7]->setBoundsRelative( 0.5879f, 0.172f, 0.0645f, 0.0735f ); // Prob (Mod Type / Value columns are gone)
+        tableHeaderData[8]->setBoundsRelative( 0.6640f, 0.172f, 0.0586f, 0.0735f ); // Rat
     }
 
     void ListEditMode::visibilityChanged()
@@ -224,14 +251,20 @@ namespace kick_ui
         for( auto it : getChildren() )
             it->setVisible( isVisible() );
         trackSelector.setVisible( isVisible() );
+        filterListBox.setVisible( isVisible() && kFilterAvailable );
+        snapButton.setVisible( isVisible() && kSnapAvailable );
+        tableHeaderData[5]->setVisible( false ); // Mod Type
+        tableHeaderData[6]->setVisible( false ); // Value
 
         if( isVisible() )
         {
             trackSelector.tracks.setSelected( ae.getSelectedTrack() );
             markSelectedRows();
+            noteWatcher.setEnabled( true );
         }
         else
         {
+            noteWatcher.setEnabled( false );
             noteList = {};
             numNotes = 0;
         }
@@ -243,6 +276,110 @@ namespace kick_ui
             tableView->refresh();
     }
 
+    void ListEditMode::updateNoteNaming()
+    {
+        auto* prog = ae.isProjectLoaded() ? ae.getProgramDataForTrack( sel.sequence, sel.track ) : nullptr;
+        ListEntry::useNoteNames = prog != nullptr && prog->type.get() != mt::MTProgramType::Drum && prog->type.get() != mt::MTProgramType::Clip;
+    }
+
+    // Re-read the note list of the selected track. SelectRow: row to select afterwards, -1 none, -2 keep.
+    void ListEditMode::reloadNotes( int SelectRow )
+    {
+        noteList = ae.isProjectLoaded() ? ae.getNoteList() : juce::ValueTree{};
+        numNotes = noteList.isValid() ? noteList.getNumChildren() : 0;
+        updateNoteNaming();
+        if( isVisible() )
+            tableView->refresh();
+        if( SelectRow >= 0 && SelectRow < numNotes )
+            tableView->selectRow( SelectRow );
+        else if( SelectRow == -1 )
+            tableView->clearSelection();
+    }
+
+    void ListEditMode::externalNotesChanged()
+    {
+        if( !isVisible() )
+            return;
+        const int count = ae.isProjectLoaded() && ae.getNoteList().isValid() ? ae.getNoteList().getNumChildren() : 0;
+        if( count != numNotes )
+        {
+            reloadNotes(); // notes were added / removed (recording, undo, other screen)
+            return;
+        }
+        // Same number of notes (a value was edited, an edit was undone): refresh the cells in place, no rebuild
+        // (a rebuild during a finger drag on a cell would cancel the drag).
+        noteList = ae.getNoteList();
+        int row  = 0;
+        tableView->forEachRowComponent( [&]( juce::Component* C ) {
+            if( auto* e = dynamic_cast<ListEntry*>( C ) )
+                e->setValues( row, noteList.getChild( row ) );
+            ++row;
+        } );
+    }
+
+    void ListEditMode::editTime( ListEntry* Entry )
+    {
+        if( Entry == nullptr )
+            return;
+        auto vt = Entry->getValueTree();
+        if( !vt.isValid() )
+            return;
+        const int  start    = vt.getProperty( mt::IDs::start );
+        const int  noteId   = vt.getProperty( mt::IDs::id );
+        auto&      gd       = GridData::Instance();
+        const auto bnb      = ae.toBnB( sel, (unsigned int)start );
+        auto*      dlg      = new ListEditTimeDialog( bnb.bar + 1, bnb.beat + 1, bnb.tick, ae.getSequenceLength( sel.sequence ) );
+        mt::utils::showOptions( dlg->getName(), dlg, [this, dlg, noteId, &gd]( int R ) {
+            if( R == UI::APPLY )
+            {
+                const int bar0     = juce::jmax( 0, dlg->getBar() - 1 );
+                const int beats    = juce::jmax( 1, gd.getBeatsPerBar( bar0 ) );
+                const int tpb      = juce::jmax( 1, gd.getTicksPerBar( bar0 ) / beats );
+                const int newStart = list_edit_logic::bbtToTicks( (int)gd.getTicksUptoBar( (unsigned int)bar0 ), tpb, { dlg->getBar(), dlg->getBeat(), dlg->getTick() } );
+                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Edit note time" );
+                ae.editNote( sel, noteId, newStart );
+                reloadNotes();
+            }
+            delete dlg;
+        } );
+    }
+
+    void ListEditMode::editPad( ListEntry* Entry )
+    {
+        if( Entry == nullptr )
+            return;
+        auto vt = Entry->getValueTree();
+        if( !vt.isValid() )
+            return;
+        std::vector<juce::String> names;
+        for( int n = 0; n < 128; ++n )
+            names.push_back( ListEntry::useNoteNames ? juce::String( list_edit_logic::noteName( n ) ) : juce::String( list_edit_logic::padName( n ) ) );
+        auto* dlg = new ListEditPadDialog( names, vt.getProperty( mt::IDs::no ) );
+        mt::utils::showOptions( dlg->getName(), dlg, [this, dlg, vt]( int R ) mutable {
+            if( R == UI::APPLY && vt.isValid() )
+            {
+                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Edit note pad" );
+                vt.setProperty( mt::IDs::no, list_edit_logic::clampCell( list_edit_logic::Cell::Pad, dlg->getSelected() ), &ae.getUndoManager() );
+                externalNotesChanged();
+            }
+            delete dlg;
+        } );
+    }
+
+    // Data Dial / +/-: step the selected row, scroll it into view.
+    void ListEditMode::stepRowBy( int Delta )
+    {
+        const int target = list_edit_logic::stepRow( tableView->getSelectedRowOrNone(), Delta, numNotes );
+        if( target < 0 )
+            return;
+        tableView->selectRow( target );
+        tableView->knobRotated( 0 ); // re-selects the same row and scrolls it into view
+    }
+
+    void ListEditMode::mouseDown( const juce::MouseEvent& ) { lastTouchMs = juce::Time::getMillisecondCounter(); }
+    void ListEditMode::mouseDrag( const juce::MouseEvent& ) { lastTouchMs = juce::Time::getMillisecondCounter(); }
+    void ListEditMode::mouseWheelMove( const juce::MouseEvent&, const juce::MouseWheelDetails& ) { lastTouchMs = juce::Time::getMillisecondCounter(); }
+
     void ListEditMode::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
     {
         if( contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) && gridSettings.getHittingPadMode() )
@@ -250,16 +387,21 @@ namespace kick_ui
             auto padNum = contracts::DclContractsHelper::getPadNumber( f_HwMsg ) + ae.getBankOffset();
             tableView->clearSelection();
             tableView->enableSelectMode( true );
-            auto i = 0;
+            auto i        = 0;
+            int  firstHit = -1;
             for( const auto& it : noteList )
             {
                 auto note = mt::MTNoteRO( it );
                 if( padNum == note.number() )
                 {
                     tableView->selectRow( i );
+                    if( firstHit < 0 )
+                        firstHit = i;
                 }
                 i++;
             }
+            if( firstHit >= 0 ) // scroll to the first matching row
+                tableView->setTableViewPosition( firstHit * ( tableView->getRowHeight() + tableView->getRowSpacing() ) );
         }
         else if( contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )
         {
@@ -267,6 +409,8 @@ namespace kick_ui
             auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
             if( knob != contracts::DeviceControlContracts::EN_KNOB_CENTER )
                 knobCommand( knob, value );
+            else if( value != 0 )
+                stepRowBy( value ); // the dial walks the rows (it used to be dropped here)
         }
         else if( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) && ( contracts::DclContractsHelper::getButtonState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED ) )
         {
@@ -280,58 +424,33 @@ namespace kick_ui
                 case contracts::DeviceControlContracts::EN_TC: tcButton.onClick(); break;
             }
         }
+        else if( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) )
+        {
+            // +/- and the cursor keys act on release (the bridge delivers them that way).
+            switch( contracts::DclContractsHelper::getButtonCode( f_HwMsg ) )
+            {
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS:
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_CW: stepRowBy( 1 ); break;
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS:
+                case contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_CCW: stepRowBy( -1 ); break;
+                default: break;
+            }
+        }
         tableView->enableSelectMode( false );
     }
 
+    // Q-Link 1-4 edit the SELECTED row: Pad, Length, Velocity, Probability. No selection or no rows: nothing happens.
     void ListEditMode::knobCommand( int knob, int value )
     {
-        auto& rowComp       = tableView->getRowComponents();
-        auto  comp1         = dynamic_cast<ListEntry*>( rowComp[0] );
-        auto  elementBounds = comp1->getElementBounds( ( knob - 1 ) % 4 + 1 );
-        auto  totalRows     = tableView->getNumRows();
-        auto  rows          = tableView->getRowNumbers( 4, ( ( knob - 1 ) / 4 ) + 1, elementBounds.getX(), elementBounds.getWidth(), 128 );
-
-        std::vector<ListEntry*> entry;
-
-        for( auto i = 0; i < rows.size(); i++ )
-        {
-            int rowIndex = rows[i];
-            if( rowIndex < totalRows )
-            {
-                auto comp = dynamic_cast<ListEntry*>( rowComp[rowIndex] );
-                entry.push_back( comp );
-            }
-        }
-        switch( knob )
-        {
-            case contracts::DeviceControlContracts::EN_KNOB_1:
-            case contracts::DeviceControlContracts::EN_KNOB_2:
-            case contracts::DeviceControlContracts::EN_KNOB_3:
-            case contracts::DeviceControlContracts::EN_KNOB_4:
-                if( entry.size() >= 1 && entry[0] ) entry[0]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_1 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_5:
-            case contracts::DeviceControlContracts::EN_KNOB_6:
-            case contracts::DeviceControlContracts::EN_KNOB_7:
-            case contracts::DeviceControlContracts::EN_KNOB_8:
-                if( entry.size() >= 2 && entry[1] ) entry[1]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_5 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_9:
-            case contracts::DeviceControlContracts::EN_KNOB_10:
-            case contracts::DeviceControlContracts::EN_KNOB_11:
-            case contracts::DeviceControlContracts::EN_KNOB_12:
-                if( entry.size() >= 3 && entry[2] ) entry[2]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_9 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_13:
-            case contracts::DeviceControlContracts::EN_KNOB_14:
-            case contracts::DeviceControlContracts::EN_KNOB_15:
-            case contracts::DeviceControlContracts::EN_KNOB_16:
-                if( entry.size() >= 4 && entry[3] ) entry[3]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_13 ), value );
-                break;
-        }
+        list_edit_logic::Cell cell;
+        if( value == 0 || !list_edit_logic::qlinkCell( knob - contracts::DeviceControlContracts::EN_KNOB_1 + 1, cell ) )
+            return;
+        const int row = tableView->getSelectedRowOrNone();
+        auto&     rowComps = tableView->getRowComponents();
+        if( !list_edit_logic::canDeleteRow( numNotes, row ) || !juce::isPositiveAndBelow( row, rowComps.size() ) )
+            return;
+        if( auto* entry = dynamic_cast<ListEntry*>( rowComps[row] ) )
+            entry->adjust( cell, value );
     }
 
     void ListEditMode::markSelectedRows()
@@ -360,6 +479,9 @@ namespace kick_ui
 
     void ListEditMode::updateViewPosition()
     {
+        // Follow / Page must not fight a finger that is scrolling or editing.
+        if( !list_edit_logic::autoScrollAllowed( juce::Time::getMillisecondCounter(), lastTouchMs ) )
+            return;
         if( isVisible() )
         {
             // Total Number of Rows and  Height
@@ -404,67 +526,69 @@ namespace kick_ui
     ListEntry::ListEntry( int Row, juce::ValueTree Vt )
     {
         addMouseListener( this, true );
-        mt::utils::addAndMakeVisible( this, row, time, note, length, velocity, type, rat, prob, value );
+        mt::utils::addAndMakeVisible( this, row, time, noteLabel, length, velocity, rat, prob );
         row.setValueJustification( juce::Justification::centred );
         time.setValueJustification( juce::Justification::centred );
-        type.setValueJustification( juce::Justification::centred );
         length.setValueJustification( juce::Justification::centred );
         velocity.setValueJustification( juce::Justification::centred );
         rat.setValueJustification( juce::Justification::centred );
         prob.setValueJustification( juce::Justification::centred );
-        value.setValueJustification( juce::Justification::centred );
-        note.setJustificationType( juce::Justification::centred );
+        noteLabel.setJustificationType( juce::Justification::centred );
+        noteLabel.setEditable( false );
 
         row.setFontHeight( 16 );
-        type.setFontHeight( 16 );
         time.setFontHeight( 16 );
+        noteLabel.setFontHeight( 16 );
         length.setValueFontHeight( 16 );
         velocity.setValueFontHeight( 16 );
         rat.setValueFontHeight( 16 );
         prob.setValueFontHeight( 16 );
-        value.setValueFontHeight( 16 );
-        note.setValueFontHeight( 16 );
 
-        value.setValue( 26, juce::dontSendNotification );
         prob.setPostFix( "%" );
 
         row.setTextColour( ui::Theme::textColour( 1 ) );
         time.setTextColour( ui::Theme::textColour( 1 ) );
-        type.setTextColour( ui::Theme::textColour( 1 ) );
-        note.setColours( ui::Theme::textColour( 1 ), juce::Colours::transparentBlack );
+        noteLabel.setColours( ui::Theme::textColour( 1 ), ui::Theme::backgroundColour( 9 ) );
         length.setColours( ui::Theme::textColour( 1 ), juce::Colours::transparentBlack );
         velocity.setColours( ui::Theme::textColour( 1 ), juce::Colours::transparentBlack );
-        value.setColours( ui::Theme::textColour( 1 ), juce::Colours::transparentBlack );
         prob.setColours( ui::Theme::textColour( 1 ), juce::Colours::transparentBlack );
         rat.setColours( ui::Theme::textColour( 1 ), juce::Colours::transparentBlack );
 
         row.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
         time.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
-        type.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
-        note.setBackGroundColours( ui::Theme::backgroundColour( 9 ), ui::Theme::backgroundColour( 9 ) );
         length.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
         velocity.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
-        value.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
         prob.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
         rat.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
 
         setValues( Row, Vt );
 
-        note.onSelectionChanged = [&]( int Sel, const juce::String& ) {
-            if( vt.isValid() ) vt.setProperty( mt::IDs::no, Sel, &mt::getAudioInterface().getUndoManager() );
-        };
-        length.onValueChanged = [&]( int V ) {
-            if( vt.isValid() ) vt.setProperty( mt::IDs::length, V, &mt::getAudioInterface().getUndoManager() );
-        };
-        velocity.onValueChanged = [&]( int V ) {
-            if( vt.isValid() ) vt.setProperty( mt::IDs::velocity, V, &mt::getAudioInterface().getUndoManager() );
-        };
-        prob.onValueChanged = [&]( int V ) {
-            if( vt.isValid() ) vt.setProperty( mt::IDs::probability, V, &mt::getAudioInterface().getUndoManager() );
-        };
-        rat.onValueChanged = [&]( int V ) {
-            if( vt.isValid() ) vt.setProperty( mt::IDs::ratchet, V, &mt::getAudioInterface().getUndoManager() );
-        };
+        // Only the user's own edits write to the note (the cells are filled without notification).
+        length.onValueChanged   = [&]( int V ) { writeProperty( mt::IDs::length, list_edit_logic::clampCell( list_edit_logic::Cell::Length, V ) ); };
+        velocity.onValueChanged = [&]( int V ) { writeProperty( mt::IDs::velocity, list_edit_logic::clampCell( list_edit_logic::Cell::Velocity, V ) ); };
+        prob.onValueChanged     = [&]( int V ) { writeProperty( mt::IDs::probability, list_edit_logic::clampCell( list_edit_logic::Cell::Probability, V ) ); };
+        rat.onValueChanged      = [&]( int V ) { writeProperty( mt::IDs::ratchet, list_edit_logic::clampCell( list_edit_logic::Cell::Ratchet, V ) ); };
+    }
+
+    void ListEntry::writeProperty( const juce::Identifier& Id, int Value )
+    {
+        if( !vt.isValid() || (int)vt.getProperty( Id ) == Value )
+            return;
+        auto& um = mt::getAudioInterface().getUndoManager();
+        mt::ScopedUndoTransaction undoScope( um, "List edit" );
+        vt.setProperty( Id, Value, &um );
+        if( onEdited )
+            onEdited();
+    }
+
+    // Relative edit straight on the note (Q-Link): based on the stored value, so fast turns add up.
+    void ListEntry::adjust( list_edit_logic::Cell C, int Delta )
+    {
+        if( !vt.isValid() || Delta == 0 )
+            return;
+        const juce::Identifier id = C == list_edit_logic::Cell::Pad ? mt::IDs::no : C == list_edit_logic::Cell::Length ? mt::IDs::length : C == list_edit_logic::Cell::Velocity ? mt::IDs::velocity : C == list_edit_logic::Cell::Probability ? mt::IDs::probability : mt::IDs::ratchet;
+        writeProperty( id, list_edit_logic::clampCell( C, (int)vt.getProperty( id ) + Delta ) );
+        refreshData();
     }
 
     void ListEntry::setValues( int Row, juce::ValueTree Vt )
@@ -486,6 +610,7 @@ namespace kick_ui
         {
             auto& ae  = mt::getAudioInterface();
             auto& sel = ae.getSelected();
+            using list_edit_logic::Cell;
 
             int n = vt.getProperty( mt::IDs::no );
             int t = vt.getProperty( mt::IDs::start );
@@ -495,26 +620,36 @@ namespace kick_ui
             int r = vt.getProperty( mt::IDs::ratchet );
 
             auto bnb      = ae.toBnB( sel, (unsigned int)t );
-            auto timeText = juce::String( bnb.bar + 1 ).paddedLeft( '0', 2 ) + ":" + juce::String( bnb.beat + 1 ).paddedLeft( '0', 2 ) + ":" + juce::String( bnb.tick ).paddedLeft( '0', 2 );
-            time.setText( timeText, juce::dontSendNotification );
-            note.setSelected( n, juce::sendNotification );
-            length.setValue( l, juce::dontSendNotification );
-            velocity.setValue( v, juce::dontSendNotification );
-            prob.setValue( p, juce::sendNotification );
-            rat.setValue( r, juce::sendNotification );
-            type.setText( "Note", juce::sendNotification );
+            time.setText( juce::String( list_edit_logic::formatTime( { bnb.bar + 1, bnb.beat + 1, bnb.tick } ) ), juce::dontSendNotification );
+            noteLabel.setText( juce::String( useNoteNames ? list_edit_logic::noteName( n ) : list_edit_logic::padName( n ) ), juce::dontSendNotification );
+            // No notification: showing a note must never write to it (a stored ratchet 0 used to be rewritten).
+            length.setValue( list_edit_logic::displayValue( Cell::Length, l ), juce::dontSendNotification );
+            velocity.setValue( list_edit_logic::displayValue( Cell::Velocity, v ), juce::dontSendNotification );
+            prob.setValue( list_edit_logic::displayValue( Cell::Probability, p ), juce::dontSendNotification );
+            rat.setValue( list_edit_logic::displayValue( Cell::Ratchet, r ), juce::dontSendNotification );
         }
+    }
+
+    void ListEntry::mouseUp( const juce::MouseEvent& e )
+    {
+        if( e.mouseWasDraggedSinceMouseDown() )
+            return;
+        const auto p = e.getEventRelativeTo( this ).getPosition();
+        if( noteLabel.getBounds().contains( p ) && onPadTapped )
+            onPadTapped( this );
+        else if( time.getBounds().contains( p ) && onTimeTapped )
+            onTimeTapped( this );
     }
 
     juce::Rectangle<int> ListEntry::getElementBounds( int state )
     {
         switch( state )
         {
-            case 1: return note.getBounds(); break;
+            case 1: return noteLabel.getBounds(); break;
             case 2: return length.getBounds(); break;
             case 3: return velocity.getBounds(); break;
             case 4: return prob.getBounds(); break;
-            default: return note.getBounds(); break;
+            default: return noteLabel.getBounds(); break;
         }
     }
 
@@ -524,25 +659,22 @@ namespace kick_ui
         row.setBounds( b.removeFromLeft( 69 ).reduced( 8 ) );
         b.removeFromLeft( 10 );
         time.setBounds( b.removeFromLeft( 167 ).reduced( 8 ) );
-        note.setBounds( b.removeFromLeft( 139 ).reduced( 8 ) );
+        noteLabel.setBounds( b.removeFromLeft( 139 ).reduced( 8 ) );
         length.setBounds( b.removeFromLeft( 99 ).reduced( 8 ) );
         velocity.setBounds( b.removeFromLeft( 99 ).reduced( 8 ) );
-        type.setBounds( b.removeFromLeft( 167 ).reduced( 8 ) );
-        b.removeFromLeft( 4 );
-        value.setBounds( b.removeFromLeft( 79 ).reduced( 8 ) );
-        b.removeFromLeft( 4 );
         prob.setBounds( b.removeFromLeft( 79 ).reduced( 8 ) );
         rat.setBounds( b.removeFromLeft( 70 ).reduced( 8 ) );
     }
 
     void ListEntry::linkRotated( int ID, int Value )
     {
+        using list_edit_logic::Cell;
         switch( ID )
         {
-            case 0: note.knobRotated( Value ); break;
-            case 1: length.knobRotated( Value ); break;
-            case 2: velocity.knobRotated( Value ); break;
-            case 3: prob.knobRotated( Value ); break;
+            case 0: adjust( Cell::Pad, Value ); break;
+            case 1: adjust( Cell::Length, Value ); break;
+            case 2: adjust( Cell::Velocity, Value ); break;
+            case 3: adjust( Cell::Probability, Value ); break;
         }
     }
 
@@ -567,7 +699,7 @@ namespace kick_ui
     {
         mt::track::timingCorrectInfo d;
         d.type        = (mt::track::timingCorrectInfo::Type)juce::jlimit( 0, 3, type.getSelectedIndex() );
-        d.events      = (mt::track::timingCorrectInfo::Events)juce::jlimit( 0, 2, events.getSelectedIndex() );
+        d.events      = (mt::track::timingCorrectInfo::Events)juce::jlimit( 0, 1, events.getSelectedIndex() );
         d.gridTicks   = timeDivToTicks( timeDivList.getSelectedValue() );
         d.swingPct    = (int)swing.getValue();
         d.shiftTicks  = (int)shiftTiming.getValue();
@@ -641,7 +773,7 @@ namespace kick_ui
             auto  d  = ae.getTimingCorrectParams();
             globalTC.setSelected( ae.isTimingCorrectEnabled() ? 1 : 0, juce::dontSendNotification );
             type.setSelected( (int)d.type, juce::dontSendNotification );
-            events.setSelected( (int)d.events, juce::dontSendNotification );
+            events.setSelected( juce::jmin( 1, (int)d.events ), juce::dontSendNotification ); // Range is not offered
             swing.setValue( d.swingPct, juce::dontSendNotification );
             shiftTiming.setValue( d.shiftTicks, juce::dontSendNotification );
             window.setValue( d.windowPct, juce::dontSendNotification );
