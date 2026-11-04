@@ -111,6 +111,7 @@
     #include "swupdate/kick_SWUpdateView.h"
 
     // modes
+    #include "modes/kick_ListEditLogic.h"
     #include "modes/kick_ListEdit.h"
     #include "modes/kick_PadColorLogic.h"
     #include "modes/kick_PadColor.h"
