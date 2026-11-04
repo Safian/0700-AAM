@@ -91,7 +91,11 @@ namespace kick_ui
 
         provider.cellComponent = [&]( int Row, juce::Component* Existing ) -> juce::Component* {
             auto comp = dynamic_cast<KickNextSequenceDisplay*>( Existing );
+            if( !juce::isPositiveAndBelow( Row, ae.getNumSequences() ) )
+                return nullptr;
             auto data = ae.getSequenceData( Row );
+            if( data == nullptr )
+                return nullptr;
 
             seqData.srNo   = juce::String( Row + 1 );
             seqData.name   = data->name.get();
@@ -99,14 +103,10 @@ namespace kick_ui
             seqData.bpm    = data->tempo;
             seqData.index  = Row;
 
-            if( juce::isPositiveAndBelow( Row, ae.getNumSequences() ) )
-            {
-                if( comp == nullptr )
-                    comp = new KickNextSequenceDisplay( seqData );
-                comp->updateData( seqData );
-                return comp;
-            }
-            return nullptr;
+            if( comp == nullptr )
+                comp = new KickNextSequenceDisplay( seqData );
+            comp->updateData( seqData );
+            return comp;
         };
 
         provider.onRowSelected = [&]( int Index ) {
@@ -322,18 +322,16 @@ namespace kick_ui
         }
         else
         {
-            if( playingSequence >= 0 )
-            {
-                pads->removeBreathing( nextSequence ); //orange
-                setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::PadColourOrange );
+            if( playingSequence < 0 )
+                playingSequence = ae.getSelectedSequence();
 
-                pads->setBreathing( playingSequence );
-                setPadBlinking( playingSequence, contracts::DeviceControlContracts::DeviceControlContracts::StateOnBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
+            pads->removeBreathing( nextSequence ); //orange
+            setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::PadColourOrange );
 
-                nextSequence = -1;
-            }
-            else
-                std::abort(); // Forces a crash here
+            pads->setBreathing( playingSequence );
+            setPadBlinking( playingSequence, contracts::DeviceControlContracts::DeviceControlContracts::StateOnBlink, contracts::DeviceControlContracts::DeviceControlContracts::PadColourIds::padColourlightGreen1, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
+
+            nextSequence = -1;
         }
     }
 
@@ -396,7 +394,12 @@ namespace kick_ui
         }
         else if( nextSequence >= 0 )
         {
-            std::abort();
+            // The engine stopped (STOP on another screen, bank change) while a next sequence was
+            // queued on this screen: the queue is meaningless now, drop it.
+            pads->removeBreathing( nextSequence );
+            setPadBlinking( nextSequence, contracts::DeviceControlContracts::StateOffBlink, contracts::DeviceControlContracts::PadColourIds::PadColourOrange );
+            nextSequence = -1;
+            ae.setNextSequence( -1 );
         }
 
         tableView->selectRow( playingSequence, juce::dontSendNotification );
