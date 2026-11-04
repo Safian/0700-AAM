@@ -186,6 +186,11 @@ target_link_libraries(kick-sustain-stress-tests PRIVATE Threads::Threads)
 add_test(NAME kick-sustain-stress COMMAND kick-sustain-stress-tests)
 set_tests_properties(kick-sustain-stress PROPERTIES TIMEOUT 60)
 
+# Logging system: timestamp, thread ID, category filter, crash ring buffer, log rotation; JUCE-free, header only.
+add_executable(kick-logging-tests LoggingTests.cpp)
+add_test(NAME kick-logging COMMAND kick-logging-tests)
+set_tests_properties(kick-logging PROPERTIES TIMEOUT 10)
+
 if(COMMAND _juce_fixup_module_source_groups)
     _juce_fixup_module_source_groups()
 endif()

@@ -99,6 +99,9 @@ namespace mt
     {
         MTIProgram* prog = nullptr;
         auto        type = toEnum<MTProgramType>( (int)VT.getProperty( IDs::type ) );
+        const auto  progName = VT.getProperty( IDs::name, "" ).toString();
+        const auto  start_ms = kick_logger::get_uptime_ms();
+        kick_log( "info", "[INFO] [PROJ] Program load begin: '%s' (type: %d)\n", progName.toRawUTF8(), (int)type );
 
         if( type == MTProgramType::Drum ) prog = new MTDrumProgram( engine, VT, undoManager );
         if( type == MTProgramType::Keygroup ) prog = new MTKeygroupProgram( engine, VT, undoManager );
@@ -117,6 +120,9 @@ namespace mt
             // Update list and call listener...
             updateProgramList();
         }
+        kick_log( "info", "[INFO] [PROJ] Program load end: '%s' (took %llu ms, success=%d)\n",
+                  progName.toRawUTF8(), static_cast<unsigned long long>( kick_logger::get_uptime_ms() - start_ms ),
+                  prog != nullptr );
         return prog;
     }
 

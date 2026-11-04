@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_basics/juce_audio_basics.h>
+#include "common/source/kick_logger.h"
 #include "hardware/device_factory.h"
 #include "hardware/pad_colour_map.h"
 #include "hardware/led_map.h"
@@ -436,8 +437,7 @@ private:
             send(ST::mouse, 0);
         if (log)
         {
-            printf("[TOUCH] source=%s slot=%d touchSrcOk=%d\n", kick_hw::probe::touchRouteName(route), slot, (int)m_touch_src_ok);
-            fflush(stdout);
+            kick_log("touch", "[TOUCH] source=%s slot=%d touchSrcOk=%d\n", kick_hw::probe::touchRouteName(route), slot, (int)m_touch_src_ok);
         }
     }
 
@@ -481,13 +481,12 @@ private:
             if (is_down || is_up)
             {
                 auto* b = dynamic_cast<juce::Button*>(target);
-                printf("[TOUCH] %s slot=%d fb=(%d,%d) ui=(%d,%d) root=%s %dx%d hitRoot=%s %dx%d vis=%d target=%s '%s' %dx%d%s peer=%d\n",
+                kick_log("touch", "[TOUCH] %s slot=%d fb=(%d,%d) ui=(%d,%d) root=%s %dx%d hitRoot=%s %dx%d vis=%d target=%s '%s' %dx%d%s peer=%d\n",
                        is_down ? "down" : "up", slot, x, y, ix, iy,
                        typeid(*root).name(), root->getWidth(), root->getHeight(),
                        typeid(*hitRoot).name(), hitRoot->getWidth(), hitRoot->getHeight(), (int)hitRoot->isVisible(),
                        typeid(*target).name(), target->getName().toRawUTF8(), target->getWidth(), target->getHeight(),
                        b ? " (Button)" : "", target->getPeer() != nullptr ? 1 : 0);
-                fflush(stdout);
             }
 
             auto* peer = target->getPeer();
@@ -500,7 +499,7 @@ private:
             auto* top = target->getTopLevelComponent();
             if (peer && top != nullptr && top != root && top->isOnDesktop() && top->isShowing() && top->getPeer() == peer)
             {
-                if (is_down || is_up) { printf("[TOUCH] popup peer path\n"); fflush(stdout); }
+                if (is_down || is_up) { kick_log("touch", "[TOUCH] popup peer path\n"); }
                 deliverPeerTouch(peer, ix, iy, mods, slot, is_down || is_up);
                 if (is_up && slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
                 return;
@@ -514,13 +513,12 @@ private:
             const auto path = kick_hw::probe::chooseDeliveryPath(peer != nullptr, windowShowing);
             if (is_down || is_up)
             {
-                printf("[TOUCH] delivery=%s (peer=%d showing=%d)\n", kick_hw::probe::deliveryPathName(path),
+                kick_log("touch", "[TOUCH] delivery=%s (peer=%d showing=%d)\n", kick_hw::probe::deliveryPathName(path),
                        peer != nullptr ? 1 : 0, (int)windowShowing);
-                fflush(stdout);
             }
             if (path == kick_hw::probe::DeliveryPath::Peer)
             {
-                if (is_down || is_up) { printf("[TOUCH] native peer path (peer visible=1)\n"); fflush(stdout); }
+                if (is_down || is_up) { kick_log("touch", "[TOUCH] native peer path (peer visible=1)\n"); }
                 deliverPeerTouch(peer, ix, iy, mods, slot, is_down || is_up);
                 if (is_up && slot >= 0 && slot < 10) m_touch_targets[slot] = nullptr;
                 return;
@@ -559,8 +557,7 @@ private:
                 // No window focus without an X display: remember the touched control as the one the data dial / +/- act on.
                 ui::selectControlFromTouch(target);
                 target->mouseDown(e);
-                printf("[TOUCH] manual mouseDown delivered to '%s'\n", target->getName().toRawUTF8());
-                fflush(stdout);
+                kick_log("touch", "[TOUCH] manual mouseDown delivered to '%s'\n", target->getName().toRawUTF8());
             }
             else if (is_up)
             {
@@ -586,16 +583,14 @@ private:
                         m_last_up_x[slot]  = ix;
                         m_last_up_y[slot]  = iy;
                     }
-                    printf("[TOUCH] manual mouseUp delivered to '%s'\n", effectiveTarget->getName().toRawUTF8());
-                    fflush(stdout);
+                    kick_log("touch", "[TOUCH] manual mouseUp delivered to '%s'\n", effectiveTarget->getName().toRawUTF8());
                 }
 
                 auto* btn = dynamic_cast<juce::Button*>(effectiveTarget);
                 if (!btn && effectiveTarget) btn = effectiveTarget->findParentComponentOfClass<juce::Button>();
                 if (btn) {
-                    printf("[TOUCH] Button released: '%s' (pos %d,%d, toggle=%d)\n",
+                    kick_log("touch", "[TOUCH] Button released: '%s' (pos %d,%d, toggle=%d)\n",
                            btn->getName().toRawUTF8(), ix, iy, (int)btn->getToggleState());
-                    fflush(stdout);
                 }
 
                 if (slot >= 0 && slot < 10) { m_touch_targets[slot] = nullptr; m_touch_dragging[slot] = false; }
@@ -653,9 +648,8 @@ private:
             }
         }
         fclose(f);
-        printf("[BRIDGE] Saved snapshot %dx%d to %s (non-bg pixels: %d / %d = %.1f%%)\n",
+        kick_log("bridge", "[BRIDGE] Saved snapshot %dx%d to %s (non-bg pixels: %d / %d = %.1f%%)\n",
                w, h, filepath, non_default_px, w * h, 100.0f * non_default_px / (float)(w * h));
-        fflush(stdout);
     }
 
     void timerCallback() override
@@ -672,49 +666,46 @@ private:
         if (compW <= 0 || compH <= 0) return;
 
         if (m_frame_counter == 30) {
-            printf("[BRIDGE] Transitioning to Screen::HomeListView (AppMainmode)...\n");
+            kick_log("bridge", "[BRIDGE] Transitioning to Screen::HomeListView (AppMainmode)...\n");
             kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
             ui::Theme::loadTheme("Default", true);
             juce::File demoPrj("/data/demos/Demo 01/Demo 01.kickPrj");
             if (demoPrj.existsAsFile()) {
-                printf("[BRIDGE] Found '%s', loading project...\n", demoPrj.getFullPathName().toRawUTF8());
+                kick_log("bridge", "[BRIDGE] Found '%s', loading project...\n", demoPrj.getFullPathName().toRawUTF8());
                 mt::getAudioInterface().loadProject(demoPrj);
             }
-            fflush(stdout);
         }
 
         static bool project_refresh_triggered = false;
         if (!project_refresh_triggered && m_frame_counter > 40 && mt::getAudioInterface().isProjectLoaded()) {
             project_refresh_triggered = true;
-            printf("[BRIDGE] Project loaded! Triggering UI refresh...\n");
+            kick_log("bridge", "[BRIDGE] Project loaded! Triggering UI refresh...\n");
             kick_ui::signals::sigScreenClose(kick_ui::Screen::HomeListView);
-            fflush(stdout);
         }
 
-        if (m_frame_counter < 5 || m_frame_counter % 60 == 0) {
-            printf("[BRIDGE] frame=%d rendering %dx%d to 1280x800, root bounds=(%d,%d,%d,%d) children=%d currentScreen=%d\n",
+        if (kick_logger::is_category_enabled("frame")) {
+            kick_log("frame", "[BRIDGE] frame=%d rendering %dx%d to 1280x800, root bounds=(%d,%d,%d,%d) children=%d currentScreen=%d\n",
                    m_frame_counter, compW, compH,
                    m_root->getX(), m_root->getY(), m_root->getWidth(), m_root->getHeight(),
                    m_root->getNumChildComponents(),
                    (int)kick_ui::KickHome::Instance().getCurrentScreen());
             if (m_frame_counter == 1 || m_frame_counter == 60) {
-                printf("[BRIDGE] --- Dump KickHome children (%d) at frame %d ---\n", m_root->getNumChildComponents(), m_frame_counter);
+                kick_log("frame", "[BRIDGE] --- Dump KickHome children (%d) at frame %d ---\n", m_root->getNumChildComponents(), m_frame_counter);
                 for (int i = 0; i < m_root->getNumChildComponents(); ++i) {
                     auto* c = m_root->getChildComponent(i);
                     if (c->isVisible()) {
-                        printf("  child[%d]: name='%s' vis=%d bounds=(%d,%d,%d,%d) numSub=%d\n",
+                        kick_log("frame", "  child[%d]: name='%s' vis=%d bounds=(%d,%d,%d,%d) numSub=%d\n",
                                i, c->getName().toRawUTF8(), c->isVisible(),
                                c->getX(), c->getY(), c->getWidth(), c->getHeight(), c->getNumChildComponents());
                         for (int j = 0; j < c->getNumChildComponents(); ++j) {
                             auto* sub = c->getChildComponent(j);
-                            printf("     sub[%d]: name='%s' vis=%d bounds=(%d,%d,%d,%d)\n",
+                            kick_log("frame", "     sub[%d]: name='%s' vis=%d bounds=(%d,%d,%d,%d)\n",
                                    j, sub->getName().toRawUTF8(), sub->isVisible(),
                                    sub->getX(), sub->getY(), sub->getWidth(), sub->getHeight());
                         }
                     }
                 }
             }
-            fflush(stdout);
         }
 
         {
@@ -771,7 +762,7 @@ public:
         }
 
         auto assetsDir = getAppDirs(MTAssets);
-        printf("[BRIDGE] getAppDirs(MTAssets) = '%s' exists=%d\n", assetsDir.getFullPathName().toRawUTF8(), assetsDir.exists());
+        kick_log("bridge", "[BRIDGE] getAppDirs(MTAssets) = '%s' exists=%d\n", assetsDir.getFullPathName().toRawUTF8(), assetsDir.exists());
         ui::Theme::loadTheme("Default", true);
 
         m_hw.reset(HardwareDeviceFactory::create());
@@ -782,9 +773,8 @@ public:
             if (m_hw->touch()) {
                 m_hw->touch()->start(this, kFbW, kFbH);
                 auto* uiRoot = (m_window != nullptr) ? (juce::Component*)m_window : m_root;
-                printf("[TOUCH] init: framebuffer touch space %dx%d -> UI %dx%d (ui = fb * ui / fb size)\n",
+                kick_log("touch", "[TOUCH] init: framebuffer touch space %dx%d -> UI %dx%d (ui = fb * ui / fb size)\n",
                        kFbW, kFbH, uiRoot ? uiRoot->getWidth() : 0, uiRoot ? uiRoot->getHeight() : 0);
-                fflush(stdout);
             }
             if (m_hw->control_surface()) {
                 m_hw->control_surface()->start(this);
@@ -819,7 +809,7 @@ public:
             m_cmd_fd = open("/data/kick_cmd", O_RDONLY | O_NONBLOCK);
             m_cmd_fd_w = open("/data/kick_cmd", O_WRONLY | O_NONBLOCK);
 
-            printf("[HAL] KickHardwareBridge fully operational (Display 1280x800 @ 30FPS, Touch, ControlSurface, CmdFIFO)\n");
+            kick_log("info", "[HAL] KickHardwareBridge fully operational (Display 1280x800 @ 30FPS, Touch, ControlSurface, CmdFIFO)\n");
         }
     }
 
@@ -891,8 +881,7 @@ public:
         stripSustainSet(false);
         if (m_hw && m_hw->control_surface())
             m_hw->control_surface()->set_led_level(HW_LED_TOUCH_STRIP, kick_hw::strip::modeLedLevel(new_mode));
-        printf("[STRIP] mode %d (0 slider, 1 pitch bend, 2 pad level, 3 mod wheel, 4 track level, 5 sustain, 6 expression, 7 off)\n", new_mode);
-        fflush(stdout);
+        kick_log("bridge", "[STRIP] mode %d (0 slider, 1 pitch bend, 2 pad level, 3 mod wheel, 4 track level, 5 sustain, 6 expression, 7 off)\n", new_mode);
     }
 
     void handleButtonPress(HardwareButton btn)
@@ -1026,8 +1015,7 @@ public:
                 } else {
                     auto& metronome = mt::getSettings().metronome;
                     metronome.enabled = !metronome.enabled();
-                    printf("[BRIDGE] Metronome %s\n", metronome.enabled() ? "ON" : "OFF");
-                    fflush(stdout);
+                    kick_log("bridge", "[BRIDGE] Metronome %s\n", metronome.enabled() ? "ON" : "OFF");
                 }
                 break;
             }
@@ -1041,8 +1029,7 @@ public:
                     const bool on = !ae.isArpEnabled(sel);
                     ae.setArpEnabled(sel, on);
                     updateArpLeds();
-                    printf("[BRIDGE] Arpeggiator %s\n", on ? "ON" : "OFF");
-                    fflush(stdout);
+                    kick_log("bridge", "[BRIDGE] Arpeggiator %s\n", on ? "ON" : "OFF");
                 }
                 break;
             }
@@ -1054,8 +1041,7 @@ public:
                     const bool on = !ae.isArpLatch(sel);
                     ae.setArpLatch(sel, on);
                     updateArpLeds();
-                    printf("[BRIDGE] Arp latch %s\n", on ? "ON" : "OFF");
-                    fflush(stdout);
+                    kick_log("bridge", "[BRIDGE] Arp latch %s\n", on ? "ON" : "OFF");
                 } else {
                     sendTrackedPress(btn, contracts::DeviceControlContracts::BtnLedSequence::EN_LATCH);
                 }
@@ -1512,8 +1498,7 @@ public:
         ++m_dial_log_count;
         if (m_dial_log_count <= 20 || m_dial_log_count % 50 == 0)
         {
-            printf("[DIAL] handleJogDial steps=%d screen=%d\n", delta, m_last_screen);
-            fflush(stdout);
+            kick_log("dial", "[DIAL] handleJogDial steps=%d screen=%d\n", delta, m_last_screen);
         }
         auto& ae = mt::getAudioInterface();
         if (m_tap_tempo_held)
@@ -1889,8 +1874,7 @@ public:
         char* end = nullptr;
         long port = strtol(p, &end, 10);
         if (end == p || port < 0 || port > 2) {
-            printf("[CMD] rawmidi: bad port (0..2)\n");
-            fflush(stdout);
+            kick_log("cmd", "[CMD] rawmidi: bad port (0..2)\n");
             return;
         }
         p = end;
@@ -1900,15 +1884,13 @@ public:
             if (*p == '\0') break;
             long v = strtol(p, &end, 16);
             if (end == p || v < 0 || v > 0xFF || (*end != '\0' && *end != ' ' && *end != '\t')) {
-                printf("[CMD] rawmidi: bad hex byte\n");
-                fflush(stdout);
+                kick_log("cmd", "[CMD] rawmidi: bad hex byte\n");
                 return;
             }
             bytes.push_back((uint8_t)v);
             p = end;
         }
-        printf("[CMD] rawmidi port=%ld bytes=%d\n", port, (int)bytes.size());
-        fflush(stdout);
+        kick_log("cmd", "[CMD] rawmidi port=%ld bytes=%d\n", port, (int)bytes.size());
         if (!bytes.empty() && m_hw && m_hw->control_surface())
             m_hw->control_surface()->inject_bytes((int)port, bytes.data(), bytes.size());
     }
@@ -1920,17 +1902,15 @@ public:
     void processProbeCommand()
     {
         const std::string report = kick_hw::sysprobe::buildReport();
-        printf("[PROBE] begin\n%s[PROBE] end\n", report.c_str());
-        fflush(stdout);
+        kick_log("probe", "[PROBE] begin\n%s[PROBE] end\n", report.c_str());
         FILE* f = fopen("/data/kick_probe.txt", "w");
         if (f) {
             fputs(report.c_str(), f);
             fclose(f);
-            printf("[PROBE] written to /data/kick_probe.txt\n");
+            kick_log("probe", "[PROBE] written to /data/kick_probe.txt\n");
         } else {
-            printf("[PROBE] cannot write /data/kick_probe.txt\n");
+            kick_log("probe", "[PROBE] cannot write /data/kick_probe.txt\n");
         }
-        fflush(stdout);
     }
 
     void processCommand(const std::string& cmd)
@@ -1942,37 +1922,30 @@ public:
         char sval[128] = { 0 };
         if (sscanf(cmd.c_str(), "%63s %d %d", op, &a1, &a2) == 3) {
             if (strcmp(op, "touch") == 0) {
-                printf("[CMD] touch %d %d\n", a1, a2);
-                fflush(stdout);
+                kick_log("cmd", "[CMD] touch %d %d\n", a1, a2);
                 on_touch_down(0, a1, a2);
                 on_touch_up(0);
             } else if (strcmp(op, "touch_down") == 0) {
-                printf("[CMD] touch_down %d %d\n", a1, a2);
-                fflush(stdout);
+                kick_log("cmd", "[CMD] touch_down %d %d\n", a1, a2);
                 on_touch_down(0, a1, a2);
             } else if (strcmp(op, "touch_move") == 0) {
-                printf("[CMD] touch_move %d %d\n", a1, a2);
-                fflush(stdout);
+                kick_log("cmd", "[CMD] touch_move %d %d\n", a1, a2);
                 on_touch_move(0, a1, a2);
             } else if (strcmp(op, "pad") == 0) {
-                printf("[CMD] pad %d vel=%d\n", a1, a2);
-                fflush(stdout);
+                kick_log("cmd", "[CMD] pad %d vel=%d\n", a1, a2);
                 if (a2 > 0) on_pad_note_on(a1, a2);
                 else on_pad_note_off(a1);
             } else if (strcmp(op, "key") == 0) {
-                printf("[CMD] key %d vel=%d\n", a1, a2);
-                fflush(stdout);
+                kick_log("cmd", "[CMD] key %d vel=%d\n", a1, a2);
                 if (a2 > 0) on_keybed_note_on(a1, a2);
                 else on_keybed_note_off(a1);
             } else if (strcmp(op, "encoder") == 0) {
-                printf("[CMD] encoder %d delta=%d\n", a1, a2);
-                fflush(stdout);
+                kick_log("cmd", "[CMD] encoder %d delta=%d\n", a1, a2);
                 on_encoder_turn(a1, a2);
             }
         } else if (sscanf(cmd.c_str(), "%63s %127s", op, sval) == 2) {
             if (strcmp(op, "btn") == 0) {
-                printf("[CMD] btn %s\n", sval);
-                fflush(stdout);
+                kick_log("cmd", "[CMD] btn %s\n", sval);
                 HardwareButton b = HW_BTN_NONE;
                 if (strcmp(sval, "PLAY") == 0) b = HW_BTN_PLAY;
                 else if (strcmp(sval, "STOP") == 0) b = HW_BTN_STOP;
@@ -2034,22 +2007,18 @@ public:
                 }
             } else if (strcmp(op, "jog") == 0) {
                 int delta = atoi(sval);
-                printf("[CMD] jog %d\n", delta);
-                fflush(stdout);
+                kick_log("cmd", "[CMD] jog %d\n", delta);
                 handleJogDial(delta);
             } else if (strcmp(op, "strip") == 0) {
                 int val = atoi(sval);
-                printf("[CMD] strip %d\n", val);
-                fflush(stdout);
+                kick_log("cmd", "[CMD] strip %d\n", val);
                 on_touch_strip(val);
             } else if (strcmp(op, "snapshot") == 0) {
-                printf("[CMD] snapshot %s\n", sval);
-                fflush(stdout);
+                kick_log("cmd", "[CMD] snapshot %s\n", sval);
                 saveSnapshot(m_framebuffer_img, sval);
             }
         } else if (strcmp(cmd.c_str(), "touch_up") == 0) {
-            printf("[CMD] touch_up\n");
-            fflush(stdout);
+            kick_log("cmd", "[CMD] touch_up\n");
             on_touch_up(0);
         }
     }
