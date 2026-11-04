@@ -11,6 +11,7 @@
 #include "hardware/hw_targets.h"
 #include "hardware/modal_dialog_keys.h"
 #include "hardware/pad_level.h"
+#include "kick_ui/modes/padperform/kick_pad_mapper.h"
 #include "hardware/system_probe.h"
 #include "hardware/touch_space.h"
 #include "hardware/qlink_bank.h"
@@ -1880,7 +1881,8 @@ public:
             case kick_hw::strip::kNotes: {
                 auto& ae = mt::getAudioInterface();
                 const int slot = kick_hw::strip::notesFromPosition(val, 16);
-                const int newNote = ae.getBankOffset() + slot;
+                // PP-24: the Pad Perform layout (Root / Scale / Mode) when it is published, else the raw bank offset + slot
+                const int newNote = kick_ui::padmap::StripNotes::instance().noteForSlot(slot, ae.getBankOffset() + slot);
                 const int oldNote = m_strip_last_note.exchange(newNote);
                 if (newNote != oldNote) {
                     const auto sel = ae.getSelected();
@@ -2032,11 +2034,20 @@ public:
                              juce::jlimit(0, 127, val) };
                 contracts::DclSignals::dispatchHardwareInput(msg);
             }
-            // PP-22: Polyphonic aftertouch directly to engine for the held pad's sounding note
+            // PP-22: Polyphonic aftertouch directly to engine for the held pad's sounding note(s): Pad Perform publishes what each held
+            // pad really sounds (scale / root / chord / 16 LEVELS), the raw bank offset + pad is only the fallback.
             auto& ae = mt::getAudioInterface();
-            const int note = pad_num + ae.getBankOffset();
-            if (note >= 0 && note <= 127) {
-                ae.addLiveMidiMsg(ae.getSelected(), juce::MidiMessage::aftertouchChange(1, note, juce::jlimit(0, 127, val)));
+            int sounding[kick_ui::padmap::SoundingPads::kMaxPerPad];
+            const int n = kick_ui::padmap::SoundingPads::instance().soundingFor(pad_num, sounding);
+            if (n > 0) {
+                for (int i = 0; i < n; ++i)
+                    if (sounding[i] >= 0 && sounding[i] <= 127)
+                        ae.addLiveMidiMsg(ae.getSelected(), juce::MidiMessage::aftertouchChange(1, sounding[i], juce::jlimit(0, 127, val)));
+            } else {
+                const int note = pad_num + ae.getBankOffset();
+                if (note >= 0 && note <= 127) {
+                    ae.addLiveMidiMsg(ae.getSelected(), juce::MidiMessage::aftertouchChange(1, note, juce::jlimit(0, 127, val)));
+                }
             }
         }
     }
