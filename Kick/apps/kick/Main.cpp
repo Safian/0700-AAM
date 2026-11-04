@@ -232,6 +232,19 @@ public:
                 contracts::DclSignals::dispatchHardwareInput( msg );
                 kick_log( "info", "[SMOKE] qlink %d %d on %s\n", knob, delta, name.toRawUTF8() );
             }
+            // List Edit: how many event rows exist and how many have a component (virtual rows: only the visible window).
+            // KICK_SMOKE_LISTEDIT_ROWS=<n>: at least that many event rows; the rows that have a component must stay far below it.
+            if( name.equalsIgnoreCase( "MenuListEdit" ) )
+                if( auto* le = dynamic_cast<kick_ui::ListEditMode*>( kick_ui::KickHome::Instance().findScreen( Screen::MenuListEdit ) ) )
+                {
+                    std::cout << "LISTEDIT rows=" << le->getNumEventRows() << " built=" << le->getNumBuiltRows() << std::endl;
+                    const auto wanted = juce::SystemStats::getEnvironmentVariable( "KICK_SMOKE_LISTEDIT_ROWS", {} );
+                    if( wanted.isNotEmpty() && ( le->getNumEventRows() < wanted.getIntValue() || le->getNumBuiltRows() > 60 || le->getNumBuiltRows() < 1 ) )
+                    {
+                        std::cerr << "FAIL: list edit rows " << le->getNumEventRows() << " built " << le->getNumBuiltRows() << " expected at least " << wanted << " rows and 1..60 built" << std::endl;
+                        setApplicationReturnValue( 3 );
+                    }
+                }
             // KICK_SMOKE_BROWSE_EXPECT="a,b,c": the rows the browser shows for KICK_SMOKE_BROWSE, in this order (sorted, no hidden files).
             const auto expect = juce::SystemStats::getEnvironmentVariable( "KICK_SMOKE_BROWSE_EXPECT", {} );
             if( name.equalsIgnoreCase( "MenuFileBrowser" ) && expect.isNotEmpty() )
