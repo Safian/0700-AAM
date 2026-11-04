@@ -56,16 +56,14 @@ namespace kick_ui
     void GridEditOptions::resized()
     {
         auto b         = getLocalBounds().reduced( 10 );
-        auto h         = b.getHeight() / 3 - 20;
+        auto h         = b.getHeight() / 2 - 20;
         auto compWidth = 146;
         auto compGap   = 10;
 
         b.removeFromTop( compGap * 2 );
         auto firstRowBounds = b.removeFromTop( h );
-        b.removeFromTop( compGap );
+        b.removeFromTop( compGap * 2 );
         auto secondRowBounds = b.removeFromTop( h );
-        b.removeFromTop( compGap );
-        auto thirdRowBounds = b.removeFromTop( h );
 
         firstRowBounds.removeFromLeft( compWidth / 2 + compGap / 2 );
         options[0].setBounds( firstRowBounds.removeFromLeft( compWidth ) );
@@ -76,6 +74,7 @@ namespace kick_ui
         firstRowBounds.removeFromLeft( compGap );
         options[3].setBounds( firstRowBounds.removeFromLeft( compWidth ) );
 
+        secondRowBounds.removeFromLeft( compWidth / 2 + compGap / 2 );
         options[4].setBounds( secondRowBounds.removeFromLeft( compWidth ) );
         secondRowBounds.removeFromLeft( compGap );
         options[5].setBounds( secondRowBounds.removeFromLeft( compWidth ) );
@@ -83,15 +82,6 @@ namespace kick_ui
         options[6].setBounds( secondRowBounds.removeFromLeft( compWidth ) );
         secondRowBounds.removeFromLeft( compGap );
         options[7].setBounds( secondRowBounds.removeFromLeft( compWidth ) );
-        secondRowBounds.removeFromLeft( compGap );
-        options[8].setBounds( secondRowBounds.removeFromLeft( compWidth ) );
-
-        thirdRowBounds.removeFromLeft( compWidth + compGap );
-        options[9].setBounds( thirdRowBounds.removeFromLeft( compWidth ) );
-        thirdRowBounds.removeFromLeft( compGap );
-        options[10].setBounds( thirdRowBounds.removeFromLeft( compWidth ) );
-        thirdRowBounds.removeFromLeft( compGap );
-        options[11].setBounds( thirdRowBounds.removeFromLeft( compWidth ) );
     }
 
     ///////////////////////////////////////////////////////////////////////
@@ -366,23 +356,17 @@ namespace kick_ui
                     ae.doubleSpeedNotes( aeSel );
                     break; //double speed
                 case 4:
-                    //Trim To Length is Related to doubleLengthWithEvents
-                    break; //trim to length
-                case 5:
                     openPitchQuantizePopUp();
                     break; //pitch quantize
-                case 6:
+                case 5:
                     openHumanizePopUp();
                     break; //humanize
-                case 7:
+                case 6:
                     openRandomEventsPopUp();
-                    break; //random evenets
-                case 8:
+                    break; //random events
+                case 7:
                     openSplitEventsPopUp();
                     break; //split events
-                case 9: break; //convert to progression
-                case 10: break; //bounce to sample
-                case 11: break; //bounce to audio track
                 default:
                     break;
             }
@@ -499,63 +483,72 @@ namespace kick_ui
 
         if( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) )
         {
-            int btnNum = contracts::DclContractsHelper::getButtonCode( f_HwMsg );
-            if( btnNum == contracts::DeviceControlContracts::BtnLedSequence::EN_COPY )
+            int  btnNum   = contracts::DclContractsHelper::getButtonCode( f_HwMsg );
+            auto btnState = contracts::DclContractsHelper::getButtonState( f_HwMsg );
+            auto state    = ( btnState == contracts::DeviceControlContracts::BTN_PRESSED )
+                               ? grid_logic::ButtonState::Pressed
+                               : grid_logic::ButtonState::Released;
+            auto action   = buttonStateMachine.processButton( btnNum, state );
+
+            switch( action )
             {
-                ae.pasteSelectedNotesDefault();
-                gridNeedsRepaint();
-            }
-            if( btnNum == contracts::DeviceControlContracts::BtnLedSequence::EN_ERASE )
-            {
-                const mt::MTSelected& aeSelected{ ae.getSelected() };
-                ae.deleteSelectedNotes( aeSelected );
-                gridNeedsRepaint();
-            }
-            else if( btnNum == contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_CW )
-            {
-                ///TBD:::ae.editSelectedNotes( aeSel, gridData.data.ticksPerQl, 0, 0 );
-                gridComponent.repaint();
-            }
-            else if( btnNum == contracts::DeviceControlContracts::BtnLedSequence::EN_KNOB_CCW )
-            {
-                ///TBD:::ae.editSelectedNotes( aeSel, -gridData.data.ticksPerQl, 0, 0 );
-                gridComponent.repaint();
-            }
-            else if( contracts::DclContractsHelper::getButtonState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED )
-            {
-                switch( btnNum )
+                case grid_logic::ButtonAction::Copy:
+                    ae.pasteSelectedNotesDefault();
+                    gridNeedsRepaint();
+                    break;
+
+                case grid_logic::ButtonAction::Erase:
                 {
-                    case contracts::DeviceControlContracts::EN_PLAY: ae.setSequencePlay( aeSel.sequence, false, true ); return;
-                    case contracts::DeviceControlContracts::EN_PLAYSTART: ae.setSequencePlay( aeSel.sequence, true, true ); return;
-                    case contracts::DeviceControlContracts::EN_STOP: ae.setSequencePause(); return;
+                    const mt::MTSelected& aeSelected{ ae.getSelected() };
+                    ae.deleteSelectedNotes( aeSelected );
+                    gridNeedsRepaint();
+                    break;
                 }
+
+                case grid_logic::ButtonAction::KnobCw:
+                    ///TBD:::ae.editSelectedNotes( aeSel, gridData.data.ticksPerQl, 0, 0 );
+                    gridComponent.repaint();
+                    break;
+
+                case grid_logic::ButtonAction::KnobCcw:
+                    ///TBD:::ae.editSelectedNotes( aeSel, -gridData.data.ticksPerQl, 0, 0 );
+                    gridComponent.repaint();
+                    break;
+
+                case grid_logic::ButtonAction::Play:
+                    ae.setSequencePlay( aeSel.sequence, false, true );
+                    break;
+
+                case grid_logic::ButtonAction::PlayStart:
+                    ae.setSequencePlay( aeSel.sequence, true, true );
+                    break;
+
+                case grid_logic::ButtonAction::Stop:
+                    ae.setSequencePause();
+                    break;
+
+                case grid_logic::ButtonAction::None:
+                    break;
             }
         }
         else if( contracts::DclContractsHelper::isPadButtonMessage( f_HwMsg ) )
         {
-            int              bankOffset = ae.getBankOffset();
-            auto             padNo      = contracts::DclContractsHelper::getPadNumber( f_HwMsg );
-            auto             padState   = contracts::DclContractsHelper::getPadState( f_HwMsg );
-            auto             velocity   = contracts::DclContractsHelper::getPadVelocity( f_HwMsg );
-            std::vector<int> pads;
+            int       bankOffset = ae.getBankOffset();
+            auto      rawPadNo   = contracts::DclContractsHelper::getPadNumber( f_HwMsg );
+            auto      padState   = contracts::DclContractsHelper::getPadState( f_HwMsg );
+            auto      velocity   = contracts::DclContractsHelper::getPadVelocity( f_HwMsg );
+            const int noteNumber = grid_logic::padToNote( rawPadNo, bankOffset );
 
-            padNo += bankOffset;
-            pads.push_back( padNo );
+            juce::MidiMessage msg;
+            if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
+                msg = juce::MidiMessage::noteOn( 1, noteNumber, (juce::uint8)velocity );
+            else if( padState == contracts::DeviceControlContracts::BTN_RELEASED )
+                msg = juce::MidiMessage::noteOff( 1, noteNumber );
 
-            for( auto& it : pads )
-            {
-                juce::MidiMessage Msg;
+            ae.addLiveMidiMsg( ae.getSelected(), msg );
 
-                if( padState == contracts::DeviceControlContracts::BTN_PRESSED )
-                    Msg = juce::MidiMessage::noteOn( 1, it, (juce::uint8)velocity );
-                else if( padState == contracts::DeviceControlContracts::BTN_RELEASED )
-                    Msg = juce::MidiMessage::noteOff( 1, it );
-
-                ae.addLiveMidiMsg( ae.getSelected(), Msg );
-            }
-            pads.clear();
-            juce::MessageManager::callAsync( [this, padNo] {
-                notesComp.selectNote( padNo + ae.getBankOffset(), gridSettings.getHittingPadMode() );
+            juce::MessageManager::callAsync( [this, noteNumber] {
+                notesComp.selectNote( noteNumber, gridSettings.getHittingPadMode() );
             } );
         }
         else if( contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )
@@ -602,20 +595,20 @@ namespace kick_ui
                 gridViewport.knobRotated( knob, value );
                 break;
             case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_3:
-                gridData.setHorizantalZoomFactor( (float)value / 100, false );
+                gridData.setHorizantalZoomFactor( grid_logic::calculateHorizontalZoomDelta( value ), true );
                 break;
             case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_4:
-                gridData.setVerticalZoomFactor( (float)value / 100, false );
+                gridData.setVerticalZoomFactor( grid_logic::calculateVerticalZoomDelta( value ), true );
                 break;
             case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_5:
             case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_6:
             case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_7:
-                ae.setBBT( knob % 4 - 1, value );
+                ae.setBBT( grid_logic::knobToBbtIndex( knob ), value );
                 break;
             case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_8:
             case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_9:
             case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_10:
-                metronome.linkRotated( knob % 8, value );
+                metronome.linkRotated( grid_logic::knobToMetronomeIndex( knob ), value );
                 break;
         }
         gridComponent.repaint();
@@ -968,9 +961,8 @@ namespace kick_ui
                         else
                             openWarningPopUp( "No Events Are Present To Split" );
                     }
-
-                    if( p ) delete p;
                 }
+                if( p ) delete p;
             },
             ui::layout::warningPopup );
     }

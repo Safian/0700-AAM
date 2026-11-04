@@ -51,20 +51,25 @@ namespace kick_ui
     APPTrackOptionHumanize::APPTrackOptionHumanize()
     {
         setName( "HUMANIZE" );
-        mt::utils::addAndMakeVisible( this, timeCheckBox, pulses, beatLabel, eagerness, noteLabel, lengthCheckBox, strength );
+        mt::utils::addAndMakeVisible( this, timeCheckBox, pulses, beatLabel, eagerness, noteLabel, lengthCheckBox, strength, velocityCheckBox, velocity );
         mt::utils::setValueJustification( juce::Justification::centred, beatLabel, noteLabel );
         mt::utils::setValueBackgroundColour( ui::Theme::backgroundColour( 3 ), beatLabel, noteLabel );
         pulses.setNumDecimalPlacesToDisplay( 0 );
         eagerness.setNumDecimalPlacesToDisplay( 0 );
         strength.setNumDecimalPlacesToDisplay( 0 );
+        velocity.setNumDecimalPlacesToDisplay( 0 );
         pulses.showTitleAndValue( true, juce::Slider::TextBoxBelow, juce::Justification::centred );
         eagerness.showTitleAndValue( true, juce::Slider::TextBoxBelow, juce::Justification::centred );
         strength.showTitleAndValue( true, juce::Slider::TextBoxBelow, juce::Justification::centred );
+        velocity.showTitleAndValue( true, juce::Slider::TextBoxBelow, juce::Justification::centred );
         pulses.setRange( 1, 240 );
         eagerness.setRange( -50, 50 );
         strength.setRange( 1, 100 );
+        velocity.setRange( 1, 100 );
         pulses.setValue( 30, juce::dontSendNotification );
+        velocity.setValue( 20, juce::dontSendNotification );
         strength.setEnabled( false );
+        velocity.setEnabled( false );
 
         timeCheckBox.onClick = [&]() {
             mt::utils::setEnabled( timeCheckBox.getToggleState(), pulses, eagerness );
@@ -72,6 +77,10 @@ namespace kick_ui
 
         lengthCheckBox.onClick = [&]() {
             strength.setEnabled( lengthCheckBox.getToggleState() );
+        };
+
+        velocityCheckBox.onClick = [&]() {
+            velocity.setEnabled( velocityCheckBox.getToggleState() );
         };
 
         timeCheckBox.triggerClick();
@@ -84,13 +93,17 @@ namespace kick_ui
 
     void APPTrackOptionHumanize::resized()
     {
-        timeCheckBox.setBoundsRelative( 0.0f, 0.03f, 0.9f, 0.08f );
-        pulses.setBoundsRelative( 0.1f, 0.11f, 0.8f, 0.2f );
-        beatLabel.setBoundsRelative( 0.0f, 0.31f, 1.0f, 0.08f );
-        eagerness.setBoundsRelative( 0.1f, 0.39f, 0.8f, 0.2f );
-        noteLabel.setBoundsRelative( 0.0f, 0.59f, 1.0f, 0.08f );
-        lengthCheckBox.setBoundsRelative( 0.0f, 0.70f, 0.9f, 0.08f );
-        strength.setBoundsRelative( 0.1f, 0.78f, 0.8f, 0.2f );
+        timeCheckBox.setBoundsRelative( 0.0f, 0.02f, 0.9f, 0.07f );
+        pulses.setBoundsRelative( 0.1f, 0.10f, 0.38f, 0.18f );
+        eagerness.setBoundsRelative( 0.52f, 0.10f, 0.38f, 0.18f );
+        beatLabel.setBoundsRelative( 0.1f, 0.29f, 0.38f, 0.06f );
+        noteLabel.setBoundsRelative( 0.52f, 0.29f, 0.38f, 0.06f );
+
+        lengthCheckBox.setBoundsRelative( 0.0f, 0.38f, 0.9f, 0.07f );
+        strength.setBoundsRelative( 0.1f, 0.46f, 0.8f, 0.18f );
+
+        velocityCheckBox.setBoundsRelative( 0.0f, 0.67f, 0.9f, 0.07f );
+        velocity.setBoundsRelative( 0.1f, 0.75f, 0.8f, 0.18f );
     }
 
     APPTrackOptionRandomEvents::APPTrackOptionRandomEvents()

@@ -232,9 +232,8 @@ namespace kick_ui
                                     else
                                         openWarningPopUp( "No Events Are Present To Split" );
                                 }
-
-                                if( p ) delete p;
                             }
+                            if( p ) delete p;
                         },
                         ui::layout::warningPopup );
                 }
