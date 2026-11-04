@@ -37,9 +37,10 @@ namespace ui
                 g.fillRect( cellRect );
             }
         }
-        if( isLatch && !isTimerRunning() )
+        // The latched cell is the last one touched (currentIndex is -1 after the finger left: it drew column -1).
+        if( isLatch && !isTimerRunning() && prevSel >= 0 )
         {
-            const juce::Rectangle<float> cellRect = getCellRect( (int)currentIndex / 8, (int)currentIndex % 8 );
+            const juce::Rectangle<float> cellRect = getCellRect( prevSel / 8, prevSel % 8 );
             g.setColour( ui::Theme::XYFXCellSelectColour( 255 ) );
             g.fillRect( cellRect );
         }
@@ -91,13 +92,29 @@ namespace ui
     void XYFXGrid::mouseDown( const juce::MouseEvent& event )
     {
         if( isEnabled() )
+        {
             updateSelection( event );
+            if( onTouch )
+                onTouch( true, xCoordinate, yCoordinate );
+        }
     }
 
     void XYFXGrid::mouseUp( const juce::MouseEvent& )
     {
         if( isEnabled() )
+        {
             currentIndex = -1;
+            if( onTouch )
+                onTouch( false, xCoordinate, yCoordinate );
+        }
+    }
+
+    void XYFXGrid::clearHighlight()
+    {
+        stopTimer();
+        std::fill( selectedCells.begin(), selectedCells.end(), 0 );
+        currentIndex = prevSel = -1;
+        repaint();
     }
 
     void XYFXGrid::mouseDrag( const juce::MouseEvent& event )
@@ -120,9 +137,9 @@ namespace ui
         if( !valueChanged )
         {
             stopTimer();
-            if( isLatch )
+            if( isLatch && prevSel >= 0 )
             {
-                selectedCells[prevSel] = 255;
+                selectedCells[(size_t)prevSel] = 255;
                 repaint();
             }
         }
@@ -132,24 +149,23 @@ namespace ui
 
     void XYFXGrid::updateSelection( const juce::MouseEvent& event )
     {
-        if( !getLocalBounds().toFloat().contains( event.position ) )
+        // The same geometry as the drawing (cells with `spacing` between them). The old hit test ignored the gaps, so a
+        // touch near the right edge hit a different cell than the one drawn there.
+        const auto cell = kick_ui::xyfx::cellAt( event.position.getX(), event.position.getY(), (float)getWidth(), (float)getHeight(), (float)spacing );
+        if( cell.column < 0 )
             return;
+        const int index = cell.row * totalHorizontalCells + cell.column;
 
-        float cw     = getWidth() * 1.0f / totalHorizontalCells;
-        float ch     = getHeight() * 1.0f / totalVerticalCells;
-        int   column = (int)( event.position.getX() / cw );
-        int   row    = (int)( event.position.getY() / ch );
-        int   index  = row * totalHorizontalCells + column;
-
-        if( index < 0 )
-            jassertfalse;
         xCoord = event.position.getX();
         yCoord = event.position.getY();
         setXYCoordinateValue( xCoord, yCoord );
 
         if( index != currentIndex )
         {
-            currentIndex = prevSel             = index;
+            currentIndex = index;
+            if( prevSel >= 0 && prevSel != index && isLatch )
+                selectedCells[(size_t)prevSel] = 0; // only the latest cell stays lit
+            prevSel                            = index;
             selectedCells[(unsigned int)index] = 255;
             if( !isTimerRunning() )
             {
@@ -163,7 +179,8 @@ namespace ui
     {
         xLabel.setText( data[0], juce::dontSendNotification );
         yLabel.setText( data[1], juce::dontSendNotification );
-        if( xLabel.getText() == "Beat Division" )
+        xIsBeat = ( data[0] == kick_ui::xyfx::axisName( kick_ui::xyfx::Axis::BeatDivision ) );
+        if( xIsBeat )
         {
             xLeft  = "2 Bar";
             xRight = "1/64";
@@ -180,22 +197,37 @@ namespace ui
         repaint();
     }
 
+    void XYFXGrid::setAxes( kick_ui::xyfx::Axis X, kick_ui::xyfx::Axis Y )
+    {
+        using namespace kick_ui::xyfx;
+        xLabel.setText( axisName( X ), juce::dontSendNotification );
+        yLabel.setText( axisName( Y ), juce::dontSendNotification );
+        xIsBeat = ( X == Axis::BeatDivision );
+        xLeft   = axisLow( X );
+        xRight  = axisHigh( X );
+        yBottom = axisLow( Y );
+        yTop    = axisHigh( Y );
+        setXYCoordinateValue( xCoord, yCoord );
+        repaint();
+    }
+
     void XYFXGrid::setXYCoordinateValue( float XCoordinate, float YCoordinate )
     {
+        // Before the first layout the grid has no size: normalising would divide by 0 and leave a NaN until the first touch.
+        if( getWidth() <= 0 || getHeight() <= 0 )
+            return;
+
         /// X Axis Coordinates
-        if( xLabel.getText() == "Beat Division" )
+        if( xIsBeat )
         {
-            float cw     = getWidth() * 1.0f / totalHorizontalCells;
-            int   column = juce::jlimit( 0, totalHorizontalCells, (int)( XCoordinate / cw ) );
-            xCoordinate  = column;
+            const auto cell = kick_ui::xyfx::cellAt( XCoordinate, 0.f, (float)getWidth(), (float)getHeight(), (float)spacing );
+            xCoordinate     = (float)kick_ui::xyfx::divisionOfColumn( cell.column < 0 ? ( XCoordinate <= 0.f ? 0 : totalHorizontalCells - 1 ) : cell.column );
         }
         else
-            xCoordinate = juce::jlimit( 0.f, 1.f, XCoordinate * 1.0f / getWidth() );
+            xCoordinate = kick_ui::xyfx::normalised( XCoordinate, (float)getWidth() );
 
         /// Y Axis Coordinates
-        {
-            yCoordinate = juce::jlimit( 0.f, 1.f, 1.0f - ( YCoordinate * 1.0f / getHeight() ) );
-        }
+        yCoordinate = 1.0f - kick_ui::xyfx::normalised( YCoordinate, (float)getHeight() );
 
         if( onValueChanged )
             onValueChanged( xCoordinate, yCoordinate );

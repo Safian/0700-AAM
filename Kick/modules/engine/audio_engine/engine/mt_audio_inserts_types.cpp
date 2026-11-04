@@ -24,73 +24,75 @@
 namespace mt
 {
 
+    // The tree is the serialized state of the engine, not an editing model: it is written without an UndoManager (an undo of
+    // an insert edit used to change the tree and leave the sound as it was; the next write then overwrote the undo).
+    static void insertsSerializeSlot( juce::ValueTree& vt, AudIO::DawInserts* synth, unsigned int i )
+    {
+        juce::UndoManager* um{ nullptr };
+        auto*              obj  = synth->getEffectObject( i );
+        auto*              clap = dynamic_cast<ClapEffect*>( obj );
+        const auto&        name = synth->getEffectName( i ); // the registration key (never empty for a loaded effect)
+
+        auto childVT = vt.getChild( static_cast<int>( i ) );
+        if( !childVT.isValid() )
+        {
+            childVT = createVTree( IDs::Insert, IDs::name, juce::String( name ) );
+            vt.addChild( childVT, static_cast<int>( i ), um );
+        }
+        else
+        {
+            childVT.setProperty( IDs::name, juce::String( name ), um );
+        }
+
+        if( clap != nullptr )
+        {
+            childVT.setProperty( "isClap", true, um );
+            childVT.setProperty( "pluginId", juce::String( clap->getPluginId() ), um );
+            childVT.setProperty( "version", juce::String( clap->getPluginVersion() ), um );
+            childVT.setProperty( "path", juce::String( clap->getPluginPath() ), um );
+            childVT.setProperty( "missing", clap->isMissing(), um );
+
+            std::vector<uint8_t> blob;
+            clap->saveState( blob );
+            if( !blob.empty() )
+            {
+                juce::MemoryBlock mb( blob.data(), blob.size() );
+                childVT.setProperty( "stateBlob", mb.toBase64Encoding(), um );
+            }
+            else
+            {
+                childVT.removeProperty( "stateBlob", um );
+            }
+        }
+        else
+        {
+            childVT.setProperty( "isClap", false, um );
+            childVT.removeProperty( "pluginId", um );
+            childVT.removeProperty( "version", um );
+            childVT.removeProperty( "path", um );
+            childVT.removeProperty( "missing", um );
+            childVT.removeProperty( "stateBlob", um );
+
+            std::vector<float> vals;
+            synth->serializeEffect( i, vals );
+            childVT.setProperty( IDs::state, VectorToJuceVar<float>( vals ), um );
+        }
+    }
+
     static void insertsSerialize( juce::ValueTree& vt, AudIO::DawInserts* synth )
     {
         juce::UndoManager* um{ nullptr };
         if( synth && vt.hasType( IDs::INSERTS ) )
         {
-            const auto& insNames = synth->getEffectsNames();
-            auto        numIns   = insNames.size();
+            const auto numIns = static_cast<unsigned int>( synth->getEffectsNames().size() );
 
             vt.setProperty( IDs::bypass, synth->isAllEffectsBypassed(), um );
-            std::vector<float> vals;
-
-            for( size_t i = 0; i < numIns; ++i )
-            {
-                auto* obj = synth->getEffectObject( static_cast<unsigned int>( i ) );
-                auto* clap = dynamic_cast<ClapEffect*>( obj );
-
-                auto childVT = vt.getChild( static_cast<int>( i ) );
-                if( !childVT.isValid() )
-                {
-                    childVT = createVTree( IDs::Insert, IDs::name, juce::String( insNames[i] ) );
-                    vt.addChild( childVT, static_cast<int>( i ), um );
-                }
-                else
-                {
-                    childVT.setProperty( IDs::name, juce::String( insNames[i] ), um );
-                }
-
-                if( clap != nullptr )
-                {
-                    childVT.setProperty( "isClap", true, um );
-                    childVT.setProperty( "pluginId", juce::String( clap->getPluginId() ), um );
-                    childVT.setProperty( "version", juce::String( clap->getPluginVersion() ), um );
-                    childVT.setProperty( "path", juce::String( clap->getPluginPath() ), um );
-                    childVT.setProperty( "missing", clap->isMissing(), um );
-
-                    std::vector<uint8_t> blob;
-                    clap->saveState( blob );
-                    if( !blob.empty() )
-                    {
-                        juce::MemoryBlock mb( blob.data(), blob.size() );
-                        childVT.setProperty( "stateBlob", mb.toBase64Encoding(), um );
-                    }
-                    else
-                    {
-                        childVT.removeProperty( "stateBlob", um );
-                    }
-                }
-                else
-                {
-                    childVT.setProperty( "isClap", false, um );
-                    childVT.removeProperty( "pluginId", um );
-                    childVT.removeProperty( "version", um );
-                    childVT.removeProperty( "path", um );
-                    childVT.removeProperty( "missing", um );
-                    childVT.removeProperty( "stateBlob", um );
-
-                    synth->serializeEffect( static_cast<unsigned int>( i ), vals );
-                    auto state = VectorToJuceVar<float>( vals );
-                    childVT.setProperty( IDs::state, state, um );
-                }
-            }
+            for( unsigned int i = 0; i < numIns; ++i )
+                insertsSerializeSlot( vt, synth, i );
 
             // Remove any excess children in ValueTree
             while( vt.getNumChildren() > static_cast<int>( numIns ) )
-            {
                 vt.removeChild( vt.getNumChildren() - 1, um );
-            }
         }
     }
 
@@ -256,6 +258,31 @@ namespace mt
         return info;
     }
 
+    void MTIInsertsInterface::setTouchFx( const MTTouchFxSettings& S ) noexcept
+    {
+        if( !pImpl || !pImpl->synth )
+            return;
+        AudIO::TouchFx::Settings fx;
+        fx.mode      = static_cast<AudIO::TouchFx::Mode>( juce::jlimit( 0, 5, S.mode ) );
+        fx.filter    = static_cast<AudIO::TouchFx::FilterType>( juce::jlimit( 0, 2, S.filter ) );
+        fx.x         = S.x;
+        fx.y         = S.y;
+        fx.division  = juce::jlimit( 0, AudIO::TouchFx::kNumDivisions - 1, S.division );
+        fx.gate      = S.gate;
+        fx.attackMs  = juce::jmax( 0.f, S.attackMs );
+        fx.releaseMs = juce::jmax( 0.f, S.releaseMs );
+        fx.wet       = juce::jlimit( 0.f, 1.f, S.wet );
+        fx.bpm       = S.bpm;
+        pImpl->synth->touchFx().set( fx );
+    }
+
+    void MTIInsertsInterface::closeTouchFx() noexcept
+    {
+        if( pImpl && pImpl->synth )
+            pImpl->synth->touchFx().close();
+    }
+
+    bool              MTIInsertsInterface::isAvailable() const noexcept { return pImpl && pImpl->synth != nullptr; }
     int               MTIInsertsInterface::getNumInserts() { return pImpl->synth ? pImpl->synth->getNumEffects() : 0; }
     int               MTIInsertsInterface::getNumParameters( unsigned int Position ) { return pImpl->synth ? pImpl->synth->getNumEffectParameters( Position ) : 0; }
     std::vector<bool> MTIInsertsInterface::getInsertBypassState() { return pImpl->synth ? pImpl->synth->getEffectsBypass() : std::vector<bool>{}; }
@@ -266,7 +293,7 @@ namespace mt
     {
         if( pImpl->synth )
         {
-            state.setProperty( IDs::bypass, Bypass, um );
+            state.setProperty( IDs::bypass, Bypass, nullptr );
             pImpl->synth->setBypassAllEffects( Bypass );
         }
     }
@@ -274,12 +301,15 @@ namespace mt
     int MTIInsertsInterface::setInsertBypass( unsigned int Position, bool Bypass )
     {
         int retVal = -1;
-        if( pImpl->synth )
+        if( pImpl->synth && static_cast<int>( Position ) < pImpl->synth->getNumEffects() )
         {
             pImpl->synth->setEffectBypass( Position, Bypass );
             retVal = 0;
-            insertsSerialize( state, pImpl->synth ); // Also, save effects latest state to value tree.
-            insertsSyncInfo( Position, pImpl->synth, pImpl->inserts[Position] ); // Synchronize as well.
+            insertsSerializeSlot( state, pImpl->synth, Position ); // Also, save the slot's latest state to the value tree.
+            if( pImpl->inserts.size() != static_cast<size_t>( pImpl->synth->getNumEffects() ) )
+                getInserts(); // the cached list is filled lazily: never index it before it exists
+            else
+                insertsSyncInfo( Position, pImpl->synth, pImpl->inserts[Position] ); // Synchronize as well.
         }
         return retVal;
     }
@@ -289,19 +319,8 @@ namespace mt
         int retVal = -1;
         if( pImpl->synth )
         {
-            if( 0 == pImpl->synth->addEffect( Effect.toStdString(), Position ) )
-            {
-                std::vector<float> vals;
-                pImpl->synth->serializeEffect( Position, vals );
-                auto valState = VectorToJuceVar<float>( vals );
-
-                auto insVT = createVTree( IDs::Insert,
-                                          IDs::name, Effect,
-                                          IDs::state, valState );
-                state.addChild( insVT, Position, um );
-                retVal = 0;
-            }
-            insertsSerialize( state, pImpl->synth ); // Also, save effects latest state to value tree.
+            retVal = ( 0 == pImpl->synth->addEffect( Effect.toStdString(), Position ) ) ? 0 : -1;
+            insertsSerialize( state, pImpl->synth ); // writes the slot (name = registration key) into the value tree
             getInserts();
         }
         return retVal;
@@ -381,11 +400,15 @@ namespace mt
 
     void MTIInsertsInterface::setParameterValue( unsigned int Position, int Parameter, float Value )
     {
-        if( pImpl->synth )
+        if( pImpl->synth && static_cast<int>( Position ) < pImpl->synth->getNumEffects() )
         {
             pImpl->synth->setEffectParameter( Position, Parameter, Value );
-            insertsSerialize( state, pImpl->synth ); // Also, save effects latest state to value tree.
-            getInserts();
+            // Only the touched slot is serialized and refreshed (a knob turn used to rewrite all four slots and rebuild the whole list).
+            insertsSerializeSlot( state, pImpl->synth, Position );
+            if( pImpl->inserts.size() != static_cast<size_t>( pImpl->synth->getNumEffects() ) )
+                getInserts();
+            else
+                insertsSyncInfo( Position, pImpl->synth, pImpl->inserts[Position] );
         }
     }
 

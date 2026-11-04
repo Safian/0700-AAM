@@ -40,6 +40,8 @@ namespace kick_ui
             content.setVisible( false );
             customContent.setVisible( true );
             knobControl.setMode( 0 );
+            knob.setRow( qlinkRow );
+            knob.refreshAll();
             knob.repaint();
         };
 
@@ -99,7 +101,17 @@ namespace kick_ui
     }
     void KnobEdit::knobCommand( int knobnum, int value )
     {
+        // Q-Link 1..4 of the Key 61 address the shown row of the 4x4 grid; the Q-LINK button moves to the next row.
+        const int first = contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1;
+        if( knobnum >= first && knobnum < first + 4 )
+            knobnum += qlinkRow * 4;
         knob.knobCommand( knobnum, value );
+    }
+
+    void KnobEdit::nextQLinkRow()
+    {
+        qlinkRow = ( qlinkRow + 1 ) % 4;
+        knob.setRow( qlinkRow );
     }
 
     void KnobEdit::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
@@ -118,24 +130,6 @@ namespace kick_ui
         }
     }
 
-    void KnobEdit::knobLongPress()
-    {
-        startTimer( timeinms );
-
-        if( screen.getToggleState() )
-            comp = &content;
-        else if( custom.getToggleState() )
-            comp = &customContent;
-
-        juce::Component tempBounds;
-        tempBounds.setSize( 500, 450 );
-    }
-    void KnobEdit::timerCallback()
-    {
-        if( auto dw = getCurrentlyModalComponent() )
-            dw->exitModalState( 0 );
-        stopTimer();
-    }
     void KnobEdit::visibilityChanged()
     {
         if( isVisible() )

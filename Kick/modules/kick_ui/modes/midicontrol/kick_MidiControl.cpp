@@ -62,9 +62,13 @@ namespace kick_ui
             }
         };
 
-        xyMidiTab.onGridCoordinateChanged = [&]( juce::MidiMessage& xaxis, juce::MidiMessage& yaxis ) {
-            hardWareTab.sendMidiMassages( xaxis );
-            hardWareTab.sendMidiMassages( yaxis );
+        // One callback per axis message: only the axes that are active and whose value changed are sent.
+        xyMidiTab.onAxisMessage = [&]( juce::MidiMessage& Msg ) {
+            hardWareTab.sendMidiMassages( Msg );
+        };
+
+        midiLearnTab.onMessageReceived = [&]( const juce::MidiMessage& Msg, const juce::String& Port ) {
+            midiMonitor.addMidiInMessage( Msg, Port );
         };
 
         output.onSelectionChanged = [&]( int index, const juce::String value ) {
@@ -112,9 +116,12 @@ namespace kick_ui
     {
         if( isVisible() )
         {
-            auto& outPorts = mt::getAudioInterface().getMidiDeviceNames( false );
-            auto  it       = std::find( outPorts.begin(), outPorts.end(), hardWareTab.getOutput() );
-            auto  selIndex = it != outPorts.end() ? std::distance( outPorts.begin(), it ) : 0;
+            // "None" first, so nothing is selected (and sent to) on its own: the saved port is selected when it is still there.
+            std::vector<juce::String> outPorts{ "None" };
+            for( const auto& n : mt::getAudioInterface().getMidiDeviceNames( false ) )
+                outPorts.push_back( n );
+            auto it       = std::find( outPorts.begin(), outPorts.end(), hardWareTab.getOutput() );
+            auto selIndex = it != outPorts.end() ? std::distance( outPorts.begin(), it ) : 0;
             output.setListOptions( outPorts, selIndex );
         }
     }
@@ -135,46 +142,43 @@ namespace kick_ui
         }
 
         {
-            bool isPadControl = contracts::DclContractsHelper::isPadButtonMessage( f_HWMsg );
-            int  index        = isPadControl ? screenIndexInPad( f_HWMsg.data[0] ) : screenIndex( f_HWMsg.data[0] );
-            if( isPadControl && index != -1 )
-            {
-                index += padIndex;
-            }
+            // The control comes from the hardware message itself. Each kind of message looks only into its own table: a knob
+            // code used to be looked up as a button code, and a message that is not a control (Shift, REC, Data Dial ...)
+            // repeated the last selected control (MC-B2 / B3).
+            using dcl = contracts::DeviceControlContracts;
+            const auto  names     = midictl::controlListNames();
+            int         index     = -1;
+            juce::String controlName;
 
             if( contracts::DclContractsHelper::isBankMessage( f_HWMsg ) )
             {
-                switch( f_HWMsg.data[0] )
-                {
-                    case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_A:
-                        hardWareTab.leftComp.bank.setSelected( 0 );
-                        break;
-                    case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_B:
-                        hardWareTab.leftComp.bank.setSelected( 1 );
-                        break;
-                    case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_C:
-                        hardWareTab.leftComp.bank.setSelected( 2 );
-                        break;
-                    case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_D:
-                        hardWareTab.leftComp.bank.setSelected( 3 );
-                        break;
-                    case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_E:
-                        hardWareTab.leftComp.bank.setSelected( 4 );
-                        break;
-                    case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_F:
-                        hardWareTab.leftComp.bank.setSelected( 5 );
-                        break;
-                    case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_G:
-                        hardWareTab.leftComp.bank.setSelected( 6 );
-                        break;
-                    case contracts::DeviceControlContracts::BtnLedSequence::EN_BANK_H:
-                        hardWareTab.leftComp.bank.setSelected( 7 );
-                        break;
-                }
+                const int bank = f_HWMsg.data[0] - dcl::BtnLedSequence::EN_BANK_A;
+                if( bank >= 0 && bank < 8 )
+                    hardWareTab.leftComp.bank.setSelected( bank );
             }
-            else if( index != -1 )
-                hardWareTab.leftComp.option1List.setSelected( index );
-            hardWareTab.handleCommand( f_HWMsg );
+            else if( contracts::DclContractsHelper::isPadButtonMessage( f_HWMsg ) )
+            {
+                if( auto pad = screenIndexInPad( f_HWMsg.data[0] ); pad != -1 )
+                    index = pad + midictl::kFirstPad;
+            }
+            else if( contracts::DclContractsHelper::isKnobMessage( f_HWMsg ) )
+            {
+                const int q = contracts::DclContractsHelper::getKnobCode( f_HWMsg ) - dcl::KnobSequence::EN_KNOB_1;
+                if( q >= 0 && q < midictl::kQLinks )
+                    index = midictl::kFirstQLink + q;
+            }
+            else if( contracts::DclContractsHelper::isButtonMessage( f_HWMsg ) )
+            {
+                index = screenIndex( f_HWMsg.data[0] );
+            }
+
+            if( index >= 0 && index < (int)names.size() )
+            {
+                controlName = names[(size_t)index];
+                if( hardWareTab.leftComp.option1List.getSelectedIndex() != index )
+                    hardWareTab.leftComp.option1List.setSelected( index ); // the list follows the hardware
+            }
+            hardWareTab.handleCommand( f_HWMsg, controlName );
         }
     }
 
@@ -264,7 +268,7 @@ namespace kick_ui
             if( out.getToggleState() )
                 midiOutData.clear();
             else if( in.getToggleState() )
-                midiOutData.clear();
+                midiInData.clear();
             refresh();
         };
 
@@ -276,32 +280,71 @@ namespace kick_ui
         in.triggerClick();
     }
 
-    void MidiMonitor::addMidiMessage( juce::MidiMessage& Msg, juce::String& Port )
+    MidiMessageDisplay::MessageData MidiMonitor::describe( const juce::MidiMessage& Msg, const juce::String& Port )
     {
-        static int                      counter = 1;
-        MidiMessageDisplay::MessageData midiMessage;
-        midiMessage.port    = Port;
-        midiMessage.Index   = counter;
-        midiMessage.channel = Msg.getChannel();
-        auto velocity       = juce::String( (int)Msg.getVelocity() );
+        MidiMessageDisplay::MessageData d;
+        d.port    = Port;
+        d.channel = Msg.getChannel();
         if( Msg.isNoteOnOrOff() )
         {
-            midiMessage.type = Msg.isNoteOn() ? "Note On" : "Note Off";
-            midiMessage.note = Msg.getMidiNoteName( Msg.getNoteNumber(), true, true, 0 );
-
-            auto perc           = juce::String( ( (int)( Msg.getVelocity() ) / MIDI::MAX ) * 100 );
-            midiMessage.details = juce::String( "Velocity  " + perc + "% ( " + velocity + " )" );
+            d.type = Msg.isNoteOn() ? "Note On" : "Note Off";
+            d.note = Msg.getMidiNoteName( Msg.getNoteNumber(), true, true, 0 );
+            const int velocity = (int)Msg.getVelocity();
+            d.details          = "Velocity  " + juce::String( midictl::velocityPercent( velocity ) ) + "% ( " + juce::String( velocity ) + " )";
+        }
+        else if( Msg.isController() )
+        {
+            auto ccName = Msg.getControllerName( Msg.getControllerNumber() );
+            d.type      = "Control Change " + juce::String( Msg.getControllerNumber() );
+            d.details   = ( ccName ? juce::String( ccName ) : juce::String() ) + " :" + juce::String( Msg.getControllerValue() );
+        }
+        else if( Msg.isPitchWheel() )
+        {
+            d.type    = "Pitch Bend";
+            d.details = juce::String( Msg.getPitchWheelValue() );
+        }
+        else if( Msg.isProgramChange() )
+        {
+            d.type    = "Program Change";
+            d.details = juce::String( Msg.getProgramChangeNumber() );
+        }
+        else if( Msg.isChannelPressure() )
+        {
+            d.type    = "Channel Pressure";
+            d.details = juce::String( Msg.getChannelPressureValue() );
+        }
+        else if( Msg.isAftertouch() )
+        {
+            d.type    = "Poly Aftertouch";
+            d.note    = Msg.getMidiNoteName( Msg.getNoteNumber(), true, true, 0 );
+            d.details = juce::String( Msg.getAfterTouchValue() );
         }
         else
         {
-            auto ccName         = Msg.getControllerName( Msg.getControllerNumber() );
-            midiMessage.type    = "Control Change " + juce::String( (int)Msg.getControllerNumber() );
-            midiMessage.details = ( ccName ? ccName : "" ) + juce::String( " :" ) + juce::String( Msg.getControllerValue() );
+            d.type    = "Other";
+            d.details = Msg.getDescription();
         }
+        return d;
+    }
 
-        midiOutData.push_back( midiMessage );
+    void MidiMonitor::addMidiMessage( juce::MidiMessage& Msg, juce::String& Port )
+    {
+        static int counter = 1;
+        auto       d       = describe( Msg, Port );
+        d.Index            = counter++;
+        midiOutData.push_back( d );
+        midictl::trimTo( midiOutData, 200 ); // the list used to grow without limit
         refresh();
-        counter++;
+    }
+
+    void MidiMonitor::addMidiInMessage( const juce::MidiMessage& Msg, const juce::String& Port )
+    {
+        static int counter = 1;
+        auto       d       = describe( Msg, Port );
+        d.Index            = counter++;
+        midiInData.push_back( d );
+        midictl::trimTo( midiInData, 200 );
+        refresh();
     }
 
     void MidiMonitor::paint( juce::Graphics& G )

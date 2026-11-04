@@ -99,6 +99,7 @@
     #include "audio_components/sampler/kick_Sampler.h"
 
     //looper
+    #include "audio_components/looper/kick_LooperLogic.h"
     #include "audio_components/looper/kick_LoopRecorder.h"
     #include "audio_components/looper/kick_Looper.h"
 
@@ -123,9 +124,11 @@
     #include "modes/kick_nextSequence.h"
     #include "modes/kick_song.h"
     #include "modes/mixers/kick_PadMixer.h"
+    #include "modes/knobedit/kick_KnobLogic.h"
     #include "modes/knobedit/kick_KnobGrid.h"
     #include "modes/knobedit/kick_KnobTabs.h"
     #include "modes/knobedit/kick_KnobEdit.h"
+    #include "modes/midicontrol/kick_MidiControlLogic.h"
     #include "modes/midicontrol/kick_MidiControlTabs.h"
     #include "modes/midicontrol/kick_MidiControl.h"
     #include "modes/padperform/kick_PadPerform.h"

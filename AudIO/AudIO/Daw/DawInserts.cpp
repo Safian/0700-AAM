@@ -1,32 +1,56 @@
 #include "DawInserts.h"
 #include "../Includes/ObjectFactory.h"
 
+#include <chrono>
+#include <thread>
+
 namespace AudIO
 {
     DawInserts::DawInserts()
     {
         for( auto& it : _inserts )
+        {
+            it.owner = this;
             it.reset();
+        }
+    }
+
+    // Waits (bounded) until the audio thread has left the process() call it was in when this was called. Not inside process():
+    // returns at once (device stopped, or between blocks).
+    void DawInserts::waitForAudio() const
+    {
+        const auto e = _epoch.load( std::memory_order_acquire );
+        if( 0 == ( e & 1u ) )
+            return;
+        for( int i = 0; i < 2000 && _epoch.load( std::memory_order_acquire ) == e; ++i )
+            std::this_thread::sleep_for( std::chrono::microseconds( 250 ) );
     }
 
     // Add or Remove effects...
     int DawInserts::InsertEffects::reset()
     {
         bypassed.store( true );
+        live.store( nullptr, std::memory_order_release );
+        if( owner )
+            owner->waitForAudio();
         pObj.reset();
+        key.clear();
         return 0;
     }
 
     int DawInserts::InsertEffects::create( const std::string& Effect, uint32_t Samplerate, uint32_t Blocksize )
     {
-        bypassed.store( true );
-        pObj = std::move( CREATE_OBJECT( Effect ) );
-        if( pObj.get() )
+        reset();
+        auto obj = CREATE_OBJECT( Effect );
+        if( obj.get() )
         {
             // Effects created after the device started would otherwise keep blockSize()==1 (see Object::_blockSize).
-            // Prepare before un-bypassing, so the audio thread never runs an unprepared effect.
+            // Prepare before it goes into service, so the audio thread never runs an unprepared effect.
             if( 0 < Blocksize )
-                pObj->prepareToPlay( Samplerate, Blocksize );
+                obj->prepareToPlay( Samplerate, Blocksize );
+            pObj = std::move( obj );
+            key  = Effect;
+            live.store( pObj.get(), std::memory_order_release );
             bypassed.store( false );
             return 0;
         }
@@ -35,12 +59,14 @@ namespace AudIO
 
     int DawInserts::InsertEffects::setObject( std::unique_ptr<Object> obj, uint32_t Samplerate, uint32_t Blocksize )
     {
-        bypassed.store( true );
-        pObj = std::move( obj );
-        if( pObj.get() )
+        reset();
+        if( obj.get() )
         {
             if( 0 < Blocksize )
-                pObj->prepareToPlay( Samplerate, Blocksize );
+                obj->prepareToPlay( Samplerate, Blocksize );
+            pObj = std::move( obj );
+            key  = pObj->getName();
+            live.store( pObj.get(), std::memory_order_release );
             bypassed.store( false );
             return 0;
         }
@@ -51,7 +77,7 @@ namespace AudIO
     {
         if( !pObj.get() )
             return false;
-        return ( 0 == Effect.compare( pObj->getName() ) ) ? true : false;
+        return 0 == Effect.compare( key );
     }
 
     DawInserts::InsertEffects* DawInserts::getEffect( const std::string& Effect )
@@ -102,13 +128,22 @@ namespace AudIO
         if( fromPos == toPos )
             return 0;
 
-        bool fromBypassed = _inserts[fromPos].bypassed.exchange( true );
-        bool toBypassed   = _inserts[toPos].bypassed.exchange( true );
+        auto& from = _inserts[fromPos];
+        auto& to   = _inserts[toPos];
 
-        std::swap( _inserts[fromPos].pObj, _inserts[toPos].pObj );
+        const bool fromBypassed = from.bypassed.exchange( true );
+        const bool toBypassed   = to.bypassed.exchange( true );
+        from.live.store( nullptr, std::memory_order_release );
+        to.live.store( nullptr, std::memory_order_release );
+        waitForAudio(); // nobody is inside either object any more
 
-        _inserts[fromPos].bypassed.store( toBypassed );
-        _inserts[toPos].bypassed.store( fromBypassed );
+        std::swap( from.pObj, to.pObj );
+        std::swap( from.key, to.key );
+
+        from.live.store( from.pObj.get(), std::memory_order_release );
+        to.live.store( to.pObj.get(), std::memory_order_release );
+        from.bypassed.store( toBypassed );
+        to.bypassed.store( fromBypassed );
         return 0;
     }
 
@@ -151,13 +186,14 @@ namespace AudIO
         setBypassAllEffects( true );
         for( auto& it : _inserts )
             it.reset();
+        setBypassAllEffects( false ); // nothing is left to bypass; an effect added later must run (it stayed bypassed for good)
     }
 
     std::vector<std::string> DawInserts::getEffectsNames() const
     {
         std::vector<std::string> names;
         for( auto& it : _inserts )
-            names.push_back( it.pObj ? it.pObj->getName() : "" );
+            names.push_back( it.pObj ? it.key : std::string() );
         return names;
     }
 
@@ -172,7 +208,7 @@ namespace AudIO
     const std::string& DawInserts::getEffectName( unsigned int Position )
     {
         auto pIns = getEffect( Position );
-        return ( pIns && pIns->pObj.get() ) ? pIns->pObj->getName() : _emptyStr;
+        return ( pIns && pIns->pObj.get() ) ? pIns->key : _emptyStr;
     }
 
     Object* DawInserts::getEffectObject( unsigned int Position )
@@ -205,8 +241,9 @@ namespace AudIO
     void DawInserts::setEffectParameter( unsigned int Position, unsigned int Parameter, float Value )
     {
         auto pIns = getEffect( Position );
-        if( pIns && pIns->pObj )
-            pIns->pObj->setParameter( Parameter, Value );
+        // The Airwindows setParameter throws (std::terminate) for an index that does not exist.
+        if( pIns && pIns->pObj && static_cast<int>( Parameter ) < pIns->pObj->getNumParameters() )
+            pIns->pObj->setParameter( static_cast<int>( Parameter ), Value );
     }
 
     ///
@@ -268,6 +305,7 @@ namespace AudIO
     {
         _rate  = Samplerate;
         _block = Blocksize;
+        _touchFx.prepare( Samplerate, static_cast<int>( Blocksize ) );
         // Run loop to prepare all inserts...
         for( auto& it : _inserts )
             if( it.pObj.get() )
@@ -276,15 +314,33 @@ namespace AudIO
 
     void DawInserts::process( Buffer<float>& Buffer )
     {
-        if( _bypassAll.load() )
-            return;
-        // Defensive: never run effects on an empty or unprepared block (processReplacing(sampleFrames=0), HW test error 7)
-        if( 0 == _block || 0 == Buffer.getBlockSize() )
+        // Marks "inside process()" for waitForAudio(): odd while running, even outside.
+        struct EpochScope
+        {
+            explicit EpochScope( std::atomic<uint32_t>& E ) : e( E ) { e.fetch_add( 1, std::memory_order_acq_rel ); }
+            ~EpochScope() { e.fetch_add( 1, std::memory_order_acq_rel ); }
+            std::atomic<uint32_t>& e;
+        } scope( _epoch );
+
+        // Defensive: never run effects on an empty or unprepared block (processReplacing(sampleFrames=0), HW test error 7), nor on
+        // a block larger than the one the effects were prepared for (they would read / write past their buffers).
+        if( 0 == _block || 0 == Buffer.getBlockSize() || Buffer.getBlockSize() > _block )
             return;
 
         // Run loop to process all inserts...
-        for( auto& it : _inserts )
-            if( !it.bypassed.load() && it.pObj.get() )
-                it.pObj->process( Buffer );
+        if( !_bypassAll.load() )
+        {
+            for( auto& it : _inserts )
+            {
+                if( it.bypassed.load() )
+                    continue;
+                if( auto* obj = it.live.load( std::memory_order_acquire ) )
+                    obj->process( Buffer );
+            }
+        }
+
+        // Touch FX last (a no-op, bit exact, while it is closed)
+        if( const auto channels = Buffer.getNumOutputChannels(); channels > 0 && Buffer.getOutputs() )
+            _touchFx.process( Buffer.getOutputs(), static_cast<int>( channels ), static_cast<int>( Buffer.getBlockSize() ) );
     }
 };

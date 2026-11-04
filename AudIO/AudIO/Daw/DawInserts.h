@@ -2,6 +2,7 @@
 
 #include "../Includes/AudioDataTypes.h"
 #include "../Includes/AudioObject.h"
+#include "../Dsp/TouchFx.h"
 
 #include <string>
 #include <array>
@@ -54,6 +55,13 @@ namespace AudIO
         void serializeEffect( unsigned int Position, std::vector<float>& Values );
         void deserializeEffect( unsigned int Position, const std::vector<float>& Values );
 
+        // The Touch FX slot of this chain (the XY screen): runs after the four inserts, independent of their bypass.
+        inline TouchFx& touchFx() { return _touchFx; }
+
+        // For hosts that run the inserts from outside (a bus runs them as a chain insert, see DawBus.cpp).
+        inline void prepareInserts( uint32_t Samplerate, uint32_t Blocksize ) { prepareToPlay( Samplerate, Blocksize ); }
+        inline void processInserts( Buffer<float>& Buffer ) { process( Buffer ); }
+
         AUD_IO_MAKE_NON_COPYABLE( DawInserts );
 
     protected:
@@ -61,10 +69,16 @@ namespace AudIO
         void process( Buffer<float>& Buffer );
 
     private:
+        // Slot. The UI thread owns pObj (create, replace, delete). The audio thread only reads `live`: a slot is taken out of
+        // service (live = nullptr), the audio thread is waited for (waitForAudio) and only then is the object replaced or
+        // deleted, so process() can never run on an object that is being destroyed.
         struct InsertEffects
         {
             std::atomic<bool>       bypassed{ true };
+            std::atomic<Object*>    live{ nullptr };
             std::unique_ptr<Object> pObj;
+            std::string             key;           // registration key the effect was created with (the name Object::getName() reports can differ: "NC-17")
+            DawInserts*             owner{ nullptr };
 
             int  reset();
             int  create( const std::string& Effect, uint32_t Samplerate, uint32_t Blocksize );
@@ -72,6 +86,11 @@ namespace AudIO
             bool isSame( const std::string& Effect ) const;
         };
 
+        // Odd while the audio thread is inside process(): the UI thread waits for it to change before it deletes an object.
+        mutable std::atomic<uint32_t>          _epoch{ 0 };
+        void                                   waitForAudio() const;
+
+        TouchFx                                _touchFx;
         std::atomic<bool>                      _bypassAll{ false };
         uint32_t                               _rate{ 0 };  // set in prepareToPlay, used for effects created later
         uint32_t                               _block{ 0 };
@@ -80,4 +99,37 @@ namespace AudIO
         InsertEffects* getEffect( const std::string& Effect );
         InsertEffects* getEffect( unsigned int Position );
     };
+
+    // Runs the four inserts of a bus as an insert of the bus' own chain. The DawInserts mixin of a bus used to be processed by
+    // nobody (only programs, audio tracks and the looper call process()), so the effects of Return / Submix / Output / Master
+    // buses were stored and shown but never heard. The chain runs this host before the bus gain / pan, i.e. the inserts are
+    // pre-fader.
+    class DawInsertsHost : public Object
+    {
+    public:
+        explicit DawInsertsHost( DawInserts& Inserts )
+            : Object( 2, 2, 0 )
+            , inserts_( Inserts )
+        {
+            setName( "BusInserts" );
+        }
+
+        const char* getType() const override { return "DawInsertsHost"; }
+
+        void prepareToPlay( uint32_t Samplerate, uint32_t Blocksize ) override
+        {
+            Object::prepareToPlay( Samplerate, Blocksize );
+            inserts_.prepareInserts( Samplerate, Blocksize );
+        }
+
+        void process( Buffer<float>& Buffer ) override
+        {
+            Buffer.copyInputsToOutputs();
+            inserts_.processInserts( Buffer );
+        }
+
+    private:
+        DawInserts& inserts_;
+    };
+
 };

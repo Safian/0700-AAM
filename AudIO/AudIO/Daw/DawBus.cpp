@@ -99,6 +99,9 @@ namespace AudIO
         DawRouting::id_ = ( BusType::In == Type ) ? Design_.createChain( true ) : Design_.createBus();
         setName( Name );
         initAudioRouting();
+
+        if( const auto hostId = Design_.createInsert( DawRouting::id_, std::make_unique<DawInsertsHost>( *this ) ) )
+            Design_.addInsert( DawRouting::id_, hostId, 0 );
     }
 
     void DawBus::reset()

@@ -127,34 +127,42 @@ Alap: statikus kódolvasás, 2026-11-04, `claude/kick-plans`. Hardveren nem mér
 ## 7. TODO
 
 Hibák:
-- [ ] **INS-01** (P0, L) Bus-insertek feldolgozása (`prepareToPlay` + `process`), pre/post-fader döntés — `DawBus.h:27-29`, `DawBus.cpp`, `mt_audio_bus_manager.cpp:88`. Függőség: az XY-02 / XY-08 (Touch FX cél) rá épül.
-- [ ] **INS-02** (P0, M) RT-biztos slot-csere (atomi pointer, késleltetett törlés), bypass kereszt-halványítással — `D:13-34`, `D:59-93`, `D:219-221`.
-- [ ] **INS-03** (P1, S) Névmentés javítása: a szerializálás a regisztrációs kulcsot menti, a név az `AudioEffectX` konstruktorában vagy a gyártóban áll be — `E:25-56`, `E:196-217`, `AX:171-180`.
-- [ ] **INS-04** (P1, S) `NCSeventeen` név/kulcs egyezés; `isSame` kulcs szerint — `NCSeventeen.cpp:132-134`, `D:36-41`.
-- [ ] **INS-05** (P1, M) Egységes undo + fa-figyelő a motor szinkronjához — `E:190`, `E:210`, `E:213`.
-- [ ] **INS-06** (P1, S) MIDI/CV program: letiltott Inserts-gomb vagy értelmes jelzés; az ADD hibakezelése — `E:199`, `U:98-122`.
-- [ ] **INS-07** (P2, S) Indexelés/inicializálás: `E:191` ellenőrzés, `UH:76-77` inicializálás, `setEffectParameter` tartomány-ellenőrzés — `D:138-143`.
-- [ ] **INS-08** (P2, S) ALL gombok: állapot-szinkron, törlés megerősítéssel/undo-toast-tal — `U:146-164`, `U:205-206`.
-- [ ] **INS-09** (P2, S) `removeAllEffects` bypass-állapot — `D:88-93`.
+- [x] **INS-01** (P0, L) Bus-insertek feldolgozása (`prepareToPlay` + `process`), pre/post-fader döntés — `DawBus.h:27-29`, `DawBus.cpp`, `mt_audio_bus_manager.cpp:88`. Függőség: az XY-02 / XY-08 (Touch FX cél) rá épül.
+- [x] **INS-02** (P0, M) RT-biztos slot-csere (atomi pointer, késleltetett törlés), bypass kereszt-halványítással — `D:13-34`, `D:59-93`, `D:219-221`.
+- [x] **INS-03** (P1, S) Névmentés javítása: a szerializálás a regisztrációs kulcsot menti, a név az `AudioEffectX` konstruktorában vagy a gyártóban áll be — `E:25-56`, `E:196-217`, `AX:171-180`.
+- [x] **INS-04** (P1, S) `NCSeventeen` név/kulcs egyezés; `isSame` kulcs szerint — `NCSeventeen.cpp:132-134`, `D:36-41`.
+- [x] **INS-05** (P1, M) Egységes undo + fa-figyelő a motor szinkronjához — `E:190`, `E:210`, `E:213`.
+- [x] **INS-06** (P1, S) MIDI/CV program: letiltott Inserts-gomb vagy értelmes jelzés; az ADD hibakezelése — `E:199`, `U:98-122`.
+- [x] **INS-07** (P2, S) Indexelés/inicializálás: `E:191` ellenőrzés, `UH:76-77` inicializálás, `setEffectParameter` tartomány-ellenőrzés — `D:138-143`.
+- [x] **INS-08** (P2, S) ALL gombok: állapot-szinkron, törlés megerősítéssel/undo-toast-tal — `U:146-164`, `U:205-206`.
+- [x] **INS-09** (P2, S) `removeAllEffects` bypass-állapot — `D:88-93`.
 
 Hiányzó funkciók:
 - [ ] **INS-10** (P1, M) Paraméter-UI: `displayValue`, `unit`, stepped paraméterek — `U:320-331`, `E:92`.
-- [ ] **INS-11** (P1, M) Q-Link (első 4 paraméter) és Data Dial/± bekötés a Key 61-hez — `UH` `handleCommand`/`knobCommand`.
+- [x] **INS-11** (P1, M) Q-Link (első 4 paraméter) és Data Dial/± bekötés a Key 61-hez — `UH` `handleCommand`/`knobCommand`.
 - [ ] **INS-12** (P1, M) `EffectCatalog`: olvasható kategória/név, leírás az `Airwindopedia.txt`-ből, kedvencek — `AudIO_airwindows.*`, `05-fx.md` 3/5.
-- [ ] **INS-13** (P1, M) Keresés a böngészőben (billentyűzet-popup) — `U:260-291`.
+- [x] **INS-13** (P1, M) Keresés a böngészőben (billentyűzet-popup) — `U:260-291`.
 - [ ] **INS-14** (P2, L) Insert-paraméter automation (új `Param` azonosítók), fejléc Automation-ikon sorsa — `mt_automation.h`, `kick_modeHeader.cpp:54-55`.
 - [ ] **INS-15** (P2, M) Effekt-presetek, A/B, lánc-másolás.
 - [ ] **INS-16** (P2, M) Pad Mixer Inserts-gomb (WP-D D-064).
-- [ ] **INS-17** (P2, L) CLAP-effektek a böngészőben (05-fx) — függ: INS-01, INS-03.
+- [x] **INS-17** (P2, L) CLAP-effektek a böngészőben (05-fx) — függ: INS-01, INS-03.
 
 Javaslatok:
-- [ ] **INS-18** (P1, S) Forgatás-esemény optimalizálása: csak az érintett slot szerializálása, diff-frissítés — `E:291-299`, `U:138-144`.
+- [x] **INS-18** (P1, S) Forgatás-esemény optimalizálása: csak az érintett slot szerializálása, diff-frissítés — `E:291-299`, `U:138-144`.
 - [ ] **INS-19** (P2, M) Insert-szintű CPU-mérő és figyelmeztetés ARMv7-n.
-- [ ] **INS-20** (P2, S) Blokkméret és csatornaszám kezelése az `AudioEffectX::process`-ben a tényleges bufferhez igazítva — `AX:166-169`, `D:215`.
+- [x] **INS-20** (P2, S) Blokkméret és csatornaszám kezelése az `AudioEffectX::process`-ben a tényleges bufferhez igazítva — `AX:166-169`, `D:215`.
 - [ ] **INS-21** (P2, S) A 329 vs 327 számolás javítása a `05-fx.md`-ben (GlitchShifter, TripleSpread).
 
 Tesztek:
 - [ ] **INS-22** (P1, M) Host-teszt: minden effekt gyártás, paraméter round-trip, feldolgozás (6. pont) — `Kick/tests/platform`.
 - [ ] **INS-23** (P1, M) Host-teszt: szerializálás round-trip és bus-insert hallhatóság — függ: INS-01, INS-03.
-- [ ] **INS-24** (P2, M) TSAN/ASAN szálteszt a slot-cserére — függ: INS-02.
+- [x] **INS-24** (P2, M) TSAN/ASAN szálteszt a slot-cserére — függ: INS-02.
 - [ ] **INS-25** (P1, S) MPC-ellenőrzőlista (6. pont) a `HW_TEST_CHECKLIST`-be.
+
+## 8. Állapot (S-E kör, 2026-11-04)
+
+Kész (host-teszt: `DawInsertsTests` ASan alatt, `BusInsertsTests` végpontig a Core `Design`-on, Mac build + smoke): **INS-01** (a busz-insertek egy `DawInsertsHost`-on át a busz láncának insertjeként futnak, pre-fader; a hallhatóság a Core-on mérve, az MPC-s meghallgatás hátra), **INS-02** (élő mutató + audio-epoch várakozás, törlés csak ha az audio-szál elhagyta az objektumot), **INS-03/04** (a tárolt név a regisztrációs kulcs; `isSame` kulcs szerint, NC-17), **INS-05** (a fa undo nélkül íródik, egy forrás), **INS-06** (a MIDI/CV program jelzi, hogy nincs insert; sikertelen ADD hibaüzenettel), **INS-07**, **INS-08** (ALL ENABLE valódi állapot, ALL DELETE megerősítéssel), **INS-09**, **INS-11** (Q-Link 1-4 az első négy paraméter, Data Dial a slotok között), **INS-13/17** a W1-D munkája (keresés, CLAP), **INS-18** (csak az érintett slot szerializálódik), **INS-20** (blokkméret-védelem; csatornaszám-védelem nincs), **INS-24** (az audio-szál versenyét a `DawInsertsTests` futtatja).
+
+Részben: **INS-10** (érték-szöveg és mértékegység kész; léptetett paraméterek nincsenek), **INS-14** (a fejléc Automation-ikon elrejtve; insert-paraméter lane NYITOTT: új `Param` azonosítók), **INS-22/23** (nincs „mind a 327 effekt" teszt és ValueTree-körút teszt).
+
+Nyitott: **INS-12** (EffectCatalog / Airwindopedia leírások: a W1-D keresése él, a leírás-tár nem), **INS-15** (effekt-presetek, A/B, lánc-másolás), **INS-16** (Pad Mixer Inserts-gomb: a mixer-képernyők másik worker fájljai), **INS-19** (CPU-mérő ARMv7-n: ember), **INS-21** (05-fx.md számolás), **INS-25** (MPC-lista: checklist 38-39.).

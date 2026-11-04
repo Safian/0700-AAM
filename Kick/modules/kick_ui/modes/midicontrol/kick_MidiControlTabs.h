@@ -152,30 +152,31 @@ namespace kick_ui
 
     class MidiControlMidiLearn : public juce::Component
         , public juce::MidiInputCallback
+        , private juce::ValueTree::Listener
+        , private juce::AsyncUpdater
 
     {
     public:
         MidiControlMidiLearn();
         ~MidiControlMidiLearn();
 
-        struct MidiMessageData
-        {
-            juce::MidiMessage message;
-            juce::Time        timeStamp;
-        };
-        void                             refresh();
-        void                             handleIncomingMidiMessage( juce::MidiInput* source, const juce::MidiMessage& message ) override;
-        ui::KickImageButton              add{ "Add", "Add_normal", "Add_normal", "Add_active" };
-        void                             startLearning();
-        void                             stopMidiInput();
-        void                             ledUpdate( int ccNumber, int midiChannel );
-        void                             processBufferedMessages();
-        void                             parameterMapping( const juce::MidiMessage& );
-        bool                             isLearning;
-        bool                             isMappingEnabled;
-        std::unique_ptr<juce::MidiInput> midiInput;
-        std::unique_ptr<juce::MidiInput> activeMidiInput;
-        std::vector<MidiMessageData>     messageBuffer;
+        void                refresh();
+        void                handleIncomingMidiMessage( juce::MidiInput* source, const juce::MidiMessage& message ) override;
+        ui::KickImageButton add{ "Add", "Add_normal", "Add_normal", "Add_active" };
+        void                startLearning();
+        void                stopMidiInput();
+        void                ledUpdate( int ccNumber, int midiChannel );
+        void                processMessage( const juce::MidiMessage& message, const juce::String& port ); // message thread
+        void                learnMessage( const juce::MidiMessage& message );
+        void                parameterMapping( const juce::MidiMessage& );
+        void                applyRow( const juce::ValueTree& row, int ccValue );
+        void                rebuildTable();
+
+        std::function<void( const juce::MidiMessage&, const juce::String& )> onMessageReceived; // for the MIDI Monitor IN view
+
+        bool                             isLearning{ false };
+        bool                             isMappingEnabled{ false };
+        std::vector<std::unique_ptr<juce::MidiInput>> activeInputs; // every available input port (MC-17)
         mt::MTClipProgram*               pClip = { nullptr };
         mt::MTDrumProgram*               pDrum{ nullptr };
 
@@ -195,6 +196,9 @@ namespace kick_ui
         void                          resized();
         void                          paint( juce::Graphics& g ) override;
         void                          visibilityChanged() override;
+        void                          valueTreeChildAdded( juce::ValueTree&, juce::ValueTree& ) override { triggerAsyncUpdate(); }
+        void                          valueTreeChildRemoved( juce::ValueTree&, juce::ValueTree&, int ) override { triggerAsyncUpdate(); }
+        void                          handleAsyncUpdate() override { rebuildTable(); }
 
         void                  saveData( int index );
         juce::ValueTree       projectVTree;
@@ -246,7 +250,7 @@ namespace kick_ui
     class MidiControlXY : public juce::Component
     {
     public:
-        std::function<void( juce::MidiMessage&, juce::MidiMessage& )> onGridCoordinateChanged;
+        std::function<void( juce::MidiMessage& )> onAxisMessage; // one message per active, changed axis
         MidiControlXY();
         void            refresh();
         void            visibilityChanged() override;
@@ -259,6 +263,7 @@ namespace kick_ui
         void                   resized();
         void                   paint( juce::Graphics& g ) override;
         int                    midiXyIndex{ 0 };
+        midictl::AxisFilter    filterX, filterY;
     };
     class MidiControlHardwareButtons : public ui::KickViewport
     {
@@ -365,35 +370,36 @@ namespace kick_ui
 
         MidiControlHardware();
         void                    refresh();
-        void                    midimessages( int knob, int knobValue, float padVelocity, int padAfterTouch, int buttonState );
+        void                    midimessages( const juce::String& controlName, int padVelocity, int padAfterTouch, bool pressed );
         MidiControlHardwareLeft leftComp;
         void                    sendMidiMassages( juce::MidiMessage& data );
-        void                    knobCommand( int knob, int value );
         void                    updateValue( int knob, int value );
-        void                    setOutput( juce::String list ) { outputPort = list; };
+        void                    setOutput( juce::String list )
+        {
+            outputPort = list;
+            vTree.setProperty( "HwOutputPort", list, nullptr ); // remembered across restarts
+        }
         juce::String&           getOutput() { return outputPort; }
-        void                    setKnobValue( int value ) { knobValue = value; };
-        void                    handleCommand( CPktMgr::HWMsg_t& f_HWMsg );
+        void                    handleCommand( CPktMgr::HWMsg_t& f_HWMsg, const juce::String& controlName );
 
     private:
         MidiControlHardwareRight rightComp;
         juce::ValueTree          vTree{};
         juce::ValueTree          midiControl;
-        bool                     knobRotated{ false };
+        std::map<juce::String, bool> toggleState;
+        void                     sendPadMessage( const juce::ValueTree& cfg, int velocity127, int afterTouch, bool pressed );
         void                     saveData();
         void                     padSelect( bool sel );
         void                     saveBankData();
         void                     createNewBankSettings( juce::String bankName );
         void                     loadBankSettings( juce::String bankName );
         void                     loadDefaultSettings();
-        int                      Knob, Value;
 
         void                  resized() override;
         void                  paint( juce::Graphics& g ) override;
         void                  visibilityChanged() override;
         juce::CriticalSection lock;
         juce::String          outputPort{ "None" };
-        int                   knobValue{ 0 };
     };
 
 }

@@ -58,7 +58,8 @@ namespace kick_ui
         ~LoopRecorder();
 
         void play( bool start );
-        void stop();
+        void stop( bool PauseSequence = true );
+        void undoRecording();
         void record( bool Overdub );
         void clearRecording();
         void exportRecording( juce::String& FilePath );
@@ -71,6 +72,8 @@ namespace kick_ui
 
         void   setThumbnail();
         void   setRecordingLength( int Bars );
+        void   applyLength( int Bars );
+        mt::MTTempoMgr* currentTempo();
         double getRecordingLength( int Bars );
 
         void onSequenceSelectionChange( const mt::MTSelected& Selected ) override;
@@ -88,6 +91,8 @@ namespace kick_ui
         mt::KickSettings&     settings{ mt::getSettings() };
         const mt::MTPlayhead& playHead{ ae.getPlayhead() };
         ui::KickIOComponent&  options;
+        int                   shownBars{ BAR::DEFAULT };
+        bool                  lastExportable{ false };
 
     public:
         mt::MTTempoMgr*   tempoMgr{ nullptr };

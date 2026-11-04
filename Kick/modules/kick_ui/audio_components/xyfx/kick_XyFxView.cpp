@@ -1,5 +1,10 @@
 namespace kick_ui
 {
+    namespace
+    {
+        constexpr const char* kTouchFxTree = "TOUCHFX";
+    }
+
     XyFxSetupScreen::XyFxSetupScreen()
     {
         attack.showTitleAndValue( true, juce::Slider::TextBoxBelow );
@@ -16,25 +21,46 @@ namespace kick_ui
         mt::utils::setValueProportion( .35f, xAxisLabel, yAxisLabel );
         mt::utils::setValueBackgroundColour( ui::Theme::backgroundColour( 13 ), xAxisLabel, yAxisLabel, xCoordinateValue, yCoordinateValue );
 
-        presets.setListOptions( mt::Kick::xyFxPresets );
-        setXYCoordinateValues( 0, 0 );
-
-        release.setTextValueSuffix( " %" );
-        wetDry.setTextValueSuffix( " %" );
+        std::vector<juce::String> names;
+        for( int i = 0; i < xyfx::kNumPresets; ++i )
+            names.emplace_back( xyfx::preset( i ).name );
+        presets.setListOptions( names, 0, juce::dontSendNotification );
 
         attack.setRange( 0, 100, 1 );
         release.setRange( 0, 100, 1 );
         wetDry.setRange( 0, 100, 1 );
+        attack.setValue( 5, juce::dontSendNotification );
+        release.setValue( 30, juce::dontSendNotification );
+        wetDry.setValue( 100, juce::dontSendNotification );
+        // The sliders run 0..100 %; the text is the time they stand for.
+        attack.textFromValueFunction  = []( double V ) { return juce::String( xyfx::envelopeText( (float)V ) ); };
+        release.textFromValueFunction = []( double V ) { return juce::String( xyfx::envelopeText( (float)V ) ); };
+        wetDry.setTextValueSuffix( " %" );
+        attack.updateText();
+        release.updateText();
+        refreshAxes();
+        setXYCoordinateValues( 0, 0 );
 
         presets.setJustificationType( juce::Justification::centred );
         presets.setTitleColour( ui::Theme::textColour( 1 ) );
 
-        presets.onSelectionChanged = [&]( int Index, const juce::String& value ) {
-            xAxisLabel.setText( mt::Kick::xyPresetsCoOrdinates.at( Index ).at( 0 ), juce::dontSendNotification );
-            yAxisLabel.setText( mt::Kick::xyPresetsCoOrdinates.at( Index ).at( 1 ), juce::dontSendNotification );
+        presets.onSelectionChanged = [&]( int, const juce::String& ) {
+            refreshAxes();
             if( onPresetChange )
                 onPresetChange();
+            if( onChanged )
+                onChanged();
         };
+        attack.onValueChanged  = [&]( double ) { if( onChanged ) onChanged(); };
+        release.onValueChanged = [&]( double ) { if( onChanged ) onChanged(); };
+        wetDry.onValueChanged  = [&]( double ) { if( onChanged ) onChanged(); };
+    }
+
+    void XyFxSetupScreen::refreshAxes()
+    {
+        const auto& p = xyfx::preset( getPreset() );
+        xAxisLabel.setText( xyfx::axisName( p.x ), juce::dontSendNotification );
+        yAxisLabel.setText( xyfx::axisName( p.y ), juce::dontSendNotification );
     }
 
     void XyFxSetupScreen::paint( juce::Graphics& g )
@@ -59,40 +85,43 @@ namespace kick_ui
         yCoordinateValue.setBoundsRelative( .5146f, .8545f, .4269f, .1f );
     }
 
-    std::vector<juce::String> XyFxSetupScreen::getXYdata()
+    void XyFxSetupScreen::setValues( int Preset, float AttackPct, float ReleasePct, float WetPct )
     {
-        std::vector<juce::String> data;
-        data.push_back( xAxisLabel.getText() );
-        data.push_back( yAxisLabel.getText() );
-        return data;
+        presets.setSelected( juce::jlimit( 0, xyfx::kNumPresets - 1, Preset ), juce::dontSendNotification );
+        attack.setValue( AttackPct, juce::dontSendNotification );
+        release.setValue( ReleasePct, juce::dontSendNotification );
+        wetDry.setValue( WetPct, juce::dontSendNotification );
+        attack.updateText();
+        release.updateText();
+        refreshAxes();
+    }
+
+    void XyFxSetupScreen::stepPreset( int Delta )
+    {
+        presets.setSelected( juce::jlimit( 0, xyfx::kNumPresets - 1, getPreset() + ( Delta > 0 ? 1 : -1 ) ), juce::sendNotification );
     }
 
     void XyFxSetupScreen::setXYCoordinateValues( const float xCoord, const float yCoord )
     {
-        if( xAxisLabel.getText() == "Beat Division" )
-            xCoordinateValue.setText( mt::Kick::QuantizeStrings.at( xCoord + 1 ), juce::dontSendNotification );
-        else
-            xCoordinateValue.setText( juce::String( xCoord, 3 ), juce::dontSendNotification );
+        const auto& p = xyfx::preset( getPreset() );
+        xCoordinateValue.setText( xyfx::axisText( p.x, xCoord ), juce::dontSendNotification );
+        yCoordinateValue.setText( xyfx::axisText( p.y, yCoord ), juce::dontSendNotification );
+    }
 
-        yCoordinateValue.setText( juce::String( yCoord, 3 ), juce::dontSendNotification );
+    juce::String XyFxSetupScreen::summary()
+    {
+        return juce::String( xyfx::preset( getPreset() ).name ) + " | Attack " + xyfx::envelopeText( getAttackPercent() ) + " | Release " + xyfx::envelopeText( getReleasePercent() ) + " | Wet " + juce::String( (int)getWetPercent() ) + " %";
     }
 
     void XyFxSetupScreen::knobCommand( int knob, int value )
     {
+        // One tick = one step of the slider (the raw tick count worked on a 0..100 range only by luck of the step size).
         switch( knob )
         {
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1:
-                presets.knobRotated( value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_2:
-                attack.knobRotated( value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_3:
-                release.knobRotated( value );
-                break;
-            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_4:
-                wetDry.knobRotated( value );
-                break;
+            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1: stepPreset( value ); break;
+            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_2: attack.knobRotated( mt::mixlogic::qlinkDelta( value, attack.getIncrement() ) ); break;
+            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_3: release.knobRotated( mt::mixlogic::qlinkDelta( value, release.getIncrement() ) ); break;
+            case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_4: wetDry.knobRotated( mt::mixlogic::qlinkDelta( value, wetDry.getIncrement() ) ); break;
         }
     }
 
@@ -104,30 +133,59 @@ namespace kick_ui
         xyFx.setEnabled( false );
 
         hdrComp.setValueBackgroundColor( ui::Theme::backgroundColour( 3 ) );
-        header.showOptions( false, true );
+        header.showOptions( false, false ); // no gesture automation exists: the header icon did nothing
         header.onBackButtonPressed = [this]( bool ) { closeScreen( Screen::HomeListView ); };
         output.setJustificationType( juce::Justification::centredLeft );
         output.setTitleColour( ui::Theme::textColour( 1 ) );
-        output.setListOptions( { "Output 1", "Output 2", "Output 1, 2" } );
+        rebuildTargets();
 
         mt::utils::setValueColour( ui::Theme::textColour( 1 ), latch, setup, on_off );
         mt::utils::setValueFontHeight( 18, latch, setup, on_off );
         output.setTitleFontHeight( 16 );
 
-        xyFx.setXYCoordinates( setupScreen.getXYdata() );
+        const auto& p = xyfx::preset( setupScreen.getPreset() );
+        xyFx.setAxes( p.x, p.y );
 
         on_off.onClick = [&]() {
+            gate.setEnabled( on_off.getToggleState() );
             xyFx.setEnabled( on_off.getToggleState() );
+            if( !on_off.getToggleState() )
+            {
+                xyFx.clearHighlight();
+                closeEffect();
+            }
             xyFx.repaint();
+            saveState();
         };
 
         setupScreen.onPresetChange = [&]() {
-            xyFx.setXYCoordinates( setupScreen.getXYdata() );
+            const auto& pr = xyfx::preset( setupScreen.getPreset() );
+            xyFx.setAxes( pr.x, pr.y );
             setupScreen.setXYCoordinateValues( xyFx.getXCoordinate(), xyFx.getYCoordinate() );
         };
+        setupScreen.onChanged = [&]() {
+            if( restoring )
+                return;
+            push();
+            saveState();
+        };
 
+        output.onSelectionChanged = [&]( int, const juce::String& ) {
+            if( restoring )
+                return;
+            closeEffect(); // the effect leaves the old destination, a new touch opens it on the new one
+            saveState();
+        };
+
+        // Finger down opens the gate, finger up closes it (Latch holds it); the position drives the effect while it is down.
+        xyFx.onTouch = [&]( bool Down, const float, const float ) {
+            if( Down ) gate.touchDown();
+            else gate.touchUp();
+            push();
+        };
         xyFx.onValueChanged = [&]( const float xCoord, const float yCoord ) {
             setupScreen.setXYCoordinateValues( xCoord, yCoord );
+            push();
         };
 
         ui::themeChanged.connect( [&]() {
@@ -138,42 +196,197 @@ namespace kick_ui
         } );
     }
 
+    XyFxView::~XyFxView() {}
+
+    // ---- destinations: the selected track's program, the return / submix / output buses (the old list, "Output 1 / 2 / 1, 2",
+    // had no consumer at all).
+    void XyFxView::rebuildTargets()
+    {
+        auto& ae = mt::getAudioInterface();
+        targets.clear();
+        targets.push_back( { "Track", true, {} } );
+        for( const auto& n : ae.getBusManager().getReturnBusNames() ) targets.push_back( { juce::String( n ), false, juce::String( n ) } );
+        for( const auto& n : ae.getBusManager().getSubmixBusNames() ) targets.push_back( { juce::String( n ), false, juce::String( n ) } );
+        for( const auto& n : ae.getBusManager().getOutputBusNames() ) targets.push_back( { juce::String( n ), false, juce::String( n ) } );
+
+        std::vector<juce::String> labels;
+        for( const auto& t : targets ) labels.push_back( t.label );
+        const int keep = output.getSelectedIndex() < 0 ? 0 : output.getSelectedIndex();
+        const bool wasRestoring = restoring;
+        restoring               = true; // the selection handler must not treat this as a user change
+        output.setListOptions( labels, juce::jmin( keep, (int)labels.size() - 1 ), juce::sendNotification );
+        restoring = wasRestoring;
+    }
+
+    const XyFxView::Target* XyFxView::selectedTarget()
+    {
+        const int i = output.getSelectedIndex();
+        return ( i >= 0 && i < (int)targets.size() ) ? &targets[(size_t)i] : nullptr;
+    }
+
+    mt::MTIInsertsInterface* XyFxView::interfaceFor( const Target& T )
+    {
+        auto& ae = mt::getAudioInterface();
+        if( T.isTrack )
+        {
+            auto& sel   = ae.getSelected();
+            auto* pProg = ae.getProgramDataForTrack( sel.sequence, sel.track );
+            if( pProg == nullptr )
+                return nullptr;
+            return ae.getInsertsInterface( ae.getProgramIndexByName( pProg->name.get() ) );
+        }
+        if( auto* bus = ae.getBusManager().getBus( T.bus ) )
+            return bus->getInsertsInterface();
+        return nullptr;
+    }
+
+    double XyFxView::bpm()
+    {
+        auto& ae = mt::getAudioInterface();
+        if( auto* tempo = ae.getTempoMgr( ae.getSelectedSequence() ) )
+        {
+            const double v = tempo->getTempoSettings().getBPM();
+            if( v > 1.0 )
+                return v;
+        }
+        return 120.0;
+    }
+
+    // The whole state goes to the engine in one lock-free write; the audio thread picks it up with its next block.
+    void XyFxView::push()
+    {
+        const auto* target = selectedTarget();
+        if( target == nullptr )
+            return;
+
+        // A destination change (or the selected track changing) moves the effect: the old one is closed first.
+        if( hasApplied && ( applied.isTrack != target->isTrack || applied.bus != target->bus || target->isTrack ) )
+            if( auto* old = interfaceFor( applied ) )
+                if( old != interfaceFor( *target ) )
+                    old->closeTouchFx();
+
+        auto* engine = interfaceFor( *target );
+        if( engine == nullptr || !engine->isAvailable() )
+        {
+            hasApplied = false;
+            return;
+        }
+
+        const auto& p = xyfx::preset( setupScreen.getPreset() );
+        mt::MTTouchFxSettings s;
+        s.mode      = p.mode;
+        s.filter    = p.filter;
+        s.division  = ( p.x == xyfx::Axis::BeatDivision ) ? xyfx::divisionOfColumn( (int)xyFx.getXCoordinate() ) : 0;
+        s.x         = ( p.x == xyfx::Axis::BeatDivision ) ? 0.f : xyFx.getXCoordinate();
+        s.y         = xyFx.getYCoordinate();
+        s.gate      = gate.open();
+        s.attackMs  = xyfx::envelopeMs( setupScreen.getAttackPercent() );
+        s.releaseMs = xyfx::envelopeMs( setupScreen.getReleasePercent() );
+        s.wet       = setupScreen.getWetPercent() / 100.f;
+        s.bpm       = bpm();
+        engine->setTouchFx( s );
+        applied    = *target;
+        hasApplied = true;
+    }
+
+    void XyFxView::closeEffect()
+    {
+        gate.closeAll();
+        if( hasApplied )
+            if( auto* engine = interfaceFor( applied ) )
+                engine->closeTouchFx();
+        hasApplied = false;
+    }
+
+    // ---- state in the project tree (TOUCHFX node)
+    void XyFxView::saveState()
+    {
+        if( restoring )
+            return;
+        auto tree = mt::getAudioInterface().getValueTree().getOrCreateChildWithName( kTouchFxTree, nullptr );
+        tree.setProperty( "preset", setupScreen.getPreset(), nullptr );
+        tree.setProperty( "attack", setupScreen.getAttackPercent(), nullptr );
+        tree.setProperty( "release", setupScreen.getReleasePercent(), nullptr );
+        tree.setProperty( "wet", setupScreen.getWetPercent(), nullptr );
+        tree.setProperty( "latch", latch.getToggleState(), nullptr );
+        tree.setProperty( "destination", output.getSelected(), nullptr );
+    }
+
+    void XyFxView::loadState()
+    {
+        auto tree = mt::getAudioInterface().getValueTree().getChildWithName( kTouchFxTree );
+        if( !tree.isValid() )
+            return;
+        restoring = true;
+        setupScreen.setValues( tree.getProperty( "preset", 0 ), tree.getProperty( "attack", 5.0 ), tree.getProperty( "release", 30.0 ), tree.getProperty( "wet", 100.0 ) );
+        latch.setToggleState( tree.getProperty( "latch", false ), juce::dontSendNotification );
+        gate.setLatch( latch.getToggleState() );
+        xyFx.setLatch( latch.getToggleState() );
+        const auto dest = tree.getProperty( "destination", "Track" ).toString();
+        for( int i = 0; i < (int)targets.size(); ++i )
+            if( targets[(size_t)i].label == dest )
+                output.setSelected( i, juce::dontSendNotification );
+        const auto& p = xyfx::preset( setupScreen.getPreset() );
+        xyFx.setAxes( p.x, p.y );
+        restoring = false;
+    }
+
     void XyFxView::resized()
     {
         auto b = getLocalBounds();
         header.setBounds( b.removeFromTop( ui::layout::header.getHeight() ) );
         on_off.setBoundsRelative( .8082f, .0299f, .0880f, .0823f );
         latch.setBoundsRelative( .0097f, .9213f, .1174f, .0636f );
-        setup.setBoundsRelative( .8747f, .9213f, .1174f, .0636f );
         xyFx.setBoundsRelative( .0097f, .1610f, .9823f, .7391f );
         output.setBoundsRelative( .2250f, .0299f, .1956f, .0823f );
         hdrComp.setBoundsRelative( .4305f, .0299f, .1956f, .0823f );
-        setupScreen.setBoundsRelative( .0f, .0f, .0f, .0f );
+        if( setup.getToggleState() )
+        {
+            xyFx.setBoundsRelative( .0097f, .1610f, .6330f, .7391f );
+            setupScreen.setBoundsRelative( .6575f, .1610f, .3346f, .8243f );
+            setup.setBoundsRelative( .5273f, .9213f, .1174f, .0636f );
+        }
+        else
+        {
+            setupScreen.setBoundsRelative( .0f, .0f, .0f, .0f );
+            setup.setBoundsRelative( .8747f, .9213f, .1174f, .0636f );
+        }
     }
 
     void XyFxView::visibilityChanged()
     {
+        if( isVisible() )
+        {
+            rebuildTargets();
+            loadState();
+        }
+        else
+        {
+            // Leaving the screen: nothing stays held (a touch gate left open would keep the effect on with no screen to close it).
+            xyFx.clearHighlight();
+            closeEffect();
+        }
     }
 
     void XyFxView::buttonClicked( juce::Button* button )
     {
         if( button == &setup )
         {
-            if( button->getToggleState() )
-            {
-                xyFx.setBoundsRelative( .0097f, .1610f, .6330f, .7391f );
-                setupScreen.setBoundsRelative( .6575f, .1610f, .3346f, .8243f );
-                setup.setBoundsRelative( .5273f, .9213f, .1174f, .0636f );
-            }
-            else
-            {
-                resized();
-            }
+            resized();
         }
         else if( button == &latch )
         {
+            gate.setLatch( latch.getToggleState() );
             xyFx.setLatch( latch.getToggleState() );
+            push();
+            saveState();
         }
+    }
+
+    void XyFxView::showSummary()
+    {
+        // Also with the Setup panel closed: the Q-Link used to change values nobody could see.
+        AppStatusbar::Instance().setBoxInfo( setupScreen.summary() );
     }
 
     void XyFxView::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
@@ -182,8 +395,11 @@ namespace kick_ui
         {
             auto knobID    = contracts::DclContractsHelper::getKnobCode( f_HwMsg );
             auto knobValue = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
-            if( knobID != contracts::DeviceControlContracts::EN_KNOB_CENTER )
+            if( knobID == contracts::DeviceControlContracts::EN_KNOB_CENTER )
+                setupScreen.stepPreset( knobValue ); // Data Dial: previous / next preset
+            else
                 setupScreen.knobCommand( knobID, knobValue );
+            showSummary();
         }
         else if( contracts::DclContractsHelper::isButtonMessage( f_HwMsg ) && ( contracts::DclContractsHelper::getButtonState( f_HwMsg ) == contracts::DeviceControlContracts::BTN_PRESSED ) )
         {
@@ -195,6 +411,9 @@ namespace kick_ui
                 case contracts::DeviceControlContracts::EN_PLAY: ae.setSequencePlay( aeSel.sequence, false, true ); return;
                 case contracts::DeviceControlContracts::EN_PLAYSTART: ae.setSequencePlay( aeSel.sequence, true, true ); return;
                 case contracts::DeviceControlContracts::EN_STOP: ae.setSequencePause(); return;
+                case contracts::DeviceControlContracts::EN_PLUS: setupScreen.stepPreset( 1 ); showSummary(); return;
+                case contracts::DeviceControlContracts::EN_MINUS: setupScreen.stepPreset( -1 ); showSummary(); return;
+                case contracts::DeviceControlContracts::EN_KNOB_ENTER: latch.setToggleState( !latch.getToggleState(), juce::sendNotification ); return; // ENTER = Latch
             }
         }
     }

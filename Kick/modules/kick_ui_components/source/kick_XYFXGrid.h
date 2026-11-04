@@ -26,16 +26,19 @@ namespace ui
     {
     public:
         std::function<void( const float, const float )> onValueChanged;
+        std::function<void( bool, const float, const float )> onTouch; // finger down (true) / up (false), with the last position
         XYFXGrid();
         ~XYFXGrid() = default;
         void  setXYCoordinates( std::vector<juce::String> );
+        void  setAxes( kick_ui::xyfx::Axis X, kick_ui::xyfx::Axis Y ); // labels, end texts and the beat axis from the preset table
+        void  clearHighlight(); // no cell lit (leaving the screen)
         float getXCoordinate() { return xCoordinate; }
         float getYCoordinate() { return yCoordinate; }
         void  setLatch( bool State )
         {
             isLatch = State;
             if( prevSel >= 0 )
-                selectedCells[prevSel] = isLatch ? 255 : 0;
+                selectedCells[(size_t)prevSel] = isLatch ? 255 : 0;
             repaint();
         }
 
@@ -60,6 +63,7 @@ namespace ui
         int              currentIndex = -1, prevSel{ -1 };
         bool             isLatch{ false };
         float            xCoordinate{ 0 }, yCoordinate{ 0 }, xCoord{ 0 }, yCoord{ 0 };
+        bool             xIsBeat{ false };
         juce::String     xLeft{ "" }, xRight{ "" }, yTop{ "" }, yBottom{ "" };
     };
 }
