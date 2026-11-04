@@ -9,6 +9,9 @@ if(NOT TARGET juce::juce_core)
     endif()
     add_subdirectory("${KICK_JUCE_PATH}" juce EXCLUDE_FROM_ALL)
 endif()
+if(NOT TARGET kick_clap_host)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../clap_host" clap_host EXCLUDE_FROM_ALL)
+endif()
 enable_testing()
 add_executable(kick-serial-tests SerialTests.cpp ../../modules/serial_port/serial_port.cpp ../../../ComProtocol/PktMgr/PktMgr.cpp)
 target_include_directories(kick-serial-tests PRIVATE ../../modules ../../../ComProtocol)
@@ -78,6 +81,18 @@ target_link_libraries(kick-clap-effect-tests PRIVATE kick_clap_host kick_audio_c
 add_dependencies(kick-clap-effect-tests kick-mock-clap-effect)
 add_test(NAME kick-clap-effect COMMAND kick-clap-effect-tests $<TARGET_FILE:kick-mock-clap-effect>)
 set_tests_properties(kick-clap-effect PROPERTIES TIMEOUT 10)
+
+add_executable(kick-plugin-manager-tests
+    PluginManagerTests.cpp
+)
+target_include_directories(kick-plugin-manager-tests PRIVATE
+    ../../clap_host/include
+    ../../clap_host/third_party/clap/include
+    ../../modules/3rdParty/tweetnacl
+)
+target_link_libraries(kick-plugin-manager-tests PRIVATE kick_clap_host ${CMAKE_DL_LIBS})
+add_test(NAME kick-plugin-manager COMMAND kick-plugin-manager-tests)
+set_tests_properties(kick-plugin-manager PROPERTIES TIMEOUT 10)
 
 add_executable(kick-clap-processor-tests
     ClapInstrumentProcessorTests.cpp

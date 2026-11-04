@@ -7,10 +7,21 @@ option(KICK_CLAP_BUILD_JUCE "Build the reusable JUCE session and touchscreen pan
 option(KICK_CLAP_BUILD_DEVICE_BENCH "Build the audio-device measurement tool without the panel/player" OFF)
 option(KICK_CLAP_BUILD_PLAYER "Build a standalone CLAP instrument host" OFF)
 set(KICK_CLAP_JUCE_PATH "" CACHE PATH "Local JUCE source for standalone adapter builds")
-add_library(kick_clap_host STATIC src/Host.cpp src/Discovery.cpp)
+add_library(kick_clap_host STATIC
+    src/Host.cpp
+    src/Discovery.cpp
+    src/PluginManifest.cpp
+    src/TrustStore.cpp
+    src/PluginInstaller.cpp
+    src/PluginLoader.cpp
+    src/PluginManager.cpp
+    ../modules/3rdParty/tweetnacl/tweetnacl.c
+    ../modules/3rdParty/tweetnacl/sha256.c
+    ../modules/3rdParty/tweetnacl/crypto_utils.cpp
+)
 target_compile_features(kick_clap_host PUBLIC cxx_std_17)
 set_target_properties(kick_clap_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_include_directories(kick_clap_host PUBLIC include third_party/clap/include)
+target_include_directories(kick_clap_host PUBLIC include third_party/clap/include ../modules/3rdParty/tweetnacl)
 target_link_libraries(kick_clap_host PUBLIC ${CMAKE_DL_LIBS})
 find_package(Threads REQUIRED)
 target_link_libraries(kick_clap_host PUBLIC Threads::Threads)

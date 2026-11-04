@@ -1,0 +1,153 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#include "kick_clap/TrustStore.h"
+#include "../../modules/3rdParty/tweetnacl/crypto_utils.h"
+
+#include <chrono>
+
+namespace kick::clap {
+
+// Built-in Safian Official Release public key
+// Key ID: safian-official-2026
+// This public key corresponds to the official signing key for built-in/official Kick plugins.
+static const char* const OFFICIAL_KEY_ID = "safian-official-2026";
+static const char* const OFFICIAL_KEY_NAME = "Safian Official Plugin Release";
+static const char* const OFFICIAL_PUBLIC_KEY_HEX =
+    "a439498e82d774a3f789ef2c02c67c29307223e7215c7e390c58f0dc4400cb62";
+
+std::string trustLevelToString(TrustLevel level) {
+    switch (level) {
+        case TrustLevel::Official: return "Official";
+        case TrustLevel::Verified: return "Verified";
+        case TrustLevel::Unknown:  return "Unknown";
+        case TrustLevel::Revoked:  return "Revoked";
+        case TrustLevel::Expired:  return "Expired";
+    }
+    return "Unknown";
+}
+
+TrustStore::TrustStore() {
+    initializeBuiltinKeys();
+}
+
+void TrustStore::initializeBuiltinKeys() {
+    TrustedKey officialKey;
+    officialKey.keyId = OFFICIAL_KEY_ID;
+    officialKey.name = OFFICIAL_KEY_NAME;
+    officialKey.publicKeyHex = OFFICIAL_PUBLIC_KEY_HEX;
+    officialKey.isOfficial = true;
+    officialKey.expiresAtEpoch = 0; // Does not expire
+    keys_[officialKey.keyId] = officialKey;
+}
+
+TrustStore& TrustStore::defaultStore() {
+    static TrustStore store;
+    return store;
+}
+
+void TrustStore::addKey(const TrustedKey& key) {
+    keys_[key.keyId] = key;
+}
+
+void TrustStore::removeKey(const std::string& keyId) {
+    keys_.erase(keyId);
+}
+
+void TrustStore::revokeKey(const std::string& keyId) {
+    revokedKeyIds_.insert(keyId);
+}
+
+bool TrustStore::isRevoked(const std::string& keyId) const {
+    return revokedKeyIds_.find(keyId) != revokedKeyIds_.end();
+}
+
+const TrustedKey* TrustStore::findKey(const std::string& keyId) const {
+    auto it = keys_.find(keyId);
+    if (it != keys_.end()) {
+        return &it->second;
+    }
+    return nullptr;
+}
+
+std::vector<TrustedKey> TrustStore::listKeys() const {
+    std::vector<TrustedKey> list;
+    for (const auto& pair : keys_) {
+        list.push_back(pair.second);
+    }
+    return list;
+}
+
+TrustEvaluation TrustStore::evaluateManifest(const PluginManifest& manifest, int64_t currentTimestamp) const {
+    TrustEvaluation eval;
+    eval.keyId = manifest.keyId;
+
+    if (currentTimestamp <= 0) {
+        auto now = std::chrono::system_clock::now().time_since_epoch();
+        currentTimestamp = std::chrono::duration_cast<std::chrono::seconds>(now).count();
+    }
+
+    if (manifest.signature.empty()) {
+        eval.level = TrustLevel::Unknown;
+        eval.signatureValid = false;
+        eval.message = "Manifest is unsigned";
+        return eval;
+    }
+
+    if (manifest.keyId.empty()) {
+        eval.level = TrustLevel::Unknown;
+        eval.signatureValid = false;
+        eval.message = "Manifest signature is missing key_id";
+        return eval;
+    }
+
+    if (isRevoked(manifest.keyId)) {
+        eval.level = TrustLevel::Revoked;
+        eval.signatureValid = false;
+        eval.message = "Publisher key '" + manifest.keyId + "' has been revoked";
+        return eval;
+    }
+
+    const auto* key = findKey(manifest.keyId);
+    if (!key) {
+        eval.level = TrustLevel::Unknown;
+        eval.signatureValid = false;
+        eval.message = "Publisher key '" + manifest.keyId + "' is not in trust store";
+        return eval;
+    }
+
+    eval.publisherName = key->name;
+
+    if (key->expiresAtEpoch > 0 && currentTimestamp > key->expiresAtEpoch) {
+        eval.level = TrustLevel::Expired;
+        eval.signatureValid = false;
+        eval.message = "Publisher key '" + manifest.keyId + "' has expired";
+        return eval;
+    }
+
+    // Cryptographic signature check
+    std::string payload = manifest.canonicalSigningPayload();
+    bool valid = crypto::ed25519_verify_string(payload, key->publicKeyHex, manifest.signature);
+    eval.signatureValid = valid;
+
+    if (!valid) {
+        eval.level = TrustLevel::Unknown;
+        eval.message = "Cryptographic signature verification failed (payload tampered or wrong key)";
+        return eval;
+    }
+
+    eval.level = key->isOfficial ? TrustLevel::Official : TrustLevel::Verified;
+    eval.message = key->isOfficial ? "Verified official Kick release" : "Verified publisher: " + key->name;
+    return eval;
+}
+
+bool TrustStore::signManifest(PluginManifest& manifest, const std::string& keyId, const std::string& secretKeyHex) {
+    manifest.keyId = keyId;
+    std::string payload = manifest.canonicalSigningPayload();
+    std::string sigHex;
+    if (!crypto::ed25519_sign_string(payload, secretKeyHex, sigHex)) {
+        return false;
+    }
+    manifest.signature = sigHex;
+    return true;
+}
+
+} // namespace kick::clap

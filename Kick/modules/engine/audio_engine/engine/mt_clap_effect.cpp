@@ -307,6 +307,25 @@ void ClapEffectRegistry::scanEffects(bool force) {
             kick_log("warn", "Failed to inspect CLAP binary %s: unknown exception", bin.string().c_str());
         }
     }
+
+    // Also register any static or installed effect descriptors from PluginManager
+    for (const auto& p : kick::clap::PluginManager::getInstance().getEffectDescriptors()) {
+        auto it = std::find_if(descriptors.begin(), descriptors.end(),
+                               [&](const kick::clap::Descriptor& d) { return d.id == p.id; });
+        if (it == descriptors.end()) {
+            descriptors.push_back(p);
+            AudIO::ObjectFactory::Get().Register(p.name, [p]() -> std::unique_ptr<AudIO::Object> {
+                return std::make_unique<ClapEffect>(p);
+            });
+            AudIO::ObjectFactory::Get().AddInfo(p.name, {
+                p.vendor.empty() ? "CLAP" : p.vendor,
+                "CLAP",
+                "Plugin",
+                p.name
+            });
+            kick_log("clap", "Registered PluginManager effect: %s (%s)", p.name.c_str(), p.id.c_str());
+        }
+    }
 }
 
 const std::vector<kick::clap::Descriptor>& ClapEffectRegistry::getEffectDescriptors() const {
