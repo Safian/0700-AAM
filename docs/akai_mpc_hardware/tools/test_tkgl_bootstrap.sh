@@ -15,6 +15,7 @@
 # 11. Scenario 9: Install cut by a power loss after the binary swap (Kick.prev keeps the real previous version)
 # 12. Scenario 10: No sha256 tool on the system / VERSION without KICK_SHA256 (install refused, old Kick kept)
 # 13. Scenario 11: ROLLBACK trigger (USB file and /data/Kick.rollback), refused rollbacks, rejected package not reinstalled
+# 14. Scenario 12: power key: Kick under systemd-inhibit --what=handle-power-key (probe, fallback to the plain exec, switches)
 set -eu
 
 TOP_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -653,6 +654,73 @@ touch "$S11/usb4/ROLLBACK"
 run_boot "$S11/usb4/pkg" "$S11_DATA" "$TEST_TMP/s11i.out"
 expect "S11: corrupt Kick.prev refused" "S11: corrupt Kick.prev accepted" grep -q "fails its SHA256 check" "$TEST_TMP/s11i.out"
 expect "S11: running Kick kept after the refused rollback" "S11: Kick changed by a refused rollback" grep -q "Mock Kick 4.0.0" "$S11_DATA/Kick"
+
+# -----------------------------------------------------------------------------
+# Test 13: Scenario 12 - power button: Kick is started under systemd-inhibit --what=handle-power-key when that works
+# -----------------------------------------------------------------------------
+echo ""
+echo "--- Test 13: Scenario 12 - power key inhibitor with fallback to the plain exec ---"
+
+S12="$TEST_TMP/s12"; mkdir -p "$S12/bin"
+cat > "$S12/bin/inhibit_ok" <<'EOS'
+#!/bin/sh
+# Stand-in for systemd-inhibit: records its arguments, skips its options and runs the command.
+echo "inhibit $*" >> "$FAKE_INHIBIT_LOG"
+while [ $# -gt 0 ]; do case "$1" in --*) shift ;; *) break ;; esac; done
+exec "$@"
+EOS
+cat > "$S12/bin/inhibit_fail" <<'EOS'
+#!/bin/sh
+# logind not answering: refuses to run anything.
+echo "inhibit_fail $*" >> "$FAKE_INHIBIT_LOG"
+exit 1
+EOS
+chmod 755 "$S12/bin/inhibit_ok" "$S12/bin/inhibit_fail"
+FAKE_INHIBIT_LOG="$S12/inhibit.log"; export FAKE_INHIBIT_LOG
+
+# run_boot_real <pkgdir> <datadir> <outfile> <inhibit tool>: the real launch (no dry run), env for the inhibitor selection
+run_boot_real() {
+    rr_inh="$4"
+    KICK_DATA_DIR="$2" KICK_INHIBIT_BIN="$rr_inh" sh "$1/scripts/tkgl_bootstrap" > "$3" 2>&1 || true
+}
+
+make_pkg "$S12/usb1/pkg" "1.0.0"
+S12_DATA="$S12/data1"; mkdir -p "$S12_DATA"
+rm -f "$FAKE_INHIBIT_LOG"
+run_boot_real "$S12/usb1/pkg" "$S12_DATA" "$S12/a.out" "$S12/bin/inhibit_ok"
+expect "S12: Kick started through the inhibitor" "S12: Kick not started through the inhibitor" grep -q "Mock Kick 1.0.0" "$S12_DATA/kick.log"
+expect "S12: inhibit handle-power-key requested for Kick" "S12: handle-power-key inhibit missing" grep -q -e "--what=handle-power-key --who=Kick --why=Kick handles the power button $S12_DATA/Kick" "$FAKE_INHIBIT_LOG"
+expect "S12: the probe ran first" "S12: no probe run" grep -q "Kick probe true" "$FAKE_INHIBIT_LOG"
+expect "S12: log says Kick runs under the inhibitor" "S12: inhibitor not logged" grep -q "under $S12/bin/inhibit_ok --what=handle-power-key" "$S12/a.out"
+
+S12_DATA="$S12/data2"; mkdir -p "$S12_DATA"
+rm -f "$FAKE_INHIBIT_LOG"
+run_boot_real "$S12/usb1/pkg" "$S12_DATA" "$S12/b.out" "$S12/bin/inhibit_fail"
+expect "S12: a failing inhibitor falls back to the plain exec (Kick runs)" "S12: Kick did not start after a failed probe" grep -q "Mock Kick 1.0.0" "$S12_DATA/kick.log"
+expect "S12: fallback is logged" "S12: fallback not logged" grep -q "probe failed" "$S12/b.out"
+expect "S12: only the probe was tried (Kick is not run through the failing tool)" "S12: failing tool called for Kick" [ "$(wc -l < "$FAKE_INHIBIT_LOG" | tr -d ' ')" = "1" ]
+
+S12_DATA="$S12/data3"; mkdir -p "$S12_DATA"
+run_boot_real "$S12/usb1/pkg" "$S12_DATA" "$S12/c.out" "$S12/bin/does_not_exist"
+expect "S12: no systemd-inhibit on the system: plain exec (Kick runs)" "S12: Kick did not start without systemd-inhibit" grep -q "Mock Kick 1.0.0" "$S12_DATA/kick.log"
+expect "S12: missing tool is logged" "S12: missing tool not logged" grep -q "No $S12/bin/does_not_exist on this system" "$S12/c.out"
+
+S12_DATA="$S12/data4"; mkdir -p "$S12_DATA"
+rm -f "$FAKE_INHIBIT_LOG"
+KICK_DATA_DIR="$S12_DATA" KICK_INHIBIT_BIN="$S12/bin/inhibit_ok" KICK_NO_POWER_INHIBIT=1 sh "$S12/usb1/pkg/scripts/tkgl_bootstrap" > "$S12/d.out" 2>&1 || true
+expect "S12: KICK_NO_POWER_INHIBIT=1 starts Kick plainly" "S12: KICK_NO_POWER_INHIBIT ignored" grep -q "Mock Kick 1.0.0" "$S12_DATA/kick.log"
+expect "S12: KICK_NO_POWER_INHIBIT=1 never calls the inhibitor" "S12: inhibitor called despite KICK_NO_POWER_INHIBIT" [ ! -e "$FAKE_INHIBIT_LOG" ]
+
+# Dry run 2 reports the decision without starting anything; dry run 1 keeps skipping it.
+S12_DATA="$S12/data5"; mkdir -p "$S12_DATA"
+rm -f "$FAKE_INHIBIT_LOG"
+KICK_DATA_DIR="$S12_DATA" KICK_INHIBIT_BIN="$S12/bin/inhibit_ok" KICK_BOOT_DRY_RUN=2 sh "$S12/usb1/pkg/scripts/tkgl_bootstrap" > "$S12/e.out" 2>&1 || true
+expect "S12: dry run 2 reports the inhibitor launch" "S12: dry run 2 did not report the inhibitor" grep -q "would exec: $S12/bin/inhibit_ok --what=handle-power-key" "$S12/e.out"
+expect "S12: dry run 2 did not start Kick" "S12: dry run 2 started Kick" [ ! -e "$S12_DATA/kick.log" ]
+S12_DATA="$S12/data6"; mkdir -p "$S12_DATA"
+rm -f "$FAKE_INHIBIT_LOG"
+KICK_DATA_DIR="$S12_DATA" KICK_INHIBIT_BIN="$S12/bin/inhibit_ok" KICK_BOOT_DRY_RUN=1 sh "$S12/usb1/pkg/scripts/tkgl_bootstrap" > "$S12/f.out" 2>&1 || true
+expect "S12: dry run 1 does not probe the inhibitor" "S12: dry run 1 probed the inhibitor" [ ! -e "$FAKE_INHIBIT_LOG" ]
 
 # -----------------------------------------------------------------------------
 # Summary

@@ -16,6 +16,7 @@
 #include "dialogs/kick_StartupScreen.cpp"
 #include "dialogs/kick_AppHome.cpp"
 #include "dialogs/kick_AppMenuOptions.cpp"
+#include "dialogs/kick_PowerActions.cpp"
 #include "dialogs/kick_AppAssignSample.cpp"
 #include "dialogs/kick_AppTopbar.cpp"
 #include "dialogs/kick_AppStatusbar.cpp"

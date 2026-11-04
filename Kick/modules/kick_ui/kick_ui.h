@@ -53,6 +53,7 @@
 
 //common
     #include "dialogs/kick_AppMenuOptions.h"
+    #include "dialogs/kick_PowerActions.h"
     #include "dialogs/kick_AppAssignSample.h"
     #include "dialogs/kick_Inserts.h"
     #include "hardware_drawer/kick_HardwareDrawer.h"

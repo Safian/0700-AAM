@@ -297,8 +297,17 @@ public:
         kick_log( "prefs", "[PREFS] Desktop factoryReset requested\n" );
         return 0;
     }
-    int reboot() override { return 0; }
-    int powerOff() override { return 0; }
+    // The desktop (and the tests / smoke) never power anything off: the request is only logged.
+    int reboot() override
+    {
+        kick_log( "info", "[PREFS] Desktop reboot requested (nothing is done)\n" );
+        return 0;
+    }
+    int powerOff() override
+    {
+        kick_log( "info", "[PREFS] Desktop power off requested (nothing is done)\n" );
+        return 0;
+    }
 
     DeviceInfo getDeviceInfo() override
     {

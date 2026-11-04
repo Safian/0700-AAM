@@ -311,6 +311,7 @@ namespace kick_ui
             }
             case ui::menu_logic::kCommandResources: KickModeHeader::showSystemResources(); return;
             case ui::menu_logic::kCommandKickUpdate: signals::sigScreenOpen( Screen::KickUpdate ); return;
+            case ui::menu_logic::kCommandPower: ui::power::showPowerWindow(); return;
             case ui::menu_logic::kCommandFavorites:
                 signals::sigBrowserShowFavourites(); // the browser reads the request when it shows
                 signals::sigScreenOpen( Screen::MenuFileBrowser );

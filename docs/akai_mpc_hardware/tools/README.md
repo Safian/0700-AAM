@@ -13,3 +13,16 @@
 | `walk.py` | egy oldaltartomány állítás-lap sorokká helyi modellel: `python walk.py <be.txt> <ki.json> <WP-betű> <első-sorszám>` (MLX, `mlx-community/Qwen3.6-35B-A3B-8bit`, `enable_thinking=False`) |
 
 A `walkthrough/WP-B.raw.json` a **nyers, nem ellenőrzött** helyi-modell kimenet a Locate/TC/Metronome oldalakra (71–74): az `oldal` mező sok sorban `null`, a sorokat a Key 61-specifikusságra és a Kick-megfelelőre még át kell nézni.
+
+## Bekapcsoló gomb és leállítás (R-12)
+- A Kick a gombot maga kezeli: a hardver-híd mellett egy szál olvassa a `/dev/input/eventN` eszközt (KEY_POWER, value 1), a rövid
+  nyomás a "Power" ablakot nyitja (Shut Down / Restart / Cancel); ugyanez a Menü "Power" csempéje (a gomb nélkül is mindig működik).
+  Az eszköz a `/proc/bus/input/devices`-ből derül ki (`Kick/apps/kick/hardware/input_devices.h`); minden bemeneti eszköz felkerül a
+  `kick.log`-ba (`[POWERKEY] input '...' ... key-power=.. score=..`). Felülírás: `KICK_POWER_KEY_DEVICE=/dev/input/eventN[,..]`.
+- Kettős kezelés ellen (logind HandlePowerKey) a `tkgl_bootstrap` a Kicket `systemd-inhibit --what=handle-power-key`-jel indítja,
+  ha az inhibit próbafutása sikerül (a gyári launcher is ezt teszi az MPC-vel); különben a régi sima `exec`. `KICK_NO_POWER_INHIBIT=1`
+  kikapcsolja. D-Bus-os `org.freedesktop.login1.Inhibit('handle-power-key', ...)` lock a Kickből: nincs megvalósítva (D-Bus függőség),
+  a wrapper ugyanazt adja.
+- Leállítás: felvétel-kérdés, transzport/looper/felvevő leállítás, mentetlen-kérdés (Save / Don't save / Cancel), `closeProject`
+  (ment), `sync`, `poweroff` / `reboot` (`kick_power_logic.h`, host-teszt: `PowerLogicTests.cpp`). "Restart Kick" (csak az alkalmazás)
+  nincs: semmi nem indítja újra a Kicket, kilépés után az MPC a gyári appra / holt képernyőre esne.

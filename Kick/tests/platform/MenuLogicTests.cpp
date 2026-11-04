@@ -85,6 +85,7 @@ int main()
         CHECK( itemNeedsProject<S>( kCommandSave ) );
         CHECK( !itemNeedsProject<S>( kCommandResources ) && !itemNeedsProject<S>( kCommandKickUpdate ) && !itemNeedsProject<S>( kCommandFavorites ) );
         CHECK( std::string( tileDef<S>( kCommandFavorites ).name ) == "Favorites" );
+        CHECK( std::string( tileDef<S>( kCommandPower ).name ) == "Power" && !itemNeedsProject<S>( kCommandPower ) && kCommandPower == kMenuItemCount - 1 ); // always works
         CHECK( !itemNeedsProject<S>( 0 ) && itemNeedsProject<S>( 1 ) && itemNeedsProject<S>( 16 ) );
     }
 
@@ -109,12 +110,12 @@ int main()
         MenuLayout        r;
         CHECK( r.deserialize( saved ) && r.serialize() == saved );
         l.reset();
-        CHECK( l.isDefault() && l.serialize() == "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20" );
+        CHECK( l.isDefault() && l.serialize() == "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21" );
 
         // Damaged text never loses an item: repeats, out-of-range ids and junk are dropped, missing ones appended in order.
         MenuLayout d;
         CHECK( d.deserialize( "5,5,x,99,-1,2,,3" ) );
-        CHECK( d.serialize() == "5,2,3,0,1,4,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20" );
+        CHECK( d.serialize() == "5,2,3,0,1,4,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21" );
         CHECK( !d.deserialize( "" ) && d.isDefault() );
         CHECK( !d.deserialize( "junk,;;" ) && d.isDefault() );
         // An older file with fewer items gets the newer ones at the end.
