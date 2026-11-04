@@ -82,47 +82,11 @@ namespace kick_ui
 
     void SendsMixer::knobCommand( int knob, int value )
     {
-        auto& rowComp       = getRowComponents();
-        auto  comp1         = dynamic_cast<SendsMixerDisplay*>( rowComp[0] );
-        auto  elementBounds = comp1->getElementBounds( ( knob - 1 ) % 4 + 1 );
-        auto  numRows       = getNumRows();
-        auto  rows          = getRowNumbers( 3, ( ( knob - 1 ) / 4 ) + 1, elementBounds.getX(), elementBounds.getWidth(), 50 );
-
-        std::vector<SendsMixerDisplay*> entry;
-
-        for( auto i = 0; i < rows.size(); i++ )
-        {
-            int rowIndex = rows[i];
-            if( rowIndex < numRows )
-            {
-                auto comp = dynamic_cast<SendsMixerDisplay*>( rowComp[rowIndex] );
-                entry.push_back( comp );
-            }
-        }
-
-        switch( knob )
-        {
-            case contracts::DeviceControlContracts::EN_KNOB_1:
-            case contracts::DeviceControlContracts::EN_KNOB_2:
-            case contracts::DeviceControlContracts::EN_KNOB_3:
-            case contracts::DeviceControlContracts::EN_KNOB_4:
-                if( entry.size() > 0 && entry[0] ) entry[0]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_1 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_5:
-            case contracts::DeviceControlContracts::EN_KNOB_6:
-            case contracts::DeviceControlContracts::EN_KNOB_7:
-            case contracts::DeviceControlContracts::EN_KNOB_8:
-                if( entry.size() > 1 && entry[1] ) entry[1]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_5 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_9:
-            case contracts::DeviceControlContracts::EN_KNOB_10:
-            case contracts::DeviceControlContracts::EN_KNOB_11:
-            case contracts::DeviceControlContracts::EN_KNOB_12:
-                if( entry.size() > 2 && entry[2] ) entry[2]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_9 ), value );
-                break;
-        }
+        // Q-Link 1..4 act on the selected row (not the first visible one); an empty list does nothing.
+        if( knob < contracts::DeviceControlContracts::EN_KNOB_1 || knob > contracts::DeviceControlContracts::EN_KNOB_4 )
+            return;
+        if( auto* display = qlinkRowDisplay<SendsMixerDisplay>() )
+            display->linkRotated( knob - contracts::DeviceControlContracts::EN_KNOB_1, value );
     }
 
     //==============================================================================
@@ -258,16 +222,19 @@ namespace kick_ui
 
         if( visible )
             updateData();
+
+        if( pProg )
+            pProg->enableOutputMetering( visible );
     }
 
     void SendsMixerDisplay::linkRotated( int ID, int value )
     {
         switch( ID )
         {
-            case 0: sends1.knobRotated( value ); break;
-            case 1: sends2.knobRotated( value ); break;
-            case 2: sends3.knobRotated( value ); break;
-            case 3: sends4.knobRotated( value ); break;
+            case 0: sends1.knobRotated( mt::mixlogic::qlinkDelta( value, sends1.getIncrement() ) ); break;
+            case 1: sends2.knobRotated( mt::mixlogic::qlinkDelta( value, sends2.getIncrement() ) ); break;
+            case 2: sends3.knobRotated( mt::mixlogic::qlinkDelta( value, sends3.getIncrement() ) ); break;
+            case 3: sends4.knobRotated( mt::mixlogic::qlinkDelta( value, sends4.getIncrement() ) ); break;
         }
     }
 

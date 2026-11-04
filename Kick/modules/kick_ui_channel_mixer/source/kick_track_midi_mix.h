@@ -95,9 +95,13 @@ namespace kick_ui
         ui::KickListBox         midiInput{ "MIDI INPUT", { "All" }, 0, 2 };
         ui::KickListBox         midiCh{ ui::KickListBox::withTitleBar, " MIDI CHANNEL", mt::Kick::midiChannels, 0, 4 };
         ui::KickListBox         sendTo{ "SEND TO", { "None" }, 0 };
-        ui::KickLevelSlider     levelSlider;
+        // Track Level scales the velocity of new notes (MTTrack levelScaler), it is not a post-fader volume.
+        ui::KickLevelSlider     levelSlider{ "VEL SCALE" };
 
         void clear();
+        void updateMonitor();
+        int  monitorMode{ 1 };
+        void paintOverChildren( juce::Graphics& g ) override;
         void resized() override;
         void mouseUp( const juce::MouseEvent& e ) override;
         void visibilityChanged() override;

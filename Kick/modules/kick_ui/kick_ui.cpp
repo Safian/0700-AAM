@@ -70,7 +70,6 @@
 #include "modes/kick_padMute.cpp"
 #include "modes/kick_nextSequence.cpp"
 #include "modes/kick_song.cpp"
-#include "modes/mixers/kick_MixerTabView.cpp"
 #include "modes/mixers/kick_PadMixer.cpp"
 #include "modes/knobedit/kick_KnobTabs.cpp"
 #include "modes/knobedit/kick_KnobEdit.cpp"

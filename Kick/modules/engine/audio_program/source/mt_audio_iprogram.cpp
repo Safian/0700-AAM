@@ -483,7 +483,7 @@ namespace mt
     {
         bool bMute = isNoteMute( Note );
         setNoteMute( Note, !bMute );
-        return mute.get();
+        return isNoteMute( Note );
     }
 
     void MTIProgram::setNoteMuteGroup( int Note, int Value )
@@ -538,55 +538,55 @@ namespace mt
 
     bool MTIProgram::isNoteMute( int Note )
     {
-        auto p = getOrCreate( Note );
+        auto p = getSample( Note ); // read only: a getter must not create a sample in the project
         return p ? p->mute : false;
     }
 
     int MTIProgram::getNoteMuteGroup( int Note )
     {
-        auto p = getOrCreate( Note );
+        auto p = getSample( Note ); // read only: a getter must not create a sample in the project
         return p ? (int)p->muteGroup.get() : MUTEGROUP::DEFAULT;
     }
 
     int MTIProgram::getNoteMin( int Note )
     {
-        auto p = getOrCreate( Note );
+        auto p = getSample( Note ); // read only: a getter must not create a sample in the project
         return p ? (int)p->minNote.get() : MIDI::MIN;
     }
 
     int MTIProgram::getNoteKey( int Note )
     {
-        auto p = getOrCreate( Note );
-        return p ? (int)p->keyNote.get() : MIDI::MIDDLE_C;
+        auto p = getSample( Note ); // read only: a getter must not create a sample in the project
+        return p ? (int)p->keyNote.get() : Note;
     }
 
     int MTIProgram::getNoteMax( int Note )
     {
-        auto p = getOrCreate( Note );
+        auto p = getSample( Note ); // read only: a getter must not create a sample in the project
         return p ? (int)p->maxNote.get() : MIDI::MAX;
     }
 
     int MTIProgram::getNoteSemi( int Note )
     {
-        auto p = getOrCreate( Note );
+        auto p = getSample( Note ); // read only: a getter must not create a sample in the project
         return p ? (int)p->semi.get() : SEMI::DEFAULT;
     }
 
     int MTIProgram::getNoteFine( int Note )
     {
-        auto p = getOrCreate( Note );
+        auto p = getSample( Note ); // read only: a getter must not create a sample in the project
         return p ? (int)p->fine.get() : FINE::DEFAULT;
     }
 
     double MTIProgram::getNoteGain( int Note )
     {
-        auto p = getOrCreate( Note );
+        auto p = getSample( Note ); // read only: a getter must not create a sample in the project
         return p ? (double)p->gain.get() : GAIN::DEFAULT;
     }
 
     double MTIProgram::getNotePan( int Note )
     {
-        auto p = getOrCreate( Note );
+        auto p = getSample( Note ); // read only: a getter must not create a sample in the project
         return p ? (double)p->pan.get() : PAN::DEFAULT;
     }
 

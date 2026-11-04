@@ -478,10 +478,13 @@ namespace ui
             case PadButtonType::padMixer:
             {
                 hdr5();
+                // The engine has no per-pad meter, so the meter stays hidden (it used to show the program signal on every pad).
+                constexpr bool kPerPadMeterAvailable = false;
                 if( isVisible )
-                    mt::utils::makeVisible( lrow1, lrow2, solo, mute, levelMeter );
+                    mt::utils::makeVisible( lrow1, lrow2, solo, mute );
                 else
-                    mt::utils::makeHidden( lrow1, lrow2, solo, mute, levelMeter );
+                    mt::utils::makeHidden( lrow1, lrow2, solo, mute );
+                levelMeter.setVisible( kPerPadMeterAvailable && isVisible );
 
                 lrow1.setBoundsRelative( .06f, .25f, .57f, .15f );
                 lrow2.setBoundsRelative( .06f, .42f, .57f, .15f );

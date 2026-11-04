@@ -35,7 +35,11 @@ namespace kick_ui
     void TrackMidiMixer::setupProvider()
     {
         provider.onRowSelected = [&]( int Row ) {
-            ae.setSelectedTrack( Row );
+            // A row is the n-th non-audio track, not track number n: map the row to the track index.
+            const auto& midiTracks = ae.getMidiTrackIndexes( aeSel.sequence );
+            const auto  track      = mt::mixlogic::rowToTrack( std::vector<int>( midiTracks.begin(), midiTracks.end() ), Row );
+            if( track >= 0 )
+                ae.setSelectedTrack( track );
         };
 
         provider.numRows = [&]() -> int {
@@ -97,47 +101,11 @@ namespace kick_ui
 
     void TrackMidiMixer::knobCommand( int knob, int value )
     {
-        auto& rowComp       = getRowComponents();
-        auto  comp1         = dynamic_cast<TrackMidiMixerDisplay*>( rowComp[0] );
-        auto  elementBounds = comp1->getElementBounds( ( knob - 1 ) % 4 + 1 );
-        auto  numRows       = getNumRows();
-        auto  rows          = getRowNumbers( 3, ( ( knob - 1 ) / 4 ) + 1, elementBounds.getX(), elementBounds.getWidth(), 50 );
-
-        std::vector<TrackMidiMixerDisplay*> entry;
-
-        for( auto i = 0; i < rows.size(); i++ )
-        {
-            int rowIndex = rows[i];
-            if( rowIndex < numRows )
-            {
-                auto comp = dynamic_cast<TrackMidiMixerDisplay*>( rowComp[rowIndex] );
-                entry.push_back( comp );
-            }
-        }
-
-        switch( knob )
-        {
-            case contracts::DeviceControlContracts::EN_KNOB_1:
-            case contracts::DeviceControlContracts::EN_KNOB_2:
-            case contracts::DeviceControlContracts::EN_KNOB_3:
-            case contracts::DeviceControlContracts::EN_KNOB_4:
-                if( entry.size() > 0 && entry[0] ) entry[0]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_1 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_5:
-            case contracts::DeviceControlContracts::EN_KNOB_6:
-            case contracts::DeviceControlContracts::EN_KNOB_7:
-            case contracts::DeviceControlContracts::EN_KNOB_8:
-                if( entry.size() > 1 && entry[1] ) entry[1]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_5 ), value );
-                break;
-
-            case contracts::DeviceControlContracts::EN_KNOB_9:
-            case contracts::DeviceControlContracts::EN_KNOB_10:
-            case contracts::DeviceControlContracts::EN_KNOB_11:
-            case contracts::DeviceControlContracts::EN_KNOB_12:
-                if( entry.size() > 2 && entry[2] ) entry[2]->linkRotated( ( knob - contracts::DeviceControlContracts::EN_KNOB_9 ), value );
-                break;
-        }
+        // Q-Link 1..4 act on the selected row (not the first visible one); an empty list does nothing.
+        if( knob < contracts::DeviceControlContracts::EN_KNOB_1 || knob > contracts::DeviceControlContracts::EN_KNOB_4 )
+            return;
+        if( auto* display = qlinkRowDisplay<TrackMidiMixerDisplay>() )
+            display->linkRotated( knob - contracts::DeviceControlContracts::EN_KNOB_1, value );
     }
 
     void TrackMidiMixer::refreshSoloMute()
@@ -169,7 +137,10 @@ namespace kick_ui
     void TrackMidiMixer::visibilityChanged()
     {
         IRowView::visibilityChanged();
-        selectRow( ae.getSelectedTrack() );
+        const auto& midiTracks = ae.getMidiTrackIndexes( aeSel.sequence );
+        const auto  row        = mt::mixlogic::trackToRow( std::vector<int>( midiTracks.begin(), midiTracks.end() ), ae.getSelectedTrack() );
+        if( row >= 0 )
+            selectRow( row );
         refreshSoloMute();
     }
 
@@ -230,9 +201,19 @@ namespace kick_ui
                 muteButton.setToggleState( true, juce::dontSendNotification );
             else
             {
-                trackData->mute = muteButton.getToggleState();
-                pTrack->mute    = trackData->mute;
+                // Through the engine, so the mute group is honoured (the Track Mute screen does the same).
+                ae.setTrackMute( seq, pTrack->index, muteButton.getToggleState() );
+                trackData->mute = pTrack->mute.get();
+                if( onSoloMuteChanged )
+                    onSoloMuteChanged(); // other tracks of the mute group changed too
             }
+        };
+
+        // Monitor: Off -> In -> Auto -> Off (same as the Track screen, mt_track_monitor.h); "A" on the lit button = Auto.
+        monitorButton.onClick = [&]() {
+            if( !pTrack ) return;
+            pTrack->monitor = mt::trackmonitor::next( pTrack->monitor.get() );
+            updateMonitor();
         };
 
         soloButton.onClick = [&]() {
@@ -261,8 +242,23 @@ namespace kick_ui
             muteButton.setImages( "Mute_normal", "Mute_active" );
         } );
 
-        mt::utils::addChildComponents( this, srNo, icon, trackName, trackHeader, levelMeter, midiInput, midiCh, sendTo, levelSlider, armButton, monitorButton, soloButton, muteButton );
+        mt::utils::addChildComponents( this, srNo, icon, trackName, trackHeader, levelMeter, midiInput, midiCh, sendTo, levelSlider, monitorButton, soloButton, muteButton );
+        // The record arm lives on the Track screen (setTrackRecordArm); the picture-only button is not shown here.
+        addChildComponent( armButton );
     };
+
+    void TrackMidiMixerDisplay::updateMonitor()
+    {
+        monitorMode = pTrack ? mt::trackmonitor::clamp( pTrack->monitor.get() ) : (int)mt::trackmonitor::Default;
+        monitorButton.setToggleState( monitorMode != mt::trackmonitor::Off, juce::dontSendNotification );
+        repaint( monitorButton.getBounds() );
+    }
+
+    void TrackMidiMixerDisplay::paintOverChildren( juce::Graphics& g )
+    {
+        if( monitorMode == mt::trackmonitor::Auto )
+            mt::utils::renderText( g, "A", monitorButton.getBounds(), ui::Theme::textColour( 1 ), juce::Justification::centred, 18.f );
+    }
 
     void TrackMidiMixerDisplay::setSoloToggleButton( bool shouldBeOn, bool notification )
     {
@@ -312,6 +308,7 @@ namespace kick_ui
             pTrack->solo.onValueChange.connect( ( soloValueHandler ), scope );
             pTrack->level.onValueChange.connect( ( levelValueHandler ), scope );
             pTrack->route.onValueChange.connect( ( routeHandler ), scope );
+            pTrack->monitor.onValueChange.connect( [&]() { updateMonitor(); }, scope );
         }
 
         updateData();
@@ -341,6 +338,7 @@ namespace kick_ui
                 pTrack->solo.onValueChange();
                 pTrack->level.onValueChange();
                 pTrack->route.onValueChange();
+                updateMonitor();
             }
         }
     }
@@ -391,7 +389,7 @@ namespace kick_ui
     {
         const auto& in = ae.getTrackMeter( seq, no );
         if( in.size() )
-            levelMeter.setSignalStrength( in[0].rms, in[1].rms, in[0].peak, in[0].peak );
+            levelMeter.setSignalStrength( in[0].rms, in[1].rms, in[0].peak, in[1].peak );
     }
 
     void TrackMidiMixerDisplay::clear()
@@ -436,6 +434,7 @@ namespace kick_ui
 
         for( auto child : getChildren() )
             child->setVisible( visible );
+        armButton.setVisible( false );
 
         if( visible )
             updateData();
@@ -447,11 +446,8 @@ namespace kick_ui
         {
             case 0: midiInput.knobRotated( value ); break;
             case 1: midiCh.knobRotated( value ); break;
-            case 2: levelSlider.knobRotated( value ); break;
-            case 3:
-                muteButton.setToggleState( value > 0, juce::dontSendNotification );
-                soloButton.setToggleState( value <= 0, juce::dontSendNotification );
-                break;
+            case 2: levelSlider.knobRotated( mt::mixlogic::qlinkDelta( value, levelSlider.getIncrement() ) ); break;
+            case 3: qlinkMuteOrSolo( muteButton, &soloButton, value ); break;
         }
     }
 

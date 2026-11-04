@@ -113,23 +113,23 @@ Forrás: WP-D (D-045..D-068) és `KEY61_DOC_VS_KICK.md`. A Pad Mixer soronként 
 
 Függőségek: PM-01..PM-03 a `knob-edit-qlinks.md` QL-01/QL-02/QL-03 javítására épülnek.
 
-- [ ] **PM-01** (P0, S) Q-Link 1–2 lépésköz: a Pad Mixer csúszkái a közös Q-Link-rétegen (QL-02) át kapjanak lépést (`knobRotated(n * getIncrement())`) — `kick_PadMixer.cpp:117-128`. Függ: QL-02.
-- [ ] **PM-02** (P0, S) Q-Link 3: valódi `setNoteMute` / `setNoteSolo` hívás (irány: jobbra be, balra ki; Shift+tekerés = solo) a `dontSendNotification` helyett — `:123-126`. Függ: QL-03.
-- [ ] **PM-03** (P0, M) `knobCommand` újraírása: a kijelölt pad sorára hat (nem az első láthatóra), üres lista / −1 index védelem, 4. Q-Link kiosztása (pl. Send vagy Solo), `getElementBounds` helyes leképezés — `:628-678, 130-139`. Függ: QL-01, QL-07.
-- [ ] **PM-04** (P1, S) Mérők: jobb csúcs `[1]` (`:536`), per-pad mérő megvalósítása vagy elrejtése, `enableOutputMetering` kezelése a láthatóság szerint; `iSynthObject::enableOutputMetering` argumentumának tiszteletben tartása (`iSynthObject.h:45`, `audioPreview.h:52`).
-- [ ] **PM-05** (P1, S) Egység és formátum: dB-átszámítás és egy tizedes a Level feliratra (`:35, 509-510`); owner-döntés: MIDI vs dB skála egységesen a mixerekben.
-- [ ] **PM-06** (P1, M) Bank-szinkron: `provider.onRowSelected` hívjon `ae.setBank`-ot (vagy a rács kövesse az engine-bankot) — `:352-358`; hardveres ellenőrzés után.
-- [ ] **PM-07** (P2, S) Üres `MidiMessage` védelem a pad-üzenetnél (`:244-252`) és a dupla kijelölés megszüntetése (`:684-686`, csak PRESSED-nél).
-- [ ] **PM-08** (P2, S) Getterek mellékhatása: üres padra ne jöjjön létre minta (`getOrCreate` csak íráskor) — `mt_audio_iprogram.cpp:118-122, 546-586`.
+- [x] **PM-01** (P0, S) Q-Link 1–2 lépésköz: a Pad Mixer csúszkái a közös Q-Link-rétegen (QL-02) át kapjanak lépést (`knobRotated(n * getIncrement())`) — `kick_PadMixer.cpp:117-128`. Függ: QL-02. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **PM-02** (P0, S) Q-Link 3: valódi `setNoteMute` / `setNoteSolo` hívás (irány: jobbra be, balra ki; Shift+tekerés = solo) a `dontSendNotification` helyett — `:123-126`. Függ: QL-03. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **PM-03** (P0, M) `knobCommand` újraírása: a kijelölt pad sorára hat (nem az első láthatóra), üres lista / −1 index védelem, 4. Q-Link kiosztása (pl. Send vagy Solo), `getElementBounds` helyes leképezés — `:628-678, 130-139`. Függ: QL-01, QL-07. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **PM-04** (P1, S) Mérők: jobb csúcs `[1]` (`:536`), per-pad mérő megvalósítása vagy elrejtése, `enableOutputMetering` kezelése a láthatóság szerint; `iSynthObject::enableOutputMetering` argumentumának tiszteletben tartása (`iSynthObject.h:45`, `audioPreview.h:52`). — S-A: jobb csúcs [1], argumentum tiszteletben tartva, per-pad mérő elrejtve (nincs engine API)
+- [x] **PM-05** (P1, S) Egység és formátum: dB-átszámítás és egy tizedes a Level feliratra (`:35, 509-510`); owner-döntés: MIDI vs dB skála egységesen a mixerekben. — S-A: dB + egy tizedes kész; a mixerek közös MIDI/dB skálája owner-döntés marad
+- [x] **PM-06** (P1, M) Bank-szinkron: `provider.onRowSelected` hívjon `ae.setBank`-ot (vagy a rács kövesse az engine-bankot) — `:352-358`; hardveres ellenőrzés után. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **PM-07** (P2, S) Üres `MidiMessage` védelem a pad-üzenetnél (`:244-252`) és a dupla kijelölés megszüntetése (`:684-686`, csak PRESSED-nél). — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **PM-08** (P2, S) Getterek mellékhatása: üres padra ne jöjjön létre minta (`getOrCreate` csak íráskor) — `mt_audio_iprogram.cpp:118-122, 546-586`. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
 - [ ] **PM-20** (P2, S) Dupla transzport-parancs: a Pad Mixer PLAY/PLAY START/STOP kezelője (`kick_PadMixer.cpp:256-267`) megismétli, amit a híd már végrehajtott (`bridge:921-960`) — vizsgálat és eltávolítás a `MU-09` szerint.
 - [ ] **PM-09** (P1, M) Keygroup programok támogatása a Pad Mixerben (a `:422` korlát feloldása, billentyű-tartomány szerinti sorok). Függ: Terv 02 döntés.
 - [ ] **PM-10** (P2, L) Per-pad Sends / Inserts / MIDI Out / Audio Out (D-063..D-068); előbb az engine támogatását kell felmérni.
 - [ ] **PM-11** (P2, M) Mixer Settings: Filter by events/samples, Write automation (D-054..D-057); függ: Terv 04 automation (T35).
-- [ ] **PM-12** (P2, S) Nagy csúszka dupla érintésre (D-060), külön „Assign” gomb a sorban.
-- [ ] **PM-13** (P2, S) Data Dial/ENTER a sorlistán, ha nincs kijelölt vezérlő (`:691`).
+- [x] **PM-12** (P2, S) Nagy csúszka dupla érintésre (D-060), külön „Assign” gomb a sorban. — S-A: külön Assign gomb a sorban kész; a nagy csúszka dupla érintésre (D-060) nincs
+- [x] **PM-13** (P2, S) Data Dial/ENTER a sorlistán, ha nincs kijelölt vezérlő (`:691`). — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
 - [ ] **PM-14** (P2, M) Teljesítmény: sorok virtualizálása / csak a látható bank mérői, mérés ARMv7-en (PM-H11).
-- [ ] **PM-15** (P2, S) Halott kód törlése: `kick_MixerTabView.*`, `kick_MixerHandlerInterface.h`, `kick_PadMixerDrumProgram.h`, `kick_PadMixerKeygroupProgram.h`, `kick_ui.h:120-121`.
+- [x] **PM-15** (P2, S) Halott kód törlése: `kick_MixerTabView.*`, `kick_MixerHandlerInterface.h`, `kick_PadMixerDrumProgram.h`, `kick_PadMixerKeygroupProgram.h`, `kick_ui.h:120-121`. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
 - [ ] **PM-16** (P2, M) Solo-állapot perzisztencia és visszavonhatóság (nem a `soloingNotes` bitkészletben) — owner-döntés (Akai: „Mute and Solo Events are Undoable”, D-127).
-- [ ] **PM-17** (P1, M) Host-teszt a közös Q-Link-lépésközre és mute/solo-irányra (`Kick/tests/platform`, lásd QL-17); a Pad Mixer-specifikus rész: `padLevel` skála-átváltás (gain ↔ MIDI ↔ dB).
-- [ ] **PM-18** (P1, S) Képernyőkép-smoke bővítés: `MenuPadMixer` injektált `touch`+`encoder` sorozattal (QL-01 regresszió).
+- [x] **PM-17** (P1, M) Host-teszt a közös Q-Link-lépésközre és mute/solo-irányra (`Kick/tests/platform`, lásd QL-17); a Pad Mixer-specifikus rész: `padLevel` skála-átváltás (gain ↔ MIDI ↔ dB). — S-A: tiszta logika host-tesztje kész (MixerLogicTests); a gain/MIDI/dB körút benne
+- [x] **PM-18** (P1, S) Képernyőkép-smoke bővítés: `MenuPadMixer` injektált `touch`+`encoder` sorozattal (QL-01 regresszió). — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
 - [ ] **PM-19** (P1, S) MPC-s checklist (6. pont) lefuttatása és rögzítése a `HW_TEST_REPORT`-ban.

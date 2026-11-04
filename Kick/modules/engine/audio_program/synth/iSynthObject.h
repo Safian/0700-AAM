@@ -43,7 +43,7 @@ namespace mt
         inline void setBypass( bool Bypass ) { bypass_ = Bypass; }
 
         // Metering.
-        inline void  enableOutputMetering( bool Enable ) { outMeterEnabled_ = true; };
+        inline void  enableOutputMetering( bool Enable ) { outMeterEnabled_ = Enable; };
         MTMeterData& readOutMeter();
 
         // Voices.

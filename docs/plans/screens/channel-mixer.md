@@ -134,22 +134,22 @@ Forrás: WP-D D-001..D-044, `KEY61_DOC_VS_KICK.md`.
 
 Függőségek: CM-02..CM-04 a QL-01/QL-02/QL-03-ra épülnek.
 
-- [ ] **CM-01** (P0, S) `ChannelMixer::knobCommand` kasztolás-csere javítása: az indexek legyenek az `pViews` sorrendjéből (virtuális `knobCommand` az `IRowView`-n, kasztolás nélkül) — `kick_ui_channel_mixer.cpp:71-72, 154-182`.
-- [ ] **CM-02** (P0, S) Mute/solo Q-Link valódi engine-hívással, 7 helyen (Programs, Returns, Submixes, Output, Midi, Audio, master) — lásd CM-H3. Függ: QL-03.
-- [ ] **CM-03** (P0, S) Pan és bus-level Q-Link lépésköz a közös rétegen át — CM-H4. Függ: QL-02.
-- [ ] **CM-04** (P0, S) `rowComp[0]` / index-határ védelem mind a hét nézetben (üres lista, −1, ≥ méret) — CM-H6.
-- [ ] **CM-05** (P1, M) Q-Link a kijelölt sorra (nem az első láthatóra); a master csík 1–4-es kiosztása vagy külön „Master” mód — CM-H5. Függ: QL-01, QL-07.
-- [ ] **CM-06** (P1, S) Midi nézet: sor→track leképezés (`midiTracks[Row]`) a kijelölésnél és a `selectRow`-nál — `kick_track_midi_mix.cpp:35-38, 172`.
-- [ ] **CM-07** (P1, S) Mérők: Submix `getSubmixBusNames()` (`kick_submixes_mix.cpp:114`), Programs bemeneti mérő be/ki, master+Output be/ki a láthatóság szerint, `Chain.h:58-59` atomok `{false}` inicializálása, `iSynthObject`/`audioPreview` `enableOutputMetering` argumentuma.
-- [ ] **CM-08** (P2, S) Csúcsjelzés: `out[0].peak, out[1].peak` (hat helyen) — owner-döntés, ha a Sends eltérése szándékos volt.
-- [ ] **CM-09** (P1, M) Hatástalan kezelőszervek: bus-solo az engine-ben (`setBusSolo`) vagy a gombok eltávolítása; Limiter; RMS/PEAK feliratok; Arm/Monitor/Audio Input bekötése (D-023, D-037..D-040).
-- [ ] **CM-10** (P1, S) Midi nézet mute a `ae.setTrackMute`-on át (mute-csoport) — `kick_track_midi_mix.cpp:224-236`.
+- [x] **CM-01** (P0, S) `ChannelMixer::knobCommand` kasztolás-csere javítása: az indexek legyenek az `pViews` sorrendjéből (virtuális `knobCommand` az `IRowView`-n, kasztolás nélkül) — `kick_ui_channel_mixer.cpp:71-72, 154-182`. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **CM-02** (P0, S) Mute/solo Q-Link valódi engine-hívással, 7 helyen (Programs, Returns, Submixes, Output, Midi, Audio, master) — lásd CM-H3. Függ: QL-03. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **CM-03** (P0, S) Pan és bus-level Q-Link lépésköz a közös rétegen át — CM-H4. Függ: QL-02. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **CM-04** (P0, S) `rowComp[0]` / index-határ védelem mind a hét nézetben (üres lista, −1, ≥ méret) — CM-H6. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **CM-05** (P1, M) Q-Link a kijelölt sorra (nem az első láthatóra); a master csík 1–4-es kiosztása vagy külön „Master” mód — CM-H5. Függ: QL-01, QL-07. — S-A: Shift+Q-Link 1–4 = master csík
+- [x] **CM-06** (P1, S) Midi nézet: sor→track leképezés (`midiTracks[Row]`) a kijelölésnél és a `selectRow`-nál — `kick_track_midi_mix.cpp:35-38, 172`. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **CM-07** (P1, S) Mérők: Submix `getSubmixBusNames()` (`kick_submixes_mix.cpp:114`), Programs bemeneti mérő be/ki, master+Output be/ki a láthatóság szerint, `Chain.h:58-59` atomok `{false}` inicializálása, `iSynthObject`/`audioPreview` `enableOutputMetering` argumentuma. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **CM-08** (P2, S) Csúcsjelzés: `out[0].peak, out[1].peak` (hat helyen) — owner-döntés, ha a Sends eltérése szándékos volt. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **CM-09** (P1, M) Hatástalan kezelőszervek: bus-solo az engine-ben (`setBusSolo`) vagy a gombok eltávolítása; Limiter; RMS/PEAK feliratok; Arm/Monitor/Audio Input bekötése (D-023, D-037..D-040). — S-A: bus-solo Returns-ben bekötve; Output solo, Limiter, Audio Input/Arm/Monitor elrejtve (nincs engine oldal); Midi nézet Monitor bekötve, Arm elrejtve (Track képernyőn van); RMS/PEAK él
+- [x] **CM-10** (P1, S) Midi nézet mute a `ae.setTrackMute`-on át (mute-csoport) — `kick_track_midi_mix.cpp:224-236`. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
 - [ ] **CM-19** (P2, S) Dupla transzport-parancs: a `ChannelMixer::handleCommand` PLAY/PLAY START/STOP ága (`kick_ui_channel_mixer.cpp:225-228`) megismétli a hídét (`bridge:921-960`) — vizsgálat és eltávolítás a `MU-09` szerint.
 - [ ] **CM-11** (P1, M) Main Volume átgondolása: nem perzisztens trim + OSD + pickup/eltérés-jelzés (owner-döntés kell) — `bridge:1707-1722`.
-- [ ] **CM-12** (P2, S) `gainToMidi` kerekítés (`std::lround`) a csonkítás helyett — `kick_common_utils.cpp:53-56`; körút-teszt 0..127.
-- [ ] **CM-13** (P1, S) Strip Track Level hatásának hardveres igazolása a Mixer Midi nézetén, dokumentálása; a „velocity-skálázó, nem hangerő” viselkedés feliratozása a UI-n („Track Velocity Scale”) vagy valódi track-hangerő.
+- [x] **CM-12** (P2, S) `gainToMidi` kerekítés (`std::lround`) a csonkítás helyett — `kick_common_utils.cpp:53-56`; körút-teszt 0..127. — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **CM-13** (P1, S) Strip Track Level hatásának hardveres igazolása a Mixer Midi nézetén, dokumentálása; a „velocity-skálázó, nem hangerő” viselkedés feliratozása a UI-n („Track Velocity Scale”) vagy valódi track-hangerő. — S-A: felirat "VEL SCALE"; hardveres igazolás hátra
 - [ ] **CM-14** (P2, M) Teljesítmény: az Audio nézet ne építsen újra 25 Hz-en (`kick_audio_track_mix.cpp:62-78`), nézetenként csak látható sorok mérői; mérés ARMv7-en.
 - [ ] **CM-15** (P2, L) Akai-paritás: Mixer Settings (Solo/Cue, crossfader, mérési módok), Track Settings ablak, Key Range/Learn/MIDI Filter, automation gomb, Track -/+, Duplicate Track (D-009..D-015, D-155..D-179) — a mixer-elrendezés (8 csík) owner-döntése után.
-- [ ] **CM-16** (P2, S) `DBG` zaj eltávolítása, Midi→„Tracks” átnevezés (lásd 5. pont).
-- [ ] **CM-17** (P1, M) Host-tesztek: Q-Link lépés/irány (QL-17), `gainToMidi` körút, Midi sor↔track leképezés (kiemelt tiszta függvény), Main Volume bus-írás (tiszta „apply” függvény) — `Kick/tests/platform`.
+- [x] **CM-16** (P2, S) `DBG` zaj eltávolítása, Midi→„Tracks” átnevezés (lásd 5. pont). — KÉSZ (S-A, kód + host-teszt/Mac-smoke; hardveren nem igazolt)
+- [x] **CM-17** (P1, M) Host-tesztek: Q-Link lépés/irány (QL-17), `gainToMidi` körút, Midi sor↔track leképezés (kiemelt tiszta függvény), Main Volume bus-írás (tiszta „apply” függvény) — `Kick/tests/platform`. — S-A: Q-Link/gainToMidi/Midi sor<->track kész; a Main Volume apply-teszt CM-11 döntésére vár
 - [ ] **CM-18** (P1, S) MPC-s checklist (6. pont) lefuttatása és rögzítése a `HW_TEST_REPORT`-ban.

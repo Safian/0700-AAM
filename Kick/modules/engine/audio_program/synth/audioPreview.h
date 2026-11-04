@@ -49,7 +49,7 @@ namespace mt
         double getPan() { return pan.getTargetValue(); };
 
         bool         isOutMeterEnabled() { return outMeterEnabled.load(); }
-        void         enableOutputMetering( bool Enable ) { outMeterEnabled = true; };
+        void         enableOutputMetering( bool Enable ) { outMeterEnabled = Enable; };
         MTMeterData& getMeter();
 
         void setGain( double Gain, bool Force = false );
