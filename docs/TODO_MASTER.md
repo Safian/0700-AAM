@@ -1,17 +1,21 @@
 # TODO — teljes lista, csoportosítva (2026-11-04)
 
-## A. Egyedül elvégezhető — ÁLLAPOT (2026-11-04 ~19:00): minden tétel kész és ellenőrzött
+## A. Egyedül elvégezhető — ÁLLAPOT (2026-11-04 este): egy tétel NYITOTT (A-MODAL), a többi kész és ellenőrzött
+**A-MODAL (nyitott hiba, saját munka): a modális ablakok gombjai ujjal sem nyomhatók az MPC-n** (a tulajdonos jelentése a Power ablakra: megjelenik, de semmit nem tud rajta megnyomni; az injektált érintés a gyári BPM Selectoron sem hat). Ez a R-12 Shut Down/Restart/Cancel használhatóságát is érinti. Terv: `kick_cmd log <kategóriák>` (megírva, ARM-build készül) a `touch` napló futás közbeni bekapcsolásához, majd a bridge modális-érintés útjának (peer / manuális, `Desktop::findComponentAt`) javítása és MPC-n igazolása. Telepítés a tulajdonos jóváhagyása után (újraindítja a Kick-et).
+
+A többi tétel:
 Merge-elve `safian/main`-re (`0c15cf9a`), Mac-build tiszta, ARM-build 0 hiba, ctest 102/102, a smoke-ok PASS, az MPC-n telepítve és igazolva (indulás, képernyők, összeomlás-mentesség, napló). Az egységek (W1-A..D, W2-A..D, W3-A/E, S-A..F, R-1..R-12) mind bent vannak; az agy- és sonnet-worker ágak merge-elve és törölve. A VST/FX-fejlesztés külön repóban/sessionben fut (SynthyBoyVST, KickEQ), ide nem tartozik; a host-oldal (CLAP-FX, `.kickplug`) bent van.
 Az, ami ember vagy hardveres hallgatás nélkül nem igazolható, a B. szakaszban van, tételenként indokolva.
 
 ## B. Ember kell — a pontos lépések a `docs/MORNING.md` "Ember kell" listájában és a `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` 20–51. pontjaiban
 - **Hallgatás** (indok: üres bemenet, nincs hangszóró-visszacsatolás a gépnek): Demo 01 zongora minden tartományban, képernyő-zongora (glissando/bend/vibrato/sustain), Looper Sync füllel, busz-insertek, XY FX presetek, Pad Perform/poly aftertouch, Sample Edit, Sampler felvétel, az `adsr.h` változás hatása a samplerre.
-- **Fizikai** (indok: ujj/gomb kell; köztük a modális ablakok gombjai ujjal, mert az injektált érintés ezeket nem éri el): strip Track Level ujjal, többujjas érintés, Q-Link/mixer, hardveres REC/OVERDUB/STOP/PLAY, **a bekapcsoló gomb rövid megnyomása és a tényleges Shut Down/Restart (R-12)**, Controller Mode mérés Mac-en.
+- **Fizikai** (indok: ujj/gomb kell): strip Track Level ujjal, többujjas érintés, Q-Link/mixer, hardveres REC/OVERDUB/STOP/PLAY, **a bekapcsoló gomb rövid megnyomása és a tényleges Shut Down/Restart (R-12)**, Controller Mode mérés Mac-en.
 - **Eszközön, visszafordíthatatlan vagy külső eszközt igényel** (indok: adatvesztés/hálózat): Format/Eject próba-pendrive-on, 300 MB másolás, dátum/idő, Ethernet/WiFi, Factory Reset, Firmware Update, pendrive-os telepítés/rollback.
 - **Owner-döntések** (indok: termékdöntés, nem műszaki): lista a lenti "Owner-döntések" sorban és a MORNING.md 4. pontjában (köztük a transzport-duplázás, a hivatalos plugin-aláíró kulcs, `assets/Default`, SW-00).
 - **Jogi átnézés**: Salamander CC BY 3.0 ↔ AGPL, Google API ToS, Splice ToS, libcurl/TLS licenc.
 - **iOS**: szimulátor/eszköz indulás és külső MIDI a mobil ágon (nem ellenőrzött).
-- A Looper loop-óra drift az MPC-n újramérve és megszűnt (KEY61_HW_BEHAVIOUR.md); csak a fülre hallgatás marad a Hallgatás pontban.
+- **Looper drift**: egy nyomkövetős buildel mérve megszűnt (KEY61_HW_BEHAVIOUR.md); a **fül szerinti ellenőrzés** B-ben marad, indok: üres bemenet, a hangot csak ember hallja.
+- **R-9..R-11 képernyők az MPC-n**: Track Mixer, Track Mute, Q-Link Edit megnyílt; a Pad Mixer "not applicable" Keygroup programra (helyes); a Pad Mute és a Program Edit megnyitását nem igazoltam (az injektált menü-érintés a Power csempére esett): B-ben, indok: az érintés-injektálás a modális ablakok miatt (A-MODAL) bizonytalan; a javítás után újra.
 
 
 ## Állapot (2026-11-04 03:50) és a képernyő-review backlog (docs/plans/screens/*.md, 22 dokumentum)
