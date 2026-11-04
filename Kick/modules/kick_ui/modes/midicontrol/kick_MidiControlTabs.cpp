@@ -289,7 +289,10 @@ namespace kick_ui
 
         vTree       = mt::getSettings().midiControl.vTree;
         midiControl = vTree;
-        outputPort  = vTree.getProperty( "HwOutputPort", "None" ).toString();
+        // MC-21: the output port is a setting of its own (Preferences can bind to it); "HwOutputPort" in the tree is what older builds wrote.
+        outputPort = mt::getSettings().midiControl.midiControlModeOutputPort.get();
+        if( outputPort.isEmpty() )
+            outputPort = vTree.getProperty( "HwOutputPort", "None" ).toString();
 
         //Hardware
         // The saved assignment survives a restart: the defaults below are rebuilt, then the saved values are merged on top
@@ -1899,11 +1902,18 @@ namespace kick_ui
             childTree = midilearn.getChild( rightComp.table->getSelectedRow() );
             if( childTree.isValid() )
             {
-                childTree.setProperty( "Type", "None", nullptr );
-                childTree.setProperty( "CH", "None", nullptr );
-                childTree.setProperty( "Data", "None", nullptr );
-                childTree.setProperty( "CC", "None", nullptr );
-                childTree.setProperty( "Number", "None", nullptr );
+                // MC-24: one undo step, offered in the status bar.
+                auto* um = &ae.getUndoManager();
+                um->beginNewTransaction( "Clear MIDI assignment" );
+                childTree.setProperty( "Type", "None", um );
+                childTree.setProperty( "CH", "None", um );
+                childTree.setProperty( "Data", "None", um );
+                childTree.setProperty( "CC", "None", um );
+                childTree.setProperty( "Number", "None", um );
+                AppStatusbar::Instance().offerUndo( "MIDI assignment cleared", [this]() {
+                    ae.getUndoManager().undo();
+                    rebuildTable();
+                } );
             }
             saveData( rightComp.table->getSelectedRow() );
         };
@@ -1911,7 +1921,12 @@ namespace kick_ui
             const int row = rightComp.table->getSelectedRow();
             if( row < 0 || row >= midilearn.getNumChildren() )
                 return;
+            ae.getUndoManager().beginNewTransaction( "Delete MIDI assignment" ); // MC-24: undo offered in the status bar
             midilearn.removeChild( row, &ae.getUndoManager() );
+            AppStatusbar::Instance().offerUndo( "MIDI assignment deleted", [this]() {
+                ae.getUndoManager().undo();
+                rebuildTable();
+            } );
             rebuildTable();
             if( midilearn.getNumChildren() > 0 )
                 rightComp.table->selectRow( juce::jmin( row, midilearn.getNumChildren() - 1 ) );
@@ -2386,7 +2401,12 @@ namespace kick_ui
             add.setImages( "Add_normal", "Add_normal", "Add_active" );
         } );
 
-        startMapping(); // MC-18: startup mappings active in background
+        // MC-18: the learned rows work from the start. The screens are built off the message thread: the inputs and the timer start there.
+        juce::Component::SafePointer<MidiControlMidiLearn> safe( this );
+        juce::MessageManager::callAsync( [safe]() {
+            if( safe != nullptr )
+                safe->startMapping();
+        } );
     }
 
     void MidiControlMidiLearn::saveData( int index )
@@ -2412,20 +2432,36 @@ namespace kick_ui
         rightComp.addStructure( data, index );
     }
 
+    // MC-18: the learned rows work from the start (the screen is built at start-up, whether it is shown or not) and also for devices
+    // that are plugged in later: the port list is compared every few seconds, new ports are opened, vanished ones closed.
     void MidiControlMidiLearn::startMapping()
     {
-        // MC-18: Every available MIDI input is opened on startup so learned rows work in background
-        if( activeInputs.empty() )
+        timerCallback();
+        startTimer( 3000 );
+    }
+
+    void MidiControlMidiLearn::timerCallback()
+    {
+        std::vector<std::string>   open, available;
+        std::map<std::string, juce::String> idOf;
+        for( const auto& in : activeInputs )
+            open.push_back( in->getIdentifier().toStdString() );
+        for( const auto& device : juce::MidiInput::getAvailableDevices() )
         {
-            for( const auto& device : juce::MidiInput::getAvailableDevices() )
-            {
-                if( auto input = juce::MidiInput::openDevice( device.identifier, this ) )
-                {
-                    input->start();
-                    activeInputs.push_back( std::move( input ) );
-                }
-            }
+            available.push_back( device.identifier.toStdString() );
+            idOf[device.identifier.toStdString()] = device.identifier;
         }
+        const auto diff = midictl::diffPorts( open, available );
+        for( const auto& id : diff.toClose )
+            activeInputs.erase( std::remove_if( activeInputs.begin(), activeInputs.end(),
+                                                [&]( const auto& in ) { return in->getIdentifier().toStdString() == id; } ),
+                                activeInputs.end() );
+        for( const auto& id : diff.toOpen )
+            if( auto input = juce::MidiInput::openDevice( idOf[id], this ) )
+            {
+                input->start();
+                activeInputs.push_back( std::move( input ) );
+            }
         isMappingEnabled = !activeInputs.empty();
     }
 
@@ -2445,6 +2481,7 @@ namespace kick_ui
 
     MidiControlMidiLearn ::~MidiControlMidiLearn()
     {
+        stopTimer();
         cancelPendingUpdate();
         midilearn.removeListener( this );
         for( auto& input : activeInputs )
@@ -2475,7 +2512,7 @@ namespace kick_ui
         if( isLearning )
             learnMessage( message );
         if( isMappingEnabled )
-            parameterMapping( message );
+            parameterMapping( message, port );
     }
 
     namespace
@@ -2544,23 +2581,32 @@ namespace kick_ui
 
     // Applies one message to every learned row that matches its type, channel and number (a row used to run for the
     // selected table row with any controller). Flip, switch edges and value ranges are part of applyRow.
-    void MidiControlMidiLearn::parameterMapping( const juce::MidiMessage& message )
+    void MidiControlMidiLearn::parameterMapping( const juce::MidiMessage& message, const juce::String& portName )
     {
         std::string type;
         int         number = 0, value = 0;
         if( !learnableOf( message, type, number, value ) )
             return;
 
-        for( int i = 0; i < midilearn.getNumChildren(); ++i )
+        if( engineDirty )
         {
-            auto row = midilearn.getChild( i );
-            midictl::LearnRow lr;
-            lr.type    = row.getProperty( "Type" ).toString().toStdString();
-            lr.channel = numberOrMinusOne( row.getProperty( "CH" ) );
-            lr.number  = row.hasProperty( "Number" ) ? numberOrMinusOne( row.getProperty( "Number" ) ) : numberOrMinusOne( row.getProperty( "CC" ) );
-            if( midictl::learnMatches( lr, type, message.getChannel(), number ) )
-                applyRow( row, midictl::flipped( value, row.getProperty( "Flip" ).toString() == "Enable" ) );
+            std::vector<midictl::LearnBinding> bindings;
+            for( int i = 0; i < midilearn.getNumChildren(); ++i )
+            {
+                auto row = midilearn.getChild( i );
+                midictl::LearnBinding b;
+                b.row     = i;
+                b.type    = row.getProperty( "Type" ).toString().toStdString();
+                b.channel = numberOrMinusOne( row.getProperty( "CH" ) );
+                b.number  = row.hasProperty( "Number" ) ? numberOrMinusOne( row.getProperty( "Number" ) ) : numberOrMinusOne( row.getProperty( "CC" ) );
+                b.flip    = row.getProperty( "Flip" ).toString() == "Enable";
+                bindings.push_back( std::move( b ) );
+            }
+            engine.rebuild( std::move( bindings ) );
+            engineDirty = false;
         }
+        for( const auto& hit : engine.match( type, message.getChannel(), number, value, portName.toStdString() ) )
+            applyRow( midilearn.getChild( hit.row ), hit.value );
     }
 
     // The target is read from the row itself (kind, source name, target text) and resolved by name at the moment the

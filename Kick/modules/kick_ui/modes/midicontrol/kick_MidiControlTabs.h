@@ -154,6 +154,7 @@ namespace kick_ui
         , public juce::MidiInputCallback
         , private juce::ValueTree::Listener
         , private juce::AsyncUpdater
+        , private juce::Timer
 
     {
     public:
@@ -169,7 +170,7 @@ namespace kick_ui
         void                ledUpdate( int ccNumber, int midiChannel );
         void                processMessage( const juce::MidiMessage& message, const juce::String& port ); // message thread
         void                learnMessage( const juce::MidiMessage& message );
-        void                parameterMapping( const juce::MidiMessage& );
+        void                parameterMapping( const juce::MidiMessage&, const juce::String& Port = {} );
         void                applyRow( const juce::ValueTree& row, int ccValue );
         void                rebuildTable();
 
@@ -182,6 +183,7 @@ namespace kick_ui
         mt::MTDrumProgram*               pDrum{ nullptr };
 
     private:
+        void timerCallback() override; // MC-18: devices plugged in / out
         void populateMaps();
 
     private:
@@ -197,8 +199,11 @@ namespace kick_ui
         void                          resized();
         void                          paint( juce::Graphics& g ) override;
         void                          visibilityChanged() override;
-        void                          valueTreeChildAdded( juce::ValueTree&, juce::ValueTree& ) override { triggerAsyncUpdate(); }
-        void                          valueTreeChildRemoved( juce::ValueTree&, juce::ValueTree&, int ) override { triggerAsyncUpdate(); }
+        void                          valueTreeChildAdded( juce::ValueTree&, juce::ValueTree& ) override { engineDirty = true; triggerAsyncUpdate(); }
+        void                          valueTreeChildRemoved( juce::ValueTree&, juce::ValueTree&, int ) override { engineDirty = true; triggerAsyncUpdate(); }
+        void                          valueTreePropertyChanged( juce::ValueTree&, const juce::Identifier& ) override { engineDirty = true; }
+        midictl::MidiLearnEngine      engine;           // MC-22: the rows as bindings, rebuilt (message thread) when the table changed
+        bool                          engineDirty{ true };
         void                          handleAsyncUpdate() override { rebuildTable(); }
 
         void                  saveData( int index );
@@ -381,7 +386,7 @@ namespace kick_ui
         void                    setOutput( juce::String list )
         {
             outputPort = list;
-            vTree.setProperty( "HwOutputPort", list, nullptr ); // remembered across restarts
+            mt::getSettings().midiControl.midiControlModeOutputPort.set( list ); // remembered across restarts (MC-21)
         }
         juce::String&           getOutput() { return outputPort; }
         void                    handleCommand( CPktMgr::HWMsg_t& f_HWMsg, const juce::String& controlName );
