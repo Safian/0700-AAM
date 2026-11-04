@@ -17,6 +17,9 @@
 #     Kick.version.prev (checked against the KICK_SHA256 stored in Kick.version.prev). The package that was rolled back from is
 #     remembered in /data/Kick.rejected and is not installed again from the same pendrive until a different package appears
 #     (or Kick.rejected is deleted).
+# 11. Power button: Kick is exec'd under `systemd-inhibit --what=handle-power-key` when a probe run of it works (Kick handles the
+#     button itself); otherwise the plain exec (KICK_NO_POWER_INHIBIT=1 forces it, KICK_INHIBIT_BIN overrides the tool for tests).
+# Test hook: KICK_BOOT_DRY_RUN=1 stops before the launch, =2 runs the inhibitor decision and exits instead of exec.
 # Test hook: KICK_BOOT_TEST_ABORT_AFTER=replace stops (exit 99) right after the binary swap, simulating a power cut.
 set -u
 
@@ -386,5 +389,34 @@ cd "$KICK_DATA_DIR" || {
 export KICK_NO_HARDWARE=1
 export KICK_NO_SERIAL_DEVICE=1
 
+# Power button: Kick reads it itself (Power window: Shut Down / Restart, like the factory MPC app). The factory launcher starts
+# the MPC app under `systemd-inhibit --what=handle-power-key` so logind does not also power the device off on the same press
+# (and without saving the project). Do the same, but only when the inhibitor demonstrably works here: a probe run must succeed,
+# otherwise systemd-inhibit would refuse to start Kick at all. No systemd-inhibit / logind not answering: the plain exec as before.
+INHIBIT_BIN="${KICK_INHIBIT_BIN:-systemd-inhibit}"
+USE_INHIBIT=0
+if [ "${KICK_NO_POWER_INHIBIT:-0}" = "1" ]; then
+    log "KICK_NO_POWER_INHIBIT=1: starting Kick without the power key inhibitor."
+elif ! command -v "$INHIBIT_BIN" >/dev/null 2>&1; then
+    log "No $INHIBIT_BIN on this system: starting Kick without the power key inhibitor (logind may handle the power key too)."
+elif "$INHIBIT_BIN" --what=handle-power-key --who=Kick --why="Kick probe" true >/dev/null 2>&1; then
+    USE_INHIBIT=1
+else
+    log "$INHIBIT_BIN probe failed: starting Kick without the power key inhibitor (logind may handle the power key too)."
+fi
+
+if [ "$USE_INHIBIT" -eq 1 ]; then
+    if [ "${KICK_BOOT_DRY_RUN:-0}" = "2" ]; then
+        log "KICK_BOOT_DRY_RUN=2: would exec: $INHIBIT_BIN --what=handle-power-key --who=Kick --why=... $LOCAL_BIN"
+        exit 0
+    fi
+    log "Executing $LOCAL_BIN under $INHIBIT_BIN --what=handle-power-key (KICK_NO_HARDWARE=1, KICK_NO_SERIAL_DEVICE=1)..."
+    exec "$INHIBIT_BIN" --what=handle-power-key --who=Kick --why="Kick handles the power button" "$LOCAL_BIN" >> "$KICK_DATA_DIR/kick.log" 2>&1
+fi
+
+if [ "${KICK_BOOT_DRY_RUN:-0}" = "2" ]; then
+    log "KICK_BOOT_DRY_RUN=2: would exec: $LOCAL_BIN"
+    exit 0
+fi
 log "Executing $LOCAL_BIN (KICK_NO_HARDWARE=1, KICK_NO_SERIAL_DEVICE=1)..."
 exec "$LOCAL_BIN" >> "$KICK_DATA_DIR/kick.log" 2>&1
