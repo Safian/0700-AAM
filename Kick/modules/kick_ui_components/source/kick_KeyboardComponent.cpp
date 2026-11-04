@@ -772,7 +772,12 @@ namespace ui
 
                 if( note >= rangeStart && note <= rangeEnd )
                 {
-                    if( getKeyPos( note ).contains( pos.x - xOffset ) )
+                    // The whole drawn key, not just its 1-unit start cell (see piano::whiteKeyUnits).
+                    float us = 0, ue = 0;
+                    piano::whiteKeyUnits( whiteNotes[i], us, ue );
+                    const auto cell = getKeyPos( note );
+                    const juce::Range<float> full( cell.getStart(), cell.getStart() + ( ue - us ) * keyWidth );
+                    if( full.contains( pos.x - xOffset ) )
                     {
                         auto whiteNoteLength  = ( orientation == horizontalKeyboard ) ? getHeight() : getWidth();
                         mousePositionVelocity = juce::jmax( 0.0f, pos.y / (float)whiteNoteLength );
