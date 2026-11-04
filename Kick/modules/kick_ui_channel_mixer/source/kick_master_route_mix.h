@@ -40,6 +40,8 @@ namespace kick_ui
             ioListBox.setListOptions( busNames );
 
             mt::utils::addChildComponents( this, master, ioListBox, masterInserts, limiter, levelSlider, panSlider, mute, levelMeter, rmsValue, peakValue );
+            // The engine has no limiter on the output bus: the button does nothing, so it is not shown.
+            limiter.setVisible( false );
 
             mt::utils::setTitleFontHeight( 16, masterInserts, levelSlider, panSlider, limiter, rmsValue, peakValue );
             mt::utils::setValueFontHeight( 18, masterInserts, levelSlider, panSlider, limiter );
@@ -76,26 +78,34 @@ namespace kick_ui
         {
             //auto& in  = pBus ? pBus->readInMeter() : AudIO::_emptyMeterData;
             auto& out = pBus ? pBus->readOutMeter() : AudIO::_emptyMeterData;
-            //levelMeter1.setSignalStrength( in[0].rms, in[1].rms, in[0].peak, in[0].peak );
-            levelMeter.setSignalStrength( out[0].rms, out[1].rms, out[1].peak, out[1].peak );
+            levelMeter.setSignalStrength( out[0].rms, out[1].rms, out[0].peak, out[1].peak );
+
+            // RMS / PEAK read-out in dB (the labels were never updated).
+            const auto rmsText  = "RMS : " + juce::String( mt::mixlogic::formatGainDb( std::max( out[0].rms, out[1].rms ) ) );
+            const auto peakText = "PEAK : " + juce::String( mt::mixlogic::formatGainDb( std::max( out[0].peak, out[1].peak ) ) );
+            if( rmsText != lastRmsText )
+            {
+                lastRmsText = rmsText;
+                rmsValue.setText( rmsText, juce::dontSendNotification );
+            }
+            if( peakText != lastPeakText )
+            {
+                lastPeakText = peakText;
+                peakValue.setText( peakText, juce::dontSendNotification );
+            }
         }
 
+        // Q-Link 13..16 (simulator) or Shift + Q-Link 1..4 (MPC has four): output, level, pan, mute of the master strip.
         void knobCommand( int knob, int value )
         {
+            using K = contracts::DeviceControlContracts::KnobSequence;
             switch( knob )
             {
-                case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_13:
-                    ioListBox.knobRotated( value );
-                    break;
-                case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_14:
-                    levelSlider.knobRotated( value );
-                    break;
-                case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_15:
-                    panSlider.knobRotated( value );
-                    break;
-                case contracts::DeviceControlContracts::KnobSequence::EN_KNOB_16:
-                    value > 0 ? mute.setToggleState( true, juce::dontSendNotification ) : mute.setToggleState( false, juce::dontSendNotification );
-                    break;
+                case K::EN_KNOB_13: ioListBox.knobRotated( value ); break;
+                case K::EN_KNOB_14: levelSlider.knobRotated( mt::mixlogic::qlinkDelta( value, levelSlider.getIncrement() ) ); break;
+                case K::EN_KNOB_15: panSlider.knobRotated( mt::mixlogic::qlinkDelta( value, panSlider.getIncrement() ) ); break;
+                case K::EN_KNOB_16: qlinkSwitch( mute, value ); break;
+                default: break;
             }
         }
 
@@ -115,6 +125,7 @@ namespace kick_ui
         ui::KickMeterHorizantalWithMarks levelMeter;
 
         std::shared_ptr<mt::Kick::ScopeTracker> scope;
+        juce::String                            lastRmsText, lastPeakText;
 
         void paint( juce::Graphics& g ) override
         {
@@ -146,6 +157,7 @@ namespace kick_ui
             scope.reset();
             if( pBus )
             {
+                pBus->enableOutMetering( true );
                 scope = std::make_shared<mt::Kick::ScopeTracker>();
 
                 auto muteValueHandler  = [&]() { mute.setToggleState( pBus ? pBus->mute.get() : false, juce::dontSendNotification ); };
@@ -180,8 +192,11 @@ namespace kick_ui
             {
                 it->setVisible( visible );
             }
+            limiter.setVisible( false );
 
             updateData();
+            if( pBus )
+                pBus->enableOutMetering( visible );
         }
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( MasterRouteDisplay )

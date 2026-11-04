@@ -47,7 +47,7 @@ namespace kick_ui
     ChannelMixerHeaderComponent::ChannelMixerHeaderComponent()
     {
         mt::utils::addAndMakeVisible( this, type );
-        type.setListOptions( { "Programs", "Sends", "Returns", "Submixes", "Output", "Midi", "Audio" } );
+        type.setListOptions( { "Programs", "Sends", "Returns", "Submixes", "Output", "Tracks", "Audio" } );
     }
 
     void ChannelMixerHeaderComponent::resized()
@@ -131,13 +131,11 @@ namespace kick_ui
         {
             headerComp.type.setSelected( headerComp.type.getSelectedIndex(), juce::sendNotification );
             startTimerHz( 25 );
-            DBG( "ChannelMixer VISIBLE" );
         }
         else
         {
             stopTimer();
             //Need to make it off
-            DBG( "ChannelMixer is not VISIBLE" );
         }
 
         header.setVisible( visible );
@@ -153,33 +151,27 @@ namespace kick_ui
     }
     void ChannelMixer::knobCommand( int knob, int value )
     {
-        if( pMaster )
-            dynamic_cast<MasterRouteDisplay*>( pMaster.get() )->knobCommand( knob, value );
+        using K = contracts::DeviceControlContracts::KnobSequence;
 
-        switch( index )
+        // Shift + Q-Link 1..4 drives the master strip (Q-Link 13..16 do not exist on the MPC).
+        if( knob >= K::EN_KNOB_1 && knob <= K::EN_KNOB_4 && contracts::DclContractsHelper::isShiftPressed() )
         {
-            case 0:
-                dynamic_cast<ProgramMixer*>( pView )->knobCommand( knob, value );
-                break;
-            case 1:
-                dynamic_cast<SendsMixer*>( pView )->knobCommand( knob, value );
-                break;
-            case 2:
-                dynamic_cast<RetrunsMixer*>( pView )->knobCommand( knob, value );
-                break;
-            case 3:
-                dynamic_cast<SubmixMixer*>( pView )->knobCommand( knob, value );
-                break;
-            case 4:
-                dynamic_cast<TrackMidiMixer*>( pView )->knobCommand( knob, value );
-                break;
-            case 5:
-                dynamic_cast<OutputTrackMixer*>( pView )->knobCommand( knob, value );
-                break;
-            case 6:
-                dynamic_cast<AudioTrackMixer*>( pView )->knobCommand( knob, value );
-                break;
+            if( pMaster )
+                dynamic_cast<MasterRouteDisplay*>( pMaster.get() )->knobCommand( knob - K::EN_KNOB_1 + K::EN_KNOB_13, value );
+            return;
         }
+
+        if( knob >= K::EN_KNOB_13 && knob <= K::EN_KNOB_16 )
+        {
+            if( pMaster )
+                dynamic_cast<MasterRouteDisplay*>( pMaster.get() )->knobCommand( knob, value );
+            return;
+        }
+
+        // The view decides (virtual IRowView::knobCommand), no type cast by position: the Output / Midi view order
+        // used to be swapped in that switch and dereferenced a null pointer.
+        if( pView )
+            pView->knobCommand( knob, value );
     }
 
     void ChannelMixer::handleCommand( CPktMgr::HWMsg_t& f_HwMsg )
