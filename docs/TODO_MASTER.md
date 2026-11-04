@@ -15,7 +15,7 @@ Az, ami ember vagy hardveres hallgatás nélkül nem igazolható, a B. szakaszba
 - **Jogi átnézés**: Salamander CC BY 3.0 ↔ AGPL, Google API ToS, Splice ToS, libcurl/TLS licenc.
 - **iOS**: szimulátor/eszköz indulás és külső MIDI a mobil ágon (nem ellenőrzött).
 - **Looper drift**: egy nyomkövetős buildel mérve megszűnt (KEY61_HW_BEHAVIOUR.md); a **fül szerinti ellenőrzés** B-ben marad, indok: üres bemenet, a hangot csak ember hallja.
-- **R-9..R-11 képernyők az MPC-n**: Track Mixer, Track Mute, Q-Link Edit megnyílt; a Pad Mixer "not applicable" Keygroup programra (helyes); a Pad Mute és a Program Edit megnyitását nem igazoltam (az injektált menü-érintés a Power csempére esett): B-ben, indok: az érintés-injektálás a modális ablakok miatt (A-MODAL) bizonytalan; a javítás után újra.
+- **R-9..R-11 képernyők az MPC-n (a végleges `4dfe9a81` buildel, injektált menü-érintéssel, 2026-11-04)**: Track Mixer (Programs nézet, Insert/Inserts), Track Mute, Pad Mute ("not available" Keygroup programra: helyes), Pad Mixer (ugyanúgy), Pad Notes (skála/root/bank/pad-rács), Program Edit (Main/Samples, Master, KeyGroup, Layer Control), Q-Link Edit, MIDI Control (Hardware/XY/MIDI Learn/MIDI Monitor) **megnyílik, nincs összeomlás, 0 ERROR sor**. A hang-, LED- és ujjas viselkedés B-ben van (hallgatás/fizikai).
 
 
 ## Állapot (2026-11-04 03:50) és a képernyő-review backlog (docs/plans/screens/*.md, 22 dokumentum)
