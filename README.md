@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/akai_mpc_key61/akai_mpc_key61_top_photo.jpg" alt="Safian Kick running on Akai MPC Key 61" width="100%">
+  <img src="docs/hardware/key61/photos/top-photo.jpg" alt="Safian Kick running on Akai MPC Key 61" width="100%">
 </p>
 
 # Safian Kick – Standalone DAW & Synthesizer Workstation
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](LICENSE)
 [![Upstream: MusicTribeOpenSource/0700-AAM](https://img.shields.io/badge/Upstream-MusicTribeOpenSource%2F0700--AAM-orange.svg)](https://github.com/MusicTribeOpenSource/0700-AAM)
-[![Hardware Verified: Akai MPC Key 61](https://img.shields.io/badge/Hardware-Akai_MPC_Key_61_Tested-success.svg)](docs/akai_mpc_hardware/PENDRIVE_INSTALL.md)
+[![Hardware Verified: Akai MPC Key 61](https://img.shields.io/badge/Hardware-Akai_MPC_Key_61_Tested-success.svg)](docs/hardware/key61/pendrive-install.md)
 [![Platform: ARM Linux / macOS / iOS](https://img.shields.io/badge/Platform-ARM_Linux_%7C_macOS_%7C_iOS-informational.svg)]()
 
 Independent, enhanced community fork of **Behringer KICK (`MusicTribeOpenSource/0700-AAM`)** developed by **[@Safian](https://github.com/Safian)**.
@@ -71,7 +71,7 @@ The easiest way to run Safian Kick on an Akai standalone instrument is via a sta
 2. **Extract the Package to the USB Root:**
    Download the release archive or build it using the package script:
    ```bash
-   ./docs/akai_mpc_hardware/tools/make_pendrive_package.sh
+   ./docs/hardware/key61/tools/make_pendrive_package.sh
    ```
    Extract the contents directly to the root directory of the USB flash drive. The directory tree on the drive should look like this:
    ```text
@@ -94,7 +94,7 @@ The easiest way to run Safian Kick on an Akai standalone instrument is via a sta
    - *(Optional)* Because the engine runs from memory/cached data, you can even unplug the drive after boot!
 
 📖 **For the full step-by-step documentation in Hungarian, read:**  
-👉 [**Akai MPC Key 61 Pendrive Telepítési és Használati Útmutató (PENDRIVE_INSTALL.md)**](docs/akai_mpc_hardware/PENDRIVE_INSTALL.md)  
+👉 [**Akai MPC Key 61 Pendrive Telepítési és Használati Útmutató (pendrive-install.md)**](docs/hardware/key61/pendrive-install.md)  
 👉 [**Részletes Felhasználói és Fejlesztői Kézikönyv képernyőképekkel (USER_MANUAL.md)**](docs/manual/USER_MANUAL.md)
 
 ---
@@ -105,11 +105,11 @@ This repository contains ready-to-use scripts for cross-compiling, packaging, an
 
 | Script / Tool | Description |
 |---|---|
-| [`docs/akai_mpc_hardware/tools/make_pendrive_package.sh`](docs/akai_mpc_hardware/tools/make_pendrive_package.sh) | Creates a ready-to-copy zip archive and USB folder structure for pendrive deployment. |
-| [`docs/akai_mpc_hardware/tools/build_arm.sh`](docs/akai_mpc_hardware/tools/build_arm.sh) | Cross-compilation script targeting ARMv7-A (Cortex-A17) Linux with ALSA and NEON SIMD. |
-| [`docs/akai_mpc_hardware/tools/deploy_mpc.sh`](docs/akai_mpc_hardware/tools/deploy_mpc.sh) | Fast network deployment tool via SSH/SCP directly to an MPC on the local network. |
-| [`docs/akai_mpc_hardware/tools/uninstall_kick.sh`](docs/akai_mpc_hardware/tools/uninstall_kick.sh) | Safe removal script that clears `/data/Kick` runtime files from the internal flash. |
-| [`docs/akai_mpc_hardware/tools/mpcsnoop.c`](docs/akai_mpc_hardware/tools/mpcsnoop.c) | Low-level Linux hardware diagnostic sniffer for intercepting input events and HID packets. |
+| [`docs/hardware/key61/tools/make_pendrive_package.sh`](docs/hardware/key61/tools/make_pendrive_package.sh) | Creates a ready-to-copy zip archive and USB folder structure for pendrive deployment. |
+| [`docs/hardware/key61/tools/build_arm.sh`](docs/hardware/key61/tools/build_arm.sh) | Cross-compilation script targeting ARMv7-A (Cortex-A17) Linux with ALSA and NEON SIMD. |
+| [`docs/hardware/key61/tools/deploy_mpc.sh`](docs/hardware/key61/tools/deploy_mpc.sh) | Fast network deployment tool via SSH/SCP directly to an MPC on the local network. |
+| [`docs/hardware/key61/tools/uninstall_kick.sh`](docs/hardware/key61/tools/uninstall_kick.sh) | Safe removal script that clears `/data/Kick` runtime files from the internal flash. |
+| [`docs/hardware/key61/tools/mpcsnoop.c`](docs/hardware/key61/tools/mpcsnoop.c) | Low-level Linux hardware diagnostic sniffer for intercepting input events and HID packets. |
 
 ---
 
