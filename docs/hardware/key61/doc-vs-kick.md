@@ -2,7 +2,7 @@
 
 **Szabály (felhasználó, 2026-11-01):** egy funkció fejlesztésénél előbb a dokumentációban keressük meg a leírását, és az ottani leírás alapján készítjük el. Hipotézis helyett tények: minden sor a dokumentáció állítása és a Kick **mért vagy kódból olvasott** állapota. Ahol nem néztük meg, az áll: "nem vizsgált".
 
-Forrás: *MPC Standalone OS – User Guide v3.10* (528 oldal; Key 61 fejezet "Top Panel" 365–369. oldal; a számok a vezérlő-leírás sorszámai), *MPC Key 61 Quickstart Guide v1.2*. Lásd: [README.md](README.md). A tények a [HW_TEST_REPORT](hw-test-report.md) köreiből jönnek.
+Forrás: *MPC Standalone OS – User Guide v3.10* (528 oldal; Key 61 fejezet "Top Panel" 365–369. oldal; a számok a vezérlő-leírás sorszámai), *MPC Key 61 Quickstart Guide v1.2*. Lásd: [README.md](README.md). A tények a hardveres próbákból jönnek (összefoglaló: [hw-behaviour.md](hw-behaviour.md); a törölt nyers riport: `git show 4fa7f88f:docs/hardware/key61/hw-test-report.md`).
 
 ## 1. Vezérlők (v3.10 Key 61 vezérlő-leírás)
 

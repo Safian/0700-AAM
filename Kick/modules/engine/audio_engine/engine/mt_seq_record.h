@@ -6,7 +6,7 @@
 // Source of the behaviour (MPC v3.10 manual, Key 61 controls 9-10, "Recording a Drum Sequence", "Rec Arm Behavior"):
 // REC arms the recording, PLAY / PLAY START starts it, a plain REC take erases the existing events of the armed
 // tracks, OVERDUB keeps them. Everything the manual does not say is a documented dummy, see
-// docs/hardware/key61/morning-decisions.md ("Szekvenciafelvetel").
+// `git show 4fa7f88f:docs/hardware/key61/morning-decisions.md` ("Szekvenciafelvetel"); open points: docs/planning/todo-master.md.
 #pragma once
 #include <atomic>
 #include <cstddef>

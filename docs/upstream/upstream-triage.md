@@ -1,7 +1,8 @@
 # Behringer Kick Upstream Triázs és Ticket-Javaslatok
 
 > **Dokumentum célja:** A `Safian/0700-AAM` fork (`fork/safian/main`) és az upstream `MusicTribeOpenSource/0700-AAM` (`origin/main`) közötti teljes commit-készlet triázsa önálló, upstreamelhető ticketekre bontva az `AGENTS.md` szabályai szerint (egy PR = egy változás, tiszta `origin/main`-ből). **Ez csak terv: az origin (MusicTribe) felé nem pusholunk és PR-t nem nyitunk.**
-> **Ellenőrzés:** `python3 docs/tools/check_upstream_triage.py` (hash-ek létezése, tartomány, útvonalak a commit diffjében, lefedettség, számok). A dokumentum minden szám- és commit-adata a git előzményből gépileg előállított; a szkript újrafuttatandó minden frissítés után.
+> **Státusz (2026-11-05): ELAVULT, újraosztandó.** A triázs a `6fe00243` állapotra készült; azóta a fork 635 commitra nőtt (530 nem-merge), a `feat/mobile-slideout-ui` bent van a `main`-ben (`9551e7d1`, a 6. szakasz és a mobil-ág megjegyzések érvénytelenek), az ellenőrző szkript ezért `UNCOVERED` és `HEADLINE` hibát jelez. PR még nincs nyitva. PR-készítés előtt újra kell osztani (todo-master F: Upstream); az útvonalak a régi `docs/`-elrendezést mutatják, szándékosan.
+> **Ellenőrzés:** `python3 docs/upstream/tools/check_upstream_triage.py` (hash-ek létezése, tartomány, útvonalak a commit diffjében, lefedettség, számok). A dokumentum minden szám- és commit-adata a git előzményből gépileg előállított; a szkript újrafuttatandó minden frissítés után.
 
 ---
 

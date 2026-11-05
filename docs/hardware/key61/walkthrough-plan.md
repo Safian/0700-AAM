@@ -3,7 +3,7 @@
 **Szabály:** funkció → keresés a dokumentációban → a leírás alapján fejlesztés. Hipotézis nincs: minden állítás mellett bizonyíték áll (útmutató-oldal, kódsor, napló, snapshot, fotó), vagy "nem vizsgált". Az útmutató: *MPC Standalone OS – User Guide v3.10* (528 oldal, ez érvényes az MPC Key 61-re is), [README.md](README.md).
 
 ## 1. A feladat egysége: az állítás-lap (claims register)
-Minden munkacsomaghoz (WP) egy külön fájl: `docs/hardware/key61/walkthrough/wp-<betű>.md` (külön fájl = nincs összeolvadási ütközés). Soronként egy állítás:
+Minden munkacsomaghoz (WP) egy külön fájl: `docs/hardware/key61/walkthrough/wp-<betű>.md` (külön fájl = nincs összeolvadási ütközés). Soronként egy állítás. A kész WP-B (nyers), WP-D és WP-G regiszterek elavultak (a státuszaik a W1–R-12 munkák előtti kódállapotot mutatták) és törölve; a tartalmuk: `git show 4fa7f88f:docs/hardware/key61/walkthrough/wp-d.md` (és `wp-g.md`, `wp-b.raw.json`).
 
 | ID | Oldal | Az útmutató állítása (rövid parafrázis, max. egy rövid idézet) | Kick megfelelője (fájl:sor vagy képernyő) | Állapot | Bizonyíték | Teendő |
 |---|---|---|---|---|---|---|
