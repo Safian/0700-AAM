@@ -36,6 +36,9 @@
 #endif
 #include "contracts/utils/keyboard/keyboard_detector.h"
 #include "common/source/kick_logger.h"
+#if JUCE_LINUX || defined(__APPLE__)
+ #include <execinfo.h>
+#endif
 #if JUCE_LINUX
  #include <execinfo.h>
  #include <dlfcn.h>
@@ -508,7 +511,7 @@ public:
     void initialise( const juce::String& commandLine ) override
     {
         kick_logger::init();
-        kick_log( "info", "[INFO] [APP] Kick %s initialising...\n", getApplicationVersion().toRawUTF8() );
+        kick_log( "info", "[INFO] [APP] Kick %s initialising... commandLine: '%s'\n", getApplicationVersion().toRawUTF8(), commandLine.toRawUTF8() );
         const bool smoke = commandLine.contains("--smoke-test");
         kick_startup::state().set( kick_startup::Step::AudioEngine, kick_startup::StepState::Running, "starting" );
 #if JUCE_LINUX
@@ -732,6 +735,7 @@ public:
                 smokeScreenShots(juce::StringArray::fromTokens(screens, ",", ""), juce::File(shotsDir), 0);
                 return;
             }
+            kick_log( "info", "[INFO] [APP] smoke timer calling quit()\n" );
             quit();
         });
 
@@ -743,6 +747,17 @@ public:
     void shutdown() override
     {
         kick_log( "info", "[INFO] [APP] Kick shutting down...\n" );
+#if defined(__APPLE__)
+        void* callstack[64];
+        int frames = backtrace( callstack, 64 );
+        char** strs = backtrace_symbols( callstack, frames );
+        if( strs )
+        {
+            for( int i = 0; i < frames; ++i )
+                kick_log( "info", "[SHUTDOWN BT] frame %d: %s\n", i, strs[i] );
+            free( strs );
+        }
+#endif
 #if PERFETTO
         MelatoninPerfetto::get().endSession();
 #endif
@@ -769,6 +784,11 @@ public:
     //==============================================================================
     void systemRequestedQuit() override
     {
+        kick_log( "info", "[INFO] [APP] systemRequestedQuit CALLED!\n" );
+#if JUCE_IOS
+        kick_log( "info", "[INFO] [APP] iOS ignoring systemRequestedQuit to remain running\n" );
+        return;
+#endif
         if (ui::RecentProject::isProjectLoading || ui::BackgroundTask::activeCount() > 0) {
             juce::Timer::callAfterDelay(100, [this] { systemRequestedQuit(); });
             return;
