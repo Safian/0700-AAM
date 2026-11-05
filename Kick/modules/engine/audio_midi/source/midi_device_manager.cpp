@@ -29,10 +29,21 @@ namespace mt
     /// Static member definitions...
     ///
     juce::CriticalSection                            MTMidiDeviceManager::midiDeviceListLock;
-    std::vector<juce::String>                        MTMidiDeviceManager::midiInPorts{ "None" };
-    std::vector<juce::String>                        MTMidiDeviceManager::midiOutPorts{ "None" };
+    std::vector<juce::String>                        MTMidiDeviceManager::midiInPorts{ "None", "All", "DIN" };
+    std::vector<juce::String>                        MTMidiDeviceManager::midiOutPorts{ "None", "DIN" };
     juce::ReferenceCountedArray<MidiDeviceListEntry> MTMidiDeviceManager::midiInputs;
     juce::ReferenceCountedArray<MidiDeviceListEntry> MTMidiDeviceManager::midiOutputs;
+    static MTMidiDeviceManager::HardwareMidiOutHandler hardwareMidiOutHandler;
+
+    void MTMidiDeviceManager::setHardwareMidiOutHandler( HardwareMidiOutHandler handler )
+    {
+        hardwareMidiOutHandler = std::move( handler );
+    }
+
+    const MTMidiDeviceManager::HardwareMidiOutHandler& MTMidiDeviceManager::getHardwareMidiOutHandler()
+    {
+        return hardwareMidiOutHandler;
+    }
 
     ///
     /// Implementation
@@ -169,10 +180,15 @@ namespace mt
             std::vector<juce::String>                        newPortNames;
 
             newPortNames.push_back( "None" );
+            if( isInputDevice )
+                newPortNames.push_back( "All" );
+            newPortNames.push_back( "DIN" );
 
             // add all currently plugged-in devices to the device list
             for( auto& newDevice : availableDevices )
             {
+                if( newDevice.name.equalsIgnoreCase( "DIN" ) )
+                    continue;
                 MidiDeviceListEntry::Ptr entry;
                 {
                     const juce::ScopedLock sl( midiDeviceListLock );
@@ -354,6 +370,9 @@ namespace mt
 
     void MTMidiDeviceManager::sendToOutputs( const juce::MidiMessage& Msg )
     {
+        if( hardwareMidiOutHandler )
+            hardwareMidiOutHandler( "DIN", Msg );
+
         juce::ReferenceCountedArray<MidiDeviceListEntry> outputsCopy;
         {
             const juce::ScopedLock sl( midiDeviceListLock );
@@ -366,6 +385,9 @@ namespace mt
 
     void MTMidiDeviceManager::sendToOutput( juce::MidiDeviceInfo Device, const juce::MidiMessage& Msg )
     {
+        if( hardwareMidiOutHandler )
+            hardwareMidiOutHandler( Device.name, Msg );
+
         juce::ReferenceCountedObjectPtr<MidiDeviceListEntry> midiOutput = findMidiDevice( Device, false );
         if( midiOutput && midiOutput->outDevice.get() != nullptr )
             midiOutput->outDevice->sendMessageNow( Msg );
@@ -373,6 +395,9 @@ namespace mt
 
     void MTMidiDeviceManager::sendToOutput( const juce::String& Device, const juce::MidiMessage& Msg )
     {
+        if( hardwareMidiOutHandler )
+            hardwareMidiOutHandler( Device, Msg );
+
         juce::ReferenceCountedObjectPtr<MidiDeviceListEntry> midiOutput = findMidiDevice( Device, false );
         if( midiOutput && midiOutput->outDevice.get() != nullptr )
             midiOutput->outDevice->sendMessageNow( Msg );

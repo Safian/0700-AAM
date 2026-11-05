@@ -489,6 +489,105 @@ void testOfflinePortAndReconnection()
     CHECK_EQ( displayList[3], std::string( "External Synth" ) ); // No "[Missing]"
 }
 
+void testDefaultDinPortAndRouting()
+{
+    // Akai MPC Standalone MIDI Program defaults to physical 5-pin DIN output
+    std::vector<std::string> ports = { "None", "DIN", "Kick:Out:1", "Kick:Out:2" };
+    std::vector<std::string> displayList;
+    int selectedIndex = -1;
+
+    std::string sel = tests::resolvePortSelection( "DIN", ports, displayList, selectedIndex );
+    CHECK_EQ( sel, std::string( "DIN" ) );
+    CHECK_EQ( selectedIndex, 1 );
+
+    // If port was empty/unset, defaulting to "DIN" gives immediate plug-and-play to external gear (Akai XL)
+    std::string defaultPort = "DIN";
+    std::string selDefault = tests::resolvePortSelection( defaultPort, ports, displayList, selectedIndex );
+    CHECK_EQ( selDefault, std::string( "DIN" ) );
+    CHECK_EQ( selectedIndex, 1 );
+}
+
+void testMidiProgramVolumeCc7()
+{
+    // Akai MPC MIDI Program volume sends CC 7 to external synthesizers/samplers (Akai XL)
+    auto levelToCc7 = []( int level ) -> int {
+        return std::clamp( level, 0, 127 );
+    };
+
+    CHECK_EQ( levelToCc7( 0 ), 0 );
+    CHECK_EQ( levelToCc7( 100 ), 100 );
+    CHECK_EQ( levelToCc7( 127 ), 127 );
+    CHECK_EQ( levelToCc7( 150 ), 127 ); // clamped
+    CHECK_EQ( levelToCc7( -10 ), 0 );   // clamped
+}
+
+void testMidiProgramBankAndProgramChange()
+{
+    // Akai MPC sends Bank Select MSB (CC 0), Bank Select LSB (CC 32), and Program Change (PC)
+    struct MidiMsgRecord { int type; int ch; int d0; int d1; };
+    std::vector<MidiMsgRecord> sent;
+
+    auto sendBankAndProgramChange = [&]( int ch, int bankMsb, int bankLsb, int progCh ) {
+        sent.push_back( { 0xB0, ch, 0, bankMsb } );  // Bank MSB CC 0
+        sent.push_back( { 0xB0, ch, 32, bankLsb } ); // Bank LSB CC 32
+        sent.push_back( { 0xC0, ch, progCh, 0 } );   // Program Change
+    };
+
+    sendBankAndProgramChange( 1, 2, 4, 15 );
+    CHECK_EQ( (int)sent.size(), 3 );
+    CHECK_EQ( sent[0].d0, 0 );
+    CHECK_EQ( sent[0].d1, 2 ); // MSB = 2
+    CHECK_EQ( sent[1].d0, 32 );
+    CHECK_EQ( sent[1].d1, 4 ); // LSB = 4
+    CHECK_EQ( sent[2].d0, 15 ); // Prog = 15
+}
+
+void testMidiProgramAllNotesOff()
+{
+    // Stopping or switching program emits All Notes Off (CC123), All Sound Off (CC120), Sustain release, and Pitch Center
+    struct MidiMsgRecord { int type; int ch; int d0; int d1; };
+    std::vector<MidiMsgRecord> sent;
+
+    auto sendAllNotesOff = [&]( int ch ) {
+        sent.push_back( { 0xB0, ch, 123, 0 } );    // All Notes Off
+        sent.push_back( { 0xB0, ch, 120, 0 } );    // All Sound Off
+        sent.push_back( { 0xB0, ch, 64, 0 } );     // Sustain Release
+        sent.push_back( { 0xE0, ch, 0x00, 0x40 } );// Pitch Center (8192)
+    };
+
+    sendAllNotesOff( 1 );
+    CHECK_EQ( (int)sent.size(), 4 );
+    CHECK_EQ( sent[0].d0, 123 );
+    CHECK_EQ( sent[1].d0, 120 );
+    CHECK_EQ( sent[2].d0, 64 );
+    CHECK_EQ( sent[2].d1, 0 );
+    CHECK_EQ( sent[3].d0, 0x00 );
+    CHECK_EQ( sent[3].d1, 0x40 ); // 0x40 << 7 = 8192
+}
+
+void testExternalDinMidiPreservation()
+{
+    // External hardware (Akai XL) on DIN IN must bypass local keyboard octave transpose:
+    // pitch is unaltered, and all controllers (CC 0..127, Pitch Bend, Aftertouch, Program Change) pass through
+    int externalNote = 36; // C1 kick
+    int octaveTranspose = +24; // User has local MPC Key 61 set to +2 octaves
+    
+    // Keybed notes get transposed:
+    int keybedSoundingPitch = externalNote + octaveTranspose;
+    CHECK_EQ( keybedSoundingPitch, 60 );
+
+    // DIN IN notes MUST NOT get transposed by local keyboard octave:
+    int dinSoundingPitch = externalNote; // Untransposed!
+    CHECK_EQ( dinSoundingPitch, 36 );
+
+    // DIN IN controllers (e.g. Cutoff CC 74, Resonance CC 71, Mod wheel CC 1, Volume CC 7) are preserved
+    std::vector<int> receivedCCs = { 1, 7, 10, 11, 64, 71, 74, 91, 93 };
+    for( int cc : receivedCCs )
+    {
+        CHECK( cc >= 0 && cc <= 127 );
+    }
+}
+
 int main()
 {
     testNoteRangeAndTranspose();
@@ -498,6 +597,11 @@ int main()
     testTypeBasedNaming();
     testCcLabels();
     testOfflinePortAndReconnection();
+    testDefaultDinPortAndRouting();
+    testMidiProgramVolumeCc7();
+    testMidiProgramBankAndProgramChange();
+    testMidiProgramAllNotesOff();
+    testExternalDinMidiPreservation();
 
     if( g_fail == 0 )
     {

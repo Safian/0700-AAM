@@ -341,6 +341,7 @@ private:
     std::atomic<int> m_dial_cc_count { 0 };  // CC100 events seen (MIDI reader thread and, via kick_cmd rawmidi, the message thread), thins the [AKAI-DIAL] log
     std::atomic<bool> m_out1_err_logged { false }; // first snd_rawmidi_write error per output handle
     std::atomic<bool> m_out0_err_logged { false };
+    std::atomic<bool> m_out2_err_logged { false };
     kick_hw::LedLevelCache m_led_cache; // last level per button LED (only changes are written)
     pthread_t m_thread;
     volatile bool m_running;
@@ -353,8 +354,9 @@ private:
 
     MidiParser m_parser[3];          // one per port; shared by the reader thread and inject_bytes()
     std::mutex m_parser_mutex;       // guards m_parser[] only; never held while listener callbacks run
-    std::mutex m_out0_mutex;         // one write guard per output handle (several threads write LEDs / pads)
+    std::mutex m_out0_mutex;         // one write guard per output handle (several threads write LEDs / pads / DIN)
     std::mutex m_out1_mutex;
+    std::mutex m_out2_mutex;
 
     // The write is the only thing under the lock (plus the LED cache update that has to stay ordered with it).
     inline void locked_write(std::mutex& mx, snd_rawmidi_t* out, const uint8_t* data, size_t len) {
@@ -363,12 +365,14 @@ private:
         if (r < 0) log_write_error(out, r);
     }
 
-    // Logs only the first write error per output handle (out0 / out1; others share the out1 flag).
+    // Logs only the first write error per output handle (out0 / out1 / out2).
     void log_write_error(snd_rawmidi_t* out, ssize_t r) {
-        std::atomic<bool>& flag = (out == m_out0) ? m_out0_err_logged : m_out1_err_logged;
+        std::atomic<bool>& flag = (out == m_out0) ? m_out0_err_logged
+                                : (out == m_out2) ? m_out2_err_logged
+                                : m_out1_err_logged;
         if (flag.exchange(true)) return;
         fprintf(stderr, "[AKAI-CONTROLLER] snd_rawmidi_write error on %s: %zd (%s)\n",
-                out == m_out0 ? "Port 0" : "Port 1", r, snd_strerror((int)r));
+                out == m_out0 ? "Port 0" : (out == m_out2 ? "Port 2 (DIN)" : "Port 1"), r, snd_strerror((int)r));
     }
 
     struct ParsedMsg { uint8_t s, d0, d1; };
@@ -538,8 +542,11 @@ private:
                     }
                 }
             }
+        } else if (port == 2) {
+            // Port 2: Physical 5-Pin DIN MIDI In (external hardware e.g. Akai MPC 2000XL)
+            m_listener->on_din_midi_message(port, status, d0, d1);
         } else {
-            // Port 0 (Keybed) or Port 2 (DIN MIDI In)
+            // Port 0 (Keybed / DAW)
             if (ch == 9) {
                 int pad_idx = get_akai_pad_index(d0);
                 if (pad_idx < 0 && d0 >= 36 && d0 < 52) pad_idx = d0 - 36;
@@ -770,6 +777,18 @@ public:
     void inject_bytes(int port, const uint8_t* data, size_t len) override {
         if (!data) return;
         feed_port(port, data, len);
+    }
+
+    // Sends raw MIDI bytes to physical hardware output ports (port 2 = 5-pin DIN Out).
+    void send_rawmidi_out(int port, const uint8_t* data, size_t len) override {
+        if (!data || len == 0) return;
+        if (port == 2 && m_out2) {
+            locked_write(m_out2_mutex, m_out2, data, len);
+        } else if (port == 0 && m_out0) {
+            locked_write(m_out0_mutex, m_out0, data, len);
+        } else if (port == 1 && m_out1) {
+            locked_write(m_out1_mutex, m_out1, data, len);
+        }
     }
 
     void stop() override {

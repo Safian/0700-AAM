@@ -153,7 +153,10 @@ namespace mt
         auto midiInCh   = MTITrackData::midiChannel.get();
         auto midiInPort = MTITrackData::midiPort.get();
 
-        auto isSrcAllowed     = ( 0 == midiInPort.compareIgnoreCase( "all" ) ) || ( 0 == midiInPort.compareIgnoreCase( Source ) );
+        auto isSrcAllowed     = ( midiInPort.isEmpty() )
+                                || ( 0 == midiInPort.compareIgnoreCase( "all" ) )
+                                || ( 0 == midiInPort.compareIgnoreCase( "none" ) )
+                                || ( 0 == midiInPort.compareIgnoreCase( Source ) );
         auto isChannelAllowed = ( 0 >= midiInCh ) || ( Channel == midiInCh );
         return ( isSrcAllowed && isChannelAllowed );
     }

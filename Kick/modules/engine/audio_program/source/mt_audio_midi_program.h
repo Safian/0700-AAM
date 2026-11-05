@@ -31,9 +31,9 @@ namespace mt
     {
     public:
         explicit MTMidiProgram( AudIO::DawEngine& Engine, juce::ValueTree& VT, juce::UndoManager* UM = nullptr );
-        virtual ~MTMidiProgram() = default;
+        virtual ~MTMidiProgram();
 
-        inline juce::String getPort() const { return midiPort.get(); }
+        inline juce::String getPort() const { auto p = midiPort.get(); return p.isEmpty() ? "DIN" : p; }
         inline int          getBankLSB() const { return bankLsb.get(); }
         inline int          getBankMSB() const { return bankMsb.get(); }
         inline int          getProgramChannel() const { return programCh.get(); }
@@ -46,6 +46,9 @@ namespace mt
         void processNoteLearn( int noteNumber );
 
         void sendPanCC10();
+        void sendVolumeCC7();
+        void sendProgramAndBankChange();
+        void sendAllNotesOff();
 
         // IMidiMsgProcessor
         void noteProcess( juce::Array<juce::MidiMessage>& Msgs, bool live = false ) override;
@@ -63,6 +66,7 @@ namespace mt
 
         MTMidiMeter outMidiMeter{ 40 };
         int         lastPanCC{ -1 }; // last CC10 value sent (message thread only), avoids duplicate CC for the 0.01 pan steps
+        int         lastVolCC{ -1 };
         std::atomic<bool> learningNotes{ false };
         int               learnStep{ 0 };
     };

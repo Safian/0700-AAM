@@ -933,6 +933,15 @@ public:
                     reportFault(kick_startup::Fault::MidiPort, errnoText("MIDI port 1 (control surface) is not available"));
                 } else {
                     initButtonLeds();
+                    mt::MTMidiDeviceManager::setHardwareMidiOutHandler([this](const juce::String& portName, const juce::MidiMessage& msg) {
+                        if (portName.equalsIgnoreCase("DIN") || portName.containsIgnoreCase("DIN") || portName.containsIgnoreCase("MIDI Out"))
+                        {
+                            if (m_hw && m_hw->control_surface())
+                            {
+                                m_hw->control_surface()->send_rawmidi_out(2, msg.getRawData(), (size_t)msg.getRawDataSize());
+                            }
+                        }
+                    });
                 }
             }
             if (midiOk) startup.set(kick_startup::Step::Midi, kick_startup::StepState::Ok, m_hw->get_device_badge());
@@ -979,6 +988,7 @@ public:
         m_pad_colour_conn.disconnect();
         m_screen_conn.disconnect();
         m_play_conn.disconnect();
+        mt::MTMidiDeviceManager::setHardwareMidiOutHandler(nullptr);
         stopTimer();
         if (m_cmd_fd >= 0) { close(m_cmd_fd); m_cmd_fd = -1; }
         if (m_cmd_fd_w >= 0) { close(m_cmd_fd_w); m_cmd_fd_w = -1; }
@@ -2123,6 +2133,40 @@ public:
             msg.pktCmd = contracts::DeviceControlContracts::PadCmd::EN_PAD_STATE;
             msg.data = { pad_num, contracts::DeviceControlContracts::BTN_RELEASED, 0, 0 };
             contracts::DclSignals::dispatchHardwareInput(msg);
+        }
+    }
+
+    void on_din_midi_message(int port, uint8_t status, uint8_t d0, uint8_t d1) override
+    {
+        juce::ignoreUnused(port);
+        const int type = status & 0xF0;
+        juce::MidiMessage msg;
+        if (type == 0xC0 || type == 0xD0)
+            msg = juce::MidiMessage(status, d0);
+        else
+            msg = juce::MidiMessage(status, d0, d1);
+
+        auto& ae = mt::getAudioInterface();
+        const auto sel = ae.getSelected();
+        ae.addLiveMidiMsg(sel, msg);
+
+        if (msg.isNoteOn() && ae.isSequenceRecArmed() && !ae.isSequencePlaying())
+        {
+            const int sounding_pitch = d0;
+            const int vel = d1;
+            juce::MessageManager::callAsync([sounding_pitch, vel]() {
+                auto& a = mt::getAudioInterface();
+                if (!a.isSequenceRecArmed() || a.isSequencePlaying()) return;
+                const auto s = a.getSelected();
+                int start = a.getSequenceSeekTick(s.sequence);
+                if (start < 0) start = 0;
+                int len = a.getTimingCorrectParams().gridTicks;
+                if (len <= 0) len = 96;
+                {
+                    a.getUndoManager().beginNewTransaction("Step record");
+                    a.addOrModifyNote(sounding_pitch, start, len, juce::jlimit(1, 127, vel));
+                }
+            });
         }
     }
 

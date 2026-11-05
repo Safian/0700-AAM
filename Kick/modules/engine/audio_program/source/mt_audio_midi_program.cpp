@@ -31,6 +31,13 @@ namespace mt
         , MTIMidiProgramData( VT, UM )
     {
         sendPanCC10();
+        sendVolumeCC7();
+        sendProgramAndBankChange();
+    }
+
+    MTMidiProgram::~MTMidiProgram()
+    {
+        sendAllNotesOff();
     }
 
     void MTMidiProgram::sendPanCC10()
@@ -44,6 +51,54 @@ namespace mt
 
             reloadMidiMeter( 1.f );
             outMidiMeter.reload( ( MIDI::SCALER * cc ) );
+        }
+    }
+
+    void MTMidiProgram::sendVolumeCC7()
+    {
+        auto port = getPort();
+        if( port.isNotEmpty() && port != "None" )
+        {
+            const int cc = juce::jlimit( 0, 127, (int)level.get() );
+            lastVolCC = cc;
+            ae.sendMidiMessage( port, juce::MidiMessage::controllerEvent( getMidiChannel(), 7, cc ) );
+
+            reloadMidiMeter( 1.f );
+            outMidiMeter.reload( ( MIDI::SCALER * cc ) );
+        }
+    }
+
+    void MTMidiProgram::sendProgramAndBankChange()
+    {
+        auto port = getPort();
+        if( port.isNotEmpty() && port != "None" )
+        {
+            const auto ch = getMidiChannel();
+
+            // Send the Bank Select MSB message
+            ae.sendMidiMessage( port, juce::MidiMessage::controllerEvent( ch, 0, getBankMSB() ) );
+
+            // Send the Bank Select LSB message
+            ae.sendMidiMessage( port, juce::MidiMessage::controllerEvent( ch, 32, getBankLSB() ) );
+
+            // Send the program change message
+            ae.sendMidiMessage( port, juce::MidiMessage::programChange( ch, getProgramChannel() ) );
+
+            reloadMidiMeter( 1.f );
+            outMidiMeter.reload( ( MIDI::SCALER * getProgramChannel() ) );
+        }
+    }
+
+    void MTMidiProgram::sendAllNotesOff()
+    {
+        auto port = getPort();
+        if( port.isNotEmpty() && port != "None" )
+        {
+            const auto ch = getMidiChannel();
+            ae.sendMidiMessage( port, juce::MidiMessage::allNotesOff( ch ) );
+            ae.sendMidiMessage( port, juce::MidiMessage::allSoundOff( ch ) );
+            ae.sendMidiMessage( port, juce::MidiMessage::controllerEvent( ch, 64, 0 ) );
+            ae.sendMidiMessage( port, juce::MidiMessage::pitchWheel( ch, 8192 ) );
         }
     }
 
@@ -88,50 +143,23 @@ namespace mt
                 reloadMidiMeter( 1.f );
                 outMidiMeter.reload( ( MIDI::SCALER * value ) );
             }
-            else if( Property.toString().containsIgnoreCase( "BankLSB" ) || Property.toString().containsIgnoreCase( "BankMSB" ) )
+            else if( Property.toString().containsIgnoreCase( "BankLSB" ) || Property.toString().containsIgnoreCase( "BankMSB" ) || Property.toString().containsIgnoreCase( "ProgCH" ) )
             {
-                juce::MidiMessage CCmsg;
-                const auto        ch = getMidiChannel();
-
-                // Send the Bank Select MSB message
-                CCmsg = juce::MidiMessage::controllerEvent(
-                    ch,
-                    0, // MSB controller number
-                    getBankMSB() );
-                ae.sendMidiMessage( port, CCmsg );
-
-                // Send the Bank Select LSB message
-                CCmsg = juce::MidiMessage::controllerEvent(
-                    ch,
-                    32, // LSB controller number
-                    getBankLSB() );
-                ae.sendMidiMessage( port, CCmsg );
-
-                // Send the program change message
-                CCmsg = juce::MidiMessage::programChange( ch, getProgramChannel() );
-                ae.sendMidiMessage( port, CCmsg );
-
-                reloadMidiMeter( 1.f );
-                outMidiMeter.reload( ( MIDI::SCALER * getProgramChannel() ) );
-            }
-            else if( Property.toString().containsIgnoreCase( "ProgCH" ) )
-            {
-                juce::MidiMessage CCmsg;
-
-                // Send the program change message
-                CCmsg = juce::MidiMessage::programChange( getMidiChannel(), getProgramChannel() );
-                ae.sendMidiMessage( port, CCmsg );
-
-                reloadMidiMeter( 1.f );
-                outMidiMeter.reload( ( MIDI::SCALER * getProgramChannel() ) );
+                sendProgramAndBankChange();
             }
             else if( Property == IDs::pan )
             {
                 sendPanCC10();
             }
+            else if( Property == IDs::level )
+            {
+                sendVolumeCC7();
+            }
             else if( Property == IDs::MIDIPort )
             {
                 sendPanCC10();
+                sendVolumeCC7();
+                sendProgramAndBankChange();
             }
         }
         else
