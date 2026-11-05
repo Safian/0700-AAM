@@ -51,6 +51,7 @@
 
     // grid common
     #include "audio_components/gridview/kick_GridData.h"
+    #include "audio_components/step_sequencer/kick_NoteListWatcher.h"
 
     // grid view
     #include "audio_components/gridview/kick_Locate.h"
@@ -71,7 +72,6 @@
 
     // Step sequencer grid
     #include "audio_components/step_sequencer/kick_StepModel.h"
-    #include "audio_components/step_sequencer/kick_NoteListWatcher.h"
     #include "audio_components/step_sequencer/kick_StepSequencerDataType.h"
     #include "audio_components/step_sequencer/kick_StepSequencerControl.h"
     #include "audio_components/step_sequencer/kick_StepPresets.h"

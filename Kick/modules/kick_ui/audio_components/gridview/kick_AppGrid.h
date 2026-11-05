@@ -340,6 +340,7 @@ namespace kick_ui
         bool              parameterViewExpanded{ false };
         juce::Point<int>  bottomLeftNote;
         juce::ProgressBar progressBar{ ae.getPlayhead().normized };
+        NoteListWatcher   noteWatcher;
 
         void openPitchQuantizePopUp();
         void openHumanizePopUp();

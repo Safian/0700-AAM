@@ -2150,6 +2150,32 @@ public:
             m_key_target.set(pitch, sel); // F5: the note-off goes to the track that got the note-on
         }
         ae.addLiveMidiNote(sel, sounding_pitch, vel);
+
+        if (ae.isSequenceRecArmed() && !ae.isSequencePlaying()) {
+            juce::MessageManager::callAsync([sounding_pitch, vel]() {
+                auto& a = mt::getAudioInterface();
+                if (!a.isSequenceRecArmed() || a.isSequencePlaying()) return;
+                const auto s = a.getSelected();
+                int start = a.getSequenceSeekTick(s.sequence);
+                if (start < 0) start = 0;
+                int len = a.getTimingCorrectParams().gridTicks;
+                if (len <= 0) len = 96;
+                {
+                    a.getUndoManager().beginNewTransaction("Step record");
+                    a.addOrModifyNote(sounding_pitch, start, len, juce::jlimit(1, 127, vel));
+                }
+                mt::MTBarNBeats bnb;
+                bnb.bar = (unsigned int)juce::jmax(1, a.getSequenceLength(s.sequence));
+                bnb.beat = 0;
+                bnb.tick = 0;
+                int seqTicks = a.toTicks(s, bnb);
+                if (seqTicks <= 0)
+                    seqTicks = juce::jmax(1, a.getSequenceLength(s.sequence)) * 4 * 96;
+                int next = start + len;
+                if (seqTicks > 0) next %= seqTicks;
+                a.seekToTick(s.sequence, next);
+            });
+        }
     }
 
     void on_keybed_note_off(int pitch) override
