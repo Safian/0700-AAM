@@ -94,7 +94,8 @@ The easiest way to run Safian Kick on an Akai standalone instrument is via a sta
    - *(Optional)* Because the engine runs from memory/cached data, you can even unplug the drive after boot!
 
 📖 **For the full step-by-step documentation in Hungarian, read:**  
-👉 [**Akai MPC Key 61 Pendrive Telepítési és Használati Útmutató (PENDRIVE_INSTALL.md)**](docs/akai_mpc_hardware/PENDRIVE_INSTALL.md)
+👉 [**Akai MPC Key 61 Pendrive Telepítési és Használati Útmutató (PENDRIVE_INSTALL.md)**](docs/akai_mpc_hardware/PENDRIVE_INSTALL.md)  
+👉 [**Részletes Felhasználói és Fejlesztői Kézikönyv képernyőképekkel (USER_MANUAL.md)**](docs/manual/USER_MANUAL.md)
 
 ---
 
