@@ -99,6 +99,7 @@ namespace kick_ui
     KickHome::KickHome()
         : statusBar_( &AppStatusbar::Instance() )
     {
+        setOpaque( true );
         mt::getAudioInterface().addListener(this);
         undoWatcher_ = std::make_unique<UndoWatcher>();
         //mt::FocusDebugger::enableFocusDebugger( true );
@@ -384,6 +385,11 @@ namespace kick_ui
                 bounds.removeFromBottom( ui::layout::statusBar.getHeight() );
         }
         return bounds;
+    }
+
+    void KickHome::paint( juce::Graphics& g )
+    {
+        g.fillAll( ui::Theme::backgroundColour( 4 ) );
     }
 
     void KickHome::resized()

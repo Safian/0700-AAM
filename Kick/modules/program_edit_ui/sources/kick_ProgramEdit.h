@@ -137,6 +137,7 @@ namespace kick_ui
         void    openPlugin( int Index );
         bool    pluginMode_{ false };
 
+        void          paint( juce::Graphics& g ) override;
         void          resized() override;
         void          visibilityChanged() override;
         ui::KickLabel selectedPadLabel{ "" };
