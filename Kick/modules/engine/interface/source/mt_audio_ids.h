@@ -337,6 +337,13 @@ namespace mt
         DECLARE_ID( wifipasswd )
         DECLARE_ID( Project )
 
+        DECLARE_ID( CloudSources )
+        DECLARE_ID( enableSplice )
+        DECLARE_ID( enableGoogleDrive )
+        DECLARE_ID( enableWebDav )
+        DECLARE_ID( splicePath )
+        DECLARE_ID( googleDrivePath )
+
         DECLARE_ID( IsPreviewOn )
         DECLARE_ID( IsPreviewAuto )
 

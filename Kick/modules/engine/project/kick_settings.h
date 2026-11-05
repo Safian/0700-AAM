@@ -211,6 +211,22 @@ namespace mt
     };
 
     /// ///////////////////////////////////
+    ///    KickCloudSources
+    /// ///////////////////////////////////
+    struct KickCloudSources : public MTIVTBase
+    {
+        void setup( juce::ValueTree VT, juce::UndoManager* Undo );
+        void makeDefaults();
+        bool isValid();
+
+        Atomic<bool> enableSplice;
+        Atomic<bool> enableGoogleDrive;
+        Atomic<bool> enableWebDav;
+        AtomicString splicePath;
+        AtomicString googleDrivePath;
+    };
+
+    /// ///////////////////////////////////
     ///    KickPreview
     /// ///////////////////////////////////
     struct KickPreview
@@ -266,6 +282,7 @@ namespace mt
         KickCVClib           cvclib;
         KickMetronome        metronome;
         KickWifi             wifi;
+        KickCloudSources     cloudSources;
         KickPadColourDefaults padColours;
 
         // Runtime settings, not saved in XML

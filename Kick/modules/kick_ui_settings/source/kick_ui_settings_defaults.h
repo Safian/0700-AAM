@@ -30,6 +30,8 @@ namespace kick_ui
     public:
         SettingsPDefault();
 
+        std::function<void()> onConfigCloudPaths;
+
         // Virtual functions
         void refresh() override;
         void setupHeader( kick_ui::KickModeHeader& Hdr ) override;
@@ -50,5 +52,11 @@ namespace kick_ui
 
         ui::KickListBox enableList{ ui::KickListBox::BoxType::withoutTitleBar, "state", { "DISABLE", "TIME STAMP", "CUSTOM" } };
         ui::KickLabel   defaultName{ "" };
+
+        // Cloud & Storage Sources
+        ui::KickToggleButton toggleSplice{ "SPLICE", "ENABLED", "DISABLED" };
+        ui::KickToggleButton toggleGoogleDrive{ "GOOGLE DRIVE", "ENABLED", "DISABLED" };
+        ui::KickToggleButton toggleWebDav{ "WEBDAV / NAS", "ENABLED", "DISABLED" };
+        ui::KickButton       btnConfigCloud{ "Storage", "Config Paths" };
     };
 }

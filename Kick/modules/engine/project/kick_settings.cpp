@@ -53,6 +53,7 @@ namespace mt
             cvclib.setup( getState().getOrCreateChildWithName( IDs::PREFCVCLIB, nullptr ), nullptr );
             metronome.setup( getState().getOrCreateChildWithName( IDs::METRONOME, nullptr ), nullptr );
             wifi.setup( getState().getOrCreateChildWithName( IDs::WIFI, nullptr ), nullptr );
+            cloudSources.setup( getState().getOrCreateChildWithName( IDs::CloudSources, nullptr ), nullptr );
             padColours.setup( getState().getOrCreateChildWithName( IDs::PADCOLOURDEFAULTS, nullptr ), nullptr );
             knobControl.setup( getState().getOrCreateChildWithName( IDs::KNOBCONTROL, nullptr ), nullptr );
         };
@@ -88,6 +89,7 @@ namespace mt
         cv.makeDefaults();
         midiControl.makeDefaults();
         wifi.makeDefaults();
+        cloudSources.makeDefaults();
         browser.makeDefaults();
         cvclib.makeDefaults();
         metronome.makeDefaults();
@@ -453,6 +455,31 @@ namespace mt
     }
 
     bool KickWifi::isValid() { return vTree.hasType( IDs::WIFI ); }
+
+    /// ///////////////////////////////////
+    ///    KickCloudSources .
+    /// ///////////////////////////////////
+    void KickCloudSources::setup( juce::ValueTree VT, juce::UndoManager* Undo )
+    {
+        setupBase( VT, Undo );
+
+        enableSplice.attachTo( vTree, IDs::enableSplice, Undo, true );
+        enableGoogleDrive.attachTo( vTree, IDs::enableGoogleDrive, Undo, true );
+        enableWebDav.attachTo( vTree, IDs::enableWebDav, Undo, true );
+        splicePath.attachTo( vTree, IDs::splicePath, Undo, "" );
+        googleDrivePath.attachTo( vTree, IDs::googleDrivePath, Undo, "" );
+    }
+
+    void KickCloudSources::makeDefaults()
+    {
+        enableSplice = true;
+        enableGoogleDrive = true;
+        enableWebDav = true;
+        splicePath = "";
+        googleDrivePath = "";
+    }
+
+    bool KickCloudSources::isValid() { return vTree.hasType( IDs::CloudSources ); }
 
     /// ///////////////////////////////////
     ///    KickPreview .

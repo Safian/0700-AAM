@@ -59,7 +59,7 @@ namespace ui
                     if( t == std::string::npos ) break;
                     p = t + 1;
                 }
-                if( f.size() != 6 || ( f[0] != "webdav" && f[0] != "local" ) || !isValidSourceId( f[1] ) || f[3].empty() ) continue; // corrupt line: skipped
+                if( f.size() != 6 || ( f[0] != "webdav" && f[0] != "local" && f[0] != "splice" && f[0] != "gdrive" ) || !isValidSourceId( f[1] ) || f[3].empty() ) continue; // corrupt line: skipped
                 if( f[0] == "webdav" && !webdav::parseUrl( f[3] ).ok ) continue;
                 out.push_back( SourceConfig{ f[0], f[1], f[2].empty() ? f[1] : f[2], f[3], f[4], f[5] == "bearer" ? "bearer" : "basic" } );
             }

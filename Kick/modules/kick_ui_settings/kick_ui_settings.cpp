@@ -89,7 +89,12 @@ namespace kick_ui
 
         // Create views...
         pViews.emplace_back( std::make_unique<SettingsInfo>() );
-        pViews.emplace_back( std::make_unique<SettingsPDefault>() );
+        auto pDefaults = std::make_unique<SettingsPDefault>();
+        pDefaults->onConfigCloudPaths = [this]() {
+            if( onConfigCloudPaths )
+                onConfigCloudPaths();
+        };
+        pViews.emplace_back( std::move( pDefaults ) );
         pViews.emplace_back( std::make_unique<SettingsHardware>() );
         // pViews.emplace_back( new SettingsAudio );
         pViews.emplace_back( std::make_unique<SettingsMidiSync>() );

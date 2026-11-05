@@ -130,7 +130,7 @@ namespace ui
         }
         rebuildShortcuts();
         refreshSourceRows();
-        left.sourceButton.onClick = [this]() { editWebDavSource(); };
+        left.sourceButton.onClick = [this]() { addOrEditCloudSource(); };
         left.folderButton.onClick = [this]() { editLocalSource(); };
         left.places.onClick       = [this]() { setLeftTab( LeftTab::Places ); };
         left.content.onClick      = [this]() { setLeftTab( LeftTab::Content ); };
@@ -1968,10 +1968,91 @@ namespace ui
     void FileBrowser::refreshSourceRows()
     {
         sourcePlaces.clear();
+        auto& cs = mt::getSettings().cloudSources;
+        const bool spliceEnabled = cs.enableSplice.get();
+        const bool gdriveEnabled = cs.enableGoogleDrive.get();
+        const bool webdavEnabled = cs.enableWebDav.get();
+
+        // 1. Splice Place
+        if( spliceEnabled )
+        {
+            juce::File spliceDir;
+            if( cs.splicePath.get().isNotEmpty() )
+                spliceDir = juce::File( cs.splicePath.get() );
+            else
+            {
+                juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
+                juce::File music = juce::File::getSpecialLocation( juce::File::userMusicDirectory );
+                juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
+                if( home.getChildFile( "Splice" ).isDirectory() ) spliceDir = home.getChildFile( "Splice" );
+                else if( music.getChildFile( "Splice" ).isDirectory() ) spliceDir = music.getChildFile( "Splice" );
+                else if( docs.getChildFile( "Splice" ).isDirectory() ) spliceDir = docs.getChildFile( "Splice" );
+                else spliceDir = home.getChildFile( "Splice" );
+            }
+            if( spliceDir.exists() )
+            {
+                Place p;
+                p.kind       = Place::Kind::Library;
+                p.label      = "Splice";
+                p.icon       = "Icon_Library";
+                p.iconActive = "Icon_LibraryActive";
+                p.width      = 18.0f;
+                p.height     = 16.0f;
+                p.path       = spliceDir.getFullPathName();
+                sourcePlaces.push_back( p );
+            }
+        }
+
+        // 2. Google Drive Place
+        if( gdriveEnabled )
+        {
+            juce::File gdriveDir;
+            if( cs.googleDrivePath.get().isNotEmpty() )
+                gdriveDir = juce::File( cs.googleDrivePath.get() );
+            else
+            {
+                juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
+                juce::File cloudStorage = home.getChildFile( "Library/CloudStorage" );
+                if( cloudStorage.isDirectory() )
+                {
+                    for( auto iter : juce::RangedDirectoryIterator( cloudStorage, false, "*GoogleDrive*" ) )
+                    {
+                        if( iter.getFile().isDirectory() )
+                        {
+                            auto myDrive = iter.getFile().getChildFile( "My Drive" );
+                            gdriveDir = myDrive.isDirectory() ? myDrive : iter.getFile();
+                            break;
+                        }
+                    }
+                }
+                if( !gdriveDir.isDirectory() && home.getChildFile( "Google Drive" ).isDirectory() )
+                    gdriveDir = home.getChildFile( "Google Drive" );
+                else if( !gdriveDir.isDirectory() )
+                    gdriveDir = home.getChildFile( "Google Drive" );
+            }
+            if( gdriveDir.exists() )
+            {
+                Place p;
+                p.kind       = Place::Kind::Internal;
+                p.label      = "Google Drive";
+                p.icon       = "Icon_Internal";
+                p.iconActive = "Icon_InternalActive";
+                p.width      = 18.0f;
+                p.height     = 16.0f;
+                p.path       = gdriveDir.getFullPathName();
+                sourcePlaces.push_back( p );
+            }
+        }
+
+        // 3. WebDAV & configured hub sources
         if( hub )
         {
             for( auto& cfg : hub->allConfigs() )
             {
+                if( cfg.type == "webdav" && !webdavEnabled ) continue;
+                if( cfg.type == "splice" && !spliceEnabled ) continue;
+                if( cfg.type == "gdrive" && !gdriveEnabled ) continue;
+
                 Place p;
                 p.kind       = Place::Kind::Source;
                 p.label      = juce::String::fromUTF8( cfg.name.c_str() );
@@ -2206,6 +2287,107 @@ namespace ui
             } );
         };
         remoteDownloadId = hub->getQueue().enqueue( std::move( job ) );
+    }
+
+    void FileBrowser::addOrEditCloudSource()
+    {
+        const auto* selPlace = currentPlaceRow();
+        if( selPlace != nullptr )
+        {
+            if( selPlace->label == "Splice" ) { editSpliceSource(); return; }
+            if( selPlace->label == "Google Drive" ) { editGoogleDriveSource(); return; }
+            if( selPlace->kind == Place::Kind::Source && hub )
+            {
+                for( auto& c : hub->allConfigs() )
+                {
+                    if( c.id == selPlace->path.toStdString() )
+                    {
+                        if( c.type == "webdav" ) { editWebDavSource(); return; }
+                        if( c.type == "splice" ) { editSpliceSource(); return; }
+                        if( c.type == "gdrive" ) { editGoogleDriveSource(); return; }
+                    }
+                }
+            }
+        }
+
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+        project_actions::askText( "CLOUD SOURCE (1:Splice, 2:Google Drive, 3:WebDAV)", "1", [safeThis]( juce::String choice ) {
+            if( safeThis == nullptr ) return;
+            choice = choice.trim().toLowerCase();
+            if( choice == "1" || choice.contains( "splice" ) )
+                safeThis->editSpliceSource();
+            else if( choice == "2" || choice.contains( "drive" ) || choice.contains( "google" ) )
+                safeThis->editGoogleDriveSource();
+            else if( choice == "3" || choice.contains( "webdav" ) || choice.contains( "nas" ) )
+                safeThis->editWebDavSource();
+            else
+                safeThis->editSpliceSource();
+        } );
+    }
+
+    void FileBrowser::editSpliceSource()
+    {
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+        juce::String currentPath = mt::getSettings().cloudSources.splicePath.get();
+        if( currentPath.isEmpty() )
+        {
+            juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
+            juce::File music = juce::File::getSpecialLocation( juce::File::userMusicDirectory );
+            juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
+            if( home.getChildFile( "Splice" ).isDirectory() ) currentPath = home.getChildFile( "Splice" ).getFullPathName();
+            else if( music.getChildFile( "Splice" ).isDirectory() ) currentPath = music.getChildFile( "Splice" ).getFullPathName();
+            else if( docs.getChildFile( "Splice" ).isDirectory() ) currentPath = docs.getChildFile( "Splice" ).getFullPathName();
+            else currentPath = home.getChildFile( "Splice" ).getFullPathName();
+        }
+
+        project_actions::askText( "SPLICE FOLDER PATH (EMPTY = RESET)", currentPath, [safeThis]( juce::String path ) {
+            if( safeThis == nullptr ) return;
+            path = path.trim();
+            mt::getSettings().cloudSources.splicePath = path;
+            mt::getSettings().cloudSources.enableSplice = true;
+            if( path.isNotEmpty() )
+                juce::File( path ).createDirectory();
+            safeThis->refreshSourceRows();
+            safeThis->statusBar.setBoxInfo( "Splice source updated" );
+        } );
+    }
+
+    void FileBrowser::editGoogleDriveSource()
+    {
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+        juce::String currentPath = mt::getSettings().cloudSources.googleDrivePath.get();
+        if( currentPath.isEmpty() )
+        {
+            juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
+            juce::File cloudStorage = home.getChildFile( "Library/CloudStorage" );
+            if( cloudStorage.isDirectory() )
+            {
+                for( auto iter : juce::RangedDirectoryIterator( cloudStorage, false, "*GoogleDrive*" ) )
+                {
+                    if( iter.getFile().isDirectory() )
+                    {
+                        auto myDrive = iter.getFile().getChildFile( "My Drive" );
+                        currentPath = ( myDrive.isDirectory() ? myDrive : iter.getFile() ).getFullPathName();
+                        break;
+                    }
+                }
+            }
+            if( currentPath.isEmpty() && home.getChildFile( "Google Drive" ).isDirectory() )
+                currentPath = home.getChildFile( "Google Drive" ).getFullPathName();
+            else if( currentPath.isEmpty() )
+                currentPath = home.getChildFile( "Google Drive" ).getFullPathName();
+        }
+
+        project_actions::askText( "GOOGLE DRIVE FOLDER PATH (EMPTY = RESET)", currentPath, [safeThis]( juce::String path ) {
+            if( safeThis == nullptr ) return;
+            path = path.trim();
+            mt::getSettings().cloudSources.googleDrivePath = path;
+            mt::getSettings().cloudSources.enableGoogleDrive = true;
+            if( path.isNotEmpty() )
+                juce::File( path ).createDirectory();
+            safeThis->refreshSourceRows();
+            safeThis->statusBar.setBoxInfo( "Google Drive source updated" );
+        } );
     }
 
     // Add a WebDAV location, or (when a source row is selected) edit it; an empty URL removes the edited one.
