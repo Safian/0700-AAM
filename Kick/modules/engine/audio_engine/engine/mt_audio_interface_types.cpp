@@ -458,7 +458,7 @@ namespace mt
         jassert( V.hasType( IDs::PROGRAM ) );
         juce::ValueTree state = V;
 
-        midiPort.referTo( state, IDs::MIDIPort, UM, "" );
+        midiPort.referTo( state, IDs::MIDIPort, UM, "DIN" );
         programCh.referTo( state, IDs::ProgCH, UM, 0 );
         bankMsb.referTo( state, IDs::BankMSB, UM, 0 );
         bankLsb.referTo( state, IDs::BankLSB, UM, 0 );
@@ -531,7 +531,7 @@ namespace mt
         muteGroup.referTo( state, IDs::muteGroup, UM, MUTEGROUP::DEFAULT );
         length.referTo( state, IDs::length, UM, MIDI::MIN );
         level.referTo( state, IDs::level, UM, MIDI::LEVEL_DEFAULT );
-        midiPort.referTo( state, IDs::MIDIPort, UM, "" );
+        midiPort.referTo( state, IDs::MIDIPort, UM, "All" );
         midiChannel.referTo( state, IDs::midiCh, UM, MIDI_CH::DEFAULT );
         midiOutChannel.referTo( state, IDs::midiChOut, UM, MIDI_CH::DEFAULT );
         route.referTo( state, IDs::route, UM, "" );

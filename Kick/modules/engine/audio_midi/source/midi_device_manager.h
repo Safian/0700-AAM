@@ -62,6 +62,11 @@ namespace mt
         void sendToOutput( juce::MidiDeviceInfo device, const juce::MidiMessage& msg );
         void sendToOutput( const juce::String& Device, const juce::MidiMessage& Msg );
 
+        // Hardware (e.g. 5-pin DIN / rawmidi) MIDI Output handler
+        using HardwareMidiOutHandler = std::function<void( const juce::String& portName, const juce::MidiMessage& msg )>;
+        static void setHardwareMidiOutHandler( HardwareMidiOutHandler handler );
+        static const HardwareMidiOutHandler& getHardwareMidiOutHandler();
+
         /// MIDI device list updater...
         void refreshMIDIDeviceLists();
 

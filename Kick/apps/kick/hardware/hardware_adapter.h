@@ -158,6 +158,8 @@ public:
     virtual void on_aftertouch(int val) { on_channel_aftertouch(val); }
     // Polyphonic pad pressure after the initial hit (pad 0..15, value 0..127).
     virtual void on_pad_aftertouch(int /*pad_num*/, int /*val*/) {}
+    // External DIN MIDI message (5-pin DIN In on MPC Key 61, Port 2)
+    virtual void on_din_midi_message(int /*port*/, uint8_t /*status*/, uint8_t /*d0*/, uint8_t /*d1*/) {}
 
     // Musical performance inputs
     virtual void on_keybed_note_on(int pitch, int vel) = 0;
@@ -198,6 +200,8 @@ public:
     // Feeds raw MIDI bytes through the same parser + dispatch path as the hardware port 'port' (0..2), so byte level
     // tests need no hardware (kick_cmd "rawmidi"). Default: no-op.
     virtual void inject_bytes(int /*port*/, const uint8_t* /*data*/, size_t /*len*/) {}
+    // Sends raw MIDI bytes to a physical hardware port (port 2 = 5-pin DIN Out on MPC Key 61).
+    virtual void send_rawmidi_out(int /*port*/, const uint8_t* /*data*/, size_t /*len*/) {}
     virtual void stop() = 0;
 };
 
