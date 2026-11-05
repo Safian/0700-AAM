@@ -1,13 +1,8 @@
-# Akai MPC Key 61 – hardveres próbalista
+# Akai MPC Key 61 – hardveres próbalista (csak a még nem igazolt pontok)
 
-Ezt kell az eszközön végigpróbálni. A `safian/main` kódja natív Linux (x86) buildben lefordul, és 9 host-teszt (parser, pad-szín, bar-seek, pitch bend, live capture, key transpose, arpeggiator, timing correct, LED-map) átmegy, de **hardveren, ARMv7-en és hallgatással semmi nem lett kipróbálva**. Minden pont mellett: mit kell látni/hallani, és mi a gyanús.
+Az eszközön végigpróbálandó, **hardveren/hallgatással még nem igazolt** pontok (az igazolt: indulás, érintés, gombok és gombpárok, LED-protokoll `cc`, bank/MIX/MUTE/AUTOMATION LED-ek, két Shift LED, pad egyszeri trigger, strip bemenet, SOUNDS, megállított bar-seek injektálva; lásd [hw-behaviour.md](hw-behaviour.md), [led-colours.md](led-colours.md)). A nyitott tételek összefoglalója: [../../planning/todo-master.md](../../planning/todo-master.md). Ha valami elromlik, a motor-érintő munkák külön commitok (`git log --oneline -- Kick/modules/engine`), egyenként visszavonhatók.
 
 Jelölés: `[ ]` próbálandó · **!** kockázatos (motor-mag, vagy a hardver-viselkedést változtat).
-
-## 0. Indulás
-- [ ] Az app elindul, a 1280×800 kijelző forgatva helyes, az érintés pontos.
-- [ ] Nincs összeomlás 5 perc használat alatt; a `/data/kick.log` nem tele hibával.
-- [ ] Gomb-LED-ek induláskor: minden ki, az aktuális képernyő mód-LED-je világít.
 
 ## 1. Pad és billentyűzet (alap)
 - [ ] 16 pad: mindegyik a saját helyén szól/villan (Pad Mixer, Grid, Pad Perform); nincs duplázódás (**T3**: a híd nem indít külön hangot).
@@ -50,11 +45,7 @@ Minden gomb: lenyomás → várt funkció; felengedés → **nem ragad be** (T6b
 - [ ] Mód-LED-ek követik a képernyőt (GRID, MIX full/A és Pad Mixer B-szín, MUTE, EDIT, SAMPLE EDIT, KEYBOARD CONTROL, MAIN, SOUNDS, MENU, QLINK, TOUCH FX).
 - [ ] SHIFT (bal), ARP, LATCH, TC LED a gombnyomásra frissül; track-váltásra elavulhat.
 
-## 5. Kijelző, érintés, popupok
-- [ ] Popup/dropdown/modális ablakok megjelennek és érinthetők.
-- [ ] Multitouch (2 ujj).
-
-## 5b. Érintő-zongora (Menü → Keyboard, `MenuPiano`) — W3-A, hardveren még NEM mért
+## 5b. Érintő-zongora (Menü → Keyboard, `MenuPiano`) — W3-A (három egyidejű ujj injektálva igazolt; a többi nem mért)
 Injektálás a `/data/kick_cmd` FIFO-n (fb-tér 1280x800): `touch_down <slot> X Y`, `touch_move <slot> X Y`, `touch_up <slot>` (slot 0..9); a slot nélküli alakok slot 0. `snapshot /data/x.ppm` a képhez, `/data/kick.log` az eseményekhez.
 - [ ] **Két ujj, két hang:** `touch_down 0 X1 Y`, `touch_down 1 X2 Y` két külön billentyűre → a logban két `[TOUCH] manual mouseDown`, két note-on; `touch_up 0` csak az elsőt engedi el. (Azonos billentyűre két ujj: egy note-on, note-off az utolsó ujjnál.)
 - [ ] **Glissando:** `touch_down 0 X Y`, majd `touch_move 0` több billentyűn át, `touch_up 0` → Glide módban minden váltásnál off-majd-on, a végén egyetlen off; Legato módban on-majd-off (átfedés); sehol nem marad beragadt hang (a motor-meter és a hang elhallgat).
@@ -70,24 +61,6 @@ Injektálás a `/data/kick_cmd` FIFO-n (fb-tér 1280x800): `touch_down <slot> X 
 - [ ] Audio bemenet (INPUT 1/2, +48V): a Looper/Sampler látja-e (a teljes app a JUCE audioeszközt használja, nem az adaptert).
 
 - [ ] **MIDI program PAN → CC10** (`def27ac2`): egy MIDI programnál a mixer PAN-gombja CC10-et küld a külső portra (bal szélső 0, közép 64, jobb szélső 127; azonos értéknél nem ismétel); **projekt betöltésekor ne menjen ki felesleges CC10**.
-
-## 7. Próbák, amik döntést hoznak (nem hibakeresés)
-**Egyszerűen:** az app futása közben `echo probe > /data/kick_cmd`, majd küldd el a `/data/kick_probe.txt` tartalmát (csak olvasó rendszerjelentés). Kézzel, ha kell (root):
-```
-cat /proc/asound/cards; cat /proc/asound/pcm; arecord -l; aplay -l
-arecord -D plughw:1,0 --dump-hw-params -d 1 /dev/null
-arecord -D plughw:1,0 -f S32_LE -c 2 -r 44100 -d 5 /tmp/in.wav
-amixer -c 1 scontrols; amixer -c 1 contents; cat /etc/asound.conf
-i2cdetect -l; ls -l /dev/i2c-*
-ls /sys/bus/i2c/devices; cat /sys/bus/i2c/devices/*/name
-dmesg | grep -i -E "i2c|dac|gpio|acvm|i2s"
-```
-- **Init SysEx Port 0-ra (T5):** indítsd az appot `KICK_AKAI_PORT0=0` környezeti változóval (kikapcsolja a Port 0-ra írást: init SysEx és pad RGB); ha a billentyű/pad-duplázódás nem jön vissza és minden működik, a Port 0 írás törölhető.
-- **CV/Gate (T19):** ha nincs `/dev/i2c-*`, a CV valószínűleg az STM32-n megy (SysEx/USB-MIDI) – **ne írjunk vakon I2C eszközre**.
-
-## Ha valami elromlik – visszavonás
-A motor-érintő munkák külön commitként vannak, egyenként visszavonhatók (`git revert <commit>`; a mellettük levő merge-commit nem kell):
-`904aaf52` + `3e981bf3` + `daf8bd22` (bar seek, a namespace-javítása és a tick-seek/event-seek, **együtt**), `ecfeb260` (pitch bend/sustain), `9fd98db4` (RECALL), `03db3663` (arpeggiator), `d1cd2421` (timing correct), `990fdf44` (automation), `490256b6` (touch strip módok; a T5 kapcsoló és a probe ártalmatlan). Visszavonás előtt futtasd újra a natív buildet (`ninja -C build-linux Kick`).
 
 ## Sequencer screens (Step Sequencer, List Edit, Next Sequence, Song, Color Edit) - added after the S-C code round
 
@@ -184,4 +157,4 @@ R11-6. XY FX cell labels: the bottom row and the left column show the value at t
 R11-7. Q-Link Edit, Screen mode: open it from the Grid, XY, Looper, Sampler, Pad Mixer, Track Mute, Pad Mute, Pad Perform, List Edit, Next Sequence, Song screens (via Shift+Q-LINK): the right side names the four Q-Links of the screen you came from; turn each Q-Link on that screen and confirm the named role. On a screen that is not listed it says so. Q-Link 1..4 and the Q-LINK row button as in the earlier list (checklist 41).
 R11-8. MIDI Control: start Kick with a MIDI controller plugged in and a learned row, do NOT open MIDI Control: the row works. Plug a second controller in while Kick runs: within 3 s its learned rows work; unplug: no log errors. Two rows learned on the same CC both react. Delete / Clear of a row shows the status bar UNDO; the output port setting survives a restart.
 R11-9. MIDI Control TSAN run (MC-28): Kick built with `-fsanitize=thread` on the Mac (`cmake -DCMAKE_CXX_FLAGS="-fsanitize=thread -DKICK_APP_SMOKE_TEST=1"`), a hardware or virtual MIDI source (IAC bus, `sendmidi` / `midi-monkey`) sending 1000 CC / s on a learned row for 60 s with the MIDI Control screen open and the table being edited: no TSAN report.
-R11-10. Looper: Export from a 4 bar loop (record a few seconds only): the file is exactly 4 bars long (the bar count of the screen), a 2 bar loop exports 2 bars; the Looper screen shows the sequence's time signature on its scale (try 3/4 and 7/8). The items of the looper plan section 6 (INPUT meter, REC / OVERDUB audibility, SYNC phase, 16 bar loop at 60 BPM, leaving the screen) and the v3.10 parity table in `docs/planning/plans/screens/looper.md` section 9.
+R11-10. Looper: Export from a 4 bar loop (record a few seconds only): the file is exactly 4 bars long (the bar count of the screen), a 2 bar loop exports 2 bars; the Looper screen shows the sequence's time signature on its scale (try 3/4 and 7/8). Also: INPUT meter, REC / OVERDUB audibility, SYNC phase, 16 bar loop at 60 BPM, leaving the screen; the v3.10 Looper parity table is in `docs/planning/screen-backlog.md` (Looper).
