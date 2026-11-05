@@ -108,6 +108,9 @@ void ClapInstrumentProcessor::unloadPlugin() noexcept {
 void ClapInstrumentProcessor::bindMacroParameters() noexcept {
     macroParamIds_.fill(CLAP_INVALID_ID);
     cachedParamCount_.store(0, std::memory_order_release);
+    for (size_t i = 0; i < kNumMacros; ++i) {
+        macroNames_[i].clear();
+    }
 
     paramsExt_ = static_cast<const clap_plugin_params_t*>(
         plugin_->get_extension(plugin_, CLAP_EXT_PARAMS));
@@ -121,14 +124,24 @@ void ClapInstrumentProcessor::bindMacroParameters() noexcept {
         clap_param_info_t info{};
         if (paramsExt_->get_info(plugin_, i, &info)) {
             cachedParamDescriptors_[validCount] = info;
-            if (validCount < kNumMacros) {
+            if (!hasActiveMap_ && validCount < kNumMacros) {
                 macroParamIds_[validCount] = info.id;
+                macroNames_[validCount] = info.name;
             }
             ++validCount;
         }
     }
 
     cachedParamCount_.store(validCount, std::memory_order_release);
+
+    if (hasActiveMap_) {
+        for (const auto& binding : activeMap_.macros) {
+            if (binding.macroIndex < kNumMacros) {
+                macroParamIds_[binding.macroIndex] = binding.paramId;
+                macroNames_[binding.macroIndex] = binding.name;
+            }
+        }
+    }
 }
 
 double ClapInstrumentProcessor::denormalizeParamValue(clap_id paramId, float normalized) const noexcept {
@@ -153,6 +166,37 @@ double ClapInstrumentProcessor::scaleParamModAmount(clap_id paramId, float norma
         }
     }
     return static_cast<double>(clamped);
+}
+
+bool ClapInstrumentProcessor::applyMancerMap(const MancerMap& map) noexcept {
+    activeMap_ = map;
+    hasActiveMap_ = true;
+
+    for (size_t i = 0; i < kNumMacros; ++i) {
+        macroNames_[i].clear();
+    }
+
+    for (const auto& binding : map.macros) {
+        if (binding.macroIndex < kNumMacros) {
+            macroParamIds_[binding.macroIndex] = binding.paramId;
+            macroNames_[binding.macroIndex] = binding.name;
+        }
+    }
+    return true;
+}
+
+bool ClapInstrumentProcessor::loadMancerMapFromFile(const char* jsonFilePath) noexcept {
+    if (!jsonFilePath) return false;
+    MancerMap map;
+    if (MancerMap::loadFromFile(jsonFilePath, map)) {
+        return applyMancerMap(map);
+    }
+    return false;
+}
+
+const char* ClapInstrumentProcessor::getMacroName(uint8_t index) const noexcept {
+    if (index >= kNumMacros) return "";
+    return macroNames_[index].c_str();
 }
 
 uint32_t ClapInstrumentProcessor::clapInputEventsSize(const struct clap_input_events* list) noexcept {
