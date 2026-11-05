@@ -30,3 +30,13 @@ The owner must not be sent hopping around the device. Debug the way the 2026-11-
 - Known traps of the X-less MPC: the top-level window is hidden (no `isShowing()`, no JUCE keyboard focus); touches are delivered by
   the bridge straight to `mouseDown/mouseDrag/mouseUp` (not through JUCE's dispatcher, so MouseListeners do not run); a double tap
   needs two taps within 450 ms; popups are separate windows that the snapshot and the injected touch may not reach.
+
+# Mobile and desktop (non-hardware) builds
+
+## Mobile App (iOS / iPadOS)
+- **Architecture**: Full-screen scaled Kick DAW UI (1024x600 layout scaled to screen aspect ratio).
+- **Control Model**: External MIDI controller connectivity (CoreMIDI, USB MIDI / Bluetooth MIDI). Full operational control is handled via connected external MIDI devices.
+- **UI Policy**: No hardware-mimicking chassis, simulated front panel, or slide-out/peeking drawer. The mobile port is a pure full-screen mobile app identical to the standalone DAW engine on Akai, designed for tactile control through external MIDI hardware (owner decision 2026-11-04).
+
+## Desktop (macOS)
+- Native document window presenting the Kick DAW interface directly at 1024x600 without hardware chassis simulation.
