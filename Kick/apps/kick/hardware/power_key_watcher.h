@@ -120,9 +120,25 @@ namespace kick_input
                     if( !( pfds[i].revents & POLLIN ) ) continue;
                     const ssize_t n = ::read( pfds[i].fd, buf, sizeof( buf ) );
                     if( n <= 0 ) continue; // EAGAIN
+                    // Every key event of the watched device (a button press is a handful of events): when "Power button does
+                    // nothing" is reported, this shows whether the kernel delivered anything at all and with which code.
+                    for( size_t off = 0; off + kEventSize <= (size_t)n; off += kEventSize )
+                    {
+                        const unsigned char* ev = buf + off + kEventSize - 8;
+                        uint16_t             type, code;
+                        int32_t              value;
+                        std::memcpy( &type, ev, 2 );
+                        std::memcpy( &code, ev + 2, 2 );
+                        std::memcpy( &value, ev + 4, 4 );
+                        if( type == kEvKey ) kick_log( "info", "[INFO] [POWERKEY] key event on device %zu: code=%u value=%d%s\n", i, (unsigned)code, (int)value, code == kKeyPower ? " (KEY_POWER)" : "" );
+                    }
                     if( countPowerPresses( buf, (size_t)n ) <= 0 ) continue;
                     const auto now = clock::now();
-                    if( haveLast && now - last < std::chrono::milliseconds( debounceMs ) ) continue;
+                    if( haveLast && now - last < std::chrono::milliseconds( debounceMs ) )
+                    {
+                        kick_log( "info", "[INFO] [POWERKEY] KEY_POWER press ignored (within %d ms of the previous one)\n", debounceMs );
+                        continue;
+                    }
                     last     = now;
                     haveLast = true;
                     kick_log( "info", "[INFO] [POWERKEY] KEY_POWER pressed\n" );

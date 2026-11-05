@@ -1,0 +1,15 @@
+# kick-armv7-builder: arm64 Debian 12 (bookworm; GCC 12.2, cmake 3.25, glibc 2.36 = the MPC's runtime) cross-compiling to ARMv7 hard-float.
+# Rebuild it when the image is gone:  docker build -t kick-armv7-builder -f Dockerfile.armv7-builder .
+# Host (arm64) -dev packages are for juceaide, which JUCE builds for the host during the cross configure.
+FROM debian:bookworm
+ENV DEBIAN_FRONTEND=noninteractive
+RUN dpkg --add-architecture armhf && apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake make pkg-config git ca-certificates curl binutils gdb-multiarch \
+    gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
+    libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev \
+    libxi-dev libxss-dev libxcomposite-dev libgl-dev libcurl4-openssl-dev libjack-jackd2-dev \
+    libasound2-dev:armhf libfreetype-dev:armhf libfontconfig1-dev:armhf libx11-dev:armhf libxext-dev:armhf libxinerama-dev:armhf \
+    libxrandr-dev:armhf libxcursor-dev:armhf libxi-dev:armhf libxss-dev:armhf libxcomposite-dev:armhf libgl-dev:armhf \
+    libcurl4-openssl-dev:armhf libjack-jackd2-dev:armhf \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace

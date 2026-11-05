@@ -172,7 +172,7 @@ namespace mt
         // close it (Apply = UI::APPLY, else UI::CANCEL). False when none is open or a popup sits on top of it.
         bool isDialogOpen();
         bool topDialogHasApply();
-        bool closeTopDialogFromHardware( bool apply );
+        bool closeTopDialogFromHardware( bool apply, const char* reason = "hardware key" );
         // A picture of the topmost open dialog (a popup window is not part of the screen snapshot); empty when none is open.
         // Smoke test / screenshots.
         juce::Image snapshotTopDialog();

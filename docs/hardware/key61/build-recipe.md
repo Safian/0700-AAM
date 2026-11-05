@@ -2,6 +2,9 @@
 
 A korábbi recept sehol nem volt rögzítve; ez a 2026-11-01-i hardveres próbánál ténylegesen használt, működő recept. A `kick-armv7-builder` image arm64 Debian (g++-arm-linux-gnueabihf, `:armhf` könyvtárak, gdb-multiarch, readelf).
 
+## 0. A `kick-armv7-builder` image
+Ha az image hiányzik (`docker images | grep kick-armv7`; a Docker VM újraépítése/takarítása törli): `docker build -t kick-armv7-builder -f docs/hardware/key61/tools/Dockerfile.armv7-builder docs/hardware/key61/tools` (Debian 12 bookworm arm64, GCC 12.2, cmake 3.25; kb. 1-2 perc). Inkrementális buildhez másold át egy korábbi `build-arm-cpm/`-et az új worktree-be (a konténerben az út mindig `/workspace`), és a **git által változtatott fájlokat `touch`-old meg** az átmásolt build készítési commitja óta (`git diff --name-only <commit> HEAD | xargs touch`), különben a régi objektum marad meg (2026-11-05: `undefined reference to mt::HwPref::setTimeZone` linkelési hiba).
+
 ## 1. Toolchain-fájl (`armv7.cmake`)
 ```cmake
 set(CMAKE_SYSTEM_NAME Linux)

@@ -29,7 +29,8 @@ The owner must not be sent hopping around the device. Debug the way the 2026-11-
   Docker build at a time (`-j2`). A deploy restarts Kick and drops the unsaved in-memory project: say so before you do it.
 - Known traps of the X-less MPC: the top-level window is hidden (no `isShowing()`, no JUCE keyboard focus); touches are delivered by
   the bridge straight to `mouseDown/mouseDrag/mouseUp` (not through JUCE's dispatcher, so MouseListeners do not run); a double tap
-  needs two taps within 450 ms; popups are separate windows that the snapshot and the injected touch may not reach.
+  needs two taps within 450 ms; modal dialogs (`fsPopup`) are children of the main window; since 2026-11-05 the hit test and `screenToLocal()` convert from the window (UI space), not through the hidden window's peer.
+- Log lines for debugging a screen that does not react (default categories): `[MODAL] open/close '<name>' ... by=<X button|Cancel button|Apply button|outside tap|hardware key MAIN|content button>`, `[POWER] Power window requested by <power key|Menu tile>`, `[POWERKEY] key event ...` (every key event of the power button device), `[BACKLIGHT] <n>% from <preferences|slider|...>`, `[WARN] [TOUCH] swallowed by modal ...` (a touch went behind an open modal; once a second), `[WARN] [TOUCH] the window's peer disagrees with the window ...` / `no component at ...`. `touch` (every touch) is off by default: `echo "log info,warn,error,touch" > /data/kick_cmd`.
 
 # Mobile and desktop (non-hardware) builds
 
