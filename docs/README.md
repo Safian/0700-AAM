@@ -22,9 +22,7 @@ All documentation lives under `docs/`. Paths below are relative to `docs/`. Dele
 - `plans/assets/piano-ui/` – UI mock-up for the piano plugin (its colours are already used by the on-screen keyboard).
 
 ## upstream/ – upstream and fork work
-- `upstream-triage.md` – triage of the fork commits into upstream PRs and fork-only tickets (outdated, needs a re-split; its file lists are verified against git history, so the old paths inside it are historical and intentionally not rewritten).
 - `fork-push-advice.md` – push and upstream rules.
-- `tools/check_upstream_triage.py` – verifies `upstream-triage.md` against git.
 
 ## Other
 - `manual/` – user and developer manual (`USER_MANUAL.md`, with sidebars). `images/` – screenshots used by the docs and the root `README.md`.
@@ -40,4 +38,4 @@ All documentation lives under `docs/`. Paths below are relative to `docs/`. Dele
 | `AKAI_MPC_KEY61_BUILD_RECIPE.md`, `..._HW_TEST_CHECKLIST.md` | `hardware/key61/build-recipe.md`, `hardware/key61/hw-test-checklist.md` |
 | `TODO_MASTER.md` | `planning/todo-master.md` |
 | `plans/**` | `planning/plans/**` |
-| `UPSTREAM_TRIAGE.md`, `FORK_PUSH_ADVICE.md`, `tools/check_upstream_triage.py` | `upstream/upstream-triage.md`, `upstream/fork-push-advice.md`, `upstream/tools/check_upstream_triage.py` |
+| `FORK_PUSH_ADVICE.md` | `upstream/fork-push-advice.md` |
