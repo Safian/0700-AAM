@@ -63,7 +63,7 @@ inline int akaiLedNote(HardwareLed led, bool& twoColour)
         case HW_LED_METRONOME:        return 112;
         case HW_LED_TAP_TEMPO:        return 53;
         case HW_LED_QLINK:            return 0;
-        // Octave indicator row: Control Change 0x5F..0x65 = -3..+3 (MEASURED on the stock MPC app, KEY61_HW_BEHAVIOUR.md)
+        // Octave indicator row: Control Change 0x5F..0x65 = -3..+3 (MEASURED on the stock MPC app, hw-behaviour.md)
         case HW_LED_OCTAVE_M3:        return 0x5F;
         case HW_LED_OCTAVE_M2:        return 0x60;
         case HW_LED_OCTAVE_M1:        return 0x61;
@@ -92,7 +92,7 @@ inline uint8_t akaiLedValue(bool twoColour, int level)
 }
 
 // Status byte of a button LED write: Control Change 0xB0 <note> <byte> on channel 0 (Port 1). Verified on the
-// MPC Key 61 with a camera (docs/akai_mpc_hardware/KEY61_LED_COLOURS.md); Note On/Off does not switch the LEDs.
+// MPC Key 61 with a camera (docs/hardware/key61/led-colours.md); Note On/Off does not switch the LEDs.
 constexpr uint8_t kAkaiLedStatus = 0xB0;
 
 // The 3 bytes of one LED write (channel 0). 'byte' comes from akaiLedValue().
@@ -148,7 +148,7 @@ inline int bankLedLevel(int bank, int ledIndex)
 }
 
 // REC / OVERDUB button LEDs from the looper state (the only consumer of EN_RECORD / EN_OVERDUB is the looper).
-// Colour A (3) = green, colour B (4) = red is proven for AUTOMATION (Read green, Write red, KEY61_LED_COLOURS.md);
+// Colour A (3) = green, colour B (4) = red is proven for AUTOMATION (Read green, Write red, led-colours.md);
 // that REC / OVERDUB use the same A/B colours is NOT verified (the camera could not tell, section 2). Dummy choice:
 //   recording (not overdubbing): REC blinks red (colour B), OVERDUB dark;
 //   recording and overdubbing: OVERDUB steady colour A, REC dark;

@@ -2,7 +2,7 @@
 // Power button watcher: a thread reads the power button's /dev/input/eventN (struct input_event, EV_KEY, KEY_POWER, value 1 =
 // press) and calls `onPress` on that thread; the caller hands it to the message thread. JUCE-free, POSIX only, host-tested with
 // pipes: PowerKeyTests.cpp. The device is only read (no EVIOCGRAB): logind still sees the key, which is why the bootstrap starts
-// Kick under `systemd-inhibit --what=handle-power-key` (docs/akai_mpc_hardware/tools/tkgl_bootstrap), else the system would
+// Kick under `systemd-inhibit --what=handle-power-key` (docs/hardware/key61/tools/tkgl_bootstrap), else the system would
 // handle the same press (poweroff) as well.
 //
 // If no device is found or none can be opened, an error is logged and the watcher is simply inactive: the Menu "Power" tile

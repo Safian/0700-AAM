@@ -80,4 +80,4 @@ Worker template: `.claude/agents/kick-worker.md`.
 
 ## Akai MPC Key 61 (hardware)
 Hardware, ARM build/deploy and on-device debugging rules live in `Kick/apps/kick/AGENTS.md` (loaded when you work there).
-Push only to the `fork` remote (`HEAD:safian/main`), never `origin`. Documentation index: `docs/README.md`.
+Push only to the `fork` remote (`HEAD:safian/main`), never `origin`. Documentation index: `docs/README.md`. All documentation (reviews, reports, plans) goes under `docs/` only; never create `documents/` or other doc folders.

@@ -1,0 +1,6 @@
+# Fork-feltöltés és upstream-munka: szabályok
+
+- Push csak a `fork` remote-ra (`HEAD:safian/main`), soha `origin`-re (`AGENTS.md`). A `safian/main`-re több munkamenet pusholhat egyszerre: push előtt `git fetch fork`, `git rev-list --left-right --count HEAD...fork/safian/main`, a saját commit `git rebase fork/safian/main`-nel kerüljön rá, **force push soha**.
+- Fájlokat névvel `git add`-old (`git add -A` nem); a commit üzenet tartalmazza a lefutott kapukat és azt is, mi nem lett ellenőrizve.
+- Upstream PR: egy PR = egy önálló változás, tiszta `origin/main`-ből ágazva; a Linux/gyári hardver viselkedése nem változhat (`#if JUCE_IOS` / `JUCE_MAC`). A nyitott upstream PR-ok listája: `gh pr list`. A "nem upstreamelhető" körbe tartozik a Proper skin (877 fájl, saját név és logó) és a Behringer/KICK nevek.
+- Kapuk minden csomaghoz: host-teszt a `Kick/tests/platform`-ban (`g++ -std=c++17 -Wall -Wextra -fsanitize=address,undefined`); Mac `ninja -C build Kick` + `--smoke-test`; projektváltás-összeomlásnál ASAN-os Mac-build (`KICK_SMOKE_SWITCH="a.kickPrj,b.kickPrj"`); MPC: ARM-build Dockerben (`-j2`), telepítés `deploy_mpc.sh`-val, összeomlásnál `/data/kick.crash` + `arm-linux-gnueabihf-addr2line`. Hang, LED, fizikai gomb: ember kell, egyszer, pontos lépésekkel kérd.
