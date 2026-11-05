@@ -32,9 +32,11 @@ namespace kick_ui
     {
     public:
         MidiMonitor();
+        ~MidiMonitor() override;
 
         void addMidiMessage( juce::MidiMessage& Msg, juce::String& Port );
         void addMidiInMessage( const juce::MidiMessage& Msg, const juce::String& Port ); // what the MIDI Learn input received
+        static void logTraffic( const juce::MidiMessage& msg, const juce::String& port, bool isInput );
         void refresh()
         {
             tableView.refresh();

@@ -682,6 +682,23 @@ private:
                 if (effectiveTarget) {
                     auto downLocalPt = screenToLocal(effectiveTarget, ix, iy).toFloat();
                     const bool wasDragged = slot >= 0 && slot < 10 && m_touch_dragging[slot];
+
+                    auto* btn = dynamic_cast<juce::Button*>(effectiveTarget);
+                    if (!btn && effectiveTarget) btn = effectiveTarget->findParentComponentOfClass<juce::Button>();
+
+                    // Button tap tolerance for touchscreens:
+                    // If the gesture was a tap on a button (not dragged), ensure downLocalPt stays inside the button
+                    // if released within expanded margin (up to 32px) around it. Otherwise, normal finger wobble
+                    // (which typically drifts 5-15px on release) places the up-point outside the button, causing
+                    // JUCE's Button::mouseUp to set isOver=false and discard the click!
+                    if (btn != nullptr && !wasDragged) {
+                        const auto b = effectiveTarget->getLocalBounds();
+                        if (b.expanded(32, 32).contains(downLocalPt.toInt())) {
+                            downLocalPt.x = juce::jlimit(0.0f, juce::jmax(0.0f, (float)b.getWidth() - 1.0f), downLocalPt.x);
+                            downLocalPt.y = juce::jlimit(0.0f, juce::jmax(0.0f, (float)b.getHeight() - 1.0f), downLocalPt.y);
+                        }
+                    }
+
                     juce::MouseEvent downE(mouseSrc,
                                            downLocalPt, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                            effectiveTarget, effectiveTarget,
@@ -720,8 +737,10 @@ private:
                 // A widget that tracks the finger itself (the piano keyboard: glissando, bend) is fed every move: it sets the
                 // component property "kickTouchNoSlop" and applies its own dead zone.
                 const bool noSlop = downTarget != nullptr && downTarget->getProperties().getWithDefault("kickTouchNoSlop", false);
+                const bool isButton = downTarget != nullptr && (dynamic_cast<juce::Button*>(downTarget) != nullptr || downTarget->findParentComponentOfClass<juce::Button>() != nullptr);
+                const int slopPx = isButton ? 24 : 8;
                 if (inSlot && !m_touch_dragging[slot]
-                    && (noSlop || kick_hw::probe::exceedsTouchSlop(m_touch_down_x[slot], m_touch_down_y[slot], ix, iy)))
+                    && (noSlop || kick_hw::probe::exceedsTouchSlop(m_touch_down_x[slot], m_touch_down_y[slot], ix, iy, slopPx)))
                     m_touch_dragging[slot] = true;
                 if (inSlot && !m_touch_dragging[slot]) {
                     // finger still within the tap slop: nothing to deliver
@@ -934,6 +953,7 @@ public:
                 } else {
                     initButtonLeds();
                     mt::MTMidiDeviceManager::setHardwareMidiOutHandler([this](const juce::String& portName, const juce::MidiMessage& msg) {
+                        kick_ui::MidiMonitor::logTraffic(msg, portName, false);
                         if (portName.equalsIgnoreCase("DIN") || portName.containsIgnoreCase("DIN") || portName.containsIgnoreCase("MIDI Out"))
                         {
                             if (m_hw && m_hw->control_surface())
@@ -2149,6 +2169,7 @@ public:
         auto& ae = mt::getAudioInterface();
         const auto sel = ae.getSelected();
         ae.addLiveMidiMsg(sel, msg);
+        kick_ui::MidiMonitor::logTraffic(msg, "DIN IN", true);
 
         if (msg.isNoteOn() && ae.isSequenceRecArmed() && !ae.isSequencePlaying())
         {

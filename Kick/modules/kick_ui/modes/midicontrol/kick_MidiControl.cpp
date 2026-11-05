@@ -24,20 +24,33 @@ namespace kick_ui
         hardware.toFront( true );
         xy.toFront( true );
         midiLearn.toFront( true );
+        monitor.toFront( true );
 
         hardware.onClick = [&]() {
             mt::utils::makeVisible( hardWareTab, output, outPutLabel );
             mt::utils::makeHidden( xyMidiTab, midiLearnTab, enableMapping );
+            hardware.toFront( true );
+            xy.toFront( true );
+            midiLearn.toFront( true );
+            monitor.toFront( true );
         };
 
         xy.onClick = [&]() {
             mt::utils::makeVisible( xyMidiTab );
             mt::utils::makeHidden( hardWareTab, midiLearnTab, enableMapping, output, outPutLabel );
+            hardware.toFront( true );
+            xy.toFront( true );
+            midiLearn.toFront( true );
+            monitor.toFront( true );
         };
 
         midiLearn.onClick = [&]() {
             mt::utils::makeVisible( midiLearnTab, enableMapping );
             mt::utils::makeHidden( xyMidiTab, hardWareTab, output, outPutLabel );
+            hardware.toFront( true );
+            xy.toFront( true );
+            midiLearn.toFront( true );
+            monitor.toFront( true );
         };
 
         monitor.onClick = [&]() {
@@ -104,9 +117,9 @@ namespace kick_ui
         midiLearn.setBoundsRelative( 0.347f, 0.917f, 0.1650f, 0.063f );
         hardware.setBoundsRelative( 0.0097f, 0.917f, 0.1650f, 0.063f );
         xy.setBoundsRelative( 0.178f, 0.917f, 0.1650f, 0.063f );
-        hardWareTab.setBoundsRelative( 0.0f, 0.1399f, 1.0f, 1.0f );
-        xyMidiTab.setBoundsRelative( 0.0f, 0.1399f, 1.0f, 1.0f );
-        midiLearnTab.setBoundsRelative( 0.0f, 0.1399f, 1.0f, 1.0f );
+        hardWareTab.setBoundsRelative( 0.0f, 0.1399f, 1.0f, 0.77f );
+        xyMidiTab.setBoundsRelative( 0.0f, 0.1399f, 1.0f, 0.77f );
+        midiLearnTab.setBoundsRelative( 0.0f, 0.1399f, 1.0f, 0.77f );
         enableMapping.setBoundsRelative( 0.7207f, 0.0333f, 0.1220f, 0.05666f );
     }
 
@@ -216,8 +229,11 @@ namespace kick_ui
     ///////             MIDI MONITOR                                ///////////
     ///////////////////////////////////////////////////////////////////////////
 
+    static MidiMonitor* s_activeMonitor = nullptr;
+
     MidiMonitor::MidiMonitor()
     {
+        s_activeMonitor = this;
         mt::utils::addAndMakeVisible( this, in, out, clear, close, tableView );
         mt::utils::addChildComponents( this, tableView );
         mt::utils::setRadioGroupID( 410, in, out );
@@ -278,12 +294,39 @@ namespace kick_ui
             refresh();
         };
 
-        close.onClick = [&]() {
-            if( auto dw = getCurrentlyModalComponent() )
-                dw->exitModalState( 0 );
+        close.onClick = [this]() {
+            mt::utils::exitDialog( this, UI::CANCEL );
         };
 
         in.triggerClick();
+    }
+
+    MidiMonitor::~MidiMonitor()
+    {
+        if( s_activeMonitor == this )
+            s_activeMonitor = nullptr;
+    }
+
+    void MidiMonitor::logTraffic( const juce::MidiMessage& msg, const juce::String& port, bool isInput )
+    {
+        if( s_activeMonitor != nullptr )
+        {
+            juce::MessageManager::callAsync( [msg, port, isInput]() {
+                if( s_activeMonitor != nullptr )
+                {
+                    if( isInput )
+                    {
+                        s_activeMonitor->addMidiInMessage( msg, port );
+                    }
+                    else
+                    {
+                        auto m = msg;
+                        auto p = port;
+                        s_activeMonitor->addMidiMessage( m, p );
+                    }
+                }
+            } );
+        }
     }
 
     MidiMessageDisplay::MessageData MidiMonitor::describe( const juce::MidiMessage& Msg, const juce::String& Port )
