@@ -128,7 +128,7 @@ namespace ui
         private:
             std::shared_ptr<FileBrowserSource> make( const SourceConfig& c ) const
             {
-                if( c.type == "local" ) return std::make_shared<LocalFolderSource>( c.id, c.name, c.location );
+                if( c.type == "local" || c.type == "splice" || c.type == "gdrive" ) return std::make_shared<LocalFolderSource>( c.id, c.name, c.location );
                 return std::make_shared<WebDavSource>( c, secretPathFor( c.id ) );
             }
 

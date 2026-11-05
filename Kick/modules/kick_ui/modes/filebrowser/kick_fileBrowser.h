@@ -71,7 +71,7 @@ namespace ui
     class FileBrowserLeftPanel : public juce::Component
     {
     public:
-        KickButton                     sourceButton{ "Sources", "+ WebDAV" }; // add / edit a WebDAV location
+        KickButton                     sourceButton{ "Sources", "+ Cloud" }; // add / edit Cloud source (Splice, Google Drive, WebDAV)
         KickButton                     folderButton{ "LocalFolder", "+ Folder" }; // add / edit a local folder location
         KickImageButton                places{ "Places", "Places" };
         KickImageButton                content{ "Content", "Content" };
@@ -346,6 +346,9 @@ namespace ui
         void remoteActivate( int row );
         void remoteBack();
         void remoteFetchAndLoad( const fileSource::Entry& e );
+        void addOrEditCloudSource();
+        void editSpliceSource();
+        void editGoogleDriveSource();
         void editWebDavSource();
         void editLocalSource();
         juce::Component* remoteCell( int row, juce::Component* existing );

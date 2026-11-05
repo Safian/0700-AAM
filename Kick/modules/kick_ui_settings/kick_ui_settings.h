@@ -76,6 +76,8 @@ namespace kick_ui
 
         void handleCommand( CPktMgr::HWMsg_t& ) override;
 
+        std::function<void()> onConfigCloudPaths;
+
     private:
         kick_ui::KickModeHeader header{ "Preferences", "Icon_SettingsScreen" };
         juce::Rectangle<int>    bCont;

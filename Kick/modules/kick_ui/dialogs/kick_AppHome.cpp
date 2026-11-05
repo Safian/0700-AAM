@@ -228,6 +228,25 @@ namespace kick_ui
                 screenAdder( Screen::CVClib, std::make_unique<CVClib>() );
                 screenAdder( Screen::Inserts, std::make_unique<Inserts>() );
 
+                if( auto* s = dynamic_cast<Settings*>( findScreen( Screen::HomePreferencesView ) ) )
+                {
+                    s->onConfigCloudPaths = [this]() {
+                        auto& cs = mt::getSettings().cloudSources;
+                        juce::String initSplice = cs.splicePath.get();
+                        if( initSplice.isEmpty() )
+                            initSplice = juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getChildFile( "Splice" ).getFullPathName();
+                        ui::project_actions::askText( "SPLICE FOLDER PATH", initSplice, [this]( juce::String path ) {
+                            mt::getSettings().cloudSources.splicePath = path.trim();
+                            juce::String initGdrive = mt::getSettings().cloudSources.googleDrivePath.get();
+                            if( initGdrive.isEmpty() )
+                                initGdrive = juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getChildFile( "Google Drive" ).getFullPathName();
+                            ui::project_actions::askText( "GOOGLE DRIVE FOLDER PATH", initGdrive, []( juce::String gpath ) {
+                                mt::getSettings().cloudSources.googleDrivePath = gpath.trim();
+                            } );
+                        } );
+                    };
+                }
+
                 lazyScreensReady_ = true;
                 if( startupScreen_ ) startupScreen_->toFront( false ); // the screens just added must not cover it
                 if( pendingScreen_ != Screen::Invalid )

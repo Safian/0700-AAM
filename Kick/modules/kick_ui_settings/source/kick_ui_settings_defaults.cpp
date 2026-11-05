@@ -31,10 +31,10 @@ namespace kick_ui
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
     SettingsPDefault::SettingsPDefault()
-        : SettingsInterface( 4, 4, true )
+        : SettingsInterface( 5, 4, true )
     {
         ui::KickGrid::setBackgroundColour( juce::Colours::transparentBlack );
-        setRowTitles( { "Recent Projects", "Auto Save", "Project Defaults", "Default Project Name" } );
+        setRowTitles( { "Recent Projects", "Auto Save", "Project Defaults", "Default Project Name", "Cloud & Storage Sources" } );
 
         asEnabled.setToggleState( settings.projects.isAutoSave(), juce::dontSendNotification );
         settings.setAutoSave( asEnabled.getToggleState() );
@@ -52,6 +52,25 @@ namespace kick_ui
 
         addComponent( enableList, 3, 0 );
         addComponent( defaultName, 3, 1 );
+
+        addComponent( toggleSplice, 4, 0 );
+        addComponent( toggleGoogleDrive, 4, 1 );
+        addComponent( toggleWebDav, 4, 2 );
+        addComponent( btnConfigCloud, 4, 3 );
+
+        toggleSplice.onClick = [this]() {
+            settings.cloudSources.enableSplice = toggleSplice.getToggleState();
+        };
+        toggleGoogleDrive.onClick = [this]() {
+            settings.cloudSources.enableGoogleDrive = toggleGoogleDrive.getToggleState();
+        };
+        toggleWebDav.onClick = [this]() {
+            settings.cloudSources.enableWebDav = toggleWebDav.getToggleState();
+        };
+        btnConfigCloud.onClick = [this]() {
+            if( onConfigCloudPaths )
+                onConfigCloudPaths();
+        };
 
         ssRecProjects.onValueChanged = [this]( int value ) {
             settings.projects.maxRecentProjects = ( value );
@@ -143,6 +162,10 @@ namespace kick_ui
         enableList.setSelected( namingStyle, juce::dontSendNotification );
         defaultName.setText( settings.projects.namePrefix(), juce::dontSendNotification );
         defaultName.setEditable( false, namingStyle == "CUSTOM" );
+
+        toggleSplice.setToggleState( settings.cloudSources.enableSplice.get(), juce::dontSendNotification );
+        toggleGoogleDrive.setToggleState( settings.cloudSources.enableGoogleDrive.get(), juce::dontSendNotification );
+        toggleWebDav.setToggleState( settings.cloudSources.enableWebDav.get(), juce::dontSendNotification );
     }
 
     void SettingsPDefault::setupHeader( kick_ui::KickModeHeader& Hdr )
