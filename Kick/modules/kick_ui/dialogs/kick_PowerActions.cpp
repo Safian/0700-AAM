@@ -118,23 +118,24 @@ namespace ui::power
         } );
     }
 
-    void showPowerWindow()
+    void showPowerWindow( const char* source )
     {
         if( !juce::MessageManager::getInstance()->isThisTheMessageThread() )
         {
-            juce::MessageManager::callAsync( [] { showPowerWindow(); } );
+            juce::MessageManager::callAsync( [source] { showPowerWindow( source ); } );
             return;
         }
         if( ui::RecentProject::isProjectLoading || ui::BackgroundTask::activeCount() > 0 )
         {
-            juce::Timer::callAfterDelay( 200, [] { showPowerWindow(); } ); // after the load / the copy, like a quit request
+            juce::Timer::callAfterDelay( 200, [source] { showPowerWindow( source ); } ); // after the load / the copy, like a quit request
             return;
         }
         if( windowOpen() || runner().busy() )
         {
-            kick_log( "info", "[INFO] [POWER] Power window request ignored (%s)\n", windowOpen() ? "already open" : "a request is running" );
+            kick_log( "info", "[INFO] [POWER] Power window request from %s ignored (%s)\n", source, windowOpen() ? "already open" : "a request is running" );
             return;
         }
+        kick_log( "info", "[INFO] [POWER] Power window requested by %s\n", source );
         windowOpen() = true;
         auto p       = new PowerPopup();
         mt::utils::showDialog(

@@ -73,6 +73,7 @@ namespace mt
 
         // Apply hardware settings to platform services
         auto& ps = PlatformServices::getInstance();
+        kick_log( "info", "[INFO] [BACKLIGHT] %d%% from the preferences at start-up\n", (int)hardware.brightness() );
         ps.setBrightness( hardware.brightness() );
 
         juce::String currentTz = hardware.timezone();
@@ -124,6 +125,7 @@ namespace mt
 
         // Re-apply defaults to running hardware
         auto& ps = PlatformServices::getInstance();
+        kick_log( "info", "[INFO] [BACKLIGHT] %d%% from the default preferences (reset)\n", (int)hardware.brightness() );
         ps.setBrightness( hardware.brightness() );
         juce::String tz = hardware.timezone();
         ps.setTimeZone( tz );
