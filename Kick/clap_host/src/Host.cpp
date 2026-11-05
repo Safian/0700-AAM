@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <kick_clap/Host.h>
+#include <kick_clap/PluginManager.h>
 #include "Internal.h"
 #include <clap/ext/audio-ports.h>
 #include <clap/ext/note-ports.h>
@@ -518,7 +519,14 @@ bool Host::load(const Descriptor& descriptor, double sampleRate, uint32_t frames
     Gate guard(s.gate);
     s.close(); s.message.clear(); s.info = descriptor;
     try {
-        s.library = detail::openLibrary(descriptor.path);
+        const clap_plugin_entry_t* staticEntry = nullptr;
+        if (descriptor.path == "internal:static" || descriptor.path.rfind("internal:", 0) == 0) {
+            auto loader = PluginManager::getInstance().findLoaderById(descriptor.id);
+            if (loader && loader->isStatic()) {
+                staticEntry = loader->getClapEntry();
+            }
+        }
+        s.library = detail::openLibrary(descriptor.path, staticEntry);
         auto* factory = s.library->factory();
         if (!factory) throw std::runtime_error("No CLAP plugin factory");
         const clap_plugin_descriptor_t* chosen = nullptr;

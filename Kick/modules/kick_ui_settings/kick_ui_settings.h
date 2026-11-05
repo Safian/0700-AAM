@@ -41,8 +41,10 @@ namespace kick_ui
     {
         ui::KickLabel title;
         ui::KickLabel value;
+        float titleRatio{ 0.5f };
 
         TextValue( const juce::String& T, const juce::String& V = "" );
+        void setTitleRatio( float ratio ) { titleRatio = ratio; resized(); }
         void resized() override;
         void paint( juce::Graphics& g ) override;
     };

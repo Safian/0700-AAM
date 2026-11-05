@@ -224,7 +224,10 @@ namespace kick_ui
         mt::HwPref::getHwPref().setIP( "eth0", ip.toStdString(), sub.toStdString(), gate.toStdString(), dnsServer.toStdString() );
     }
 
-    void SettingsEthernet::setupHeader( kick_ui::KickModeHeader& Hdr ) {}
+    void SettingsEthernet::setupHeader( kick_ui::KickModeHeader& Hdr )
+    {
+        Hdr.setTitle( "Preferences - Ethernet" );
+    }
 
     void SettingsEthernet::handleCommand( CPktMgr::HWMsg_t& ) {}
 

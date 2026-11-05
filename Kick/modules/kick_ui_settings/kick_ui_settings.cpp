@@ -68,7 +68,7 @@ namespace kick_ui
     void TextValue::resized()
     {
         auto b = getLocalBounds();
-        title.setBounds( b.removeFromLeft( b.proportionOfWidth( 0.5 ) ) );
+        title.setBounds( b.removeFromLeft( (int)( b.getWidth() * titleRatio ) ) );
         value.setBounds( b );
     }
 
@@ -142,8 +142,11 @@ namespace kick_ui
             pView = pViews[Index].get();
             if( pView )
             {
-                pView->setVisible( true );
-                addChildComponent( pView );
+                addAndMakeVisible( pView );
+                if( ! bCont.isEmpty() )
+                    pView->setBounds( bCont );
+                pView->setupHeader( header );
+                pView->refresh();
             }
         }
     }

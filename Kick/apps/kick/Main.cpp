@@ -1121,6 +1121,71 @@ public:
     };
 #else
 #if JUCE_IOS
+    class KickMobileView : public juce::Component
+    {
+    public:
+        KickMobileView()
+        {
+            setOpaque( true );
+            kickHome = &kick_ui::KickHome::Instance();
+            addAndMakeVisible( kickHome );
+        }
+
+        ~KickMobileView() override
+        {
+            if( kickHome != nullptr )
+            {
+                kickHome->setTransform( juce::AffineTransform() );
+                removeChildComponent( kickHome );
+            }
+        }
+
+        void paint( juce::Graphics& g ) override
+        {
+            g.fillAll( juce::Colour( 0xff121215 ) );
+        }
+
+        void resized() override
+        {
+            int w = getWidth();
+            int h = getHeight();
+            if( w <= 0 || h <= 0 ) return;
+
+            const float targetAspect = 1024.0f / 600.0f;
+            float dawW, dawH;
+
+            if( (float)w / (float)h > targetAspect )
+            {
+                // Screen is wider than 1024:600 -> pillarbox
+                dawH = (float)h;
+                dawW = (float)h * targetAspect;
+            }
+            else
+            {
+                // Screen is taller -> letterbox
+                dawW = (float)w;
+                dawH = (float)w / targetAspect;
+            }
+
+            float scale = dawW / 1024.0f;
+            float dawX = ( (float)w - dawW ) * 0.5f;
+            float dawY = ( (float)h - dawH ) * 0.5f;
+
+            if( kickHome != nullptr )
+            {
+                kickHome->setBounds( 0, 0, 1024, 600 );
+                kickHome->setTransform(
+                    juce::AffineTransform::scale( scale, scale )
+                                         .translated( dawX, dawY )
+                );
+            }
+        }
+
+    private:
+        kick_ui::KickHome* kickHome{ nullptr };
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( KickMobileView )
+    };
+
     class HomeWindow : public juce::DocumentWindow
     {
     public:
@@ -1128,14 +1193,14 @@ public:
             : juce::DocumentWindow( name, juce::Colours::black, 0 )
         {
             setTitle( name );
-            mobileLayout = std::make_unique<kick_mobile::KickMobileTLayout>();
-            setContentNonOwned( mobileLayout.get(), false );
+            mobileView = std::make_unique<KickMobileView>();
+            setContentNonOwned( mobileView.get(), false );
         }
 
         ~HomeWindow() override
         {
             clearContentComponent();
-            mobileLayout.reset();
+            mobileView.reset();
         }
 
         void closeButtonPressed() override
@@ -1152,7 +1217,7 @@ public:
         }
 
     private:
-        std::unique_ptr<kick_mobile::KickMobileTLayout> mobileLayout;
+        std::unique_ptr<KickMobileView> mobileView;
     };
 #else
     class HomeWindow : public juce::DocumentWindow

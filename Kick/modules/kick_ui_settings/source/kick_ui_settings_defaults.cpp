@@ -145,7 +145,10 @@ namespace kick_ui
         defaultName.setEditable( false, namingStyle == "CUSTOM" );
     }
 
-    void SettingsPDefault::setupHeader( kick_ui::KickModeHeader& Hdr ) {}
+    void SettingsPDefault::setupHeader( kick_ui::KickModeHeader& Hdr )
+    {
+        Hdr.setTitle( "Preferences - Project Defaults" );
+    }
 
     void SettingsPDefault::handleCommand( CPktMgr::HWMsg_t& ) {}
 }

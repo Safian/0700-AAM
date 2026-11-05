@@ -30,7 +30,23 @@ struct Library {
     void* handle = nullptr;
     const clap_plugin_entry_t* entry = nullptr;
     std::string path;
-    explicit Library(const std::string& source) : path(source) {
+    explicit Library(const std::string& source, const clap_plugin_entry_t* staticEntry = nullptr) : path(source) {
+        if (staticEntry) {
+            entry = staticEntry;
+            if (!entry || !clap_version_is_compatible(entry->clap_version) ||
+                !entry->init || !entry->deinit || !entry->get_factory) {
+                entry = nullptr;
+                close();
+                throw std::runtime_error("Invalid static CLAP entry: " + source);
+            }
+            if (!entry->init(path.c_str())) {
+                entry = nullptr;
+                close();
+                throw std::runtime_error("CLAP entry initialization failed: " + source);
+            }
+            return;
+        }
+
         const auto binary = executablePath(source).string();
 #ifdef _WIN32
         handle = LoadLibraryW(std::filesystem::path(binary).wstring().c_str());
@@ -69,15 +85,20 @@ struct Library {
         return f && f->get_plugin_count && f->get_plugin_descriptor && f->create_plugin ? f : nullptr;
     }
 };
-inline std::shared_ptr<Library> openLibrary(const std::string& source) {
+inline std::shared_ptr<Library> openLibrary(const std::string& source, const clap_plugin_entry_t* staticEntry = nullptr) {
     // entry.init/deinit are per binary, not per instance. Keep a strong reference
     // in every host and coordinate init when a second program uses that binary.
     static std::mutex mutex;
     static std::map<std::string, std::weak_ptr<Library>> libraries;
     std::lock_guard<std::mutex> guard(mutex);
-    auto path = std::filesystem::canonical(source).string();
+    std::string path;
+    if (staticEntry || source == "internal:static" || source.rfind("internal:", 0) == 0) {
+        path = source;
+    } else {
+        path = std::filesystem::canonical(source).string();
+    }
     if (auto existing = libraries[path].lock()) return existing;
-    auto library = std::make_shared<Library>(path);
+    auto library = std::make_shared<Library>(path, staticEntry);
     libraries[path] = library;
     return library;
 }

@@ -26,6 +26,14 @@ namespace kick_ui
                                       restoreContentBtn,
                                       statusLabel );
 
+        for (auto* tv : { &pluginIdValue, &pluginNameValue, &pluginVersionValue, &pluginAuthorValue, &pluginLicenseValue, &pluginTrustValue, &pluginKindValue })
+        {
+            tv->setTitleRatio( 0.28f );
+            tv->value.setValueJustification( juce::Justification::centredLeft );
+            tv->title.setFontHeight( 16.0f );
+            tv->value.setFontHeight( 16.0f );
+        }
+
         rescanBtn.onClick = [this]() {
             kick::clap::PluginManager::getInstance().scanInstalledPlugins();
             populateItems();
@@ -133,7 +141,7 @@ namespace kick_ui
 
     void SettingsPlugins::setupHeader( kick_ui::KickModeHeader& Hdr )
     {
-        Hdr.setTitle( "Plugin Manager" );
+        Hdr.setTitle( "Preferences - Plugin Manager" );
     }
 
     int SettingsPlugins::getNumRows()

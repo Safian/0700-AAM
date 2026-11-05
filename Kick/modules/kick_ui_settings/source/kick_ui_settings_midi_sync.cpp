@@ -100,7 +100,10 @@ namespace kick_ui
         m_isRefreshing = false;
     }
 
-    void SettingsMidiSync::setupHeader( kick_ui::KickModeHeader& Hdr ) {}
+    void SettingsMidiSync::setupHeader( kick_ui::KickModeHeader& Hdr )
+    {
+        Hdr.setTitle( "Preferences - MIDI & Sync" );
+    }
 
     void SettingsMidiSync::handleCommand( CPktMgr::HWMsg_t& ) {}
 }
