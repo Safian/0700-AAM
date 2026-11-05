@@ -67,7 +67,7 @@ namespace mt
             return !r.empty() && r.back()->hasApplyButton();
         }
 
-        bool closeTopDialogFromHardware( bool apply )
+        bool closeTopDialogFromHardware( bool apply, const char* reason )
         {
             auto& r = openDialogRegistry();
             if( r.empty() )
@@ -77,6 +77,7 @@ namespace mt
             // modal must not end under it.
             if( !d->isCurrentlyModal( true ) )
                 return false;
+            d->closeReason = reason;
             d->exitModalState( apply ? UI::APPLY : UI::CANCEL );
             return true;
         }

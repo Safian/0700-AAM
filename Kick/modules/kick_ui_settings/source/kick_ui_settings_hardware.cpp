@@ -78,6 +78,12 @@ namespace kick_ui
 
         brightness.onValueChanged = [this]( double value ) {
             settings.hardware.brightness = ( value );
+            // The slider fires on every step of a drag: only the settled value is logged (400 ms after the last change).
+            static int logToken = 0;
+            const int  token    = ++logToken;
+            juce::Timer::callAfterDelay( 400, [token, value = (int)value] {
+                if( token == logToken ) kick_log( "info", "[INFO] [BACKLIGHT] %d%% set with the Settings slider\n", value );
+            } );
             mt::HwPref::getHwPref().setBrightness( settings.hardware.brightness() );
         };
 
@@ -112,6 +118,7 @@ namespace kick_ui
 
         // Send hardware brightness and timezone at startup
         int value = settings.hardware.brightness();
+        kick_log( "info", "[INFO] [BACKLIGHT] %d%% re-applied when the Settings screen was built\n", value );
         mt::HwPref::getHwPref().setBrightness( value );
         juce::String zone = settings.hardware.timezone();
         mt::HwPref::getHwPref().setTimeZone( zone );

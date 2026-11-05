@@ -672,7 +672,7 @@ public:
             hwBridge = std::make_unique<KickHardwareBridge>();
             hwBridge->start( w.get(), &kick_ui::KickHome::Instance() );
             // Power button (short press): the Power window. A missing / unopenable device is logged; Menu > Power always works.
-            kick_input::startPowerKeyWatcher( powerKey, [] { juce::MessageManager::callAsync( [] { ui::power::showPowerWindow(); } ); } );
+            kick_input::startPowerKeyWatcher( powerKey, [] { juce::MessageManager::callAsync( [] { ui::power::showPowerWindow( "power key" ); } ); } );
         }
         else
 #endif

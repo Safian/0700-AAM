@@ -55,6 +55,10 @@ private:
     int         m_last_up_x[10]  = { 0 };
     int         m_last_up_y[10]  = { 0 };
     int         m_click_count[10] = { 0 };
+    // "[TOUCH] swallowed by modal" warning: at most one line a second (message thread only), see dispatchTouch().
+    kick_hw::probe::LogThrottle m_modal_swallow_log;
+    kick_hw::probe::LogThrottle m_peer_mismatch_log; // "peer disagrees with the window" self-check
+    kick_hw::probe::LogThrottle m_no_target_log;     // "no component at the touch" fallback to the window
     // Peer-path touch source (message thread only): probed on the first delivery, see deliverPeerTouch().
     bool m_touch_src_probed = false;
     bool m_touch_src_ok     = true;
@@ -491,13 +495,26 @@ private:
         return nullptr;
     }
 
+    // The UI space the touch is converted to (fbToUi) is the main window's own local space (timerCallback() paints the window
+    // scaled to the framebuffer). The hit test of the content therefore converts from the WINDOW (a plain parent -> child
+    // chain), not through the window's native peer: getLocalPoint(nullptr, ..) ends in peer->globalToLocal(), i.e. in the
+    // peer's idea of where the hidden X-less window is. MPC log of an 11 h run, 2026-11-05: every touch (finger and injected,
+    // modal dialog open or not) got target=HomeWindow, i.e. the peer based hit test of the content missed everywhere; a fresh
+    // process has peer bounds (0,0,1024,600) and works. What moved the peer is not known; this path no longer depends on it, and
+    // the self-check in dispatchTouch() logs a disagreement if it happens again.
+    juce::Component* hitTestContent(juce::Component* content, int ix, int iy) const
+    {
+        return content->getComponentAt(content->getLocalPoint(m_window, juce::Point<int>(ix, iy)));
+    }
+
     juce::Point<int> screenToLocal(juce::Component* comp, int ix, int iy) const
     {
         auto* top = comp->getTopLevelComponent();
         if (top != nullptr && !isMainWindowTop(top) && top->isOnDesktop())
             return comp->getLocalPoint(top, juce::Point<int>(ix, iy) - top->getPosition());
-        if (m_window != nullptr && comp != m_window)
-            return comp->getLocalPoint(m_window, juce::Point<int>(ix, iy));
+        // The UI space is the main window's local space: no trip through the (hidden window's) peer, see hitTestContent().
+        if (m_window != nullptr)
+            return comp == m_window ? juce::Point<int>(ix, iy) : comp->getLocalPoint(m_window, juce::Point<int>(ix, iy));
         return comp->getLocalPoint(nullptr, juce::Point<int>(ix, iy));
     }
 
@@ -574,7 +591,7 @@ private:
             // Search desktop components first (modal dialogs, popups, dropdowns)
             auto* target = findDesktopPopupAt(ix, iy);
             if (!target) target = juce::Desktop::getInstance().findComponentAt(juce::Point<int>(ix, iy));
-            if (!target) target = hitRoot->getComponentAt(hitRoot->getLocalPoint(nullptr, juce::Point<int>(ix, iy)));
+            if (!target) target = hitTestContent(hitRoot, ix, iy);
             if (!target) target = root;
             // A slider's value box (a Label child) hands its mouse events to the slider through a MouseListener (LinearBar
             // styles). The direct mouseDown()/mouseDrag() calls below do not run listeners, so a touch on the value box
@@ -582,6 +599,43 @@ private:
             if (dynamic_cast<juce::Label*>(target) != nullptr)
                 if (auto* sl = target->findParentComponentOfClass<juce::Slider>())
                     target = sl;
+
+            // A modal dialog is open but the finger landed somewhere else than on it: the dialog can not be reached (the "Power
+            // window does not react" case). Category "warn" (on by default; "touch" is off), at most one line a second.
+            if (is_down)
+            {
+                auto* modal = juce::Component::getCurrentlyModalComponent(0);
+                if (modal != nullptr && modal->isVisible() && target != modal && !modal->isParentOf(target))
+                {
+                    int skipped = 0;
+                    if (m_modal_swallow_log.allow(juce::Time::currentTimeMillis(), 1000, skipped))
+                        kick_log("warn", "[WARN] [TOUCH] swallowed by modal %s '%s' %dx%d: ui=(%d,%d) fb=(%d,%d) went to %s '%s'; %d more since the last line\n",
+                                 typeid(*modal).name(), modal->getName().toRawUTF8(), modal->getWidth(), modal->getHeight(), ix, iy, x, y,
+                                 typeid(*target).name(), target->getName().toRawUTF8(), skipped);
+                }
+            }
+
+            // Coordinate self-check (down only, "warn" is on by default, one line a second each): the hit test above is window based,
+            // the peer based conversion is what the bridge used before. If they ever disagree, the window's native peer lost its
+            // position (see hitTestContent()); and a touch that found no component at all is named, with both conversions.
+            if (is_down && m_window != nullptr)
+            {
+                const juce::Point<int> pt(ix, iy);
+                const auto viaPeer   = hitRoot->getLocalPoint(nullptr, pt);
+                const auto viaWindow = hitRoot->getLocalPoint(m_window, pt);
+                int skipped = 0;
+                if (viaPeer != viaWindow && m_peer_mismatch_log.allow(juce::Time::currentTimeMillis(), 1000, skipped))
+                {
+                    auto* pr = m_window->getPeer();
+                    kick_log("warn", "[WARN] [TOUCH] the window's peer disagrees with the window: ui=(%d,%d) via peer=(%d,%d) via window=(%d,%d) peer bounds=(%d,%d,%d,%d) window=(%d,%d,%d,%d); %d more since the last line\n",
+                             ix, iy, viaPeer.x, viaPeer.y, viaWindow.x, viaWindow.y,
+                             pr ? pr->getBounds().getX() : -1, pr ? pr->getBounds().getY() : -1, pr ? pr->getBounds().getWidth() : -1, pr ? pr->getBounds().getHeight() : -1,
+                             m_window->getX(), m_window->getY(), m_window->getWidth(), m_window->getHeight(), skipped);
+                }
+                if (target == root && m_no_target_log.allow(juce::Time::currentTimeMillis(), 1000, skipped))
+                    kick_log("warn", "[WARN] [TOUCH] no component at ui=(%d,%d) fb=(%d,%d): the window itself got the touch (content %d,%d %dx%d visible=%d; %d more since the last line)\n",
+                             ix, iy, x, y, hitRoot->getX(), hitRoot->getY(), hitRoot->getWidth(), hitRoot->getHeight(), (int)hitRoot->isVisible(), skipped);
+            }
 
             // Diagnostics (hardware debugging, down / up only): fb -> UI point, hit root, target, peer.
             if (is_down || is_up)
@@ -1103,7 +1157,9 @@ public:
         // (modal_dialog_keys.h). A popup on top of the dialog keeps the dialog open (closeTopDialogFromHardware = false).
         if (mt::utils::isDialogOpen()) {
             const auto act = kick_hw::modalDialogAction(btn, isShiftDown(), mt::utils::topDialogHasApply());
-            if (act != kick_hw::ModalDialogAction::None && mt::utils::closeTopDialogFromHardware(act == kick_hw::ModalDialogAction::Apply)) {
+            const char* keyReason = btn == HW_BTN_MAIN ? "hardware key MAIN" : btn == HW_BTN_ENTER ? "hardware key ENTER"
+                                  : btn == HW_BTN_STOP ? (isShiftDown() ? "hardware key SHIFT+STOP" : "hardware key STOP") : "hardware key";
+            if (act != kick_hw::ModalDialogAction::None && mt::utils::closeTopDialogFromHardware(act == kick_hw::ModalDialogAction::Apply, keyReason)) {
                 if (btn >= 0 && btn < NUM_HW_BUTTONS) m_modal_consumed[(size_t)btn] = true;
                 return;
             }
