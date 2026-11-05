@@ -75,6 +75,7 @@ namespace kick_ui
         bool requiresHandleCommand() override { return true; }
 
         void handleCommand( CPktMgr::HWMsg_t& ) override;
+        void paint( juce::Graphics& g ) override;
 
         std::function<void()> onConfigCloudPaths;
 

@@ -135,7 +135,8 @@ namespace kick_ui
 
         int bankOffset{ 0 };
 
-        void resized();
+        void paint( juce::Graphics& g ) override;
+        void resized() override;
         void refresh();
         void refreshPad( int Id );
         void sendColourModeToHardware( int noteOff, int noteOn );
