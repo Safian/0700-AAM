@@ -1,6 +1,6 @@
 # SW Update (Firmware Update) — review és TODO
 
-Dátum: 2026-11-04. Ág: `claude/kick-plans`. Alap: **statikus kódolvasás** (build, futtatás, MPC nélkül) + a repó dokumentumai. „KÉSZ" = van bekötött handler az engine-ig, nem hardveren igazolt. Ahol nem volt kódból eldönthető: **NEM ELLENŐRIZHETŐ KÓDBÓL (N/E)**. Rövidítés: `M/` = `Kick/modules/`, `A/` = `Kick/apps/`. Kiindulás: `docs/plans/research/screen-inventory.md` §4.26, §5; a kód az igazság, ahol a régi doksi (pl. `WP-G.md` G-050 „OK") ellentmond.
+Dátum: 2026-11-04. Ág: `claude/kick-plans`. Alap: **statikus kódolvasás** (build, futtatás, MPC nélkül) + a repó dokumentumai. „KÉSZ" = van bekötött handler az engine-ig, nem hardveren igazolt. Ahol nem volt kódból eldönthető: **NEM ELLENŐRIZHETŐ KÓDBÓL (N/E)**. Rövidítés: `M/` = `Kick/modules/`, `A/` = `Kick/apps/`. Kiindulás: `docs/planning/plans/research/screen-inventory.md` §4.26, §5; a kód az igazság, ahol a régi doksi (pl. `wp-g.md` G-050 „OK") ellentmond.
 
 ## 1. Áttekintés
 
@@ -17,9 +17,9 @@ Dátum: 2026-11-04. Ág: `claude/kick-plans`. Alap: **statikus kódolvasás** (b
 3. Update gomb → `validateImage` → `openssl enc -aes-256-cbc … -k 'PJSDSOMKICK'` + `mount -o loop` (`kick_Hwpref.cpp:219-247, 495-530`) → `SWUpdateScreen` → `/usr/bin/swupdate -i /tmp/fwupdate/Kick.swu` + a `/tmp/swupdateprog` socket (`kick_FirmwareUpdate.cpp:429-561`) → opcionális MCU-hex átvitel DCL-en (`:146-331`) → „reboot -nf" (`kick_SWUpdateScreen.cpp:126`).
 
 **Az MPC Key 61-en az igazi frissítési út más: a pendrive-os bootstrap.**
-- A Kick a belső flashen (`/data/Kick`) fut; a `tkgl_bootstrap` (`docs/akai_mpc_hardware/tools/tkgl_bootstrap:116-259`) induláskor összeveti a pendrive `VERSION` fájlját a `/data/Kick.version`-nel, **eltérésnél** (fel- és lefelé is) atomi cserét csinál (`Kick.new` → SHA256 → `Kick.prev` mentés → `mv` → `Kick.version` utoljára), a felhasználói adatot (`/data/projects`, `/data/prefs`) nem bántja (`PENDRIVE_INSTALL.md` §5, `01-pendrive-image.md` DÖNTÉS). Az MPC rootfs csak olvasható, a gyári frissítés aláírt (`01-pendrive-image.md:17, :35`) — az OS-t a Kick **nem** frissítheti, és nem is szabad.
+- A Kick a belső flashen (`/data/Kick`) fut; a `tkgl_bootstrap` (`docs/hardware/key61/tools/tkgl_bootstrap:116-259`) induláskor összeveti a pendrive `VERSION` fájlját a `/data/Kick.version`-nel, **eltérésnél** (fel- és lefelé is) atomi cserét csinál (`Kick.new` → SHA256 → `Kick.prev` mentés → `mv` → `Kick.version` utoljára), a felhasználói adatot (`/data/projects`, `/data/prefs`) nem bántja (`pendrive-install.md` §5, `01-pendrive-image.md` DÖNTÉS). Az MPC rootfs csak olvasható, a gyári frissítés aláírt (`01-pendrive-image.md:17, :35`) — az OS-t a Kick **nem** frissítheti, és nem is szabad.
 - A bootstrap mindig `KICK_NO_HARDWARE=1`-gyel indítja a Kicket (`tkgl_bootstrap:286`) → `hardwareEnabled()==false` (`M/hardware/source/kick_HardwareMode.h:5-12`) → a teljes Behringer-frissítő (`updateFirmware`, `linuxUpdate`, `MCUUpdate`, `decryptopenSSLImage`, `extractImage`, `USBFunctionFS::init`) **azonnal, némán visszatér** (`kick_FirmwareUpdate.cpp:113, 148, 431`; `kick_Hwpref.cpp` `if (!hardwareEnabled()) return`; `kick_UsbFunctionFS.cpp:77`).
-- Az MPC rootfs-en nincs `swupdate`, `/etc/version.txt`, `/mnt/flash` (élő, csak olvasásos ellenőrzés: `04-screen-audit.md` §8.1; az MPC-n az SD `/sdcard`, a pendrive `/media/PenDrive`: `KEY61_HW_BEHAVIOUR.md:123`).
+- Az MPC rootfs-en nincs `swupdate`, `/etc/version.txt`, `/mnt/flash` (élő, csak olvasásos ellenőrzés: `04-screen-audit.md` §8.1; az MPC-n az SD `/sdcard`, a pendrive `/media/PenDrive`: `hw-behaviour.md:123`).
 
 **Összkép:** a SW Update képernyő az MPC-n a pendrive-os frissítéssel **semmilyen kapcsolatban nincs**; a felhasználónak semmi nem mondja meg, milyen Kick-verzió fut, van-e frissebb a pendriveon, és hogyan kell alkalmazni. A két mechanizmus között az egyetlen közös pont a „Firmware Update" gomb félrevezető jelenléte.
 
@@ -76,14 +76,14 @@ Dátum: 2026-11-04. Ág: `claude/kick-plans`. Alap: **statikus kódolvasás** (b
 
 **3.8 A bootstrap `Kick.prev` mentése megszakadt frissítés után felülíródik (P1, a pendrive-os út hibája).** Ha az `mv Kick.new Kick` (`tkgl_bootstrap:218`) után, de a `Kick.version` frissítése (`:249-250`) előtt megszakad az áram, a következő indításkor a verzió még eltér → újratelepítés → a `cp -f "$LOCAL_BIN" Kick.prev` (`:209`) most már az **új** bináris másolata lesz, az eredeti jó előző verzió elveszik. (Tesztelt forgatókönyvek: `test_tkgl_bootstrap.sh` Scenario 1-8 — megszakított frissítés nincs közöttük.)
 
-**3.9 Tesztlefedettség a tévhitek miatt.** `WP-G.md` G-050 „OK", G-051 „nem vizsgált" — a kód alapján a képernyő MPC-n nem frissít. (A `screen-inventory.md` §4.26 ezt már „RÉSZLEGES"-ként jelöli.)
+**3.9 Tesztlefedettség a tévhitek miatt.** `wp-g.md` G-050 „OK", G-051 „nem vizsgált" — a kód alapján a képernyő MPC-n nem frissít. (A `screen-inventory.md` §4.26 ezt már „RÉSZLEGES"-ként jelöli.)
 
 ## 4. Tervben / hiányzik (az Akai MPC Standalone-hoz és a docs-hoz képest)
 
-- **Akai:** Preferences → Info → Update: három mód — Online Update, USB Drive Update, Switch to Update Mode (`WP-G.md` G-051; a Kick megfelelője nem vizsgált). Az Akai a *saját OS-ét* frissíti, aláírt `az01-update.img`-gel (167 MB, `01-pendrive-image.md:17`); a Kick-nek erre nincs jogosultsága/szándéka. A Kick „frissítése" = a Kick-csomag cseréje (`/data/Kick`).
-- **Terv 01 (`docs/plans/01-pendrive-image.md`):** az auto-telepítés megvalósult (`bdd6e744`, `6e222d80`); hátralévő: független ellenőrzés, `readelf -d`, release-csomagolás + CI (`dist/…zip` + SHA256), a hook meglétének ellenőrzése másik MPC-n, user-oldali próba. **Az alkalmazáson belüli oldal nincs a tervben** — ezt a dokumentum hozza be.
+- **Akai:** Preferences → Info → Update: három mód — Online Update, USB Drive Update, Switch to Update Mode (`wp-g.md` G-051; a Kick megfelelője nem vizsgált). Az Akai a *saját OS-ét* frissíti, aláírt `az01-update.img`-gel (167 MB, `01-pendrive-image.md:17`); a Kick-nek erre nincs jogosultsága/szándéka. A Kick „frissítése" = a Kick-csomag cseréje (`/data/Kick`).
+- **Terv 01 (`docs/planning/plans/01-pendrive-image.md`):** az auto-telepítés megvalósult (`bdd6e744`, `6e222d80`); hátralévő: független ellenőrzés, `readelf -d`, release-csomagolás + CI (`dist/…zip` + SHA256), a hook meglétének ellenőrzése másik MPC-n, user-oldali próba. **Az alkalmazáson belüli oldal nincs a tervben** — ezt a dokumentum hozza be.
 - **Hiányzik** (a `VERSION` fájl már hordozza az adatot: `VERSION`, `GIT_COMMIT`, `BUILD_DATE`, `KICK_SHA256`; `make_pendrive_package.sh:234-239`): telepített verzió (`/data/Kick.version`), a pendriveon talált csomag verziója és státusza (azonos / újabb / régebbi = visszalépés / sérült), „Restart to install", visszalépés `Kick.prev`-re, változásnapló, a Preferences→Info oldal valódi Kick-verziója és build-azonosítója (a mostani az `/etc/version.txt`-ből jön, MPC-n `0.0.0`).
-- **`SwUpdateMode_t::OTA`** enum létezik (`kick_Hwcommon.h`, `getSwUpdateModeFromString` `kick_FirmwareUpdate.cpp:606-618`), megvalósítás nincs; online frissítés a `plans/research/architecture-and-publishing.md` és `cloud-sources.md` hálózati döntéseitől függ (MPC-n WiFi: iwd, a kód `wpa_supplicant`-ra épül: `04-screen-audit.md` §8.1).
+- **`SwUpdateMode_t::OTA`** enum létezik (`kick_Hwcommon.h`, `getSwUpdateModeFromString` `kick_FirmwareUpdate.cpp:606-618`), megvalósítás nincs; online frissítés a `planning/plans/research/architecture-and-publishing.md` és `cloud-sources.md` hálózati döntéseitől függ (MPC-n WiFi: iwd, a kód `wpa_supplicant`-ra épül: `04-screen-audit.md` §8.1).
 
 ## 5. Javaslataim
 
@@ -98,7 +98,7 @@ Dátum: 2026-11-04. Ág: `claude/kick-plans`. Alap: **statikus kódolvasás** (b
 
 ## 6. Hardveres és unit-tesztek
 
-**Ma:** a SW Update kódnak **nincs** host-tesztje és smoke-képernyőképe (a `A/kick/Main.cpp:155-167` tábla nem tartalmazza a `SWUpdateView/Window`-t). A pendrive-os bootstrapet a `docs/akai_mpc_hardware/tools/test_tkgl_bootstrap.sh` fedi (Scenario 1-8: friss telepítés, azonos VERSION, eltérő VERSION, sérült másolat, hiányzó bináris, felhasználói adat megőrzése, UNINSTALL, standalone uninstaller). Nincs: megszakított frissítés (3.8), hiányzó sha256 eszköz (3.7), rollback, két pendrive.
+**Ma:** a SW Update kódnak **nincs** host-tesztje és smoke-képernyőképe (a `A/kick/Main.cpp:155-167` tábla nem tartalmazza a `SWUpdateView/Window`-t). A pendrive-os bootstrapet a `docs/hardware/key61/tools/test_tkgl_bootstrap.sh` fedi (Scenario 1-8: friss telepítés, azonos VERSION, eltérő VERSION, sérült másolat, hiányzó bináris, felhasználói adat megőrzése, UNINSTALL, standalone uninstaller). Nincs: megszakított frissítés (3.8), hiányzó sha256 eszköz (3.7), rollback, két pendrive.
 
 **Hiányzik (host):** `KickVersion` parser + állapotgép (naprakész/frissebb/régebbi/sérült/nincs pendrive) fixture-fájlokkal; pendrive-keresés `/proc/mounts` fixture-rel; a `deviceData`-életciklus (ha a Behringer-folyamat marad).
 

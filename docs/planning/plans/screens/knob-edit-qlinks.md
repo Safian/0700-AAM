@@ -1,13 +1,13 @@
 # Knob Edit / Q-Links — review és TODO
 
-Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül), 2026-11-04, ág `claude/kick-plans`. „KÉSZ” = van bekötött handler az engine-ig, nem hardveres igazolás. Ahol a régi docs és a kód ellentmond, a **kód az igazság**. `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `KE/` = `Kick/modules/kick_ui/modes/knobedit/`. Alap: `research/screen-inventory.md` §4.16, `research/known-issues-and-roadmap.md` §3.2/§3.4, `KEY61_DOC_VS_KICK.md` (Q-Link: L12 „nem vizsgált”), `KEY61_TOUCH_STRIP_MODES.md` §3 (Q-Link strip-mód), `WP-D.md`, `WP-G.md` (G-118, G-134, G-135, G-140, G-168, G-169, G-220..G-222). **A Q-Link-ágat érintő három közös hiba (QL-01 routing, QL-02 lépésköz, QL-03 mute/solo) itt van részletesen; a `pad-mixer.md`, `channel-mixer.md` és `pad-mute-track-mute.md` ide hivatkozik.** A WP-H (Q-Link Edit az Akai útmutatóban) a repóban nincs elkészítve.
+Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül), 2026-11-04, ág `claude/kick-plans`. „KÉSZ” = van bekötött handler az engine-ig, nem hardveres igazolás. Ahol a régi docs és a kód ellentmond, a **kód az igazság**. `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `KE/` = `Kick/modules/kick_ui/modes/knobedit/`. Alap: `research/screen-inventory.md` §4.16, `research/known-issues-and-roadmap.md` §3.2/§3.4, `doc-vs-kick.md` (Q-Link: L12 „nem vizsgált”), `touch-strip-modes.md` §3 (Q-Link strip-mód), `wp-d.md`, `wp-g.md` (G-118, G-134, G-135, G-140, G-168, G-169, G-220..G-222). **A Q-Link-ágat érintő három közös hiba (QL-01 routing, QL-02 lépésköz, QL-03 mute/solo) itt van részletesen; a `pad-mixer.md`, `channel-mixer.md` és `pad-mute-track-mute.md` ide hivatkozik.** A WP-H (Q-Link Edit az Akai útmutatóban) a repóban nincs elkészítve.
 
 ## 1. Áttekintés
 
 Két réteg van, ezeket külön kell nézni:
 
 **(A) A Q-Link hardver és a csomag útja a képernyőkig (globális).**
-- Hardver: Q-Link 1–4 = CC 16–19 relatív (`0x01` = +1, `0x7F` = −1), ch1, Port 1; érintés = Note 84–87 be/ki (mért, `KEY61_HW_BEHAVIOUR.md` L16). A Q-Link LED-sornak nincs szoftveres funkciója (az útmutató „Light LED”, `AKAI_MPC_KEY61_HW_TEST_REPORT.md` L191).
+- Hardver: Q-Link 1–4 = CC 16–19 relatív (`0x01` = +1, `0x7F` = −1), ch1, Port 1; érintés = Note 84–87 be/ki (mért, `hw-behaviour.md` L16). A Q-Link LED-sornak nincs szoftveres funkciója (az útmutató „Light LED”, `hw-test-report.md` L191).
 - Adapter: `A/hardware/adapters/akai_mpc_key61_adapter.h:472-475` → `on_encoder_turn(idx 0..3, delta)`; a 0 lépés nem megy tovább. Híd: `A/kick_hardware_bridge.h:1530-1542` → DCL `EN_PKT_TYPE_KNOBS / EN_KNOB_QLINK`, `EN_KNOB_1 + idx`, irány, `abs(delta)`. Érintés: `on_encoder_touch` **szándékosan üres** (`:1544-1549`, T11).
 - Elosztás: `DclSignals::dispatchHardwareInput` (modális „owner”-ek előbb) → `hardwareInputTriggered` → `KickHome::handleCommand` (`M/kick_ui/dialogs/kick_AppHome.cpp:561-580`):
   1. **Custom mód** (`knobControl.getMode() == 0`): minden Q-Link a `MenuKnobEdit` `knobCommand`-jára megy (`:561-570`).
@@ -85,7 +85,7 @@ Két réteg van, ezeket külön kell nézni:
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest)
 
-Forrás: `KEY61_DOC_VS_KICK.md` (L12), `known-issues-and-roadmap.md` §3.2/§3.4, WP-G, `KEY61_TOUCH_STRIP_MODES.md`.
+Forrás: `doc-vs-kick.md` (L12), `known-issues-and-roadmap.md` §3.2/§3.4, WP-G, `touch-strip-modes.md`.
 - **Q-Link Edit ablak** (bármely paraméter bármely Q-Link-hez, banki oszlopok): jelenleg Custom rács 16 elemmel; az Akai-ban 4 oszlop × 4 gomb (a Q-Link gomb váltja az oszlopot).
 - **Shift+Q-Link**: Q-Link Configuration ablak, második nyomás: vissza a főoldalra (G-118). A híd Shift+QLINK-re a Knob Edit képernyőt nyitja (közelítés).
 - **Touch Strip Q-Link mód** (strip → Q-Link 1–16, „Touch Strip Q-Link” ablak, pad kiválasztja a Q-Link-et), **Crossfader** (Q-Link Edit > Crossfader) — hiányzik (STRIP §3).

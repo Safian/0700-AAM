@@ -19,7 +19,7 @@
 set -eu
 
 TOP_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-TOOLS_DIR="$TOP_DIR/docs/akai_mpc_hardware/tools"
+TOOLS_DIR="$TOP_DIR/docs/hardware/key61/tools"
 
 PASS_COUNT=0
 FAIL_COUNT=0

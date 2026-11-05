@@ -14,7 +14,7 @@ Közös: az oldalt 1 Hz-es timer frissíti (`refresh()`, `startTimerHz(1)` a `vi
 | Firmware Version | `/etc/version.txt` első sora, regex `^[a-zA-Z]+ \d+\.\d+\.\d+$` (Hwpref.cpp:262-300), különben "0.0.0" | csak kijelzés | RÉSZLEGES (Behringer-formátum; MPC-n valószínűleg "0.0.0") |
 | Control Version | `HwPref::surfaceVersion`, csak `KickHome::handleCommand` állítja `EN_SYS_GET_SW_VER`-re (`kick_ui/dialogs/kick_AppHome.cpp:455-458`) | az `apps/`-ban nincs küldő -> üres; az oldal sosem frissül, ha később érkezne | STUB-ÜRES |
 | Build Date | `#if defined(TIMESTAMP) && (TIMESTAMP > 0)` (:93) | a `TIMESTAMP` csak CMake `option` (`Kick/CMakeLists.txt:30`), C-makró sehol (nincs `-DTIMESTAMP`), `timestamp.h`-t a modul nem include-olja -> az `else` ág: `__DATE__ :: __TIME__` (az adott fordítási egységé, git hash/ág NINCS) | BUGOS GYANÚ: a WP-G G-053 "git hash látszik" állítása valószínűleg téves |
-| Factory Reset | megerősítő popup -> `HwPref::factoryReset()` = `/bin/rm -rf /home/Kick/projects* /home/Kick/prefs` (Hwpref.cpp:29,136-139) | `hardwareEnabled()`-hez kötött: a telepített MPC-n `KICK_NO_HARDWARE=1` (AKAI_MPC_KEY61_BUILD_RECIPE.md:39, PENDRIVE_INSTALL.md:118, tools/tkgl_bootstrap:286) -> **némán nem csinál semmit**; ha engedélyezett: MPC-n a valódi adat `/data/projects`,`/data/prefs`, tehát nem azt törli; nincs újraindítás/újratöltés, nincs visszajelzés | MPC-n HATÁSTALAN; BUGOS GYANÚ (útvonal) |
+| Factory Reset | megerősítő popup -> `HwPref::factoryReset()` = `/bin/rm -rf /home/Kick/projects* /home/Kick/prefs` (Hwpref.cpp:29,136-139) | `hardwareEnabled()`-hez kötött: a telepített MPC-n `KICK_NO_HARDWARE=1` (build-recipe.md:39, pendrive-install.md:118, tools/tkgl_bootstrap:286) -> **némán nem csinál semmit**; ha engedélyezett: MPC-n a valódi adat `/data/projects`,`/data/prefs`, tehát nem azt törli; nincs újraindítás/újratöltés, nincs visszajelzés | MPC-n HATÁSTALAN; BUGOS GYANÚ (útvonal) |
 | Firmware Update | `sigScreenOpen(SWUpdateView)` (:60) | gombnyomás KÉSZ; a frissítés `/usr/bin/swupdate -i /tmp/fwupdate/Kick.swu -v &` (hardware/source/kick_FirmwareUpdate.cpp:444-445), `reboot -nf` (kick_ui/swupdate/kick_SWUpdateScreen.cpp:126), `mount -o loop -t ext4` (Hwpref.cpp:228); mind `hardwareEnabled()`-hez kötött (kick_FirmwareUpdate.cpp:431) | MPC-n HATÁSTALAN (Behringer-image) |
 | Restore Defaults | megerősítés -> `getSettings().makeDefaults()` (:74) = `projects/hardware/eth/cv.makeDefaults()` (`engine/project/kick_settings.cpp:61-67`), `removeAllProperties` (`mt_audio_ids.h:336`) | nem érinti: midiControl, wifi, metronome, browser, cvclib; nem alkalmazza újra a futó állapotot (fényerő, időzóna, pad-küszöbök, a statikus autosave-flag/idő csak konstruktorban / vezérlő-váltáskor íródnak); törli a `projects.currentProject` és `isAutoLoad` property-ket is (ugyanaz a fa) | RÉSZLEGES |
 Popup: `ConfirmationPopup{..., false, false}` (a saját Yes/No rejtve, a `showOptions` Yes/No-t ad, utils.cpp:38-48); a callback minden kimenetnél `delete p` (a tulajdonos NEM ELLENŐRIZHETŐ - dupla felszabadítás kockázat).
@@ -56,14 +56,14 @@ Szálbiztonság: minden handler üzenetszálon; `AtomicString::operator()` nem a
 | Input/Output TRACK, CONTROL kapcsolók (:47-61; mindhárom felirat azonos) | `midiInput/OutputTrack/ControlState` (false) | NINCS fogyasztó | STUB |
 Nincs sync/clock/MMC/MTC vezérlő. `KickMidiControl::isValid()` az `IDs::MIDICONTROL`-t ellenőrzi, a `setup` az `IDs::PREFMIDICONTROL`-t használja (kick_settings.cpp:44,261) -> mindig false (latens). A MIDI-vezérlő térkép ugyanazt a fát használja (`modes/midicontrol/kick_MidiControlTabs.cpp:264,1634`).
 
-## 5. Külső parancsok/fájlok - ellenőrzendő az MPC Key 61 rootfs-ben (BusyBox/Yocto, AKAI_MPC_KEY61_BUILD_RECIPE.md:36)
+## 5. Külső parancsok/fájlok - ellenőrzendő az MPC Key 61 rootfs-ben (BusyBox/Yocto, build-recipe.md:36)
 Parancsok (mind `std::system`, mind `hardwareEnabled()`-hez kötve - a telepített MPC-n `KICK_NO_HARDWARE=1` => egyik sem fut):
 - `/bin/rm -rf /home/Kick/projects* /home/Kick/prefs` (Hwpref.cpp:29)
 - `timedatectl set-timezone <tz>` (:828) - systemd-s Behringer-image-ben van (`Linux/buildroot/configs/KTKick_defconfig:5`); MPC-n NEM ELLENŐRIZHETŐ
 - `echo N > /sys/devices/platform/backlight/backlight/backlight/brightness` (:849)
 - `<yyyy-m-d>` és `<h:m:00>` mint parancs (:941,959; szándék: `date -s`)
 - (Info/Ethernet/Update, hivatkozva:) `/sbin/poweroff` (:30), `/usr/sbin/udhcpc -i eth0 &`, `killall udhcpc` (:125,132), `/usr/bin/swupdate -i /tmp/fwupdate/Kick.swu -v &` (kick_FirmwareUpdate.cpp:444), `reboot -nf` (kick_SWUpdateScreen.cpp:126), `mount -o loop -t ext4` (Hwpref.cpp:228)
-Fájlok (nincs `hardwareEnabled` védelem, Linuxon mindig olvassa): `/sys/devices/soc0/serial_number` (:251), `/etc/version.txt` (:275), `/proc/mounts` (`isStorageconnected`), zoneinfo a `TZ`-hez. Írt: `/data/prefs/preferences.settingsprj` (PENDRIVE_INSTALL.md:47).
+Fájlok (nincs `hardwareEnabled` védelem, Linuxon mindig olvassa): `/sys/devices/soc0/serial_number` (:251), `/etc/version.txt` (:275), `/proc/mounts` (`isStorageconnected`), zoneinfo a `TZ`-hez. Írt: `/data/prefs/preferences.settingsprj` (pendrive-install.md:47).
 Ellenőrző parancs az eszközön: `ls /sys/devices/soc0/serial_number /etc/version.txt /sys/devices/platform/backlight /usr/share/zoneinfo/Asia/Kolkata; which timedatectl date swupdate udhcpc poweroff`.
 
 ## 6. Desktop vs MPC
@@ -71,9 +71,9 @@ Ellenőrző parancs az eszközön: `ls /sys/devices/soc0/serial_number /etc/vers
 - Linux desktop: shell no-op, DE a `TZ`-állítás és a sysfs-fájlolvasás él.
 - MPC: build `KICK_ENABLE_HARDWARE=ON` (tools/build_arm.sh:49), futtatás `KICK_NO_HARDWARE=1` -> a screen-inventory.md:294 "executed" állítása a telepített konfigurációra téves (no-op). Pad-küszöb/érzékenység/görbe: a híd eldobja. Aftertouch: letiltva.
 
-## 7. Hiányok az Akai MPC Preferences-hez képest (WP-G.md G-xxx sorok)
+## 7. Hiányok az Akai MPC Preferences-hez képest (wp-g.md G-xxx sorok)
 - Info: Legal Info (G-052), Version Info Shift-nézet (G-053 ELTÉR), Reset után projekt-mentés felkínálása (G-048).
-- Hardware: Pad Brightness valójában képernyő-fényerő (G-105/113), Dimming (G-112), 4 fokozatú fényerő (G-113), Curve A-D helyett 1-4 (G-109), Bank Button Press (G-117), Shift+Q-Link (G-118), Global Pitch Bend + Range (G-119/120), alapértelmezett Touch Strip mód (KEY61_TOUCH_STRIP_MODES.md:8; MORNING_DECISIONS.md:122,132).
+- Hardware: Pad Brightness valójában képernyő-fényerő (G-105/113), Dimming (G-112), 4 fokozatú fényerő (G-113), Curve A-D helyett 1-4 (G-109), Bank Button Press (G-117), Shift+Q-Link (G-118), Global Pitch Bend + Range (G-119/120), alapértelmezett Touch Strip mód (touch-strip-modes.md:8; MORNING_DECISIONS.md:122,132).
 - Sequencer csoport teljesen hiányzik (G-126..136), benne Rec Arm / Solo Behavior (G-128/129; MORNING_DECISIONS.md:77).
 - Project Defaults: Default Mode/Q-Link/Loop/Slice/Filter/Plugin/Monitor/Track Color/User Level (G-138..153), Project Load/Save: New Project Behavior, User Auto Load File, Template File, Temp File (G-154..158).
 - MIDI/Sync: Global kapcsoló, Sync, MMC, MTC, Program Change, All Notes Off szűrő, port-átnevezés, reset, Enable MIDI Ports When Discovered, Control Mode Output (G-090..104).
@@ -81,7 +81,7 @@ Ellenőrző parancs az eszközön: `ls /sys/devices/soc0/serial_number /etc/vers
 - A WP-G "OK" sorai a hatást nem vizsgálták: G-107/108 (pad küszöb/érzékenység), G-122..124 (dátum/idő/zóna), G-137/141/143/144 (tempó, ütem, ütemmutató) kódból HATÁSTALAN/HIBÁS - javítandó a WP-G-ben.
 
 ## 8. Ismert problémák a dokumentumokban
-screen-inventory.md:166-173,307-308 (setDate/setTime, év-handler, MIDI output nem áll vissza, visibilityChanged log); plans/04-screen-audit.md:95-96 (pad-érzékenység hatástalan MPC-n, Behringer-parancsok); known-issues-and-roadmap.md:82 (Menü/Preferences hiányok), :88 (Hardware alap strip-mód), :101 (aftertouch kikapcsolva); AKAI_MPC_KEY61_TODO.md §5 T10 (pad poly-AT a Hardware oldal flagjétől függ, később letiltva), T27/§6 #6 (EN_PREF Shift+METRONOME), T19 (CV/I2C); §7 (screenshot-segéd `HomePreferencesView`); §8 nem érinti. HW_TEST_REPORT: Preferences-oldal hardveres mérését nem találtam.
+screen-inventory.md:166-173,307-308 (setDate/setTime, év-handler, MIDI output nem áll vissza, visibilityChanged log); planning/plans/04-screen-audit.md:95-96 (pad-érzékenység hatástalan MPC-n, Behringer-parancsok); known-issues-and-roadmap.md:82 (Menü/Preferences hiányok), :88 (Hardware alap strip-mód), :101 (aftertouch kikapcsolva); todo.md §5 T10 (pad poly-AT a Hardware oldal flagjétől függ, később letiltva), T27/§6 #6 (EN_PREF Shift+METRONOME), T19 (CV/I2C); §7 (screenshot-segéd `HomePreferencesView`); §8 nem érinti. HW_TEST_REPORT: Preferences-oldal hardveres mérését nem találtam.
 Új (jelen felmérés, nincs dokumentálva): Info Build Date/Control Version, Factory Reset MPC-n, Project Defaults fogyasztó nélküli mezői, MIDI port felülírás, TZ Asia/Kolkata folyamatszinten, Restore Defaults részlegessége, projekt-autosave alapból KI.
 
 ## 9. Tesztek

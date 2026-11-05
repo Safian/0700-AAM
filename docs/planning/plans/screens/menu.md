@@ -1,6 +1,6 @@
 # Menu (HomeOptions) — review és TODO
 
-Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül; az MPC-hez nem csatlakoztam), 2026-11-04, ág `claude/kick-plans`. A „KÉSZ” itt azt jelenti: van bekötött handler a képernyőig, nem azt, hogy hardveren igazolt. Ahol a régi docs (`WP-G.md`) és a kód ellentmond, a **kód az igazság**. Rövidítések: `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `bridge` = `A/kick_hardware_bridge.h`, `MENU/` = `M/kick_ui/dialogs/`, `MC` = `M/kick_ui_components/source/kick_menuComponent.{h,cpp}`. Prioritás: **P0** összeomlás / adatvesztés / biztonság, **P1** hibás vagy hiányzó alapfunkció, **P2** javítás / kényelem. Méret: S ≤ fél nap, M ≤ 2 nap, L > 2 nap.
+Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül; az MPC-hez nem csatlakoztam), 2026-11-04, ág `claude/kick-plans`. A „KÉSZ” itt azt jelenti: van bekötött handler a képernyőig, nem azt, hogy hardveren igazolt. Ahol a régi docs (`wp-g.md`) és a kód ellentmond, a **kód az igazság**. Rövidítések: `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `bridge` = `A/kick_hardware_bridge.h`, `MENU/` = `M/kick_ui/dialogs/`, `MC` = `M/kick_ui_components/source/kick_menuComponent.{h,cpp}`. Prioritás: **P0** összeomlás / adatvesztés / biztonság, **P1** hibás vagy hiányzó alapfunkció, **P2** javítás / kényelem. Méret: S ≤ fél nap, M ≤ 2 nap, L > 2 nap.
 
 ## 1. Áttekintés
 
@@ -78,12 +78,12 @@
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest)
 
-Forrás: `WP-G.md` (G-001 – G-024, G-044, G-285 – G-286), `KEY61_DOC_VS_KICK.md` (24. sor: „Menu / Browse: a mód-menü; Shift: Browser — nem vizsgált: a menü tartalma”), `known-issues-and-roadmap.md` §3.1 („Menu tartalma”).
+Forrás: `wp-g.md` (G-001 – G-024, G-044, G-285 – G-286), `doc-vs-kick.md` (24. sor: „Menu / Browse: a mód-menü; Shift: Browser — nem vizsgált: a menü tartalma”), `known-issues-and-roadmap.md` §3.1 („Menu tartalma”).
 - **Menü-tartalom**: Project ablak (G-008, G-033), New Project (G-006), Save (G-007), Preferences gomb a Menüben (G-009, G-044), Sounds (G-286), Browser, módok.
 - **Oldalak és testreszabás**: oldalnyilak (G-005), húzással átrendezés (G-010), három pont → Reset Mode Menu (G-012), fekete fogantyú → bal oldali 5 mód gyorspanel (G-011).
 - **Eszköztár a Menü fölött**: Sync mező — MIDI Clock / MTC / Ableton Link (G-013, G-014 NEM-KICK), Help + QR (G-015), Undo History (G-016 – G-018), hangoló (G-019 – G-021), MIDI-monitor ikonok (G-022), Controller Mode (G-024 NEM-KICK), projekt-idő számláló pull-down (G-206, G-207). 
 - **Rendszer-erőforrás ablak** (G-025 – G-032): a Kickben a fejléc gombjáról nyílik; Purge-gombok üresek (`kick_ui_systemResources.cpp:78-79`).
-- **Hiányzó Key 61 elérések**: a Next Sequence, Song, Color Edit, Looper képernyőknek nincs hardveres gombja a Kick Key 61-es kiosztásában (`akai_map.h`), csak a Menü csempéje. Az Akai-féle elérésük **NEM ELLENŐRIZHETŐ**: az útmutató erre vonatkozó fejezetei (WP-B: Next Sequence, Song, Looper; WP-C: Pad Color) még nincsenek feldolgozva (`WALKTHROUGH_PLAN.md`).
+- **Hiányzó Key 61 elérések**: a Next Sequence, Song, Color Edit, Looper képernyőknek nincs hardveres gombja a Kick Key 61-es kiosztásában (`akai_map.h`), csak a Menü csempéje. Az Akai-féle elérésük **NEM ELLENŐRIZHETŐ**: az útmutató erre vonatkozó fejezetei (WP-B: Next Sequence, Song, Looper; WP-C: Pad Color) még nincsenek feldolgozva (`walkthrough-plan.md`).
 - A Menü a Kickben nem listáz Grid / Step Seq / XY / Preferences / Projects-et; az Akai menü a **rendelkezésre álló módokat, projektinfót, beállításokat, mentési és betöltési lehetőségeket** mutatja (G-001).
 
 ## 5. Javaslataim
@@ -102,7 +102,7 @@ Forrás: `WP-G.md` (G-001 – G-024, G-044, G-285 – G-286), `KEY61_DOC_VS_KICK
 - `AppSmoke.py` / `KICK_SMOKE_SCREENS`: `HomeOptions` képernyőkép készíthető (`A/Main.cpp:152-198`); az alapteszt nem járja végig, a csempék megnyitását nem ellenőrzi.
 - `AkaiMapTests` (pad- és gombtérkép), `LedMapTests`, `PadColourMapTests`: a bridge térképeit fedik, a Menü-leképezést (`15 − pad`) nem.
 - Nincs teszt: csempe → képernyő, Dial-navigáció, pad → csempe, MENU toggle, Menü projekt nélkül.
-- A `KEY61_DOC_VS_KICK.md` 24. sora szerint a Menü *tartalma* nem vizsgált.
+- A `doc-vs-kick.md` 24. sora szerint a Menü *tartalma* nem vizsgált.
 
 **MPC-n ellenőrzendők.**
 1. MENU gomb: megnyílik-e a Menü; második nyomás hatása (B1); Shift+MENU → File Browser.

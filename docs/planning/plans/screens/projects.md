@@ -73,7 +73,7 @@
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest)
 
-Forrás: `WP-G.md` (G-001 – G-009 Menu, G-033 – G-043 Project ablak, G-154 – G-157 New Project, G-174 – G-203 Save ablak, G-246), `known-issues-and-roadmap.md`, `04-screen-audit.md`.
+Forrás: `wp-g.md` (G-001 – G-009 Menu, G-033 – G-043 Project ablak, G-154 – G-157 New Project, G-174 – G-203 Save ablak, G-246), `known-issues-and-roadmap.md`, `04-screen-audit.md`.
 - **Save ablak és Save As** (G-174 – G-186): Project / Project As, Track, Drum Program, Sample, Track as MIDI / Pattern (G-188), Audio Mixdown (G-190, G-191); mentési hely választó (Internal, MPC Documents, USB, SD: G-197), File Name mező (G-201), **Save as Template** jelölő (G-202). A Kickben csak a hardveres SAVE gomb mentheti a *meglévő* helyre (`kick_AppHome.cpp:544-546`) — **demo / sablon szerkesztése nem menthető** (`XML:270-271`, a hibaüzenet „Please use Save As…”-ra hivatkozik, ami nincs).
 - **New Project viselkedés** (G-154 – G-157): Empty / Factory / User Auto Load; New Project Dialog módja (Off / Demo / Recent / Demo+Template+Recent); User Template és User Auto Load File kiválasztása. A Kick Preferences ON LAUNCH listája (Selector / New Project / Last Used) **fogyasztó nélkül** (`04-screen-audit.md` §8.2).
 - **Project ablak** (G-033 – G-043): a projekt mintái és sávjai, Purge, Memory and Streaming, Disk Streaming (G-035 – G-038) — nincs.

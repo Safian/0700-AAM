@@ -1,6 +1,6 @@
 # Terv 04 — Képernyő-audit és fejlesztési tervek (indítóképernyő, főképernyő tabjai, Grid, érintő-zongora, MIDI program hozzáadása)
 
-Állapot: terv. Alap: **statikus kódolvasás** (build/futtatás/hardver nélkül) — a „KÉSZ” azt jelenti: van bekötött handler az engine-ig, nem azt, hogy hardveren igazolt. A hardveres igazolás a `research/known-issues-and-roadmap.md`-ben. Részletes bizonyítékok (fájl:sor): `research/screen-inventory.md`, `research/midi-program-add.md`, `research/grid-and-piano-view.md`. Ahol a régi `docs/AKAI_MPC_KEY61_*.md` és a kód ellentmond, a **kód az igazság**.
+Állapot: terv. Alap: **statikus kódolvasás** (build/futtatás/hardver nélkül) — a „KÉSZ” azt jelenti: van bekötött handler az engine-ig, nem azt, hogy hardveren igazolt. A hardveres igazolás a `research/known-issues-and-roadmap.md`-ben. Részletes bizonyítékok (fájl:sor): `research/screen-inventory.md`, `research/midi-program-add.md`, `research/grid-and-piano-view.md`. Ahol a régi `docs/hardware/key61/*.md` és a kód ellentmond, a **kód az igazság**.
 
 ## 0. Prioritások (összefoglaló)
 1. Indítás: nincs indítóképernyő; két gyanús versenyhelyzet (dupla betöltés, üres képernyő); a hardver-/hang-init hibák láthatatlanok.
@@ -27,7 +27,7 @@ Közös: fül- és eszköztár (Add/Delete/Undo/Redo), egy globális UndoManager
 ### 2.1 Sequence tab
 - **KÉSZ:** lista (név, BPM, loop, SEQ/GLO, transzponálás), Half/Double length, Insert bars, Copy events/bars/sequence, Clear (`kick_AppSequenceOptions.cpp:355-440`).
 - **NEM MEGY:** Time Signature opció üres (`:366`, a csempe látszik); Bounce kikommentezve.
-- **Hiányzik / terv (Akai-eltérés, `KEY61_DOC_VS_KICK.md`, WP-D/G):** sequence-szintű beállítások, count-in, SEQ REC ARM, Next Sequence mód finomságai; Song konvertálás (`Convert >SEQ` stub).
+- **Hiányzik / terv (Akai-eltérés, `doc-vs-kick.md`, WP-D/G):** sequence-szintű beállítások, count-in, SEQ REC ARM, Next Sequence mód finomságai; Song konvertálás (`Convert >SEQ` stub).
 - **Javaslat:** működő Time Signature (kiinduló: taktusméret-váltás a sequence hosszához és a metronómhoz igazítva), törlés-megerősítés vagy „Undo-t kínáló toast”, Sequence-duplikálás/ átrendezés húzással, vizuális loop/ tempó állapot.
 ### 2.2 Track tab
 - **KÉSZ:** név, program-választó, hossz, transzponálás, szint, mute, solo, rec-arm, I/P MIDI port+csatorna, mérő; Half/Double speed, Explode, Pitch quantize, Humanize, Split, Copy, Random, Erase (`kick_AppTrackOptions.cpp:172-300`).
@@ -81,7 +81,7 @@ Közös: fül- és eszköztár (Add/Delete/Undo/Redo), egy globális UndoManager
 - CC95 elérhetetlen (hibás címkék: „CC21”-szomszéd, kétszeres „Send4”); `MTTrack::setMidiPort` önmagát írja felül; MidiControl „output” lista a bemenetekből épül; selector ikon-hiba; duplikált program neve nem egyedi;
 - program/track létrehozás-törlés undo-ja nem igazítja a motor vektorait (nincs `valueTreeChildAdded/Removed`);
 - tesztek: csak `MidiPanTests` (a `panToCC10` leképezés); port/csatorna/PC/bank/hot-plug/undo teszt nincs;
-- hardver: a Key 61 DIN/USB kimenetét látja-e a JUCE, ha az adapter foglalja a rawmidi portokat — **nyitott** (`KEY61_HW_BEHAVIOUR.md:10`); hardveres bizonyíték MIDI programra nincs.
+- hardver: a Key 61 DIN/USB kimenetét látja-e a JUCE, ha az adapter foglalja a rawmidi portokat — **nyitott** (`hw-behaviour.md:10`); hardveres bizonyíték MIDI programra nincs.
 **Terv (sorrendben):**
 1. **Biztonság/stabilitás**: zár vagy immutable-snapshot a MIDI-kimeneti listán; a port-lista frissítés ne hívjon visszahívást és ne építse újra feleslegesen; eltűnt portnál látható jelzés és újracsatlakozás.
 2. **Hozzáadási folyamat**: az „Add MIDI program” opció opcionálisan **track-et is létrehoz** (és hozzárendeli); típus-alapú alapnév („MIDI 1”), egyedi név kikényszerítve; kötelező típusválasztás (Apply csak ha választott).

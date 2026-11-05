@@ -18,7 +18,7 @@ Alap: **statikus kódolvasás** (build, futtatás, hardver nélkül), ág `claud
 | Plugin (CLAP) | modális panel: Scan, Add folder, Load, Remove, Panic, hibák, paraméterlista + keresés, 4 makró a Q-Linkeken | `M/kick_ui/program_view/source/kick_ClapPanel.h`, `Kick/clap_host/juce/PluginPanel.cpp` |
 
 **Hogyan érhető el.**
-- **HW EDIT gomb** → `sigScreenClose(MenuProgramEdit)` típustól függetlenül (`A/kick/kick_hardware_bridge.h:1220-1227`); Shift+EDIT → XY FX. MPC-n fizikailag igazolt: „EDIT … fizikai nyomásra: Program Edit … OK” (`docs/AKAI_MPC_KEY61_HW_TEST_REPORT.md:90`). A mód-LED követi (`bridge:277`).
+- **HW EDIT gomb** → `sigScreenClose(MenuProgramEdit)` típustól függetlenül (`A/kick/kick_hardware_bridge.h:1220-1227`); Shift+EDIT → XY FX. MPC-n fizikailag igazolt: „EDIT … fizikai nyomásra: Program Edit … OK” (`docs/hardware/key61/hw-test-report.md:90`). A mód-LED követi (`bridge:277`).
 - **Program fül `edit` gomb** (`M/kick_ui/program_view/source/kick_AppProgramComponent.cpp:60-71`): Clip/Audio → Program Edit; **Drum → Sample Edit** (`MenuSampleEdit`); **Keygroup/Midi/Cv → Pad Perform**; Plugin → CLAP-modál. Következmény: a Drum és Keygroup *Program Edit* lapjai csak a HW EDIT gombbal (vagy a Menü „Program edit” csempéjével) érhetők el, a Program fül más képernyőre visz — a felhasználónak két párhuzamos Drum-szerkesztője van (Sample Edit és Program Edit).
 - A Plugin-szerkesztő **csak** a Program fül `edit` gombján át nyílik (`openClapInstrument`, `kick_AppProgramComponent.cpp:62-64`; más hívó nincs). A HW EDIT gomb Plugin programnál a Program Edit „No Programs Available” üzenetét hozza (`kick_ProgramEdit.cpp:216-224`).
 
@@ -107,12 +107,12 @@ Súly: **P0** = összeomlás/adatkárosodás, **P1** = funkció hibás/félrevez
 
 ## 4. Tervben / hiányzik (az Akai MPC Standalone-hoz képest, a docs-ból ismert tervek)
 
-A kézikönyv nincs a repóban (`docs/akai_mpc_hardware/manuals` üres); az Akai-összevetés a `KEY61_DOC_VS_KICK.md`-re, a WP-D/WP-G lapokra és a tervekre támaszkodik. Általános MPC-ismeretből származó állításokat „(ellenőrizendő)” jelöl.
-- **EDIT gomb jelentése**: a v3.10 szerint „Track Edit Mode” (a Quickstart v1.2: Program Edit); a Kickben nincs külön Track Edit (`KEY61_DOC_VS_KICK.md` #14 vezérlő-sor). Track-szintű tartomány/szűrő/Monitor/Output/Key Range: WP-D (51 HIÁNYZIK, 34 ELTÉR), `research/midi-program-add.md` §6.
+A kézikönyv nincs a repóban (`docs/hardware/key61/manuals` üres); az Akai-összevetés a `doc-vs-kick.md`-re, a WP-D/WP-G lapokra és a tervekre támaszkodik. Általános MPC-ismeretből származó állításokat „(ellenőrizendő)” jelöl.
+- **EDIT gomb jelentése**: a v3.10 szerint „Track Edit Mode” (a Quickstart v1.2: Program Edit); a Kickben nincs külön Track Edit (`doc-vs-kick.md` #14 vezérlő-sor). Track-szintű tartomány/szűrő/Monitor/Output/Key Range: WP-D (51 HIÁNYZIK, 34 ELTÉR), `research/midi-program-add.md` §6.
 - **Program-szintű note/velocity-tartomány, transzpozíció, MIDI/CC-szűrők** (D-165, D-176, D-178, D-175, D-179): hiányzik (`midi-program-add.md` §2, §6; `04-screen-audit.md` §5).
-- **Keygroup-motor** (a Program Edit lapjai ezt vezérelnék): release-ág, burkológörbe, szűrő, LFO, round-robin, voice stealing, loop-crossfade, streaming, max 4 réteg — `plans/02-piano-clap.md`, `research/codebase-survey.md` §1; `04-screen-audit.md` §2.3 javaslata: vagy bekötni, vagy elrejteni a lapokat, amíg nem működnek.
-- **Plugin-szerkesztő**: `clap.gui` (natív GUI) tervben (`04-screen-audit.md` §2.3; `plans/02`, `plans/03`); Sounds/Favorites mód hiányzik (WP-G G-285..287).
-- **Q-Link oszlopváltás, Shift+Q-Link konfiguráció**: nem vizsgált (`KEY61_DOC_VS_KICK.md` #3,#5 vezérlő-sor).
+- **Keygroup-motor** (a Program Edit lapjai ezt vezérelnék): release-ág, burkológörbe, szűrő, LFO, round-robin, voice stealing, loop-crossfade, streaming, max 4 réteg — `planning/plans/02-piano-clap.md`, `research/codebase-survey.md` §1; `04-screen-audit.md` §2.3 javaslata: vagy bekötni, vagy elrejteni a lapokat, amíg nem működnek.
+- **Plugin-szerkesztő**: `clap.gui` (natív GUI) tervben (`04-screen-audit.md` §2.3; `planning/plans/02`, `planning/plans/03`); Sounds/Favorites mód hiányzik (WP-G G-285..287).
+- **Q-Link oszlopváltás, Shift+Q-Link konfiguráció**: nem vizsgált (`doc-vs-kick.md` #3,#5 vezérlő-sor).
 - **Zóna-szerkesztés (Edit Zones), Flatten Pads, Convert to KG, Drum insert-szerkesztés**: a régi Behringer-UI tervezte (header-ikonok léteznek), a Kickben nem épült meg (B15).
 - **Automation „Add New”, Clear Auto, TC ablak az Audio szerkesztőből**: Akai-hiányok (`04-screen-audit.md` §3, Grid-mintára).
 - **MPC 16 pad-os bank-nézet (Drum pad-lista a fejlécben)**: halott fejléc-komponens (B15) — (ellenőrizendő) az Akai Program Edit pad-választója.
@@ -169,7 +169,7 @@ Sorrend: hibák → hiányzó funkciók → javaslatok → tesztek. (P0/P1/P2; m
 - [ ] **PE-16** (P2, S) Halott kód takarítása (B15) **az owner jóváhagyásával** — `program_edit_ui.cpp:15-21,35-41`, a nem fordított .cpp-k, `KeyGroupInserts`, `PanVelocityEditKG`.
 - [x] **PE-20** (P1, L) Réteg 2–4 mintakezelés + velocity-tartomány UI (Samples lap réteg-gombjai mintát fogadjanak; start/end velocity) — `PE/drum/kick_DrumProgramSampleTab.cpp:138-163`, `EN/audio_program/source/mt_audio_iprogram.cpp:760-767`. Függ: PE-06; az Assign Sample réteg-választóval (AS-10) együtt tervezendő.
 - [x] **PE-21** (P1, L) Szűrő (típus/cutoff/rezonancia) modell-API + UI Drumra (és Keygroupra a motor kész állapotában). Függ: PE-02.
-- [ ] **PE-22** (P1, L) Keygroup Envelopes/LFO/Layer Mix motor-bekötés — a zongora-terv (02) motorjával egyesítve; addig PE-23. Függ: `plans/02-piano-clap.md` döntés.
+- [ ] **PE-22** (P1, L) Keygroup Envelopes/LFO/Layer Mix motor-bekötés — a zongora-terv (02) motorjával egyesítve; addig PE-23. Függ: `planning/plans/02-piano-clap.md` döntés.
 - [x] **PE-23** (P1, S) Keygroup Envelopes/LFO addig jelezze „nem aktív”-ként (szürke + felirat) vagy rejtse — `04-screen-audit.md` §2.3. (Owner dönt PE-22 vs PE-23.)
 - [x] **PE-24** (P1, M) Zóna-szerkesztés (min/max/root) Keygroupra — `mt_audio_interface_types.cpp:133-134`; Drum Flatten/Convert (döntés).
 - [x] **PE-25** (P1, M) Q-Link→paraméter leképezés a Program Edit lapjain (`knobCommand`, 4 Q-Link/lap) — `M/kick_ui_common/source/kick_IScreen.h:106`, mintának `PadMixer::knobCommand` (`kick_PadMixer.cpp:628`).
@@ -179,7 +179,7 @@ Sorrend: hibák → hiányzó funkciók → javaslatok → tesztek. (P0/P1/P2; m
 - [x] **PE-30** (P1, M) Egységteszt: MIDI-editor CC-kötés, Clip pad mute group, knob-csomag ≠ note (`Kick/tests/platform/`).
 - [x] **PE-31** (P1, M) Motor-egységteszt: Layer Play (Cycle/Random/Velocity 127), Sample Play enum↔címke, DrumVoice-kötés (modell→atom→renderelt eltérés).
 - [x] **PE-32** (P1, M) ASAN-os Clip programváltó smoke (az `AppSmoke.py` bővítése Clip/Drum/Keygroup programokkal és a Program Edit megnyitásával).
-- [x] **PE-33** (P1, M) MPC hardveres ellenőrzőlista bővítése a 6. fejezet pontjaival (`docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md`), eredmény-rögzítés a jegyzőkönyvben.
+- [x] **PE-33** (P1, M) MPC hardveres ellenőrzőlista bővítése a 6. fejezet pontjaival (`docs/hardware/key61/hw-test-checklist.md`), eredmény-rögzítés a jegyzőkönyvben.
 
 ### Állapot (S-F, `sonnet/s-f-padperform`)
 

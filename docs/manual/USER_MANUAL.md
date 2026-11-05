@@ -184,6 +184,6 @@ A beállítások menüben a hardveres interfészek, hálózati kapcsolatok és f
 
 ## 📚 Kapcsolódó További Dokumentumok a Repóban
 
-- [Akai MPC Key 61 Pendrive Telepítési Útmutató (PENDRIVE_INSTALL.md)](../akai_mpc_hardware/PENDRIVE_INSTALL.md)
-- [Hardver Viselkedés és LED Protokoll (KEY61_HW_BEHAVIOUR.md)](../akai_mpc_hardware/KEY61_HW_BEHAVIOUR.md)
+- [Akai MPC Key 61 Pendrive Telepítési Útmutató (pendrive-install.md)](../hardware/key61/pendrive-install.md)
+- [Hardver Viselkedés és LED Protokoll (hw-behaviour.md)](../hardware/key61/hw-behaviour.md)
 - [CLAP Plugin Hoszt Építési Útmutató](../../Kick/clap_host/README.md)

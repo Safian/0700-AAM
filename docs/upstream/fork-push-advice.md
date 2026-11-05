@@ -10,7 +10,7 @@
 - `safian/main`-re több agent/munkamenet pusholhat egyszerre (2026-11-04-én a push elutasításba futott, 7 új doksi-commit jött): mindig `git fetch fork`, `git rev-list --left-right --count HEAD...fork/safian/main`, a saját commitot `git rebase fork/safian/main`-nel rakd rá, **force push soha**; push csak `git push fork HEAD:safian/main`, **az `origin` (MusicTribe) soha**.
 - Fájlokat névvel `git add`-old (`git add -A` nem), a commit üzenet tartalmazza a kapukat és hogy mi nem lett ellenőrizve.
 
-## Az upstream-triázs (`docs/UPSTREAM_TRIAGE.md`)
+## Az upstream-triázs (`docs/upstream/upstream-triage.md`)
 - Az agy (Gemini) állította elő; a commit-hasheket és a csoportosítást **én nem ellenőriztem soronként**, mintavétel nélkül ne hivatkozz rá. Az alap `8ea4af11` volt, azóta több mint 20 commit jött (log, aszinkron mappaméret, oktáv-akkord/LED-sor, pendrive-telepítő, mobil, tervek): frissíteni kell.
 - A "nem upstreamelhető" listában a **mobil chassis** commitok szerepelnek. A hardverkinézet kivétele (2026-11-04) után a mobil app maradéka (teljes képernyős UI, külső MIDI) upstreamelhető irány lehet, a triázst újra kell osztani. A Proper skin (877 fájl) és a Behringer/KICK nevek és logók továbbra sem mehetnek upstreamre.
 - Szabály az `AGENTS.md`-ből: egy PR = egy önálló változás, tiszta `main`-ből ágazva; a Linux/gyári hardver viselkedése nem változhat (`#if JUCE_IOS` / `JUCE_MAC`).

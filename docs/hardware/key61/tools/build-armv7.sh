@@ -1,5 +1,5 @@
 #!/bin/bash
-# ARMv7 build of Kick for the MPC Key 61 in the kick-armv7-builder Docker image (details: ../../AKAI_MPC_KEY61_BUILD_RECIPE.md).
+# ARMv7 build of Kick for the MPC Key 61 in the kick-armv7-builder Docker image (details: ../../build-recipe.md).
 # Usage: W=<checkout> CACHE=<writable CPM cache> [DEBUG=1] [BUILD=build-arm] [JOBS=2] bash build-armv7.sh
 #   W      checkout (worktree) to build; CACHE  writable CPM source cache (a read-only mount breaks cmake.lock)
 #   DEBUG  1 = -g build (~190 MB binary, for gdb-multiarch core analysis); default Release

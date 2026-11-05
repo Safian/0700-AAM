@@ -552,7 +552,7 @@ add_test(NAME kick-power-key COMMAND kick-power-key-tests)
 set_tests_properties(kick-power-key PROPERTIES TIMEOUT 20)
 
 # Bootstrap script (pendrive install / update / rollback / power key inhibitor), offline with mock binaries.
-add_test(NAME kick-tkgl-bootstrap COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/../../../docs/akai_mpc_hardware/tools/test_tkgl_bootstrap.sh")
+add_test(NAME kick-tkgl-bootstrap COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/../../../docs/hardware/key61/tools/test_tkgl_bootstrap.sh")
 set_tests_properties(kick-tkgl-bootstrap PROPERTIES TIMEOUT 300 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
 
 # Keybed processor: transpose, channel, velocity curves, scale filter, routing, pedals (PP-21, PP-21a-e, PP-30b)

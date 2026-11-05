@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Pure (JUCE-free) logic of the Kick Update screen: VERSION file parsing, version comparison, the state of the package on
 // the USB drive against the installed Kick, and the guards for a restart. The installer itself is the pendrive bootstrap
-// (docs/akai_mpc_hardware/tools/tkgl_bootstrap); this only tells the user what it will do. Host-tested in
+// (docs/hardware/key61/tools/tkgl_bootstrap); this only tells the user what it will do. Host-tested in
 // Kick/tests/platform/KickUpdateTests.cpp.
 #pragma once
 

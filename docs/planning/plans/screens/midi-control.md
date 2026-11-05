@@ -140,7 +140,7 @@ Súlyosság szerint rendezve.
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest)
 
-- **Doksi-források:** `KEY61_TOUCH_STRIP_MODES.md` §5, `KEY61_DOC_VS_KICK.md` 19. sor, WP-G G-022, G-095, G-210, `screen-inventory.md` 4.19 ("nem olvasva mélyen").
+- **Doksi-források:** `touch-strip-modes.md` §5, `doc-vs-kick.md` 19. sor, WP-G G-022, G-095, G-210, `screen-inventory.md` 4.19 ("nem olvasva mélyen").
 - **Strip a MIDI Control módban:** CC-szám, csatorna, Low/High Range, Touch Sense, Note (útmutató 334. o.); a Mode itt nem elérhető. A Kick listában nincs strip-elem.
 - **MIDI Control Mode Output** a Preferences-ben (G-095): nincs. A Kick egyetlen portot használ a képernyőn.
 - **MIDI Monitor** az I/O ikonokról és a fejlécből (G-022, G-210): csak ezen a képernyőn érhető el.
@@ -179,7 +179,7 @@ Súlyosság szerint rendezve.
 
 **Az MPC-n ellenőrzendők:**
 1. Shift+KEYBOARD CONTROL megnyitja a képernyőt, a LED halvány.
-2. Output port: a Key 61 DIN OUT / USB portja szerepel-e a listában (nyitott: `KEY61_HW_BEHAVIOUR.md:10`).
+2. Output port: a Key 61 DIN OUT / USB portja szerepel-e a listában (nyitott: `hw-behaviour.md:10`).
 3. Minden pad ütésre a megfelelő Note On/Off a monitoron és egy külső MIDI-vevőn; bankváltás utáni hangok.
 4. Fantom üzenetek: Shift, REC, OVERDUB, bank gomb, Data Dial, PLAY elengedés mérése a MIDI Monitoron.
 5. Q-Link lépésszám és sebesség, első ütés a forgatás után, Custom Q-Link mód hatása.

@@ -35,7 +35,7 @@ Eszköz: MPC Key 61, `192.168.0.30`. Alap: `fork/safian/main` `4605b75e` (a Sess
 Fizikai próba kell: a 3. és 4. hiba pontos oka (gomb-naplózás kell), LOCATE+STEP, SHIFT+STOP, LED két színe, pad RGB, RECALL, PAN→CC10, érintő skálázás.
 
 ## 2. kör (önállóan, a felhasználó nélkül)
-Ág a helyi próbákkal: `hw-local-patches` (a `fork`-on; ideiglenes startup-patch, `seekSteps`, `[AKAI-BTN]`/`[AKAI-LED]` naplózás, `ledraw`/`aftertouch` ideiglenes parancsok). Build-recept: `docs/AKAI_MPC_KEY61_BUILD_RECIPE.md`.
+Ág a helyi próbákkal: `hw-local-patches` (a `fork`-on; ideiglenes startup-patch, `seekSteps`, `[AKAI-BTN]`/`[AKAI-LED]` naplózás, `ledraw`/`aftertouch` ideiglenes parancsok). Build-recept: `docs/hardware/key61/build-recipe.md`.
 
 ### 7. hiba – spontán SIGSEGV üresjáratban (új)
 A `KICK_AKAI_PORT0=0` módban futó példány (PID 29666, kb. 25 perc futás után, nem nyúlt hozzá senki) összeomlott: `/data/coredumps/Kick.2026-11-01T052810Z.core.zst`, `signal=11`. Backtrace: `Aura::Aura::processReplacing (this=0x3f2aa08, sampleFrames=0)` at `AudIO/AudIO/airwindows/src/Aura/AuraProc.cpp:78`, az audio szálban (a további frame-ek `??`, "corrupt stack?"). **Korlát:** a core az előző `-g` buildből való, a szimbólumokat az utána újraépített binaryval oldottam fel (az AudIO kód nem változott, a függvénynév valószínű, de a pontos sor nem biztos). Ok nem megállapítva; a `sampleFrames=0` hívás gyanús.
@@ -47,7 +47,7 @@ A Port 1-re először mind a 36 LED-re `0x90 <note> 0x00` megy (led=0..35, `valu
 A bridge aftertouch-kapuja (`m_pad_aftertouch_enabled`) kódban alapból `false`, a UI Hardware beállítása kapcsolja be. `echo "aftertouch 0|1" > /data/kick_cmd` ideiglenes parancs kész (`[CMD] aftertouch gate=0` a naplóban), de a nyomva tartott pad fizikai nyomás nélkül nem szimulálható. **Fizikai próba kell** (előbb kapu `0`, utána `1`, és figyelni, hogy a gyors ismétlés megszűnik-e).
 
 ## 3. kör (build `b8ee63a6`, saját patch nélkül, recept szerint)
-Build: `docs/AKAI_MPC_KEY61_BUILD_RECIPE.md` (Release, `-DKICK_ENABLE_HARDWARE=ON -DKICK_TOUCH_SINGLE_TAP_LISTBOX=ON`, 16 MB). Indítás: `KICK_NO_HARDWARE=1 KICK_NO_SERIAL_DEVICE=1`. A build `1024x600`-ból skáláz `1280x800`-ra (`[BRIDGE] rendering 1024x600 to 1280x800`), az elrendezés ezért más, mint a korábbi buildeken (pl. a Program fül kb. x=440, y=145).
+Build: `docs/hardware/key61/build-recipe.md` (Release, `-DKICK_ENABLE_HARDWARE=ON -DKICK_TOUCH_SINGLE_TAP_LISTBOX=ON`, 16 MB). Indítás: `KICK_NO_HARDWARE=1 KICK_NO_SERIAL_DEVICE=1`. A build `1024x600`-ból skáláz `1280x800`-ra (`[BRIDGE] rendering 1024x600 to 1280x800`), az elrendezés ezért más, mint a korábbi buildeken (pl. a Program fül kb. x=440, y=145).
 
 | Tétel | Állapot | Bizonyíték |
 |---|---|---|
@@ -67,7 +67,7 @@ Az app indításkor `0x90 <note> 0`-t küld mind a 36 LED-re, majd bekapcsolja a
 Próba reggelre (az MPC-n a telepített build futásidőben kapcsol, nincs külön build): leállítás `kill -TERM <pid>`, indítás `cd /data && KICK_AKAI_LED_MODE=<note|cc|noteoff0> KICK_NO_HARDWARE=1 KICK_NO_SERIAL_DEVICE=1 setsid /data/Kick > /data/kick.log 2>&1 < /dev/null &`; a naplóban `LED mode: <mód>`, a STOP LED-nek indításkor világítania, a többinek nem szabad. Utána `echo "snapshot /data/x.ppm" > /data/kick_cmd` felesleges, a LED-et csak szem látja.
 
 ### LED-protokoll: a kamerás mérés eredménye (4. kör)
-Photo Booth kamerával, `btn PLAY` utáni LED-változással (STOP-nak ki, PLAY-nek be kell kapcsolnia): **`KICK_AKAI_LED_MODE=cc` működik; `note` (alap) és `noteoff0` nem** (a STOP nem aludt ki). A gombok LED-jét tehát `0xB0 <gomb-note> <érték>` vezérli. A `note` módban a gombok a firmware állapotában ragadnak (a korábbi "minden világít" ebből). Részletek és színek: `docs/akai_mpc_hardware/KEY61_LED_COLOURS.md`. **Javaslat: az alap legyen `cc`.**
+Photo Booth kamerával, `btn PLAY` utáni LED-változással (STOP-nak ki, PLAY-nek be kell kapcsolnia): **`KICK_AKAI_LED_MODE=cc` működik; `note` (alap) és `noteoff0` nem** (a STOP nem aludt ki). A gombok LED-jét tehát `0xB0 <gomb-note> <érték>` vezérli. A `note` módban a gombok a firmware állapotában ragadnak (a korábbi "minden világít" ebből). Részletek és színek: `docs/hardware/key61/led-colours.md`. **Javaslat: az alap legyen `cc`.**
 
 ## 5. kör (`safian/main` `ea7f2d68`, `-g` build, tartalék kijelzővel)
 Build: `-g`, `-DKICK_TOUCH_SINGLE_TAP_LISTBOX=ON`; a docker-build `-j4`-nél memóriahiány miatt megszakadt (`Killed signal terminated program cc1plus`, `audio_core.cpp`), `-j2`-vel lefutott. Indítás: `KICK_NO_HARDWARE=1 KICK_NO_SERIAL_DEVICE=1`.
@@ -223,12 +223,12 @@ A húzás (`mouseDrag`) külön naplósort nem ír; a csúszka és a tekerő a f
 Az útmutató a REC/OVERDUB LED-színt nem írja le.
 
 # VÉGLEGES ÖSSZEFOGLALÓ (2026-11-02, build `safian/main` `b65dc8c6`, ARMv7 `-g`, `KICK_NO_HARDWARE=1`)
-A fenti körök (1–14) összegzése. Minden állítás a megadott körben mért bizonyítékra támaszkodik; az útmutató: MPC v3.10 (`docs/akai_mpc_hardware/`, összevetés: `KEY61_DOC_VS_KICK.md`).
+A fenti körök (1–14) összegzése. Minden állítás a megadott körben mért bizonyítékra támaszkodik; az útmutató: MPC v3.10 (`docs/hardware/key61/`, összevetés: `doc-vs-kick.md`).
 
 ## Hardveren igazolt (OK)
 | Terület | Állapot | Kör |
 |---|---|---|
-| Build és telepítés | recept rögzítve (`AKAI_MPC_KEY61_BUILD_RECIPE.md`, `tools/build-armv7.sh`, `JOBS=2`) | 2., 3. |
+| Build és telepítés | recept rögzítve (`build-recipe.md`, `tools/build-armv7.sh`, `JOBS=2`) | 2., 3. |
 | Indulás kijelző nélkül | működik (`179c99c9`), tmp patch nélkül | 3. |
 | **Érintés** | működik: fizikai és injektált, `delivery=manual`; fülváltás, Step Seq csúszka, tekerő | 13. |
 | Gombok | minden gomb megérkezik (`[AKAI-BTN]`); gombpárok a várt képernyőt nyitják: EDIT/XYFX, GRID/STEP SEQ, MIX/PAD, MUTE/PAD, SAMPLE EDIT/SAMPLER, KEYBOARD CONTROL/MIDI CTRL, SOUNDS, UNDO/REDO, AUTOMATION | 6., 7. |
@@ -243,7 +243,7 @@ A fenti körök (1–14) összegzése. Minden állítás a megadott körben mér
 | Tétel | Állapot |
 |---|---|
 | REC/OVERDUB LED | nincs bekötve a szekvenciára; felhasználói döntés: REC élesítve piros, felvételkor villog; OVERDUB aktív zöld |
-| Keyboard Control menü, Sounds Mode, Locate ablak | hiányzik (doksi szerint kell) — `KEY61_DOC_VS_KICK.md` |
+| Keyboard Control menü, Sounds Mode, Locate ablak | hiányzik (doksi szerint kell) — `doc-vs-kick.md` |
 | Touch strip LED-sor | a doksi szerint nincs szoftveres funkciója (nem hiba) |
 | Automation: Shift | a doksi szerint ki/be kapcsol; a Kick csak kikapcsol |
 | Stop dupla nyomás | nem vizsgált |

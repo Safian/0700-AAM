@@ -366,7 +366,7 @@ namespace ui
         g.fillPath( path, path.getTransformToScaleToFit( 1.0f, 1.0f, (float)w - 2.0f, (float)h - 2.0f, true ) );
     }
 
-    // Colours of the piano-ui mock-up (docs/plans/assets/piano-ui, dark theme): graphite gap, ivory / ebony keys,
+    // Colours of the piano-ui mock-up (docs/planning/plans/assets/piano-ui, dark theme): graphite gap, ivory / ebony keys,
     // velocity bands blue / turquoise / yellow / orange / red (the Kick pad LED palette), amber = held by the pedal,
     // cyan = sounds from elsewhere. A colour set on the component (or the look and feel) wins.
     juce::Colour KeyboardComponent::colourOr( int id, juce::Colour fallback ) const

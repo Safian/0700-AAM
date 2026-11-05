@@ -59,7 +59,7 @@ S-C: NS-01..03, 06..09 (`dec5d617`, `d2d51ce2`), SG-01..08 (`10217009`), CE-01, 
 | Keygroup / plugin / MIDI / CV sávok **alapból a Pad Perform pad-szín kiosztását** használják; egyedi kiosztás a pad-terület megérintésével | JAVASLAT (owner-döntés): a Keygroup / MIDI programok alapszíne a Pad Perform színei: gyökér = piros, skála-hang = sötétsárga, a többi halvány (S-F: ugyanez a pad-LED logika); ma `defaultPadColours` = { Red } (csak az első pad piros, a többi 0 = sötétpiros). Ezt a `mt_audio_iprogram.h` tömbje cseréli, a program-típusonként |
 
 
-**Az Akai-összevetésről.** Az Akai útmutató erre a három módra vonatkozó fejezeteit (WP-B: Next Sequence, Song, Looper; WP-C: Pad Color) a `WALKTHROUGH_PLAN.md` szerint még **nem** dolgozta fel senki (a `walkthrough/` mappában csak WP-B.raw.json, WP-D, WP-G van, és a nyers JSON-ban nincs „Next Sequence” / „Song” / „Color” találat). Ezért ahol az Akai-viselkedésről szólok, az **NEM ELLENŐRIZHETŐ KÓDBÓL / DOKUMENTUMBÓL**; az első TODO ennek pótlása (NSC-01).
+**Az Akai-összevetésről.** Az Akai útmutató erre a három módra vonatkozó fejezeteit (WP-B: Next Sequence, Song, Looper; WP-C: Pad Color) a `walkthrough-plan.md` szerint még **nem** dolgozta fel senki (a `walkthrough/` mappában csak wp-b.raw.json, WP-D, WP-G van, és a nyers JSON-ban nincs „Next Sequence” / „Song” / „Color” találat). Ezért ahol az Akai-viselkedésről szólok, az **NEM ELLENŐRIZHETŐ KÓDBÓL / DOKUMENTUMBÓL**; az első TODO ennek pótlása (NSC-01).
 
 ## 1. Áttekintés
 
@@ -200,7 +200,7 @@ A híd az UI→hardver (DCL) parancsok közül **csak** az `EN_PAD_SET_COLOUR_ST
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest)
 
-- **Akai-összevetés mindhárom módra hiányzik** (NEM ELLENŐRIZHETŐ): WP-B (Next Sequence, Song) és WP-C (Pad Color) nincs kész; sem a doksi, sem a `KEY61_DOC_VS_KICK.md` nem ír róluk. A `known-issues-and-roadmap.md` a Next Sequence / Song / Color Edit-et csak a leltárból (`screen-inventory.md` §4.21 – 4.23) említi: Next Sequence és Color Edit „KÉSZ, logika mélysége nem követve az engine-ig”, Song Export / Convert STUB.
+- **Akai-összevetés mindhárom módra hiányzik** (NEM ELLENŐRIZHETŐ): WP-B (Next Sequence, Song) és WP-C (Pad Color) nincs kész; sem a doksi, sem a `doc-vs-kick.md` nem ír róluk. A `known-issues-and-roadmap.md` a Next Sequence / Song / Color Edit-et csak a leltárból (`screen-inventory.md` §4.21 – 4.23) említi: Next Sequence és Color Edit „KÉSZ, logika mélysége nem követve az engine-ig”, Song Export / Convert STUB.
 - **Song**: Export és Convert >SEQ (STUB); dal törlése / átnevezése; undo; az Akai Save ablak szerinti exportok (Track as MIDI / Pattern G-188, Audio Mixdown G-190, G-191) — a Song Export tartalmáról döntés kell.
 - **Next Sequence**: Key 61 gomb nincs; érintéses transport nincs; a Hold/Sudden/Next Bar/Clear Akai-szerinti pontos viselkedése N/E.
 - **Color Edit**: a pad-szín hardveres megjelenítése MPC-n (lásd CE-B2); Akai Pad Color 3 mód viselkedése N/E.
@@ -282,5 +282,5 @@ Függőségek: NS-03 → NS-02; NS-05, SG-10, CE-04 ← NS-04 (közös pad-LED r
 - [ ] **CE-08** (P2, S) Híd `EN_PAD_*` parancs-leképezés teszt (`pad_colour_map.h` bővítés a `PadColourMapTests` mintájára). Függ: NS-04.
 
 *Közös*
-- [ ] **NSC-01** (P1, M) Az Akai-összevetés elvégzése (WP-B: Next Sequence, Song; WP-C: Pad Color) a `WALKTHROUGH_PLAN.md` szerint — a Hold / Sudden / Next Bar / Clear, a Song Export és Convert, a Pad Off / Pad On / Empty Pad módok Akai-szemantikája, a Key 61 elérés. Blokkolja: NS-05, SG-08, CE-02 (módválasztók).
+- [ ] **NSC-01** (P1, M) Az Akai-összevetés elvégzése (WP-B: Next Sequence, Song; WP-C: Pad Color) a `walkthrough-plan.md` szerint — a Hold / Sudden / Next Bar / Clear, a Song Export és Convert, a Pad Off / Pad On / Empty Pad módok Akai-szemantikája, a Key 61 elérés. Blokkolja: NS-05, SG-08, CE-02 (módválasztók).
 - [ ] **NSC-02** (P1, M) MPC hardveres ellenőrzőlista végrehajtása (6. szakasz), különösen NS-B1 (összeomlás) és a pad-LED viselkedés — a hardveres session végezze.

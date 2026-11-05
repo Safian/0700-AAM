@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify docs/UPSTREAM_TRIAGE.md against the git history.
+"""Verify docs/upstream/upstream-triage.md against the git history.
 
 For every commit-hash reference in the document (backticked, 7-40 hex digits) it checks:
   1. the hash resolves to a commit (git cat-file -e),
@@ -48,7 +48,7 @@ SHORTSTAT_RE = re.compile(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--doc", default="docs/UPSTREAM_TRIAGE.md")
+    ap.add_argument("--doc", default="docs/upstream/upstream-triage.md")
     ap.add_argument("--base", default="origin/main")
     ap.add_argument("--head", default=DEFAULT_HEAD,
                     help="tip ref the document describes (default: fork/safian/main if it exists, else HEAD)")

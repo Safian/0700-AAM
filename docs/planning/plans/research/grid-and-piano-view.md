@@ -1,6 +1,6 @@
 # Grid képernyő és zongora/billentyűzet nézet: felmérés (2026-11-04)
 
-Csak olvasás. Forrás: kód (ág `claude/kick-plans`, worktree `Kick/`), `docs/`, és az MPC Standalone OS User Guide v3.10 szövege (a PDF a `.worktrees/kick-mpc-test/docs/akai_mpc_hardware/manuals/` alatt van; a kick-plans worktree `manuals/` mappája üres, csak `.gitignore`). Jelölés: KÉSZ / RÉSZLEGES / STUB / BUGOS GYANÚ / NEM ELLENŐRIZHETŐ KÓDBÓL. Útmutató-oldal = nyomtatott oldalszám.
+Csak olvasás. Forrás: kód (ág `claude/kick-plans`, worktree `Kick/`), `docs/`, és az MPC Standalone OS User Guide v3.10 szövege (a PDF a `.worktrees/kick-mpc-test/docs/hardware/key61/manuals/` alatt van; a kick-plans worktree `manuals/` mappája üres, csak `.gitignore`). Jelölés: KÉSZ / RÉSZLEGES / STUB / BUGOS GYANÚ / NEM ELLENŐRIZHETŐ KÓDBÓL. Útmutató-oldal = nyomtatott oldalszám.
 Fájlok rövidítve: `G/` = `Kick/modules/kick_ui/audio_components/gridview/`.
 
 ## 0. Terminológiai korrekció (fontos)
@@ -21,7 +21,7 @@ Fájlok rövidítve: `G/` = `Kick/modules/kick_ui/audio_components/gridview/`.
 | Eraser: koppintás / húzás törli | KÉSZ | `kick_GridEraseTool.cpp:21-33` |
 | Select: doboz-kijelölés, mozgatás | KÉSZ | `kick_GridSelectTool.cpp:43-145` |
 | Copy-húzás eszköz (`GridCopyTool`) | STUB/ELÉRHETETLEN: létrehozva (`kick_GridComponent.cpp:57`), de nincs fejléc-gomb, amely `GridToolType::GridCopyTool`-t választana | `kick_AppGridHeader.cpp:45-48` (csak 4 tool jelez) |
-| Magnify (húzás-görgetés, kétujjas csípés-zoom) | BUGOS GYANÚ (MPC-n halott): minden ág `if(event.source.isTouch())`; az MPC "manual" érintés-útja a főegér-forrást adja (nem touch) | `kick_GridMagnifyTool.cpp:14,32,45`; `apps/kick/kick_hardware_bridge.h:542,572,620` (`getMainMouseSource()`), `docs/AKAI_MPC_KEY61_HW_TEST_REPORT.md` 13. kör (`delivery=manual` 184, `peer` 0) |
+| Magnify (húzás-görgetés, kétujjas csípés-zoom) | BUGOS GYANÚ (MPC-n halott): minden ág `if(event.source.isTouch())`; az MPC "manual" érintés-útja a főegér-forrást adja (nem touch) | `kick_GridMagnifyTool.cpp:14,32,45`; `apps/kick/kick_hardware_bridge.h:542,572,620` (`getMainMouseSource()`), `docs/hardware/key61/hw-test-report.md` 13. kör (`delivery=manual` 184, `peer` 0) |
 | Cut / Copy / Paste gombok (kijelölés, beillesztés a playheadnél) | KÉSZ | `kick_AppGrid.cpp:230-246`, `kick_AppGridHeader.cpp:50-87` |
 | Select All, Duplicate, Delete gomb, Solo, Clear Auto (útmutató p.168-171) | HIÁNYZIK (Delete = Cut; Select All/Duplicate nincs) | nincs találat a `G/` alatt |
 | Edit Start / Edit End / Transpose / Nudge / Don't Snap (a Data Dial vagy +/- állítja) | KÉSZ | `kick_ParameterView.cpp:11-60`, `kick_AppGrid.cpp:564-590` (dial-ág), `:618-780` (helperek) |
@@ -50,7 +50,7 @@ Fájlok rövidítve: `G/` = `Kick/modules/kick_ui/audio_components/gridview/`.
 ### A2. Key 61 hardver a Gridben (a híd -> DCL -> `AppGrid::handleCommand`)
 | Gomb | Hatás Gridben | Forrás |
 |---|---|---|
-| GRID / Shift+GRID | Grid View / Step Sequencer megnyitása (mért: OK) | `kick_hardware_bridge.h:1240-1246`; `KEY61_DOC_VS_KICK.md` 15. sor |
+| GRID / Shift+GRID | Grid View / Step Sequencer megnyitása (mért: OK) | `kick_hardware_bridge.h:1240-1246`; `doc-vs-kick.md` 15. sor |
 | 16 pad | note on/off ch1 a kijelölt trackre (`addLiveMidiMsg`) + sorkijelölés (HittingPad) | `kick_AppGrid.cpp:535-560`; pad-szín: `hardware/pad_colour_map.h` |
 | Data Dial | az aktív mód (Edit Start/End, Transpose, Nudge) a kijelölt jegyzetekre | `kick_AppGrid.cpp:564-590` |
 | +/- | `EN_PLUS/MINUS` (a Grid külön nem kezeli) | `kick_hardware_bridge.h:1220-1230` |
@@ -70,12 +70,12 @@ Nincs Key 61-gomb a Grid-eszközök (Pencil/Eraser/Select) váltására, a zoomr
 - Automation sáv "Add New" paraméterrel; Probability/Ratchet megvan.
 - Grid Edit: Trim To Length, Convert to Progression, Bounce (üres), Pitch Quantize (megvan), Humanize velocity.
 - Pinch-zoom érintésen (kód megvan, de MPC-n nem jut el: 0. lent).
-- A walkthrough WP-E (Grid, Step Seq, List Edit, útmutató p.165-212) NINCS elkészítve; csak WP-D és WP-G van (`docs/akai_mpc_hardware/walkthrough/`). A fenti összevetés ezen felmérés saját munkája, nem claims-register.
+- A walkthrough WP-E (Grid, Step Seq, List Edit, útmutató p.165-212) NINCS elkészítve; csak WP-D és WP-G van (`docs/hardware/key61/walkthrough/`). A fenti összevetés ezen felmérés saját munkája, nem claims-register.
 
 ### A4. Ismert hibák a dokumentumokból (kód-igazsággal egyeztetve)
 - H30: Grid csak A bank sorait mutatja / hang "nincs bent" (`known-issues-and-roadmap.md`); a kód-ok valószínűleg a dupla bankeltolás + a nézet-pozíció (`kick_AppGrid.cpp:186-190` bankChanged görgetés).
 - H4: List Edit dial nem látszik hatni (nem Grid).
-- `docs/AKAI_MPC_KEY61_*.md` Gridet érintő sorai: TODO L67 (GRID gomb OK), L101 (pad dupla trigger: a Grid maga indít hangot, ez a `handleCommand` pad-ág).
+- `docs/hardware/key61/*.md` Gridet érintő sorai: TODO L67 (GRID gomb OK), L101 (pad dupla trigger: a Grid maga indít hangot, ez a `handleCommand` pad-ág).
 - Az érintés a GridComponentre működik (HW report 13. kör célpontok között).
 
 ## B) ZONGORA / BILLENTYŰZET NÉZET ÉRINTŐ FELÜLETEN
@@ -85,11 +85,11 @@ Nincs Key 61-gomb a Grid-eszközök (Pencil/Eraser/Select) váltására, a zoomr
    - Tud: fix 61+ billentyű-rács, `firstKey=48`, `keyWidth=16`, fel/le oktáv-gombok (`UpDownButton`), fehér/fekete billentyű hit-test, **velocity az érintés magasságából** (`useMousePositionForVelocity=true`, privát flag; `remappedXYToNote` :639-681), per-ujj követés `e.source.getIndex()` alapján (`mouseOverNotes/mouseDownNotes` 32 elem, :204-257), MIDI csatorna 1, qwerty-leképezés regisztrálva (:55-58).
    - NEM tud / hibás: nincs `mouseDrag` -> nincs glissando; nincs `keyPressed` (a qwerty-tábla halott); a `state.addListener(this)` ki van kommentezve (:61) -> külső note-on nem rajzolódik; nincs pitch bend / vibrato / sustain / aftertouch; nincs skála-/akkord-jelölés; a velocity a billentyű tetején 0 felé megy (`jmax(0, y/hossz)`): 0 velocity = note-off kockázat; paint-ben `getHeight() - 108` varázsszám.
 2. **`ui::KickVirtualKeyBoard`** (`kick_ui_controls/source/kick_VirtualKeyboard.*`): **szöveges** (QWERTY/szám/szimbólum) képernyő-billentyűzet, nem zongora. (`kick_mobile_t_layout.h:745` is ezt ismeri fel.)
-3. **Pad Perform / Notes / 16 Level** (`modes/padperform/kick_PadPerform.*`, 822 sor): a 16 padra Chromatic / Notes (skála) / Chords / Progression / Chromatic Chords kiosztás (root, scale, chord, oktáv, bank); a képernyő mutatja a kiosztást, de a hangot csak a **hardveres pad-csomag** indítja (`kick_PadPerform.cpp:41-65`), a képernyő-pad érintése nem (nincs `OnButtonClicked` kötés). Key 61: KEYBOARD CONTROL és Shift+16 LEVEL is ide visz (`kick_hardware_bridge.h:1150-1153`). Az MPC "Keyboard Control" menü (Transpose, Channel, Aftertouch, Velocity Response, Scale Filter, routing) hiányzik (`KEY61_DOC_VS_KICK.md` 19. sor).
+3. **Pad Perform / Notes / 16 Level** (`modes/padperform/kick_PadPerform.*`, 822 sor): a 16 padra Chromatic / Notes (skála) / Chords / Progression / Chromatic Chords kiosztás (root, scale, chord, oktáv, bank); a képernyő mutatja a kiosztást, de a hangot csak a **hardveres pad-csomag** indítja (`kick_PadPerform.cpp:41-65`), a képernyő-pad érintése nem (nincs `OnButtonClicked` kötés). Key 61: KEYBOARD CONTROL és Shift+16 LEVEL is ide visz (`kick_hardware_bridge.h:1150-1153`). Az MPC "Keyboard Control" menü (Transpose, Channel, Aftertouch, Velocity Response, Scale Filter, routing) hiányzik (`doc-vs-kick.md` 19. sor).
 4. **`Kick/apps/mpc_gui/main_gui.cpp`** (1686 sor; NINCS az `apps/CMakeLists.txt`-ben): régi önálló prototípus, amelyen van **61 billentyűs érintő zongora** (36 fehér, `get_keyboard_note_at` :1186-1224), **10 ujjas** slot-követés (`MAX_TOUCH_SLOTS`, :149, :1265-1420), csúszás-váltás (a `on_touch_move` = `on_touch_down`: a hang vált az ujjal), oktáv-sáv -3..+3 (:1045-1069), fix velocity 105 (pad: 115), 21 mintás F9 zongora. Pitch bend / vibrato / sustain érintésre nincs; sustain csak a fizikai pedálról (CC64). Nem a Kick UI-jának része.
 5. **`Kick/apps/mpc_piano/main.cpp`** (ALSA additív szintetizátor + MIDI thru): csak fizikai billentyűk (port 16:0 -> 16:2), sustain/pitch bend/aftertouch; nincs érintés (`touch_probe.c` csak az ABS-tartományt írja ki). Nincs a CMake-ben.
 6. **`Kick/apps/multitouch/Main.cpp`**: JUCE csípés-zoom demó (`KICK_MULTITOUCH=OFF` alapból, `CMakeLists.txt:37`); a Grid Magnify eszköz mintája.
-7. **`docs/plans/02-piano-clap.md` + `assets/piano-ui/`**: a terv a zongora-CLAP (motor, minta, plugin-GUI). A mockup (`main-dark.html`, `compact.html`: 88-billentyűs geometria `build.py`, rövid billentyűzet a kompakt nézetben) a **plugin saját ablakához** készült (borostyán `#FFB608`, cián `#00AAEE`); nem érintő-játék tervrajz. A terv szerint a Kick nem ágyaz be plugin-GUI-t (`clap.gui` sehol; `research/codebase-survey.md` L48): a Kickben a zongora paraméter-sorokon + 4 makrón át érhető el. Az érintő-zongora nézet tehát **Kick-oldali UI**, nem a pluginé.
+7. **`docs/planning/plans/02-piano-clap.md` + `assets/piano-ui/`**: a terv a zongora-CLAP (motor, minta, plugin-GUI). A mockup (`main-dark.html`, `compact.html`: 88-billentyűs geometria `build.py`, rövid billentyűzet a kompakt nézetben) a **plugin saját ablakához** készült (borostyán `#FFB608`, cián `#00AAEE`); nem érintő-játék tervrajz. A terv szerint a Kick nem ágyaz be plugin-GUI-t (`clap.gui` sehol; `research/codebase-survey.md` L48): a Kickben a zongora paraméter-sorokon + 4 makrón át érhető el. Az érintő-zongora nézet tehát **Kick-oldali UI**, nem a pluginé.
 8. MPC Standalone: az útmutató szerint **nincs** képernyő-zongora (a "virtual keyboard" csak szövegbevitel); az MPC-n a zongora = Key 61 billentyűzet + Pad Perform (p.78-84).
 
 ### B2. Érintő-bemenet útvonala MPC-n
@@ -117,4 +117,4 @@ Nincs Key 61-gomb a Grid-eszközök (Pencil/Eraser/Select) váltására, a zoomr
 10. **Felvétel**: a `addLiveMidiMsg` élő jegyzetet a Rec Arm track felveszi (az MPC-n mért útvonal: pad/billentyű -> sáv), tehát az érintő-hang is bekerülne; az érintő billentyű-hanghoz is kell note-off az engedéskor.
 
 ### B5. UI-minta
-- `docs/plans/assets/piano-ui/` (88 billentyű geometria `build.py`; `compact.html` 640x400 rövid billentyűzet) a színekhez és a billentyű-arányokhoz használható. Az MPC képernyő 1280x800 fb / 1024x600 UI-fa (`fbToUi`); a mockup 960x600 és 640x400, tehát átskálázandó. Az érintő-zongora méretezése ujjhoz: a `mpc_gui` prototípus 36 fehér billentyű 1216 px-en (~33 px/billentyű, `main_gui.cpp:1049-1053`) szűk; oktáv-váltó + kevesebb látható billentyű kell.
+- `docs/planning/plans/assets/piano-ui/` (88 billentyű geometria `build.py`; `compact.html` 640x400 rövid billentyűzet) a színekhez és a billentyű-arányokhoz használható. Az MPC képernyő 1280x800 fb / 1024x600 UI-fa (`fbToUi`); a mockup 960x600 és 640x400, tehát átskálázandó. Az érintő-zongora méretezése ujjhoz: a `mpc_gui` prototípus 36 fehér billentyű 1216 px-en (~33 px/billentyű, `main_gui.cpp:1049-1053`) szűk; oktáv-váltó + kevesebb látható billentyű kell.

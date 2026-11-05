@@ -1,6 +1,6 @@
 # File Browser — review és TODO
 
-Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül; az MPC-hez nem csatlakoztam), 2026-11-04, ág `claude/kick-plans`. A „KÉSZ” itt azt jelenti: van bekötött handler az engine-ig, nem azt, hogy hardveren igazolt. Ahol a régi docs (pl. `WP-G.md` sorszámai/sorszámok) és a kód ellentmond, a **kód az igazság**; a `WP-G.md` fájl:sor hivatkozásai a jelenlegi HEAD-hez képest elavultak. Rövidítések: `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `FB/` = `M/kick_ui/modes/filebrowser/`, `bridge` = `A/kick_hardware_bridge.h`. Prioritás: **P0** összeomlás / adatvesztés / biztonság, **P1** hibás vagy hiányzó alapfunkció, **P2** javítás / kényelem. Méret: S ≤ fél nap, M ≤ 2 nap, L > 2 nap.
+Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül; az MPC-hez nem csatlakoztam), 2026-11-04, ág `claude/kick-plans`. A „KÉSZ” itt azt jelenti: van bekötött handler az engine-ig, nem azt, hogy hardveren igazolt. Ahol a régi docs (pl. `wp-g.md` sorszámai/sorszámok) és a kód ellentmond, a **kód az igazság**; a `wp-g.md` fájl:sor hivatkozásai a jelenlegi HEAD-hez képest elavultak. Rövidítések: `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `FB/` = `M/kick_ui/modes/filebrowser/`, `bridge` = `A/kick_hardware_bridge.h`. Prioritás: **P0** összeomlás / adatvesztés / biztonság, **P1** hibás vagy hiányzó alapfunkció, **P2** javítás / kényelem. Méret: S ≤ fél nap, M ≤ 2 nap, L > 2 nap.
 
 ## 1. Áttekintés
 
@@ -9,7 +9,7 @@
 **Elérés.**
 - Menü → „Browser” (csempe 0: `M/kick_ui/dialogs/kick_AppMenuOptions.cpp:85`).
 - Projects képernyő fejléce, File Browser gomb (`M/kick_ui/recent_project/kick_RecentProject.cpp:76-78`); felső sáv Browse gomb (`M/kick_ui/dialogs/kick_AppTopbar.cpp:96`).
-- MPC Key 61: **SOUNDS** gomb → File Browser (`bridge:1171-1181`; a Sounds Mode nem létezik, `KEY61_DOC_VS_KICK.md` 26. sor); **Shift+MENU** → File Browser (`bridge:1162-1168`); **Shift+SOUNDS** → ugrás a következő hozzárendelt kedvenc mappára (`bridge:1174-1178`, `FB/kick_fileBrowser.cpp:76-84, 957-973`). DCL `EN_BROWSE` → `kick_AppHome.cpp:502` (a Key 61-en nincs ilyen fizikai gomb). Mód-LED: SOUNDS (`bridge:284`).
+- MPC Key 61: **SOUNDS** gomb → File Browser (`bridge:1171-1181`; a Sounds Mode nem létezik, `doc-vs-kick.md` 26. sor); **Shift+MENU** → File Browser (`bridge:1162-1168`); **Shift+SOUNDS** → ugrás a következő hozzárendelt kedvenc mappára (`bridge:1174-1178`, `FB/kick_fileBrowser.cpp:76-84, 957-973`). DCL `EN_BROWSE` → `kick_AppHome.cpp:502` (a Key 61-en nincs ilyen fizikai gomb). Mód-LED: SOUNDS (`bridge:284`).
 - Fontos: a bridge-ből közvetlenül nyíló SOUNDS / Shift+MENU **megkerüli** a `prjLoaded` kaput (`kick_AppHome.cpp:487`), tehát projekt nélkül is megnyílik (a Load / Load All / Sample Assign ilyenkor tiltott: `FB/kick_fileBrowser.cpp:1233-1238`).
 
 **Hardver-kötések a képernyőn.**
@@ -27,7 +27,7 @@
 
 **Érintés.** Egy koppintás kijelöl, **dupla koppintás** belép / betölt (450 ms / 24 px küszöb, `KEY61` bridge; MPC-n a Sample Assign dupla koppintása igazolt: 42cfdc3c). Select módban minden koppintás kapcsolja a sor kijelölését. A modális ablakok (Eject, Delete, Rename, Format) csak érintéssel zárhatók (`bridge:893-905`: csak a Timing Correct ablaknak van hardveres zárása).
 
-**Mount-pontok.** Mért (`KEY61_HW_BEHAVIOUR.md` 6. szakasz, 2026-11-03): SD = `/sdcard`, USB-pendrive = `/media/PenDrive`. A kód a `/proc/mounts`-ból keres (`FB/kick_fileUtils.cpp:15-31`): SD = az első `/dev/mmcblk1*` eszköz, USB = az első `/dev/sd*` eszköz (az MPC `sdb`-től számoz: `:58` megjegyzése); a `…/EFI` mount-pontokat kihagyja. Tartalék: `/mnt//sdcard`, `/mnt//flash` (dupla perjel, Behringer-lemezkép-örökség, `:35, 39`). A felismerés csak Linuxon fut (`#if LINUX`, `FB/kick_fileBrowser.cpp:1480-1559`): macOS-en a külső meghajtók nem jelennek meg.
+**Mount-pontok.** Mért (`hw-behaviour.md` 6. szakasz, 2026-11-03): SD = `/sdcard`, USB-pendrive = `/media/PenDrive`. A kód a `/proc/mounts`-ból keres (`FB/kick_fileUtils.cpp:15-31`): SD = az első `/dev/mmcblk1*` eszköz, USB = az első `/dev/sd*` eszköz (az MPC `sdb`-től számoz: `:58` megjegyzése); a `…/EFI` mount-pontokat kihagyja. Tartalék: `/mnt//sdcard`, `/mnt//flash` (dupla perjel, Behringer-lemezkép-örökség, `:35, 39`). A felismerés csak Linuxon fut (`#if LINUX`, `FB/kick_fileBrowser.cpp:1480-1559`): macOS-en a külső meghajtók nem jelennek meg.
 
 **Mappaméret (friss, aszinkron).** A mappasor mérete kezdetben „…”, majd egy **egyszálú** `juce::ThreadPool` számolja (`FolderSizeJob`, `:680-721, 738-789`). Az eredmény `FolderSizeCache`-be kerül (`FB/kick_folderSizeHelper.h:21-58`: mutex-szel védett `útvonal → (méret, mtime)`, a mappa **saját mtime-ja** az érvényesség kulcsa); a navigáció új „generációt” nyit (`GenerationTracker`, `:67-101`), a futó munka a következő iterációnál kilép (`calculateFolderSize` `-1`-et ad: `FB/kick_fileUtils.cpp:69-91`), az eredmény `callAsync`-kel kerül a sorba (`SafePointer`-rel védve). A számítás egyetlen rekurzív `RangedDirectoryIterator` menet (a korábbi exponenciális változat javítva: build `688245fb`, `580620c3`).
 
@@ -107,7 +107,7 @@
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest)
 
-Forrás: `WP-G.md` (Browser: G-226 – G-284), `known-issues-and-roadmap.md` §3.1, `cloud-sources.md`, `04-screen-audit.md` §6–7. A jegyzett hiányok:
+Forrás: `wp-g.md` (Browser: G-226 – G-284), `known-issues-and-roadmap.md` §3.1, `cloud-sources.md`, `04-screen-audit.md` §6–7. A jegyzett hiányok:
 - **Content / Expansion fülek** (G-234, G-235, G-266 – G-270): Drums / Instruments / Samples / Demos / My Files gyorsparancsok; MPC Documents mappa (G-232). A Kick Places listája más (Internal / Factory / Demos).
 - **Rendezés** oszlopfejléc-érintésre (G-240), **Open** gomb (G-242), **Shift+Load All** (G-247), **Drive Info** (G-256), **Format Drive** exFAT-ra (G-257), **hat szűrő** (projekt, minta, pattern, kit, plugin preset, összes; G-258), **Browser Options** (méret / módosítási dátum / létrehozási dátum oszlop kapcsoló, rekurzív keresés kapcsoló, Project és Track adatmappák elrejtése, nem használt minták törlése betöltéskor: G-259 – G-265).
 - **Előhallgatás**: tartott Play (G-250), **Sync** és **Warp** (G-254, G-255), Auto-tartam.

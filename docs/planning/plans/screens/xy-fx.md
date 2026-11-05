@@ -51,8 +51,8 @@ Alap: statikus kódolvasás, 2026-11-04, `claude/kick-plans`. Hardveren nem mér
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest)
 
-- **Docs-ból ismert tervek:** `04-screen-audit.md` §6 (nem hat hangra/MIDI-re); `screen-inventory.md` 4.6 (STUB); `known-issues-and-roadmap.md` §3.2 (Touch FX strip-mód, Shift+gomb beállítóablakok hiányoznak); `KEY61_DOC_VS_KICK.md` 33–35. sor (Touch FX gomb → XY képernyő). A `05-fx.md` nem említi.
-- **Akai Touch FX (`KEY61_TOUCH_STRIP_MODES.md` §4):**
+- **Docs-ból ismert tervek:** `04-screen-audit.md` §6 (nem hat hangra/MIDI-re); `screen-inventory.md` 4.6 (STUB); `known-issues-and-roadmap.md` §3.2 (Touch FX strip-mód, Shift+gomb beállítóablakok hiányoznak); `doc-vs-kick.md` 33–35. sor (Touch FX gomb → XY képernyő). A `05-fx.md` nem említi.
+- **Akai Touch FX (`touch-strip-modes.md` §4):**
   - A strip a Touch FX plugin paraméterét vezérli; a plugin egy insert effekt a kijelölt kimeneten.
   - TOUCH FX gomb nyomva tartva a preset-listát nyitja; a Shift+TOUCH FX a Touch FX Setup ablakot (Destination: Track / Return / Submix / Output, "Insert Touch FX"); majd Shift+Touch Strip ugyanazt.
   - Beállítások: Touch FX Preset (a Data Dial vagy a −/+ léptet), Latch (a pozíció elengedés után is marad), Touch > Wet/Dry, Wet/Dry, Attack, Release, Assigned Parameter.

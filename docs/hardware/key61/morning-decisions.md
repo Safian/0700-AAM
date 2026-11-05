@@ -25,7 +25,7 @@ A felhasználó utasítása: ne álljunk meg apró döntés miatt; ha UI-elem ke
 | Tartósan hiányzó minta | Egyszeri, nem blokkoló figyelmeztetés a UI-ban (nem csak napló, nem blokkoló hiba). A napló marad. | DUMMY UI-elem + callback a KickXML-ben (mintánként egyszer); reggeli finomítás |
 | Shift+`<` / Shift+`>` | Ütem-ugrás (Akai-konvenció); a sima `<`/`>` marad a rácsos léptetés | bridge: `seekToBar(±1)` Shift mellett |
 | Review-fix ciklus | Amíg a kör pontosan „Nincs megerősített hiba”-t mond | folyamatban (mentési sample-ág: K3…Q2) |
-| Gomb-LED | A felhasználó javítása: csak STOP világított, a többi nem (az előző „mind világít” megfigyelés téves volt). A kamerás ellenőrzést a felhasználó végzi. | LEZÁRVA: `cc` (`0xB0 <note> <érték>`) az alap, a `KICK_AKAI_LED_MODE` kapcsoló és a `note`/`noteoff0` ág törölve; mérés: `docs/akai_mpc_hardware/KEY61_LED_COLOURS.md` |
+| Gomb-LED | A felhasználó javítása: csak STOP világított, a többi nem (az előző „mind világít” megfigyelés téves volt). A kamerás ellenőrzést a felhasználó végzi. | LEZÁRVA: `cc` (`0xB0 <note> <érték>`) az alap, a `KICK_AKAI_LED_MODE` kapcsoló és a `note`/`noteoff0` ág törölve; mérés: `docs/hardware/key61/led-colours.md` |
 
 ## Egyéb döntések a mentési sample-ágon (autonóm)
 - Hiányzó forrás + hiányzó másolat: a mentés nem blokkol (lecsatolt meghajtó ne akadályozza az autosave-et/bezárást), a mentett út megmarad; naplósor mentésenként (szerkesztés után, 1,5 s debounce).
@@ -115,7 +115,7 @@ Minden beolvasztott ag tartalma mar (cherry-pick / ujraimplementalas formajaban)
 | Következtetés | Az injektált `jog` ugyanazt a `handleJogDial`-t hívja (mért: Track képernyőn a kijelölés lépett). A fizikai ok a Kick-kódból NEM állapítható meg. Nyitott (hardveres mérés kell): fizikai tekerés futó appon a Track képernyőn + snapshot; ha ott sem lép, naplózni kell, hogy a `B0 64 xx` megérkezik-e a `handle_midi_message`-be (jelenleg a Data Dial nem naplóz) és a `callAsync` lefut-e. |
 
 
-## Y4 – Touch Strip módok (2026-11-02; forrás: `docs/akai_mpc_hardware/KEY61_TOUCH_STRIP_MODES.md`, MPC v3.10 101–103. o.)
+## Y4 – Touch Strip módok (2026-11-02; forrás: `docs/hardware/key61/touch-strip-modes.md`, MPC v3.10 101–103. o.)
 Sorrend (TOUCH STRIP gomb): Kick slider (Kick-natív alap, az első) → Pitch Bend → Pad Level → Mod Wheel → Track Level → Sustain → Expression → Off → (újra Kick slider). A doksi sorrendje a Kickben nem létező módok (Q-Link, Touch FX, Notes, Crossfader, Note Strum) kihagyásával; a Touch FX gomb továbbra is a meglévő XY képernyőt nyitja (nem változott).
 | Mód | Állapot | „nincs a doksiban” → döntés + indok |
 |---|---|---|

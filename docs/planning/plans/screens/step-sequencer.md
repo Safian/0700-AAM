@@ -45,16 +45,16 @@ S-C (`d7076177`, `39846b60`): SS-01..06, 08..16, 18 (xN jelzés, pontos törlés
 | Step Automation (Parameter mező: Add New; rajzolás, Q-Link, Shift+Clear, nudge, csúszka, presets; sötét sáv = az utolsó aktív lépés értéke) | NINCS |
 
 
-Rövidítések a hivatkozásokban (mind a repó gyökeréhez képest): `SSq/` = `Kick/modules/kick_ui/audio_components/step_sequencer/`; `B:` = `Kick/apps/kick/kick_hardware_bridge.h`; `Home:` = `Kick/modules/kick_ui/dialogs/kick_AppHome.cpp`; `Eng/` = `Kick/modules/engine/audio_engine/engine/`; `Ctl/` = `Kick/modules/kick_ui_controls/source/`; `RPT` = `docs/AKAI_MPC_KEY61_HW_TEST_REPORT.md`; `DVK` = `docs/akai_mpc_hardware/KEY61_DOC_VS_KICK.md`; `KIR` = `docs/plans/research/known-issues-and-roadmap.md`.
+Rövidítések a hivatkozásokban (mind a repó gyökeréhez képest): `SSq/` = `Kick/modules/kick_ui/audio_components/step_sequencer/`; `B:` = `Kick/apps/kick/kick_hardware_bridge.h`; `Home:` = `Kick/modules/kick_ui/dialogs/kick_AppHome.cpp`; `Eng/` = `Kick/modules/engine/audio_engine/engine/`; `Ctl/` = `Kick/modules/kick_ui_controls/source/`; `RPT` = `docs/hardware/key61/hw-test-report.md`; `DVK` = `docs/hardware/key61/doc-vs-kick.md`; `KIR` = `docs/planning/plans/research/known-issues-and-roadmap.md`.
 
 ## 1. Áttekintés
 **Mit csinál.** Egy sáv egy ütemének (BAR) egy padjához tartozó lépéseit mutatja és szerkeszti. Két nézet (`viewModeButton`, `SSq/kick_stepSequencer.cpp:173,808-810,1062-1068`):
 - **CLASSIC** (`StepComponent`): lépés-gombok alul (be/ki), fölötte lépésenként egy érték-oszlop a kiválasztott paraméterre (Velocity / Probability / Ratchet); jobbra Presets panel (Ramp/Triangle/Pulse x1/x2/x4 és fordított, Flip/Mirror/Inverse, offset-csúszka). Egyszerre 16 lépés látszik, `PAGE` választóval lapozva (`SSq/kick_stepSequencer.cpp:374-389`).
-- **GRID** (`DrumGrid`, upstream PR #19b, `docs/UPSTREAM_TRIAGE.md` UPSTREAM-FEAT-01): a kiválasztott bank mind a 16 padja sorként, a lépések oszlopként, 4 réteg-fül (NOTES/VELOCITY/PROBABILITY/RATCHET), festés/húzás, Shift+érintés többkijelölés, a Data Dial a kijelölteket relatívan állítja (`SSq/kick_DrumGrid.h:24-31`).
+- **GRID** (`DrumGrid`, upstream PR #19b, `docs/upstream/upstream-triage.md` UPSTREAM-FEAT-01): a kiválasztott bank mind a 16 padja sorként, a lépések oszlopként, 4 réteg-fül (NOTES/VELOCITY/PROBABILITY/RATCHET), festés/húzás, Shift+érintés többkijelölés, a Data Dial a kijelölteket relatívan állítja (`SSq/kick_DrumGrid.h:24-31`).
 Közös felső sáv: PAD (A01..H16), PARAMETER, PAGE, BAR, TIME DIV; alsó sáv: Clear Pad, Clear Bar, Pad Select, BAR -/+, PAD -/+, Nudge -/+; fejlécben TRACK, TOTAL BARS, BPM (`SSq/kick_StepSequencerControl.cpp:5-44,50-106`, `SSq/kick_stepSequencer.cpp:823-839`).
 
 **Hogyan érhető el.**
-- Hardver: **Shift+GRID** vagy a `STEP_SEQ` gomb (`B:1229-1241`); a GRID LED halványan világít (`B:272`; `docs/akai_mpc_hardware/KEY61_LED_COLOURS.md:43`: a két állapot színe nem különböztethető meg). Hardveren mért: a gombpár a várt képernyőt nyitja (RPT L111, L234).
+- Hardver: **Shift+GRID** vagy a `STEP_SEQ` gomb (`B:1229-1241`); a GRID LED halványan világít (`B:272`; `docs/hardware/key61/led-colours.md:43`: a két állapot színe nem különböztethető meg). Hardveren mért: a gombpár a várt képernyőt nyitja (RPT L111, L234).
 - Érintés: a felső sáv Step Seq gombja (`Kick/modules/kick_ui/dialogs/kick_AppTopbar.cpp:94`). A **Menü csempék között nincs** (`kick_AppMenuOptions.cpp:84-101`).
 - A képernyő az indításkor jön létre (`Home:289`), a lejátszási jelekre ezért már akkor is feliratkozik, amikor nem látszik (lásd 3.6).
 
@@ -149,19 +149,19 @@ A Data Dial / +/- csak akkor éri el a képernyőt, ha **nincs kiválasztott vez
 - **Elavult index (SS-14):** `padMinus/padPlus/barPlus/barMinus` a `knobRotated` után azonnal `getSelectedIndex()`-et olvas, de a `KickListBox::setSelected` aszinkron (`Ctl/kick_listbox.cpp:559-566`) → a pad-kiemelés egy lépéssel lemaradhat (`:660-726`).
 - **Bar-szám egységhiba (SS-15):** `gridData.getBarFromX( tick )` pixel-helyett tick-értékkel hívva (`:137,427,466`; `GridData::getBarFromX` pixelt vár, `kick_GridData.cpp:312-316`). Egy tempo-beállításnál ártalmatlan; több tempo/mérték esetén rossz kvantálás-lekérdezés.
 - **Dial darabszám (SS-16):** a dial `abs(delta)` darabszámát a nudge nem veszi figyelembe (`:962-987`): gyors forgatás lépést veszít.
-- **Nem 4/4 ütem (SS-17, NEM ELLENŐRIZHETŐ KÓDBÓL, ha van ilyen projekt):** `numSteps` = `getQuantizationPerBar` = a kvantálás **enum-értéke** (`Eng/mt_audio_transport.cpp:36,282`), nem a mérték függvénye; 3/4-ben 16 lépés 16 lépés-hosszal túllóg az ütemen. A Sequence „Time Signature” művelete stub (`docs/plans/04-screen-audit.md` 2.1), így ma ritka.
+- **Nem 4/4 ütem (SS-17, NEM ELLENŐRIZHETŐ KÓDBÓL, ha van ilyen projekt):** `numSteps` = `getQuantizationPerBar` = a kvantálás **enum-értéke** (`Eng/mt_audio_transport.cpp:36,282`), nem a mérték függvénye; 3/4-ben 16 lépés 16 lépés-hosszal túllóg az ütemen. A Sequence „Time Signature” művelete stub (`docs/planning/plans/04-screen-audit.md` 2.1), így ma ritka.
 - **GRID (SS-18):** a lépésenkénti **első** jegyzetet mutatja, a többit elrejti (`kick_DrumGrid.cpp:126-127`); alap velocity 100 (`:29`) a CLASSIC 127-ével szemben (`kick_stepSequencer.cpp:584`); a sorok ≈19 UI-pixel magasak (`stepViewport`/`drumGrid` = 0,64 x képernyő, 16 sor, `:834`; a 7"-os kijelzőn kb. 3 mm, számítás, nem mért).
 - **Bank-gomb és engine-bank (tervezési kérdés):** a lapozó bank gomb az engine bankját is váltja (`Home:523-530`), így Pad Select-ben a pad-szám + `getBankOffset()` mást jelenthet, mint a látott lap (`:914,927`).
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest, a docs-ból)
-- **Az Akai Step Sequencer szakasza nincs átvéve**: a `WALKTHROUGH_PLAN.md` E csomagja (Grid, Step Sequencer, List Edit; útmutató 165–212, 252–255 o.) **nem készült el** (csak WP-D, WP-G; `KIR` 3.1 utolsó pont). A Step Seq funkciólistája ezért a dokumentáció szerint NEM ELLENŐRIZHETŐ; a jelen review nem állít Akai-paritást. A DVK csak a gombot említi (15. sor: Grid / Shift: Step Sequencer, „nincs eltérés”). → SS-20.
+- **Az Akai Step Sequencer szakasza nincs átvéve**: a `walkthrough-plan.md` E csomagja (Grid, Step Sequencer, List Edit; útmutató 165–212, 252–255 o.) **nem készült el** (csak WP-D, WP-G; `KIR` 3.1 utolsó pont). A Step Seq funkciólistája ezért a dokumentáció szerint NEM ELLENŐRIZHETŐ; a jelen review nem állít Akai-paritást. A DVK csak a gombot említi (15. sor: Grid / Shift: Step Sequencer, „nincs eltérés”). → SS-20.
 - **Q-Link oszlopváltás és Shift+Q-Link ablak**: nem vizsgált (DVK 3., 5. sor, `KIR` 3.4). A Step Seq 4 Q-Linkje csak a 0..3. lépést éri el, amíg az oszlopváltás nincs meg. → SS-22.
 - **Pad nyomás/aftertouch** ki van kapcsolva (`B:1777`, `kSendPadAftertouchPackets=false`, `KIR` 3.4); a pad-velocity csak user-szinten érvényesül.
 - **Full/Half Level „user level”**, **16 Level**, **Notes mód**, **Erase / Copy** a lépés-bevitellel: DVK 29–32. sor „nem vizsgált”.
 - **Dupla Bank-nyomás = E–H**: nem vizsgált (DVK 28. sor); a Shift-es E–H a kódban van (`B:1070-1100`).
 - **TC ablak, Locate ablak, Sounds/Keyboard Control menü** — a Step Seq-et közvetve érintik (a `<`/`>` lépés a TC rácsát használja, `B:1331-1349`); Locate-ablak hiányzik (`KIR` 3.1).
 - **Timing Correct:** a Range nem támogatott, a beállítások nem perzisztensek (`KIR` H26).
-- Nincs külön terv a `docs/plans/` alatt a Step Seq-re.
+- Nincs külön terv a `docs/planning/plans/` alatt a Step Seq-re.
 
 ## 5. Javaslataim
 1. **Egy forrás a lépés-adatra (UX + helyesség).** A CLASSIC (tömbök) és a GRID (cellák) más-más módon olvas az engine-ből, ez okozza az 3.1, 3.3, 3.10 hibákat. Egy közös, JUCE-mentes `StepModel` (pad, bar, page → tick-tartomány; a lépés jegyzete = a lépésben **kezdődő** jegyzet; paraméter-szintű `set` az `editNote*` hívásokkal, nem `addOrModifyNote` újraírással) kiküszöböli a hibaosztályt és hoston tesztelhető (SS-40). Indok: a mostani kód a lépés állapotát a UI-tömbökben tartja (`:204-252`), és onnan ír vissza.
@@ -180,8 +180,8 @@ A Data Dial / +/- csak akkor éri el a képernyőt, ha **nincs kiválasztott vez
 **Hiányzik / javasolt.**
 - Host: JUCE-mentes `step_model.h` (lap/lépés/pad leképezés, `ceil` oldalszám, pad→lépés, preset-értékek tartománya, nudge wrap) — SS-40.
 - Host: a jegyzetlista API (JUCE `ValueTree`-vel, mint a `clap_host` tesztek): `find` hossz-egyezés, átfedés, `probability=0`, undo-lépésszám — SS-41 (közös LE-40).
-- Szkript: `kick_cmd` forgatókönyv + `snapshot` md5/PNG (a RPT módszere): `pad N`, `jog`, `rawmidi B0 10 01`, `btn UNDO`; a `KICK_SMOKE_SCREENS="HomeSequencerView"` képernyőkép-futtatás (`docs/AKAI_MPC_KEY61_TODO.md:78-82`) mindkét nézetre — SS-42/43.
-**MPC-n ellenőrzendő** (a `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` bővítéséhez):
+- Szkript: `kick_cmd` forgatókönyv + `snapshot` md5/PNG (a RPT módszere): `pad N`, `jog`, `rawmidi B0 10 01`, `btn UNDO`; a `KICK_SMOKE_SCREENS="HomeSequencerView"` képernyőkép-futtatás (`docs/hardware/key61/todo.md:78-82`) mindkét nézetre — SS-42/43.
+**MPC-n ellenőrzendő** (a `docs/hardware/key61/hw-test-checklist.md` bővítéséhez):
 1. Shift+GRID / STEP SEQ → képernyő; pad-bank LED viselkedés.
 2. 16 pad = 16 lépés, ütésre azonnali kijelző-frissítés; Full/Half Level hatása a velocity-re.
 3. Pad LED-ek (3.5): ég-e bármi a Step Seq-ben (várt: nem).
@@ -221,7 +221,7 @@ Függőségek: `LE-xx` = `list-edit.md`. Méret: S < fél nap, M ~1–2 nap, L >
 - [ ] **SS-18** (P2, S) GRID: többes jegyzet jelzése, `eraseNote` hossz-`-1` kikerülése, alap-velocity egységesítés (owner-döntés) — `kick_DrumGrid.cpp:29,126,247`
 
 **Hiányzó funkciók**
-- [ ] **SS-20** (P1, M) WP-E (Akai útmutató 165–212, 252–255 o.) végigvétele Step Sequencerre: Akai-hiánylista (csak dokumentum) — `docs/akai_mpc_hardware/WALKTHROUGH_PLAN.md:23`
+- [ ] **SS-20** (P1, M) WP-E (Akai útmutató 165–212, 252–255 o.) végigvétele Step Sequencerre: Akai-hiánylista (csak dokumentum) — `docs/hardware/key61/walkthrough-plan.md:23`
 - [ ] **SS-21** (P2, M) Lejátszási pozíció + lap-követés a CLASSIC nézetben — `:39-45`
 - [ ] **SS-22** (P2, M) Q-Link oszlopváltás a hídban (4x4 → `EN_KNOB_1..16`), közös a List Edit-tel (**LE-02**) — `B:1195-1203,1530-1541`; DVK 3., 5. sor
 - [ ] **SS-23** (P2, S) Audio/Clip sáv: letiltott állapot + jelzés — `:1017`
@@ -237,5 +237,5 @@ Függőségek: `LE-xx` = `list-edit.md`. Méret: S < fél nap, M ~1–2 nap, L >
 **Tesztek**
 - [ ] **SS-40** (P1, M) JUCE-mentes `step_model.h` + host-teszt (lap/lépés/pad leképezés, oldalszám, preset-értékek, nudge wrap) — függ: SS-02, SS-06
 - [ ] **SS-41** (P1, M) Jegyzetlista-API teszt ValueTree-vel (find, átfedés, probability 0, undo-lépésszám) — közös **LE-40**
-- [ ] **SS-42** (P1, S) MPC-s `kick_cmd`+`snapshot` forgatókönyv és a HW checklist bővítése a 6. pont listájával — `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md`
-- [ ] **SS-43** (P2, S) Smoke-képernyőkép HomeSequencerView CLASSIC és GRID nézetre — `docs/AKAI_MPC_KEY61_TODO.md:78-82`
+- [ ] **SS-42** (P1, S) MPC-s `kick_cmd`+`snapshot` forgatókönyv és a HW checklist bővítése a 6. pont listájával — `docs/hardware/key61/hw-test-checklist.md`
+- [ ] **SS-43** (P2, S) Smoke-képernyőkép HomeSequencerView CLASSIC és GRID nézetre — `docs/hardware/key61/todo.md:78-82`

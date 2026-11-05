@@ -1,12 +1,12 @@
 # Akai MPC Key 61 – TODO és döntések
 
-A korábbi, statikus kódolvasáson alapuló audit (§0–§4: összegzés, funkciónkénti állapot, hibák, doksi↔kód eltérések) elavult és törölve; a git-történetből visszahozható (`d9a48e38` környéki állapot). Az aktuális állapot: `docs/plans/04-screen-audit.md` és `docs/plans/research/`.
+A korábbi, statikus kódolvasáson alapuló audit (§0–§4: összegzés, funkciónkénti állapot, hibák, doksi↔kód eltérések) elavult és törölve; a git-történetből visszahozható (`d9a48e38` környéki állapot). Az aktuális állapot: `docs/planning/plans/04-screen-audit.md` és `docs/planning/plans/research/`.
 
 ## 5. TODO (prioritás szerint)
 
 ### P0 – hibák
 
-- [ ] **T5** (kész, hardveres döntésre vár) `KICK_AKAI_PORT0=0` környezeti változó a Port 0-ra írás (init SysEx + pad RGB) kikapcsolására, alapértelmezés = a mostani viselkedés, a beállítás logolva indulásnál (`31b7d850` után: `490256b6`). Teendő eszközön: kipróbálni `KICK_AKAI_PORT0=0`-val; ha a pad/billentyű-duplázódás nem jön vissza, a Port 0 írás törölhető. Hardveres próba 2026-11-01: `KICK_AKAI_PORT0=0` mellett is minden gomb-LED világít, tehát nem a Port 0 init SysEx az ok; pad/billentyű duplázódás nem mérve (`docs/AKAI_MPC_KEY61_HW_TEST_REPORT.md`). **Végső (2026-11-02):** az alap (Port 0 írás be) mellett a LED-ek és a pad-színek működnek; a `PORT0=0` összehasonlítás nincs mérve.
+- [ ] **T5** (kész, hardveres döntésre vár) `KICK_AKAI_PORT0=0` környezeti változó a Port 0-ra írás (init SysEx + pad RGB) kikapcsolására, alapértelmezés = a mostani viselkedés, a beállítás logolva indulásnál (`31b7d850` után: `490256b6`). Teendő eszközön: kipróbálni `KICK_AKAI_PORT0=0`-val; ha a pad/billentyű-duplázódás nem jön vissza, a Port 0 írás törölhető. Hardveres próba 2026-11-01: `KICK_AKAI_PORT0=0` mellett is minden gomb-LED világít, tehát nem a Port 0 init SysEx az ok; pad/billentyű duplázódás nem mérve (`docs/hardware/key61/hw-test-report.md`). **Végső (2026-11-02):** az alap (Port 0 írás be) mellett a LED-ek és a pad-színek működnek; a `PORT0=0` összehasonlítás nincs mérve.
 
 ### P1 – hiányzó funkciók
 
@@ -35,7 +35,7 @@ A korábbi, statikus kódolvasáson alapuló audit (§0–§4: összegzés, funk
 
 - [x] **T21** kész és beolvasztva (`31b7d850`): `akai_map.h` + `AkaiMapTests.cpp` (45 gomb-Note, 16 pad bijekció, 49 és 50 is SHIFT).
 - [x] **T22** kész és beolvasztva (`31b7d850`): `rawmidi <port> <hex...>` a `/data/kick_cmd` FIFO-ban, ugyanazon a parseren/dispatchen át (`inject_bytes`); a parancsot futtatva nem próbáltam, csak fordul.
-- [x] **T23** Hardveres próbalista elkészült: `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` (gombok, Shift-párok, pad/billentyű, transport/seek, LED-ek, hang, döntést hozó próbák, visszavonási commitok).
+- [x] **T23** Hardveres próbalista elkészült: `docs/hardware/key61/hw-test-checklist.md` (gombok, Shift-párok, pad/billentyű, transport/seek, LED-ek, hang, döntést hozó próbák, visszavonási commitok).
 
 ## 6. Döntések (2026-11-01)
 
