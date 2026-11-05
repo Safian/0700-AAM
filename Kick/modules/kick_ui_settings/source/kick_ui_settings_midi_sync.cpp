@@ -31,7 +31,7 @@ namespace kick_ui
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
     SettingsMidiSync::SettingsMidiSync()
-        : SettingsInterface( 2, 2, true )
+        : SettingsInterface( 6, 2, true )
     {
         ui::KickGrid::setBackgroundColour( juce::Colours::transparentBlack );
         setRowTitles( { "MIDI Input", "MIDI Output" } );
