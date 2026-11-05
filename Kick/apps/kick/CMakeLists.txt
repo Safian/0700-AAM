@@ -158,6 +158,8 @@ target_link_libraries(${TargetName}
         audio_engine
         kick_ui
         program_edit_ui
+        kick_clap_host
+        kick_clap_juce
         juce::juce_gui_extra
         juce::juce_audio_devices
         juce::juce_audio_processors

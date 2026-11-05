@@ -35,6 +35,7 @@ public:
 
     // Register built-in / static plugin
     void registerStaticPlugin(std::shared_ptr<StaticPluginLoader> loader);
+    void registerBuiltinPlugins();
 
     // Rescans installed plugins from disk and updates dynamic loaders
     void scanInstalledPlugins();

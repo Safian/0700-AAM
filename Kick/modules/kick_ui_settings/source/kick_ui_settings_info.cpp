@@ -65,7 +65,7 @@ namespace kick_ui
         };
         fReset.onClick = [this]() {
             mt::utils::showDialogOwned<ConfirmationPopup>(
-                "CONFIRMATION!", std::make_unique<ConfirmationPopup>( "Factory Reset will erase all projects, settings, and WiFi credentials. Continue?", false, false ),
+                "CONFIRMATION!", std::make_unique<ConfirmationPopup>( "Factory Reset will erase all projects, settings, and WiFi credentials. Continue?", true, true ),
                 []( int R, ConfirmationPopup& ) {
                     if( R == UI::APPLY )
                         mt::PlatformServices::getInstance().factoryReset();
@@ -74,7 +74,7 @@ namespace kick_ui
         };
         rDefaults.onClick = [this]() {
             mt::utils::showDialogOwned<ConfirmationPopup>(
-                "CONFIRMATION!", std::make_unique<ConfirmationPopup>( "Are You Sure You Want To Restore Defaults ?", false, false ),
+                "CONFIRMATION!", std::make_unique<ConfirmationPopup>( "Are You Sure You Want To Restore Defaults ?", true, true ),
                 [this]( int R, ConfirmationPopup& ) {
                     if( R == UI::APPLY )
                     {
@@ -108,7 +108,10 @@ namespace kick_ui
         updateInfo();
     }
 
-    void SettingsInfo::setupHeader( kick_ui::KickModeHeader& Hdr ) {}
+    void SettingsInfo::setupHeader( kick_ui::KickModeHeader& Hdr )
+    {
+        Hdr.setTitle( "Preferences - System Info" );
+    }
 
     void SettingsInfo::handleCommand( CPktMgr::HWMsg_t& ) {}
 

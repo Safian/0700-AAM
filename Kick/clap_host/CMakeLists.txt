@@ -18,10 +18,34 @@ add_library(kick_clap_host STATIC
     ../modules/3rdParty/tweetnacl/tweetnacl.c
     ../modules/3rdParty/tweetnacl/sha256.c
     ../modules/3rdParty/tweetnacl/crypto_utils.cpp
+    builtin/synthyboy/src/content_pack.cpp
+    builtin/synthyboy/src/engine_factory.cpp
+    builtin/synthyboy/src/modulation.cpp
+    builtin/synthyboy/src/number.cpp
+    builtin/synthyboy/src/param_table.cpp
+    builtin/synthyboy/src/params.cpp
+    builtin/synthyboy/src/preset.cpp
+    builtin/synthyboy/src/sha256.cpp
+    builtin/synthyboy/src/state.cpp
+    builtin/synthyboy/engine-own/own_engine.cpp
+    builtin/synthyboy/synthyboy_clap.cpp
 )
 target_compile_features(kick_clap_host PUBLIC cxx_std_17)
 set_target_properties(kick_clap_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_include_directories(kick_clap_host PUBLIC include third_party/clap/include ../modules/3rdParty/tweetnacl)
+target_include_directories(kick_clap_host PUBLIC
+    include
+    third_party/clap/include
+    ../modules/3rdParty/tweetnacl
+    builtin/synthyboy/include
+)
+target_include_directories(kick_clap_host PRIVATE
+    builtin/synthyboy/src
+    builtin/synthyboy/engine-own
+)
+target_compile_definitions(kick_clap_host PRIVATE
+    SYNTHYBOY_HAS_VITAL=0
+    SYNTHYBOY_STATIC_ONLY=1
+)
 target_link_libraries(kick_clap_host PUBLIC ${CMAKE_DL_LIBS})
 find_package(Threads REQUIRED)
 target_link_libraries(kick_clap_host PUBLIC Threads::Threads)

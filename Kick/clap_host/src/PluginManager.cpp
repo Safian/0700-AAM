@@ -38,9 +38,13 @@ static fs::path defaultPluginsRoot() {
 #endif
 }
 
+extern "C" const clap_plugin_entry_t* synthyboy_clap_get_entry(void);
+
 PluginManager::PluginManager()
     : pluginsRoot_(defaultPluginsRoot()),
       installer_(std::make_unique<PluginInstaller>(pluginsRoot_, &trustStore_)) {
+    scanInstalledPlugins();
+    registerBuiltinPlugins();
 }
 
 void PluginManager::initialize(const fs::path& customRoot) {
@@ -52,6 +56,23 @@ void PluginManager::initialize(const fs::path& customRoot) {
     }
     installer_ = std::make_unique<PluginInstaller>(pluginsRoot_, &trustStore_);
     scanInstalledPlugins();
+    registerBuiltinPlugins();
+}
+
+void PluginManager::registerBuiltinPlugins() {
+    if (const auto* entry = synthyboy_clap_get_entry()) {
+        PluginManifest synthyManifest;
+        synthyManifest.id = "com.safian.synthyboy";
+        synthyManifest.name = "SynthyBoy";
+        synthyManifest.version = "1.0.0";
+        synthyManifest.author = "Safian";
+        synthyManifest.license = "AGPL-3.0-or-later";
+        synthyManifest.kind = PluginKind::Instrument;
+        synthyManifest.description = "Synthesizer plugin (VST3 + CLAP)";
+
+        auto loader = std::make_shared<StaticPluginLoader>(synthyManifest, entry, TrustLevel::Official);
+        registerStaticPlugin(loader);
+    }
 }
 
 void PluginManager::registerStaticPlugin(std::shared_ptr<StaticPluginLoader> loader) {

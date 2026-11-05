@@ -129,7 +129,10 @@ namespace kick_ui
         mt::CV::getCVInterface().setChannelNoteMap( 7, note );
     }
 
-    void SettingsCV::setupHeader( kick_ui::KickModeHeader& Hdr ) {}
+    void SettingsCV::setupHeader( kick_ui::KickModeHeader& Hdr )
+    {
+        Hdr.setTitle( "Preferences - CV & Gate" );
+    }
 
     void SettingsCV::handleCommand( CPktMgr::HWMsg_t& ) {}
 

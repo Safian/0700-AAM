@@ -169,7 +169,10 @@ namespace kick_ui
         }
     }
 
-    void SettingsWifi::setupHeader( kick_ui::KickModeHeader& Hdr ) {}
+    void SettingsWifi::setupHeader( kick_ui::KickModeHeader& Hdr )
+    {
+        Hdr.setTitle( "Preferences - Wi-Fi" );
+    }
 
     void SettingsWifi::handleCommand( CPktMgr::HWMsg_t& ) {}
 

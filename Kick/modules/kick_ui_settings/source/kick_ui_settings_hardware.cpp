@@ -160,7 +160,10 @@ namespace kick_ui
         time_MM.setValue( time.MM, juce::dontSendNotification );
     }
 
-    void SettingsHardware::setupHeader( kick_ui::KickModeHeader& Hdr ) {}
+    void SettingsHardware::setupHeader( kick_ui::KickModeHeader& Hdr )
+    {
+        Hdr.setTitle( "Preferences - Hardware & Clock" );
+    }
 
     void SettingsHardware::UpdatePadInfo( uint8_t f_velocity, uint8_t f_afterTouch )
     {
