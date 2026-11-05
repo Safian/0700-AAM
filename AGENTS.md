@@ -1,7 +1,7 @@
 # BehringerKick – agent instructions
 
 Local fork of `MusicTribeOpenSource/0700-AAM` (Behringer KICK, AGPL-3.0-or-later).
-Goal: contribute to Kick upstream (iOS/iPad port, scalable UI) and ship
+Goal: contribute to Kick upstream (iOS/iPad port, scalable full-screen UI with external MIDI controller connectivity) and ship
 a **Proper** build that is Kick plus a skin only. Everything except the skin should be upstreamable.
 
 ## Layout
@@ -44,11 +44,9 @@ iOS: configure (with `MACOSX_DEPLOYMENT_TARGET=12.0` in the env, for the host to
 team ID is `8R7QAX93QJ`. Simulator results are not evidence for audio timing – verify on a device.
 
 ## Known state
-- Branch `feat/mobile-slideout-ui`: macOS `Kick` target builds and starts. Other targets, tests, hardware and iOS unverified.
-- iOS simulator (Xcode 27.1 SDK): `Kick` target builds, but the app exits at launch with
-  "UIScene life cycle is required" (log: `xcrun simctl spawn <dev> log show --predicate 'process == "Kick"'`).
-  JUCE 7.0.12 uses the legacy single-window `UIApplicationDelegate`; fix needs a JUCE version with UIScene
-  support (check JUCE 8 release notes; the multitouch patch is pinned to 7.0.12) or a custom scene delegate.
+- Mobile port (iOS/iPad): Full-screen DAW UI with external MIDI controller connectivity (CoreMIDI). Hardware-mimicking chassis and slide-out drawer removed (owner decision 2026-11-04): the Kick mobile port is a full-screen mobile app to which external MIDI controllers are connected.
+- macOS `Kick` target builds and the smoke test starts the full-screen UI (verified 2026-11-04, no chassis).
+- iOS: a UIScene patch for JUCE 7.0.12 is in the tree (`Kick/patches/juce_ios_uiscene_7.0.12.patch`, commit `2ec647d7`). Launch in the iOS simulator and on a device NOT re-verified after the chassis/drawer removal.
 - Missing from the release: factory samples, Myriad Pro font, `juce_serialport`.
 
 ## Git
