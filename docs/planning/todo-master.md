@@ -46,7 +46,7 @@ Döntés nélkül nem javított: Step Automation (L méretű egység), Convert >
 | W3-F | Plugin backend/index, build-farm, publikálói regisztráció, sandbox; terv: [03](plans/03-plugin-ecosystem.md) 4.–6. fázis | terv-szintű döntések (hosting, kulcsgazda) |
 | W2-C folyt. | Drive/Splice fájlböngésző-források: csak a jogi átnézés (C/4) után; kutatás: [cloud-sources](plans/research/cloud-sources.md) | jogi átnézés |
 | Akai-paritás | Preferences: Sequencer csoport (Rec Arm Behavior, Solo Behavior), MIDI/Sync (Sync, MMC, MTC, Program Change, port-átnevezés), Project Defaults/Load-Save, Hardware (Dimming, 4 fokozatú fényerő, Curve A–D, Bank Button Press, Global Pitch Bend, alapértelmezett Touch Strip mód), Info (Legal/Version). A kézikönyv-bejárás WP A,C,E,F,H,I,J,K nincs elkészítve ([walkthrough-plan](../hardware/key61/walkthrough-plan.md)) | az owner 2026-11-02-i döntése: a Kick-funkciók után, az Akai rétegben |
-| Upstream | PR-ek a fork-commitokból: [upstream-triage](../upstream/upstream-triage.md) 2. szakasza (elsőnek FIX-04, 09, 02, 08, 01, 06, 03, 07, PLAT-03); PR még nincs nyitva; a mobil-változás és az új commitok után a triázs újraosztandó | — |
+| Upstream | A fork-javítások PR-jai nyitva vannak az upstreamen (#29, #30, #31, #33, #35, #37, #43, #44, #46, #48); a `fix/*` ágak a PR-fejek, a PR zárásáig ne töröld őket | — |
 
 ## G. Ismert korlátok
 WebDAV https az MPC-n nem működik (nincs TLS-könyvtár), a jelszó bevitele nyílt szövegben látszik; a `KT_KickEM` szimulátor target Mac-en nem fordul (`config.h` hiányzik); `kick_hardware_bridge.h` Linux-kódja Mac-en csak `-fsyntax-only` (a teljes forgatás az ARM-build és az MPC); a Docker-újraindulás 0 bájtos ARM-binárist hagyhat (a telepítő szkript elkapja: nem 32 bites ARM ELF).
