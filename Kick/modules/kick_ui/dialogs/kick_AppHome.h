@@ -29,7 +29,6 @@ namespace kick_ui
 {
     class KickLEDs;
     class AppStatusbar;
-    class MobileHardwareDrawer;
     class StartupScreen;
 
     class KickHome : public juce::Component
@@ -47,9 +46,6 @@ namespace kick_ui
         bool          areLazyScreensReady() const { return lazyScreensReady_; }
 
         void AssignSampleStartUp( void );
-
-        void setHardwareDrawerVisible( bool isVisible );
-        bool isHardwareDrawerVisible() const;
 
     private:
         KickHome();
@@ -74,7 +70,6 @@ namespace kick_ui
         std::unique_ptr<Component>                 selectionOutline_;
         std::unique_ptr<KickLEDs>                  ledControl_;
         std::unique_ptr<UndoWatcher>               undoWatcher_; // "Undid: ..." for every undo / redo path
-        std::unique_ptr<MobileHardwareDrawer>      hardwareDrawer_;
         std::unique_ptr<StartupScreen>             startupScreen_;
         juce::Component::SafePointer<AppStatusbar> statusBar_;
         int                                        page{ 0 };
