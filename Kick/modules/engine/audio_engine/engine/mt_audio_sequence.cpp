@@ -404,6 +404,8 @@ namespace mt
 
         if( auto& t = tracks.emplace_back( std::make_unique<MTTrack>( manager, *this, undoManager, VT ) ) )
         {
+            if( tracks.size() == 1 )
+                t->setRecArmed( true );
             ++_trkNo;
             updateTrackList();
             return ( (int)tracks.size() - 1 );

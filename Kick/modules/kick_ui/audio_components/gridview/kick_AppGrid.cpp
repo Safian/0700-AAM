@@ -134,6 +134,12 @@ namespace kick_ui
         header.onBackButtonPressed = [this]( bool ) { closeScreen( Screen::HomeListView ); };
         header.showSettingsButton( true );
 
+        noteWatcher.onChanged = [this]() {
+            gridComponent.repaintNotes();
+            parameterView.repaint();
+        };
+        noteWatcher.setEnabled( true );
+
         // initialize grid
         mt::utils::addChildComponents( this, header, progressBar, scaleViewport, gridViewport, parameterViewport, noteViewport, phViewport, parameterControl, ph, hdrComp, timeDivListBox, parameterScale );
 
@@ -547,6 +553,24 @@ namespace kick_ui
 
             ae.addLiveMidiMsg( ae.getSelected(), msg );
 
+            if( padState == contracts::DeviceControlContracts::BTN_PRESSED && ae.isSequenceRecArmed() && !ae.isSequencePlaying() )
+            {
+                const int start = ae.getSequenceSeekTick( aeSel.sequence );
+                const int length = juce::jmax( 1, ae.getTimingCorrectParams().gridTicks > 0 ? ae.getTimingCorrectParams().gridTicks : 96 );
+                {
+                    mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Step record" );
+                    ae.addOrModifyNote( noteNumber, juce::jmax( 0, start ), length, juce::jlimit( 1, 127, (int)velocity ) );
+                }
+                if( gridSettings.getAutoAdvance() )
+                {
+                    const int seqTicks = (int)gridData.getTicksUptoBar( (unsigned int)juce::jmax( 1, ae.getSequenceLength( aeSel.sequence ) ) );
+                    const int nextTick = ( seqTicks > 0 ) ? ( juce::jmax( 0, start ) + length ) % seqTicks : juce::jmax( 0, start ) + length;
+                    ae.seekToTick( aeSel.sequence, nextTick );
+                }
+                gridComponent.repaintNotes();
+                parameterView.repaint();
+            }
+
             juce::MessageManager::callAsync( [this, noteNumber] {
                 notesComp.selectNote( noteNumber, gridSettings.getHittingPadMode() );
             } );
@@ -843,8 +867,12 @@ namespace kick_ui
     {
         auto visible = isVisible();
 
+        noteWatcher.setEnabled( visible );
         if( visible )
         {
+            noteWatcher.rebind();
+            gridComponent.repaintNotes();
+            parameterView.repaint();
             gridViewport.getVerticalScrollBar().scrollToBottom();
             if( 0 <= aeSel.sequence )
             {
@@ -871,6 +899,11 @@ namespace kick_ui
     void AppGrid::timerCallback()
     {
         updatePlayhead();
+        if( isVisible() && ae.isSequenceRecording() )
+        {
+            gridComponent.repaintNotes();
+            parameterView.repaint();
+        }
     }
 
     void AppGrid::updatePlayhead()

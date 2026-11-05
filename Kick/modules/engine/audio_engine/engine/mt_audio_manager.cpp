@@ -745,32 +745,81 @@ namespace mt
     {
         seqrec::Control before, after;
         int             idx;
+        bool            punchIn = false;
         {
             const juce::ScopedLock sl( seqRecLock );
             before = seqRec;
             if( seqrec::Phase::Off == before.phase )
                 seqRecSeq = getSelectedSequence(); // REC arms the sequence that is selected now
-            seqRec = seqrec::onRecPressed( before );
+
+            if( isPlaying() )
+            {
+                if( seqrec::Phase::Recording == before.phase )
+                {
+                    // Punch-out: stop recording, continue playing
+                    seqRec = seqrec::Control{};
+                }
+                else
+                {
+                    // Punch-in: start recording immediately without erasing existing notes
+                    seqRec.phase = seqrec::Phase::Recording;
+                    seqRec.overdub = true;
+                    punchIn = true;
+                }
+            }
+            else
+            {
+                seqRec = seqrec::onRecPressed( before );
+            }
             after  = seqRec;
             idx    = seqRecSeq;
         }
         auto* S = getSequence( idx );
-        if( seqrec::Phase::Recording == before.phase && seqrec::Phase::Off == after.phase )
+        if( punchIn && S )
+        {
+            seqRecBeginTake( S, false );
+        }
+        else if( seqrec::Phase::Recording == before.phase && seqrec::Phase::Off == after.phase )
+        {
             seqRecEnd( S ); // punch out: playback goes on
+        }
         seqRecSyncState( S );
     }
 
     void MTAudioManager::seqOverdubPressed()
     {
-        int idx;
+        int  idx;
+        bool punchIn = false;
         {
             const juce::ScopedLock sl( seqRecLock );
             if( seqrec::Phase::Off == seqRec.phase )
                 seqRecSeq = getSelectedSequence();
-            seqRec = seqrec::onOverdubPressed( seqRec );
-            idx    = seqRecSeq;
+
+            if( isPlaying() )
+            {
+                if( seqrec::Phase::Recording == seqRec.phase && seqRec.overdub )
+                {
+                    seqRec = seqrec::Control{};
+                }
+                else
+                {
+                    seqRec.phase = seqrec::Phase::Recording;
+                    seqRec.overdub = true;
+                    punchIn = true;
+                }
+            }
+            else
+            {
+                seqRec = seqrec::onOverdubPressed( seqRec );
+            }
+            idx = seqRecSeq;
         }
-        seqRecSyncState( getSequence( idx ) );
+        auto* S = getSequence( idx );
+        if( punchIn && S )
+        {
+            seqRecBeginTake( S, false );
+        }
+        seqRecSyncState( S );
     }
 
     bool MTAudioManager::getAudioLoad( double& Cpu, int& XRuns ) const
@@ -813,6 +862,14 @@ namespace mt
         if( !S )
             return;
         undoManager.beginNewTransaction( "Record" );
+
+        // Ensure the active/selected track is armed so playing into it records
+        if( auto* selTrack = getTrack( getSelectedSequence(), getSelectedTrack() ) )
+            selTrack->setRecArmed( true );
+        else if( S->getNumTracks() > 0 )
+            if( auto* t0 = S->getTrack( 0 ) )
+                t0->setRecArmed( true );
+
         S->forAllTracks( [&]( MTTrack* T ) {
             if( !T->isRecArmed() )
                 return;

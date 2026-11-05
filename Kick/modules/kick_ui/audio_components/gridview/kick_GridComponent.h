@@ -74,6 +74,7 @@ namespace kick_ui
         bool                getEditNoteEnd() { return noteEndEdit; }
         bool                getTranspose() { return transpose; }
         int                 getMouseDownNote();
+        void                repaintNotes() { notes.repaint(); repaint(); }
         juce::TooltipWindow infoBar;
 
     private:

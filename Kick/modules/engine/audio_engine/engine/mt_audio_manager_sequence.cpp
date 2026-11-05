@@ -111,7 +111,10 @@ namespace mt
             s->setSelectedTrack( num );
             selected.track = s->getSelectedTrack();
             if( auto trk = s->getTrack( selected.track ) )
+            {
                 strack = trk->getName();
+                trk->setRecArmed( true );
+            }
         }
         else
         {

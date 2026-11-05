@@ -231,6 +231,7 @@ namespace kick_ui
 
     void GridComponent::handleAsyncUpdate()
     {
+        notes.repaint();
         repaint();
     }
 
