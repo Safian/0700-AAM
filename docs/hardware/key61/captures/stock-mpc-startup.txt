@@ -1,3 +1,4 @@
+# captured: 2026-11-02
 # A gyári MPC-alkalmazás indítási MIDI-sorozata a vezérlő felé (Key 61, 2026-11-02), LD_PRELOAD-os figyelővel (tools/mpcsnoop.c).
 # A gyári alkalmazás a hw:0,0,0-t (Port 0) csak KIMENETRE, a hw:0,0,1-et (Port 1) bemenetre és kimenetre nyitja.
 # Az alábbi 21 üzenet mind Port 0-ra megy, az indítás első ~1,1 másodpercében (a pad-RGB és LED-írások nélkül).

@@ -1,6 +1,6 @@
 # Pad Mixer — review és TODO
 
-Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül), 2026-11-04, ág `claude/kick-plans`. A „KÉSZ” itt azt jelenti: van bekötött handler az engine-ig, nem azt, hogy hardveren igazolt. Ahol a régi docs és a kód ellentmond, a **kód az igazság**. Fájlhivatkozások a repó gyökeréhez képest; `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`. Alap: `research/screen-inventory.md` §4.14, `research/known-issues-and-roadmap.md`, `docs/akai_mpc_hardware/walkthrough/WP-D.md` (D-045..D-068), `KEY61_DOC_VS_KICK.md`, `KEY61_TOUCH_STRIP_MODES.md`. A két Q-Link-hiba (QL-01, QL-02) közös gyökere a `knob-edit-qlinks.md`-ben van részletezve.
+Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül), 2026-11-04, ág `claude/kick-plans`. A „KÉSZ” itt azt jelenti: van bekötött handler az engine-ig, nem azt, hogy hardveren igazolt. Ahol a régi docs és a kód ellentmond, a **kód az igazság**. Fájlhivatkozások a repó gyökeréhez képest; `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`. Alap: `research/screen-inventory.md` §4.14, `research/known-issues-and-roadmap.md`, `docs/hardware/key61/walkthrough/wp-d.md` (D-045..D-068), `doc-vs-kick.md`, `touch-strip-modes.md`. A két Q-Link-hiba (QL-01, QL-02) közös gyökere a `knob-edit-qlinks.md`-ben van részletezve.
 
 ## 1. Áttekintés
 
@@ -50,7 +50,7 @@
 
 **PM-H1 — Q-Link 1/2 lépésköze hibás (P0).** `PadMixerDisplay::linkRotated` a csúszkák `knobRotated(value)`-ját hívja a **nyers** számlálóval (`kick_PadMixer.cpp:121-122`), a `KickSlider::knobRotated` pedig ezt egyszerűen hozzáadja az értékhez (`M/kick_ui_controls/source/kick_slider.cpp:128-134`). A Level tartománya 0..1 (lépés 0,01) és a Pan −1..1 (`:33-34`, `AudIO/AudIO/Includes/Constants.h:38-39`), a Q-Link delta ±1 (relatív CC, `A/kick_hardware_bridge.h:1530-1542`). Egy kattanás tehát a teljes skálát bejárja (0 ↔ 1, −1 ↔ 1). A Data Dial ugyanezt a hibát az 0a42bfdb-ben `* getIncrement()`-tel kapta javítva (`kick_ControlBase.h:126`); a Q-Link-ág kimaradt. Hatás: MPC-n a Pad Mixer Q-Link 1–2 használhatatlan. Reprodukció: `echo "encoder 0 1" > /data/kick_cmd` a Pad Mixeren (a híd `on_encoder_turn` útja azonos a fizikaival). Megoldás: QL-02.
 
-**PM-H2 — Q-Link 3 (Mute/Solo) nem hat az engine-re (P0).** `mute.setToggleState(Value > 0, dontSendNotification); solo.setToggleState(Value <= 0, …)` (`:123-126`): a `dontSendNotification` miatt a `onClick` (`:38-63`) nem fut le, tehát a `setNoteMute`/`setNoteSolo` nem hívódik; jobbra tekerés „mute” képet, balra „solo” képet kapcsol. A T11 megjegyzés (`docs/AKAI_MPC_KEY61_TODO.md` T11) pont ezt a képi billenést írja le „káros nulla-deltaként”, de nem vette észre, hogy az engine soha nem értesül. Ugyanez a minta még 7 helyen (Channel Mixer: `channel-mixer.md` CM-H3). Megoldás: QL-03.
+**PM-H2 — Q-Link 3 (Mute/Solo) nem hat az engine-re (P0).** `mute.setToggleState(Value > 0, dontSendNotification); solo.setToggleState(Value <= 0, …)` (`:123-126`): a `dontSendNotification` miatt a `onClick` (`:38-63`) nem fut le, tehát a `setNoteMute`/`setNoteSolo` nem hívódik; jobbra tekerés „mute” képet, balra „solo” képet kapcsol. A T11 megjegyzés (`docs/hardware/key61/todo.md` T11) pont ezt a képi billenést írja le „káros nulla-deltaként”, de nem vette észre, hogy az engine soha nem értesül. Ugyanez a minta még 7 helyen (Channel Mixer: `channel-mixer.md` CM-H3). Megoldás: QL-03.
 
 **PM-H3 — Q-Link érintés után halott (P0, magas valószínűség).** `KickHome::handleCommand`: ha van „kijelölt vezérlő” (`ui::getComponentInFocus()`), **minden** navigációs üzenet (a `isKnobMessage` is, tehát a Q-Link is; csak a pad-üzenet kivétel) ahhoz megy, és `else if`-ágban a képernyő `handleCommand`-ja nem kap semmit (`M/kick_ui/dialogs/kick_AppHome.cpp:573-580`). A vezérlő `handleCommand`-ja a `EN_KNOB_1..16` ágat szándékosan eldobja („Nothing to be done for link knobs…”, `kick_ControlBase.h:98-121`). Az MPC hídja minden érintésnél beállítja a kijelölést (`bridge:561` `selectControlFromTouch`), a képernyőváltás törli (`:789`, `kick_AppHome.cpp:346-355`). Eredmény: a Pad Mixer megnyitása után a Q-Link csak addig működne, amíg nem érintettél meg egy csúszkát/gombot. Következtetés a 0a42bfdb commit-üzenetéből: a hiba e commit óta áll fenn (előtte a JUCE-fókusz hiánya miatt `getComponentInFocus()` az X nélküli MPC-n null volt, a Q-Link tehát a képernyőig jutott). Hardveren nem mértem. Reprodukció: `touch <x> <y>` egy Level csúszkára, majd `encoder 1 1`. Megoldás: QL-01.
 
@@ -72,13 +72,13 @@
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest)
 
-Forrás: WP-D (D-045..D-068) és `KEY61_DOC_VS_KICK.md`. A Pad Mixer soronként nem 8 csík, hanem sorlista (D-049, döntés).
+Forrás: WP-D (D-045..D-068) és `doc-vs-kick.md`. A Pad Mixer soronként nem 8 csík, hanem sorlista (D-049, döntés).
 - **Program-típusok**: az Akai drum- és Keygroup-sávra is ad Pad Mixert (D-046); a Kick Keygroupra „nem alkalmazható”. A zongora/Keygroup irány (Terv 02) miatt ez fontos hiány.
 - **Per-pad Sends fül** (D-063) és **Effects/Inserts** (D-064): nincs vezérlő; az engine per-pad send/insert támogatása **nem vizsgált**.
 - **MIDI Out** (Enabled/Note/Channel, D-065..D-067) és **Audio Out** (Track vagy közvetlen kimenet, D-068): nincs.
 - **Mixer Settings ikon**: Filter by events / Filter by samples / Write automation when recording (D-054..D-057); a Kick csak a mintás padokat mutatja, kapcsoló nélkül (D-056).
 - **Nagy csúszka dupla érintésre** (D-060), automation gomb (D-022 analóg), pad kijelölése hardveres pad megérintésével (D-051, nem mért).
-- **Q-Link**: az Akai Q-Link-gombja oszlopot (bankot) vált (`KEY61_DOC_VS_KICK.md` L12 — oszlopváltás „nem vizsgált”); a Pad Mixer Q-Link-térképe az Akai-n nem ismert a repóban (WP-H nincs elkészítve).
+- **Q-Link**: az Akai Q-Link-gombja oszlopot (bankot) vált (`doc-vs-kick.md` L12 — oszlopváltás „nem vizsgált”); a Pad Mixer Q-Link-térképe az Akai-n nem ismert a repóban (WP-H nincs elkészítve).
 - **Pad színek / LED**: az Akai-ban a pad-LED a mixer-állapotot követi; a Pad Mixer jelenleg nem küld mute-szín csomagot (a híd saját idle-színét használja).
 
 ## 5. Javaslataim

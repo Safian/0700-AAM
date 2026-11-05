@@ -1,13 +1,13 @@
 # Sample Edit — review és TODO
 
-Alap: **statikus kódolvasás** (olvasás kezdete: HEAD `40fb2db6`, ág `claude/kick-plans`, 2026-11-04; közben a Kick-kódot csak `168417a1` érintette — Looper-összeomlás-javítás —, az itt idézett fájlokat nem), semmi nem lett futtatva, hardveren nem mértem. A „KÉSZ” azt jelenti: van bekötött handler az engine-ig, nem azt, hogy hallgatással/hardveren igazolt. Ahol a kód és a régi doksi ellentmond, a kód az igazság. Jelölések: `M/` = `Kick/modules/`, `UI/` = `Kick/modules/kick_ui/audio_components/sample_editor/`, `ENG/` = `Kick/modules/engine/audio_engine/engine/`. Alap-dokumentumok: `research/screen-inventory.md` §4.8, `research/known-issues-and-roadmap.md`, `docs/akai_mpc_hardware/KEY61_DOC_VS_KICK.md` (#20), `walkthrough/WP-D.md`, `WP-G.md`.
+Alap: **statikus kódolvasás** (olvasás kezdete: HEAD `40fb2db6`, ág `claude/kick-plans`, 2026-11-04; közben a Kick-kódot csak `168417a1` érintette — Looper-összeomlás-javítás —, az itt idézett fájlokat nem), semmi nem lett futtatva, hardveren nem mértem. A „KÉSZ” azt jelenti: van bekötött handler az engine-ig, nem azt, hogy hallgatással/hardveren igazolt. Ahol a kód és a régi doksi ellentmond, a kód az igazság. Jelölések: `M/` = `Kick/modules/`, `UI/` = `Kick/modules/kick_ui/audio_components/sample_editor/`, `ENG/` = `Kick/modules/engine/audio_engine/engine/`. Alap-dokumentumok: `research/screen-inventory.md` §4.8, `research/known-issues-and-roadmap.md`, `docs/hardware/key61/doc-vs-kick.md` (#20), `walkthrough/wp-d.md`, `wp-g.md`.
 
 ## 1. Áttekintés (mit csinál, hogyan lehet elérni, hardver-gombok kötése)
 
 **Mit csinál.** Egy minta (asset) hullámforma-szerkesztője. Két fül: **Tune** (alapértelmezett: `UI/kick_SampleEditor.cpp:165` `tuneCompButton.triggerClick()`; slice-lista, BPM/Semi/Fine mezők) és **Chop** (Manual / Threshold / Regions / Quantize szeletelés, Start/End/Cue, Split/Combine/Legato/Play Cue/Clear All). Fejléc: Settings (Cue/Slice preview, Auto scroll, Timeline units), Assign (padhoz rendelés), **Process** (külön képernyő, `Screen::ProcessEdit`, 14 művelet: `UI/kick_SampleEditor.cpp:125-129`, `310-345`, `395-531`). A szerkesztés **helyben, destruktívan** írja át a forrás-WAV-ot, a visszavonáshoz `undo_sampleeditor.wav` segédfájlt használ (`ENG/mt_sample_editor_actions.cpp:15-25, 336-349`). A régiókat (szeleteket) a projekt-fa `SAMPLEEDITOR/SAMPLESTATE/REGIONS` ágában tárolja, abszolút fájlútvonal szerint (`UI/kick_SampleEditorData.cpp:610-686`).
 
 **Elérés.**
-- Hardver: SAMPLE EDIT gomb (Akai-térkép note 6 → `HW_BTN_SAMPLE_EDIT`: `Kick/apps/kick/hardware/akai_map.h:89`), a híd a képernyőt kapcsolja (`kick_hardware_bridge.h:1293-1300`; Shift+gomb = Sampler). LED: `kick_hardware_bridge.h:279-280`. A gombpár a MPC-n **mért**: megnyitja a Sample Editort / Samplert (`docs/AKAI_MPC_KEY61_HW_TEST_REPORT.md:98-99, 234`).
+- Hardver: SAMPLE EDIT gomb (Akai-térkép note 6 → `HW_BTN_SAMPLE_EDIT`: `Kick/apps/kick/hardware/akai_map.h:89`), a híd a képernyőt kapcsolja (`kick_hardware_bridge.h:1293-1300`; Shift+gomb = Sampler). LED: `kick_hardware_bridge.h:279-280`. A gombpár a MPC-n **mért**: megnyitja a Sample Editort / Samplert (`docs/hardware/key61/hw-test-report.md:98-99, 234`).
 - Érintés: Menü csempe #10 (`M/kick_ui/dialogs/kick_AppMenuOptions.cpp:97`), Sampler „Edit” gomb (`M/kick_ui/audio_components/sampler/kick_Sampler.cpp:208-215`).
 
 **Hardver-kötés a képernyőn** (`UI/kick_SampleEditor.cpp:168-244`, `UI/kick_SampleEditorOptions.cpp:1011-1088`):
@@ -94,8 +94,8 @@ Alap: **statikus kódolvasás** (olvasás kezdete: HEAD `40fb2db6`, ág `claude/
 
 ## 4. Tervben / hiányzik (az Akai MPC Standalone-hoz képest, a docs-ból ismert tervek)
 
-- **A v3.10 Sample Edit/Chop/Sampler fejezet (p. 267–303, „WP-F”) áttekintése NINCS elvégezve** (`docs/akai_mpc_hardware/WALKTHROUGH_PLAN.md:24`; `known-issues` §3.1 „csak WP-D és WP-G készült”). Ezért a teljes Akai-paritási lista **NEM ELLENŐRIZHETŐ a repóból**; első teendő a WP-F (SE-30).
-- A meglévő WP-ek ide vágó pontjai: **G-042** Browser „Edit” → Sample Edit a kijelölt mintával: HIÁNYZIK (`WP-G.md:50`); **G-164/165** Cue/Slice Preview: ELTÉR (a Kickben a Sample Editor beállításai közt van, nem a Preferences-ben; `WP-G.md:172-173`); **G-186** Sampler Save ablak: ELTÉR (`WP-G.md:194`). `KEY61_DOC_VS_KICK.md` #20: gombpár „nincs eltérés”.
+- **A v3.10 Sample Edit/Chop/Sampler fejezet (p. 267–303, „WP-F”) áttekintése NINCS elvégezve** (`docs/hardware/key61/walkthrough-plan.md:24`; `known-issues` §3.1 „csak WP-D és WP-G készült”). Ezért a teljes Akai-paritási lista **NEM ELLENŐRIZHETŐ a repóból**; első teendő a WP-F (SE-30).
+- A meglévő WP-ek ide vágó pontjai: **G-042** Browser „Edit” → Sample Edit a kijelölt mintával: HIÁNYZIK (`wp-g.md:50`); **G-164/165** Cue/Slice Preview: ELTÉR (a Kickben a Sample Editor beállításai közt van, nem a Preferences-ben; `wp-g.md:172-173`); **G-186** Sampler Save ablak: ELTÉR (`wp-g.md:194`). `doc-vs-kick.md` #20: gombpár „nincs eltérés”.
 - A Kick **saját UI-ja** már tartalmazza a tervezett, de be nem kötött funkciókat (ezek a „mit akart a tervező” bizonyítékai): Chop → pad kiosztás (Assign to / Slice type / Crop), Detect BPM / To Seq / Match BPM / From BPM, Semi/Fine/Root note/Loop/X-fade slice-paraméterek (a holt Trim/Program/Layer osztályokban), Pitch Shift / Time Stretch / Bit Reduce.
 - Nincs ide vágó tétel a `known-issues` H1–H30 listájában (a Sample Edit nem szerepel a hardveres igazoltak között sem, csak a gombpár).
 - Terv 02 (zongora): a multisample zónák/rétegek mintakezelése a Sample Edit-et nem érinti, de a 5 s-os cache-korlát (B7) a zongora-tervet is (14 s-os minták) — egyeztetendő (lásd `research/codebase-survey.md` Memory/streaming).
@@ -114,7 +114,7 @@ Alap: **statikus kódolvasás** (olvasás kezdete: HEAD `40fb2db6`, ág `claude/
 
 ## 6. Hardveres és unit-tesztek
 
-**Ma fedi:** semmi nem fedi a Sample Editort. `Kick/tests/platform` 33 fájlja közül csak az `AudioTests.cpp` érinti a rögzítőt (nem a szerkesztőt); `grep SampleEditor|MTSampleEditor` a teszt-mappában 0 találat. Hardveren csak a gombpár nyitása igazolt (RPT:98-99, 234; LED-szín bizonytalan: RPT:116). Képernyőkép-smoke: a `KICK_SMOKE_SHOTS_DIR` névlistában szerepel `MenuSampleEdit` (`docs/AKAI_MPC_KEY61_TODO.md:82`), tartalmi ellenőrzés nélkül.
+**Ma fedi:** semmi nem fedi a Sample Editort. `Kick/tests/platform` 33 fájlja közül csak az `AudioTests.cpp` érinti a rögzítőt (nem a szerkesztőt); `grep SampleEditor|MTSampleEditor` a teszt-mappában 0 találat. Hardveren csak a gombpár nyitása igazolt (RPT:98-99, 234; LED-szín bizonytalan: RPT:116). Képernyőkép-smoke: a `KICK_SMOKE_SHOTS_DIR` névlistában szerepel `MenuSampleEdit` (`docs/hardware/key61/todo.md:82`), tartalmi ellenőrzés nélkül.
 
 **Hiányzik:** a Process-műveletek (szintetikus WAV: reverse, normalize, gain, silence, fade, delete/discard hossz, stereo→mono), `splitByThreshold`, zero-snap, `Regions` matek, paraméter-lista-összeállítás (`ProcessSlice`), undo/redo fájl-konzisztencia (több lépés, mintaváltás), nem-WAV forrás.
 
@@ -163,6 +163,6 @@ Hiányzó funkciók / hardver:
 Tesztek:
 - [ ] **SE-26** (P1, M) Host-teszt: Process-műveletek szintetikus WAV-on (reverse, normalize, gain, silence, fade, delete/discard hossz, stereo→mono, extract/copy) — új `Kick/tests/platform/SampleEditorActionsTests.cpp` (CMake bekötés). Függ: SE-01…SE-04.
 - [ ] **SE-27** (P2, S) Host-teszt: `splitByThreshold`, zero-snap, `Regions` matek, `ProcessSlice` paraméter-lista — a függvények GUI-mentesítése.
-- [ ] **SE-28** (P1, M) MPC-s ellenőrző-lista (§6) felvétele a `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md`-be, a futtatás eredményével.
+- [ ] **SE-28** (P1, M) MPC-s ellenőrző-lista (§6) felvétele a `docs/hardware/key61/hw-test-checklist.md`-be, a futtatás eredményével.
 - [ ] **SE-29** (P2, S) `KICK_SMOKE` képernyőkép-ellenőrzés a Chop/Tune/Process képernyőkre (tartalmi összehasonlítással).
 - [ ] **SE-30** (P1, M) WP-F (v3.10 p. 267–303: Sample Edit, Chop, Pad mód, Sampler, Auto Sampler) végigvétele a `walkthrough/WP-F.md`-ben → a SE/SA TODO bővítése Akai-paritással.

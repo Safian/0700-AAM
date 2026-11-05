@@ -5,7 +5,7 @@
 // packet (EN_SLIDER_TOUCH_INPUT 0..100), which stays the first mode (Kick-native default). After it the TOUCH STRIP
 // button cycles in the MPC v3.10 manual order (p. 101):
 // Pitch Bend, Pad Level, Mod Wheel, Track Level, Sustain, Touch FX (XY-11), Expression, Notes (PP-24), Off.
-// (Modes without engine counterparts in Kick: Q-Link, Crossfader, Note Strum; see docs/akai_mpc_hardware/KEY61_TOUCH_STRIP_MODES.md)
+// (Modes without engine counterparts in Kick: Q-Link, Crossfader, Note Strum; see docs/hardware/key61/touch-strip-modes.md)
 namespace kick_hw {
 namespace strip {
 

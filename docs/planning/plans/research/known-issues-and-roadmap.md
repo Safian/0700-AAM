@@ -1,7 +1,7 @@
 # Kick (MPC Key 61 + desktop): ismert hibák, hiányzó/tervezett funkciók, igazolt állapot
 
 Gyűjtés dátuma: 2026-11-04, ág `claude/kick-plans` (HEAD `b650370e`). Csak dokumentumokból és git-történetből; kódot, hardvert nem futtattam. Jelölés: **HIBA** / **HIÁNYZIK** / **IGAZOLT** (hardveren vagy tesztben mért) / **KÓD-ONLY** (megépítve, hardveren nem igazolt).
-Forrás-rövidítések (mind `docs/` alatt): TODO = `AKAI_MPC_KEY61_TODO.md`; RPT = `AKAI_MPC_KEY61_HW_TEST_REPORT.md`; MD = `AKAI_MPC_KEY61_MORNING_DECISIONS.md`; CHK = `AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md`; R1/R2 = `_REVIEW_ROUND1/2.md`; DVK = `akai_mpc_hardware/KEY61_DOC_VS_KICK.md`; BEH = `.../KEY61_HW_BEHAVIOUR.md`; STRIP = `.../KEY61_TOUCH_STRIP_MODES.md`; LED = `.../KEY61_LED_COLOURS.md`; TO/FROM = `hw-mailbox/TO_CLOUD.md`/`FROM_CLOUD.md`; WP-D/WP-G = `akai_mpc_hardware/walkthrough/`.
+Forrás-rövidítések (mind `docs/` alatt): TODO = `todo.md`; RPT = `hw-test-report.md`; MD = `morning-decisions.md`; CHK = `hw-test-checklist.md`; R1/R2 = `_REVIEW_ROUND1/2.md`; DVK = `hardware/key61/doc-vs-kick.md`; BEH = `.../hw-behaviour.md`; STRIP = `.../touch-strip-modes.md`; LED = `.../led-colours.md`; TO/FROM = `hw-mailbox/TO_CLOUD.md`/`FROM_CLOUD.md`; WP-D/WP-G = `hardware/key61/walkthrough/`.
 
 ## 0. Figyelmeztetés: elavult / egymásnak ellentmondó sorok a dokumentumokban
 - TODO.md §1-§3 (L17-L154) még a d9a48e38-i statikus audit állapotát tükrözi; a §5-§8 (L156-L237) frissebb. A §2 "❌" sorok jó része azóta megépült (T7-T13, T24-T34).
@@ -81,7 +81,7 @@ Forrás: MD L92-L97; FROM L13.
 - **Keyboard Control menü** (Transpose, MIDI Channel, Aftertouch, Note On Velocity, Scale Filter, Internal/External routing, Velocity Response/Curve/Gain, Black/White Key Sensitivity, Pedal Settings); a gomb most a Pad Perform-ot nyitja - DVK L26, RPT L97.
 - **Menu tartalma** (Project ablak, módikon átrendezés, Reset Mode Menu, Help/QR, Undo History, hangoló, Sync mező (MIDI Clock/MTC/Link), Legal Info, Bluetooth, Wi-Fi Show/Forget/Reset, Audio Device választó, 32 In/Out, Disk Streaming) - WP-G (kb. 154 HIÁNYZIK, 62 ELTÉR, 47 OK sor, grep-es számolás).
 - **Track View/Track Mixer** (WP-D: 51 HIÁNYZIK, 34 ELTÉR): Mixer Settings ikon, Solo/Cue mód, crossfader profil, metering módok, Track Settings ablak, Key Range/Learn, Output mező, Monitor Off/In/Auto/Merge, track pan, MIDI Filter (Note/Velocity Range, CC Filter), Track -/+, Duplicate Track; a Track Mixer sorlista (programonként), nem 8 oszlopos csík.
-- Scope: a WALKTHROUGH_PLAN.md szerinti WP A-K végigvételéből csak WP-D és WP-G készült el (+ WP-B nyers JSON); WP-A,C,E,F,H,I,J,K nincs (`docs/akai_mpc_hardware/walkthrough/` csak WP-B.raw.json, WP-D.md, WP-G.md). Az 0. fázis blokkolói közül: érintés (kész), megállított seek (kész), "melyik gomb ér el az alkalmazásig" napló (`[AKAI-BTN]` megvan), bridge szétbontása területi fejlécekre (engedélyezett, hogy kész-e: nem ellenőriztem).
+- Scope: a walkthrough-plan.md szerinti WP A-K végigvételéből csak WP-D és WP-G készült el (+ WP-B nyers JSON); WP-A,C,E,F,H,I,J,K nincs (`docs/hardware/key61/walkthrough/` csak wp-b.raw.json, wp-d.md, wp-g.md). Az 0. fázis blokkolói közül: érintés (kész), megállított seek (kész), "melyik gomb ér el az alkalmazásig" napló (`[AKAI-BTN]` megvan), bridge szétbontása területi fejlécekre (engedélyezett, hogy kész-e: nem ellenőriztem).
 
 ### 3.2 Touch strip (STRIP L30-L38; MD L118-L132)
 - Megépült: Kick slider -> Pitch Bend -> Pad Level -> Mod Wheel -> Track Level -> Sustain -> Expression -> Off.
@@ -113,11 +113,11 @@ Forrás: MD L92-L97; FROM L13.
 - Audio kimenet: Main és Phones azonos jelet kap; Outputs 3/4 nincs; hard clip nincs limiter; latency-kérés (30 ms) ellentmond a "5.8 ms" logüzenetnek (csak mpc_gui).
 - Multitouch: csak egy ujj bizonyított; "Multitouch (2 ujj)" CHK §5 próbálandó.
 - DIN MIDI IN/OUT/THRU (a JUCE MIDI manager viszi?), USB-A/USB-B gadget: nem része az adapternek, nem vizsgált.
-- **Controller Mode / telefon-tablet** használat (Kick telefonon + Key 61 mint kontroller): csak kutatás, hardveren nem mérve, a források ellentmondóak (`KEY61_USB_AND_PHONE.md`). Következő mérés: Key 61 Controller Mode + Mac.
+- **Controller Mode / telefon-tablet** használat (Kick telefonon + Key 61 mint kontroller): csak kutatás, hardveren nem mérve, a források ellentmondóak (`usb-and-phone.md`). Következő mérés: Key 61 Controller Mode + Mac.
 
-### 3.6 Motor / hang (tervek, `docs/plans/`)
+### 3.6 Motor / hang (tervek, `docs/planning/plans/`)
 - **Terv 01 (telepíthető pendrive):** csak terv; a pendrive-os indulás ma működik; rootfs csak olvasható; hook-telepítő egyelőre csak hivatkozás (35fce454).
-- **Terv 02 (zongora-CLAP):** a mostani `KeygroupProgram` nem elég zongorának: nincs release-ág, burkológörbe, szűrő, round-robin, voice stealing, loop-crossfade, streaming; velocity-rétegek max 4; generált projekt ONE_SHOT, ezért pedál/note-off hatástalan; minták float32 sztereóban a RAM-ban; Kicknek csak CLAP-host oldala van, nincs `clap.gui` (sem host, sem plugin oldalon); mintaforrás-döntés A+D ajánlott, nincs eldöntve (b650370e; plans/02 L7-L18). A multisample zónák/rétegek (b101e5b8) "Not yet auditioned on the keybed (build 49)".
+- **Terv 02 (zongora-CLAP):** a mostani `KeygroupProgram` nem elég zongorának: nincs release-ág, burkológörbe, szűrő, round-robin, voice stealing, loop-crossfade, streaming; velocity-rétegek max 4; generált projekt ONE_SHOT, ezért pedál/note-off hatástalan; minták float32 sztereóban a RAM-ban; Kicknek csak CLAP-host oldala van, nincs `clap.gui` (sem host, sem plugin oldalon); mintaforrás-döntés A+D ajánlott, nincs eldöntve (b650370e; planning/plans/02 L7-L18). A multisample zónák/rétegek (b101e5b8) "Not yet auditioned on the keybed (build 49)".
 - **Terv 03 (plugin-ökoszisztéma):** Vital-alapú saját szinti (munkacím SynthyBoy; név/védjegy-ütközés ellenőrzése hátra), `.kickplug`/manifest-URL, MCP-szerű letöltés, harmadik fél publikálás; "terv, nyitott kutatással".
 - Lásd még: `research/codebase-survey.md`, `sample-sources.md`, `architecture-and-publishing.md`.
 

@@ -1,6 +1,6 @@
 # Sampler (felvétel) — review és TODO
 
-Alap: **statikus kódolvasás** (olvasás kezdete: HEAD `40fb2db6`, ág `claude/kick-plans`, 2026-11-04; közben a Kick-kódot csak `168417a1` érintette — Looper-összeomlás-javítás —, az itt idézett fájlokat nem), semmi nem lett futtatva, hardveren nem mértem. Ahol a kód és a régi doksi ellentmond, a kód az igazság. Jelölések: `UI/` = `Kick/modules/kick_ui/audio_components/sampler/`, `REC/` = `AudIO/juce_modules/AudIO_juce/Recorder.{h,cpp}` (a felvevő/looper motor, `mt::Recorder`, `SampleRecorder`, `Looper`), `ENG/` = `Kick/modules/engine/audio_engine/engine/`, `bridge` = `Kick/apps/kick/kick_hardware_bridge.h`. Alap-dokumentumok: `research/screen-inventory.md` §4.10, `research/known-issues-and-roadmap.md` (H17), `docs/AKAI_MPC_KEY61_TODO.md` T15/T32, `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` §6-7, `KEY61_DOC_VS_KICK.md` #20, `WP-G.md`.
+Alap: **statikus kódolvasás** (olvasás kezdete: HEAD `40fb2db6`, ág `claude/kick-plans`, 2026-11-04; közben a Kick-kódot csak `168417a1` érintette — Looper-összeomlás-javítás —, az itt idézett fájlokat nem), semmi nem lett futtatva, hardveren nem mértem. Ahol a kód és a régi doksi ellentmond, a kód az igazság. Jelölések: `UI/` = `Kick/modules/kick_ui/audio_components/sampler/`, `REC/` = `AudIO/juce_modules/AudIO_juce/Recorder.{h,cpp}` (a felvevő/looper motor, `mt::Recorder`, `SampleRecorder`, `Looper`), `ENG/` = `Kick/modules/engine/audio_engine/engine/`, `bridge` = `Kick/apps/kick/kick_hardware_bridge.h`. Alap-dokumentumok: `research/screen-inventory.md` §4.10, `research/known-issues-and-roadmap.md` (H17), `docs/hardware/key61/todo.md` T15/T32, `docs/hardware/key61/hw-test-checklist.md` §6-7, `doc-vs-kick.md` #20, `wp-g.md`.
 
 ## 1. Áttekintés (mit csinál, hogyan lehet elérni, hardver-gombok kötése)
 
@@ -88,9 +88,9 @@ Alap: **statikus kódolvasás** (olvasás kezdete: HEAD `40fb2db6`, ág `claude/
 
 ## 4. Tervben / hiányzik (az Akai MPC Standalone-hoz képest, a docs-ból ismert tervek)
 
-- **A v3.10 Sampler/Auto Sampler fejezet („WP-F”, p. 267–303) áttekintése NINCS elvégezve** (`WALKTHROUGH_PLAN.md:24`; `known-issues` §3.1). Az Akai-paritási lista ezért **NEM ELLENŐRIZHETŐ a repóból**; WP-F = SE-30.
-- Dokumentált, nyitott: **audio bemenet** (INPUT 1/2, +48 V) a Samplerben igazolatlan — `known-issues` H17; `AKAI_MPC_KEY61_TODO.md` T15 („felderítve, kód nem kell… eszközön ellenőrizni”), T32 (probe: `echo probe > /data/kick_cmd` → `/data/kick_probe.txt`); `HW_TEST_CHECKLIST.md` §6, §7 (`arecord -D plughw:1,0 …`). A +48 V vezérlésének útja a repóban nincs (NEM ELLENŐRIZHETŐ).
-- **WP-G G-186**: a Sampler Save/Save ablakai ELTÉRnek az útmutatótól (`WP-G.md:194`). A mentés-hely választó (Storage: Internal/USB/SD) nincs a mentő-ablakban (G-197, `WP-G.md:205`).
+- **A v3.10 Sampler/Auto Sampler fejezet („WP-F”, p. 267–303) áttekintése NINCS elvégezve** (`walkthrough-plan.md:24`; `known-issues` §3.1). Az Akai-paritási lista ezért **NEM ELLENŐRIZHETŐ a repóból**; WP-F = SE-30.
+- Dokumentált, nyitott: **audio bemenet** (INPUT 1/2, +48 V) a Samplerben igazolatlan — `known-issues` H17; `todo.md` T15 („felderítve, kód nem kell… eszközön ellenőrizni”), T32 (probe: `echo probe > /data/kick_cmd` → `/data/kick_probe.txt`); `HW_TEST_CHECKLIST.md` §6, §7 (`arecord -D plughw:1,0 …`). A +48 V vezérlésének útja a repóban nincs (NEM ELLENŐRIZHETŐ).
+- **WP-G G-186**: a Sampler Save/Save ablakai ELTÉRnek az útmutatótól (`wp-g.md:194`). A mentés-hely választó (Storage: Internal/USB/SD) nincs a mentő-ablakban (G-197, `wp-g.md:205`).
 - `screen-inventory` §6/7: Sampler Export/Clear/Output STUB; pad-szín `if(0)`; felvétel-hossz `//TODO` — ld. a fenti hibákat.
 - A Kick **saját UI-ja** már jelzi a tervezett funkciókat: Export/Clear, Output-választó, pad-szín-váltás (GD oldali színek), felvétel-hossz paraméterezés, Sampler-insert.
 - Nem találtam tervet: Auto Sampler, felvétel előtti puffer (pre-roll), belső busz felvétele (resample), count-in, normalizálás/vágás mentéskor (WP-F ellenőrzendő).

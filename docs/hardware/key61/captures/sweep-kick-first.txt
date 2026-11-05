@@ -1,3 +1,4 @@
+# captured: 2026-11-02
 # MPC Key 61 gomb-sweep, Kick-first indulás (pendrive-os boot), 2026-11-02, build f7e8846d + [AKAI-RAW] napló
 # A felhasználó egyszer, sorban megnyomta: Shift, Full Level, 16 Levels, Erase, Copy, Menu, Sounds, Main, Undo, Tap Tempo, Play, Stop.
 # Formátum: [AKAI-RAW] port=<n> <status> <d0> <d1> (hex).

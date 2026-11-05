@@ -1,6 +1,6 @@
 # Channel (Track) Mixer — review és TODO
 
-Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül), 2026-11-04, ág `claude/kick-plans`. „KÉSZ” = van bekötött handler az engine-ig, nem hardveres igazolás. Ahol a régi docs és a kód ellentmond, a **kód az igazság**. `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `CM/` = `Kick/modules/kick_ui_channel_mixer/`. Alap: `research/screen-inventory.md` §4.15, `research/known-issues-and-roadmap.md`, `walkthrough/WP-D.md` (D-001..D-044), `KEY61_HW_BEHAVIOUR.md`, `KEY61_TOUCH_STRIP_MODES.md`. A Q-Link közös hibái (routing, lépésköz, mute/solo): `knob-edit-qlinks.md` QL-01..QL-03. A **Main Volume**, a **Track Level strip** és a **master-busz útvonal** ennek a képernyőnek a részei (1. és 3. pont).
+Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül), 2026-11-04, ág `claude/kick-plans`. „KÉSZ” = van bekötött handler az engine-ig, nem hardveres igazolás. Ahol a régi docs és a kód ellentmond, a **kód az igazság**. `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `CM/` = `Kick/modules/kick_ui_channel_mixer/`. Alap: `research/screen-inventory.md` §4.15, `research/known-issues-and-roadmap.md`, `walkthrough/wp-d.md` (D-001..D-044), `hw-behaviour.md`, `touch-strip-modes.md`. A Q-Link közös hibái (routing, lépésköz, mute/solo): `knob-edit-qlinks.md` QL-01..QL-03. A **Main Volume**, a **Track Level strip** és a **master-busz útvonal** ennek a képernyőnek a részei (1. és 3. pont).
 
 ## 1. Áttekintés
 
@@ -83,7 +83,7 @@
 
 **CM-H11 — Mute-csoport a Mixerből nem érvényesül (P1).** A Midi nézet `pTrack->mute = …` közvetlenül írja az adatot (`kick_track_midi_mix.cpp:233-234`), a Track Mute képernyő `ae.setTrackMute` → `MTTrack::setMute` a csoporttagokat is némítja (`mt_audio_track.cpp:100-113`). Ugyanaz a track a két képernyőn különbözően viselkedik.
 
-**CM-H12 — Main Volume a projekt master-gain-jét írja (P1, tervezési).** (1) A fizikai gomb abszolút pozíciót küld, a projektben tárolt gain viszont betöltéskor felülírja az értéket — a gomb állása és a tényleges hangerő eltér, amíg a gombot nem mozdítod. (2) A gain mentődik a projekttel és (UndoManager-rel hivatkozott) undo-lépést is okozhat — hogy a gombmozgások egyesülnek-e, nem vizsgáltam. (3) Az SysEx `0x5B` parancsbájt jelentése ismeretlen, `0x76..0x7F` sosem látott (H12 a known-issues-ban). (4) 2026-11-04-én a lehúzott gomb miatt „nem szólt a zongora” (`KEY61_HW_BEHAVIOUR.md` L127): a UI nem jelezte a hangerőt a Mixeren kívül, nincs OSD. (5) `gainToMidi` csonkít (`(int)(Gain*127)`, `kick_common_utils.cpp:53-56`): float32-szimulációval a 9, 13, 18, 26, 36, 52, 72, 104 értékek 1-gyel kisebbet adnak vissza (a master/Output/Sends csúszka kijelzése ennyivel eltér; ARM-on ellenőrizendő).
+**CM-H12 — Main Volume a projekt master-gain-jét írja (P1, tervezési).** (1) A fizikai gomb abszolút pozíciót küld, a projektben tárolt gain viszont betöltéskor felülírja az értéket — a gomb állása és a tényleges hangerő eltér, amíg a gombot nem mozdítod. (2) A gain mentődik a projekttel és (UndoManager-rel hivatkozott) undo-lépést is okozhat — hogy a gombmozgások egyesülnek-e, nem vizsgáltam. (3) Az SysEx `0x5B` parancsbájt jelentése ismeretlen, `0x76..0x7F` sosem látott (H12 a known-issues-ban). (4) 2026-11-04-én a lehúzott gomb miatt „nem szólt a zongora” (`hw-behaviour.md` L127): a UI nem jelezte a hangerőt a Mixeren kívül, nincs OSD. (5) `gainToMidi` csonkít (`(int)(Gain*127)`, `kick_common_utils.cpp:53-56`): float32-szimulációval a 9, 13, 18, 26, 36, 52, 72, 104 értékek 1-gyel kisebbet adnak vissza (a master/Output/Sends csúszka kijelzése ennyivel eltér; ARM-on ellenőrizendő).
 
 **CM-H13 — Track Level hatása a Mixerben igazolatlan (P1).** A Strip Track Level mód a Track képernyőn igazolt (HW_BEHAVIOUR L129), a Mixer „Midi” nézete az `onValueChange` bekötés miatt követi (`kick_track_midi_mix.cpp:313-314`), de ezt nem nézték hardveren (H6). A Track Level velocity-skálázó (lásd 1. pont), nem hangerő: hallható hatása csak új note-oknál van, Audio programú trackre nincs.
 
@@ -91,7 +91,7 @@
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest)
 
-Forrás: WP-D D-001..D-044, `KEY61_DOC_VS_KICK.md`.
+Forrás: WP-D D-001..D-044, `doc-vs-kick.md`.
 - **Layout**: 8 csík egy képernyőn, Volume / Pan&Volume / Sends / Effects / I-O fülek, balra söprésre Submix/Return/Output (D-004, D-008, D-016, D-032, D-036) — a Kick sorlistás, legördülős (döntés).
 - **Mixer Settings** ikon: Solo Tracks / Cue Tracks mód, crossfader profil (Linear/Exp/Log), MIDI/Audio Input Metering módok (D-009..D-014, D-021).
 - **Track Settings** (sávfejléc dupla érintés), nagy csúszka/mérő dupla érintésre, pan nagy csúszka (D-015, D-019, D-025).

@@ -163,7 +163,7 @@ only updates two labels (:96-98 region, `onValueChanged` -> `setXYCoordinateValu
 ### 4.7 Preferences (HomePreferencesView) - `M/kick_ui_settings/*`, 7 pages (`kick_ui_settings.cpp:88-96`; SettingsAudio is commented out :93 and its file is empty stubs)
 | Page | Controls | Status | Evidence |
 |---|---|---|---|
-| Info | logo, serial, surface/firmware version, build stamp, Factory Reset, Firmware Update, Restore Defaults | RESZLEGES | Factory reset runs `rm -rf /home/Kick/projects* /home/Kick/prefs` (`M/hardware/source/kick_Hwpref.cpp:29,136`, only `if hardwareEnabled()`; MPC build has `KICK_ENABLE_HARDWARE=ON`, `docs/akai_mpc_hardware/tools/build_arm.sh:49`): board-image paths, not the MPC's `/data/...`; Restore Defaults KESZ (`mt::getSettings().makeDefaults()`); serial/versions from Behringer board (N/E on MPC) |
+| Info | logo, serial, surface/firmware version, build stamp, Factory Reset, Firmware Update, Restore Defaults | RESZLEGES | Factory reset runs `rm -rf /home/Kick/projects* /home/Kick/prefs` (`M/hardware/source/kick_Hwpref.cpp:29,136`, only `if hardwareEnabled()`; MPC build has `KICK_ENABLE_HARDWARE=ON`, `docs/hardware/key61/tools/build_arm.sh:49`): board-image paths, not the MPC's `/data/...`; Restore Defaults KESZ (`mt::getSettings().makeDefaults()`); serial/versions from Behringer board (N/E on MPC) |
 | Project Defaults | startup action, recent count, auto save + timeout, bit depth, tempo/bars/time sig, root/scale, seq/track count, default name | KESZ | `kick_ui_settings_defaults.cpp:34-100` |
 | Hardware | pad threshold/sensitivity/curve, velocity, aftertouch, brightness, tap-tempo LED + taps, date, time, timezone | RESZLEGES / BUG? | pad settings are sent as a DCL packet (`SendPadSettings` :139); the MPC bridge's `onDclCommand` consumes only EN_PAD_SET_AFTER_TOUCH and EN_PAD_SET_COLOUR_STATE (`kick_hardware_bridge.h:137-160`) -> threshold/sens/curve have no effect on MPC; brightness writes `/sys/devices/platform/backlight/...` (Hwpref.cpp:841-853, Behringer path); **setDate/setTime execute the bare strings "2025-5-15" / "10:30:00" as shell commands - the `date -s` prefix is missing** (`kick_Hwpref.cpp:941, 959`); **year handler passes the year as month** `getDaysInMonth( Value, date_YYYY.getValue() )` (`kick_ui_settings_hardware.cpp:110`, compare :104) |
 | MIDI | input port, output port, track/control toggles | RESZLEGES | page has no sync/clock controls despite name; `refresh()` restores only the INPUT selection (`kick_ui_settings_midi_sync.cpp:101`), output port selection is not restored |
@@ -194,7 +194,7 @@ Plugin type: no editor in the switch (`kick_ProgramEdit.cpp:166-173`); edited fr
 plugin list, search, parameter rows, 4 macros on Q-Links; no native plugin GUI, `clap_host/README.md`).
 | Item | Status | Evidence |
 |---|---|---|
-| Drum program editors | KESZ | engine `DrumVoice` has ADSR/filter/LFO (`docs/plans/research/codebase-survey.md` s.1) |
+| Drum program editors | KESZ | engine `DrumVoice` has ADSR/filter/LFO (`docs/planning/plans/research/codebase-survey.md` s.1) |
 | **Keygroup Filter/Env, LFO, Layer-Mix pages** | STUB (UI bound to model, engine ignores) | `M/engine/audio_program/synth/KeygroupProgram.cpp`, `audio_voice.h`, `iSynthVoice.h` contain no adsr/filter/lfo (grep empty); survey s.1 confirms. Note Layer-mix: only VELOCITY layerPlay is honoured |
 | Midi, Clip, Audio editors | KESZ (not read in depth) | |
 | CV editor | read-only monitor | see above |
@@ -210,7 +210,7 @@ Modes Sample / Slice / Pad Tap / Pad Hold, Slice+, Cancel, Save, Play, Discard, 
 | `options.outputChanged` | STUB | empty lambda `:38-39` |
 | Pad-tap pad colour toggle | STUB | `if( 0 )` + `//TODO--> Need PadButton Colour from GD side` :411-420 |
 | Record length | RESZLEGES | `startRecording` has `//TODO` and passes fixed args to `setupRecorder` (`kick_SamplerRecorder.cpp:344-353`); ppq hard-coded :137 |
-| Audio INPUT on MPC | N/E | recorder uses the engine's JUCE `AudioDeviceManager` input channels (`AudIO/src/juce_adapter.cpp:22`); whether the MPC ALSA device exposes inputs is not decidable from code. Older audit `docs/AKAI_MPC_KEY61_TODO.md` s.1 (2026-10-31, static) lists audio input as missing |
+| Audio INPUT on MPC | N/E | recorder uses the engine's JUCE `AudioDeviceManager` input channels (`AudIO/src/juce_adapter.cpp:22`); whether the MPC ALSA device exposes inputs is not decidable from code. Older audit `docs/hardware/key61/todo.md` s.1 (2026-10-31, static) lists audio input as missing |
 
 ### 4.11 Looper - `.../looper/*`
 Input selector (6 L/R modes), inserts button, recorder with bar display, Export (name popup -> wav -> asset -> optional program/pad), Clear; hardware REC/OVERDUB.

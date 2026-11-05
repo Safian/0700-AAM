@@ -2,7 +2,7 @@
 
 Állapot: terv (csak kutatás, kód nem változott). Mért adatok: az élő MPC Key 61-ről, 2026-11-04, csak olvasással.
 
-> **ÁLLAPOT-FRISSÍTÉS (2026-11-04, élő felmérés a `fork/safian/main`-en):** a fenti döntés (auto-telepítés a belsőre, verzió-eltérésre frissítés, atomi csere, `Kick.prev` mentés, `Kick.version` utolsóként) **már megvalósult** az `agy/pendrive` ágból beolvasztva: `bdd6e744` (`tkgl_bootstrap`, `make_pendrive_package.sh`, `uninstall_kick.sh`, `test_tkgl_bootstrap.sh`) és `6e222d80` (`docs/akai_mpc_hardware/PENDRIVE_INSTALL.md`). **Ezt nem fejlesztjük újra.** Hátralévő teendők: (1) a megvalósítás **független ellenőrzése** (agy-kimenet: a shell-tesztek futtatása, a szkript átolvasása, hardveres próba az MPC-n tiszta pendrive-val és pendrive nélkül), (2) a futásidejű függőségek valós `readelf -d` ellenőrzése (az útmutató ezt még nyitva hagyja), (3) release-csomagolás és CI (`dist/…zip` + SHA256), (4) a hook meglétének ellenőrzése másik, gyári MPC-n (lásd lent), (5) user-oldali kipróbálás.
+> **ÁLLAPOT-FRISSÍTÉS (2026-11-04, élő felmérés a `fork/safian/main`-en):** a fenti döntés (auto-telepítés a belsőre, verzió-eltérésre frissítés, atomi csere, `Kick.prev` mentés, `Kick.version` utolsóként) **már megvalósult** az `agy/pendrive` ágból beolvasztva: `bdd6e744` (`tkgl_bootstrap`, `make_pendrive_package.sh`, `uninstall_kick.sh`, `test_tkgl_bootstrap.sh`) és `6e222d80` (`docs/hardware/key61/pendrive-install.md`). **Ezt nem fejlesztjük újra.** Hátralévő teendők: (1) a megvalósítás **független ellenőrzése** (agy-kimenet: a shell-tesztek futtatása, a szkript átolvasása, hardveres próba az MPC-n tiszta pendrive-val és pendrive nélkül), (2) a futásidejű függőségek valós `readelf -d` ellenőrzése (az útmutató ezt még nyitva hagyja), (3) release-csomagolás és CI (`dist/…zip` + SHA256), (4) a hook meglétének ellenőrzése másik, gyári MPC-n (lásd lent), (5) user-oldali kipróbálás.
 
 ## Kérdés
 Lehet-e olyan pendrive-ot adni a usereknek, amiről az MPC elindítja a Kicket (vagy felmásolja magára és úgy indítja), anélkül, hogy kézzel kellene scp-zniük?
@@ -43,7 +43,7 @@ A hook exFAT/FAT32-t is mountol, ezért **elég egy zip**, amit a user bármilye
 3. Release-script: ARM build → csomag (`dist/kick-mpc-key61-<verzió>.zip`) + SHA256 + verzió-fájl.
 4. Telepítés-a-belsőre mód (opcionális) és eltávolítás/„vissza a gyári MPC-hez" leírás.
 5. Hook megléte gyári gépen (B. pont) — dönteni a telepítő mellékeléséről vagy hivatkozásról.
-6. Tesztek valódi hardveren: tiszta pendrive; pendrive nélkül (gyári MPC indul); exFAT és FAT32; a stick kihúzása futás közben; hideg indítás (adapter küldi a gyári init-SysEx-et, lásd `KEY61_HW_BEHAVIOUR.md`).
+6. Tesztek valódi hardveren: tiszta pendrive; pendrive nélkül (gyári MPC indul); exFAT és FAT32; a stick kihúzása futás közben; hideg indítás (adapter küldi a gyári init-SysEx-et, lásd `hw-behaviour.md`).
 7. User-dokumentáció (letöltés, kicsomagolás, bedugás, visszaállítás) + jogi: csak Kick és saját szkriptek kerülnek a csomagba, Akai-fájlok nem.
 
 ## DÖNTÉS (owner, 2026-11-04): alapmód = automatikus telepítés a belsőre, onnan futás

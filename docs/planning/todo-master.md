@@ -7,14 +7,14 @@ A többi tétel:
 Merge-elve `safian/main`-re (`0c15cf9a`), Mac-build tiszta, ARM-build 0 hiba, ctest 102/102, a smoke-ok PASS, az MPC-n telepítve és igazolva (indulás, képernyők, összeomlás-mentesség, napló). Az egységek (W1-A..D, W2-A..D, W3-A/E, S-A..F, R-1..R-12) mind bent vannak; az agy- és sonnet-worker ágak merge-elve és törölve. A VST/FX-fejlesztés külön repóban/sessionben fut (SynthyBoyVST, KickEQ), ide nem tartozik; a host-oldal (CLAP-FX, `.kickplug`) bent van.
 Az, ami ember vagy hardveres hallgatás nélkül nem igazolható, a B. szakaszban van, tételenként indokolva.
 
-## B. Ember kell — a pontos lépések a `docs/MORNING.md` "Ember kell" listájában és a `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` 20–51. pontjaiban
+## B. Ember kell — a pontos lépések a `docs/planning/morning-notes.md` "Ember kell" listájában és a `docs/hardware/key61/hw-test-checklist.md` 20–51. pontjaiban
 - **Hallgatás** (indok: üres bemenet, nincs hangszóró-visszacsatolás a gépnek): Demo 01 zongora minden tartományban, képernyő-zongora (glissando/bend/vibrato/sustain), Looper Sync füllel, busz-insertek, XY FX presetek, Pad Perform/poly aftertouch, Sample Edit, Sampler felvétel, az `adsr.h` változás hatása a samplerre.
 - **Fizikai** (indok: ujj/gomb kell): strip Track Level ujjal, többujjas érintés, Q-Link/mixer, hardveres REC/OVERDUB/STOP/PLAY, **a bekapcsoló gomb rövid megnyomása és a tényleges Shut Down/Restart (R-12)**, Controller Mode mérés Mac-en.
 - **Eszközön, visszafordíthatatlan vagy külső eszközt igényel** (indok: adatvesztés/hálózat): Format/Eject próba-pendrive-on, 300 MB másolás, dátum/idő, Ethernet/WiFi, Factory Reset, Firmware Update, pendrive-os telepítés/rollback.
-- **Owner-döntések** (indok: termékdöntés, nem műszaki): lista a lenti "Owner-döntések" sorban és a MORNING.md 4. pontjában (köztük a transzport-duplázás, a hivatalos plugin-aláíró kulcs, `assets/Default`, SW-00).
+- **Owner-döntések** (indok: termékdöntés, nem műszaki): lista a lenti "Owner-döntések" sorban és a morning-notes.md 4. pontjában (köztük a transzport-duplázás, a hivatalos plugin-aláíró kulcs, `assets/Default`, SW-00).
 - **Jogi átnézés**: Salamander CC BY 3.0 ↔ AGPL, Google API ToS, Splice ToS, libcurl/TLS licenc.
 - **iOS**: szimulátor/eszköz indulás és külső MIDI a mobil ágon (nem ellenőrzött).
-- **Looper drift**: egy nyomkövetős buildel mérve megszűnt (KEY61_HW_BEHAVIOUR.md); a **fül szerinti ellenőrzés** B-ben marad, indok: üres bemenet, a hangot csak ember hallja.
+- **Looper drift**: egy nyomkövetős buildel mérve megszűnt (hw-behaviour.md); a **fül szerinti ellenőrzés** B-ben marad, indok: üres bemenet, a hangot csak ember hallja.
 - **R-9..R-11 képernyők az MPC-n (a végleges `4dfe9a81` buildel, injektált menü-érintéssel, 2026-11-04)**: Track Mixer (Programs nézet, Insert/Inserts), Track Mute, Pad Mute ("not available" Keygroup programra: helyes), Pad Mixer (ugyanúgy), Pad Notes (skála/root/bank/pad-rács), Program Edit (Main/Samples, Master, KeyGroup, Layer Control), Q-Link Edit, MIDI Control (Hardware/XY/MIDI Learn/MIDI Monitor) **megnyílik, nincs összeomlás, 0 ERROR sor**. A hang-, LED- és ujjas viselkedés B-ben van (hallgatás/fizikai).
 **A-PREFS — KÉSZ (2026-11-04): a Preferences-beállítások nem mentődtek és nullán indultak.** Gyökérok: Linuxon a prefs-könyvtár `/data/prefs`, de az az MPC-n nem létezett, a tartalék `/home/Kick/prefs` pedig a csak olvasható rendszerlemezen van, ezért a beállítások, a menü-elrendezés és az insert-presetek soha nem mentődtek, és az alapértékek nem alkalmazódtak. Javítás: `getAppDirs(MTPrefs)` (`kick_paths.cpp`) a `/data/prefs`-et létrehozza, ha van `/data`. MPC-n igazolva: a `/data/prefs/preferences/preferences.settingsprj` létrejön, indításkor a háttérvilágítás 255 (100 %, korábban 20), a Threshold/Sensitivity/Curve 4, a csúszkával beállított 37 % újraindítás (`systemctl restart acvs`) után is megmaradt (háttérvilágítás 106). **Owner-döntés (B): az upstream alapértelmezett időzóna `Asia/Kolkata`** (a Hardware fülön az óra most 0:36, a valós idő 19:36 CET): szeretnéd `Europe/Budapest`-re?
 
@@ -26,12 +26,12 @@ Az, ami ember vagy hardveres hallgatás nélkül nem igazolható, a B. szakaszba
 | R-11 Inserts / XY FX / Q-Link / MIDI Control / Looper UI | `0c15cf9a` | Q-Link Edit, MIDI Control (Hardware/XY/MIDI Learn/MIDI Monitor), Looper (REC/overdub/play, Sync); XY FX és Inserts korábbi buildeken nyílt | insert/XY FX hallhatóság, Q-Link tárcsák ujjal |
 
 
-## Állapot (2026-11-04 03:50) és a képernyő-review backlog (docs/plans/screens/*.md, 22 dokumentum)
+## Állapot (2026-11-04 03:50) és a képernyő-review backlog (docs/planning/plans/screens/*.md, 22 dokumentum)
 **Kész, mergelve és pusholva (`468d65fd`):** W1-A Preferences-csomag, W1-B Grid, W1-C MIDI program, W1-D CLAP-FX host + `clap.gui`, W2-A indítás, W2-B főképernyő tabok, W2-C fájlböngésző-források (M0 helyi + M1 WebDAV; https az MPC-n nincs TLS-könyvtár miatt), Looper SIGFPE javítások (két nullával osztás), crash-jelentés.
 **Kész, helyben mergelve, még nem pusholva (integrált ARM-buildre vár):** W3-A érintő-zongora (`83d1f096`).
 **Fut (éjszaka):** W3-E `.kickplug`/PluginManifest telepítő (agy), Looper lejátszási fázis gyökérok-elemzés (agy; mérés: felvétel rendben, lejátszás ~1,3 s eltérés), S-B minta/sampler/assign képernyők (agy), S-A mixer/mute képernyők (sonnet), S-C szekvencer-szerkesztők (sonnet).
 **Következő egységek a képernyő-review backlogból (fájlkör szerint szétválasztva, a fentiek után):**
-| ID | Képernyők (docs/plans/screens/) | Végrehajtó |
+| ID | Képernyők (docs/planning/plans/screens/) | Végrehajtó |
 |---|---|---|
 | S-D | menu, projects, file-browser, system-resources, header-statusbar-popups, sw-update | sonnet |
 | S-E | looper (a fázis-javítás után), inserts, xy-fx, knob-edit-qlinks, midi-control | agy |
@@ -61,7 +61,7 @@ Mindegyik egység a dokumentum TODO-sorait csinálja, a hardvert/hangot kérő t
 ---
 (Részletes egységek és sorrend alább.)
 
-Forrás: `docs/plans/01..05`, `docs/plans/research/known-issues-and-roadmap.md`, a 2026-11-03/04-es munka nyitott tételei. A tervek részletei ott vannak; ez a végrehajtási sorrend. Végrehajtó: **agy-worker** (saját worktree + ág, a kvóta elfogyásakor automatikusan **sonnet-worker** viszi tovább ugyanazt a feladatot a worktree állapotából), a főszál ellenőriz, mergel, és **egy** közös ARM-build/telepítés/MPC-teszt fut hullámonként (egy MPC, egy Docker-build).
+Forrás: `docs/planning/plans/01..05`, `docs/planning/plans/research/known-issues-and-roadmap.md`, a 2026-11-03/04-es munka nyitott tételei. A tervek részletei ott vannak; ez a végrehajtási sorrend. Végrehajtó: **agy-worker** (saját worktree + ág, a kvóta elfogyásakor automatikusan **sonnet-worker** viszi tovább ugyanazt a feladatot a worktree állapotából), a főszál ellenőriz, mergel, és **egy** közös ARM-build/telepítés/MPC-teszt fut hullámonként (egy MPC, egy Docker-build).
 
 Szabályok minden egységre: saját worktree és ág; csak a felsorolt fájlok; nincs push, nincs MPC-hozzáférés a workernek; kapu = host-teszt (ASAN/UBSAN) + `-fsyntax-only`/Mac-build, ahol lehet; nincs "egyelőre így" ág; a híd (`kick_hardware_bridge.h`) közös fájl: minimális, helyi módosítás, vagy a hullámban csak egy egység érintse.
 
@@ -82,7 +82,7 @@ Keygroup (egy minta kromatikus + több minta zónák/rétegek), fájlböngésző
 | W2-A | **Indítás**: indítóképernyő lépés-állapottal, egyetlen betöltési útvonal (dupla `loadProject` megszüntetése), hibák láthatóvá tétele, állapot-csík, biztonságos mód két összeomlás után | 04 §1 | a híd indítás-része; ezzel egy időben ne legyen más híd-egység |
 | W2-B | **Főképernyő tabok**: Sequence Time Signature, Track Monitor, törlés-megerősítés, program/track undo, Bounce/Convert stubok | 04 §2 | `kick_AppMainMode*`, `kick_AppSequenceOptions*`, `kick_AppTrack*` |
 | W2-C | **Fájlböngésző-források**: `FileBrowserSource` interfész, helyi mappa + gyorsítótár (M0), WebDAV (M1); Drive/Splice **csak a jogi átnézés után** | 04 §7, `research/cloud-sources.md` | jogi átnézés: ember |
-| W2-D | **Triázs frissítése**: `UPSTREAM_TRIAGE.md` újraosztása a mobil-változás és az új commitok után, hash-ek ellenőrzése `git log`-ból | — | csak doksi |
+| W2-D | **Triázs frissítése**: `upstream-triage.md` újraosztása a mobil-változás és az új commitok után, hash-ek ellenőrzése `git log`-ból | — | csak doksi |
 
 ## 3. hullám
 | ID | Egység | Terv | Előfeltétel |

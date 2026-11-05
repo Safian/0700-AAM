@@ -3,7 +3,7 @@
 **Szabály:** funkció → keresés a dokumentációban → a leírás alapján fejlesztés. Hipotézis nincs: minden állítás mellett bizonyíték áll (útmutató-oldal, kódsor, napló, snapshot, fotó), vagy "nem vizsgált". Az útmutató: *MPC Standalone OS – User Guide v3.10* (528 oldal, ez érvényes az MPC Key 61-re is), [README.md](README.md).
 
 ## 1. A feladat egysége: az állítás-lap (claims register)
-Minden munkacsomaghoz (WP) egy külön fájl: `docs/akai_mpc_hardware/walkthrough/WP-<betű>.md` (külön fájl = nincs összeolvadási ütközés). Soronként egy állítás:
+Minden munkacsomaghoz (WP) egy külön fájl: `docs/hardware/key61/walkthrough/wp-<betű>.md` (külön fájl = nincs összeolvadási ütközés). Soronként egy állítás:
 
 | ID | Oldal | Az útmutató állítása (rövid parafrázis, max. egy rövid idézet) | Kick megfelelője (fájl:sor vagy képernyő) | Állapot | Bizonyíték | Teendő |
 |---|---|---|---|---|---|---|
@@ -16,7 +16,7 @@ Minden munkacsomaghoz (WP) egy külön fájl: `docs/akai_mpc_hardware/walkthroug
 ## 2. Munkacsomagok (az útmutató fejezetei szerint; oldalak a tartalomjegyzékből)
 | WP | Terület | Oldalak | Kick-oldali fő fájlok |
 |---|---|---|---|
-| **A** | Key 61 hardver (felső/hátsó panel), Hardware beállítások | 365–371, 61 | `hardware/akai_map.h`, `led_map.h`, `kick_hardware_bridge.h` (*kész: [KEY61_DOC_VS_KICK.md](KEY61_DOC_VS_KICK.md); kiegészítendő*) |
+| **A** | Key 61 hardver (felső/hátsó panel), Hardware beállítások | 365–371, 61 | `hardware/akai_map.h`, `led_map.h`, `kick_hardware_bridge.h` (*kész: [doc-vs-kick.md](doc-vs-kick.md); kiegészítendő*) |
 | **B** | Idő és transzport: Time Counter/Locate, Timing Correct, Metronome, Next Sequence, Song, Looper | 71–74, 316–318, 326–329, 338–341 | bridge (transport, seek), `mt_audio_*` |
 | **C** | Pad és játék: 16 Level, Pad Perform, Arpeggiator, Erase, Keyboard Control, Touch Strip, Pad Color | 77–84, 99–104, 336–337 | `strip_modes.h`, `key_transpose.h`, `pad_colour_map.h`, bridge |
 | **D** | Mixer és mute: Track/Pad Mixer, Track/Pad Mute, Track View | 137–147, 256–266 | UI modulok, bridge |

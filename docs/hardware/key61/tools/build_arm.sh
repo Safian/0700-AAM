@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build the Kick for the Akai MPC Key 61 (ARMv7) in the kick-armv7-builder Docker image.
-# Recipe: docs/AKAI_MPC_KEY61_BUILD_RECIPE.md. A full build takes about 4-5 minutes; run it in the background.
+# Recipe: docs/hardware/key61/build-recipe.md. A full build takes about 4-5 minutes; run it in the background.
 #
 # Usage: build_arm.sh [--dry-run]
 # Environment (all optional):

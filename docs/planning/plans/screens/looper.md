@@ -1,6 +1,6 @@
 # Looper — review és TODO
 
-Alap: **statikus kódolvasás** (olvasás kezdete: HEAD `40fb2db6`; közben az ág `168417a1`-gyel a Looper megnyitási összeomlását javította, lásd §3 L0; a sorszámok az új állapotra vonatkoznak, 2026-11-04), semmi nem lett futtatva, hardveren nem mértem. Ahol a kód és a régi doksi ellentmond, a kód az igazság. Jelölések: `UI/` = `Kick/modules/kick_ui/audio_components/looper/`, `REC/` = `AudIO/juce_modules/AudIO_juce/Recorder.{h,cpp}` (a `mt::Looper` a `mt::Recorder` leszármazottja), `ENG/` = `Kick/modules/engine/audio_engine/engine/`, `bridge` = `Kick/apps/kick/kick_hardware_bridge.h`. Alap-dokumentumok: `research/screen-inventory.md` §4.11, `research/known-issues-and-roadmap.md` (H7, H17), `docs/AKAI_MPC_KEY61_MORNING_DECISIONS.md` (REC/OVERDUB routing + LED), `docs/AKAI_MPC_KEY61_HW_TEST_REPORT.md:215`, `docs/TODO_MASTER.md` H2, `KEY61_DOC_VS_KICK.md`.
+Alap: **statikus kódolvasás** (olvasás kezdete: HEAD `40fb2db6`; közben az ág `168417a1`-gyel a Looper megnyitási összeomlását javította, lásd §3 L0; a sorszámok az új állapotra vonatkoznak, 2026-11-04), semmi nem lett futtatva, hardveren nem mértem. Ahol a kód és a régi doksi ellentmond, a kód az igazság. Jelölések: `UI/` = `Kick/modules/kick_ui/audio_components/looper/`, `REC/` = `AudIO/juce_modules/AudIO_juce/Recorder.{h,cpp}` (a `mt::Looper` a `mt::Recorder` leszármazottja), `ENG/` = `Kick/modules/engine/audio_engine/engine/`, `bridge` = `Kick/apps/kick/kick_hardware_bridge.h`. Alap-dokumentumok: `research/screen-inventory.md` §4.11, `research/known-issues-and-roadmap.md` (H7, H17), `docs/hardware/key61/morning-decisions.md` (REC/OVERDUB routing + LED), `docs/hardware/key61/hw-test-report.md:215`, `docs/planning/todo-master.md` H2, `doc-vs-kick.md`.
 
 ## 1. Áttekintés (mit csinál, hogyan lehet elérni, hardver-gombok kötése)
 
@@ -35,7 +35,7 @@ A hardveres REC-hez tartozó engine-viselkedés (a szekvenciafelvétel és a loo
 | REC (csere-felvétel) | RÉSZLEGES (L2: a sticky overdub-flag miatt overdubként viselkedhet; körbeér és felülír, nincs egymenetes mód) | `UI/kick_LoopRecorder.cpp:94-98, 138-161`; `REC/Recorder.cpp:77-85, 175-182` |
 | OVERDUB | **BUGOS** (L1, L2) | `UI/kick_LoopRecorder.cpp:100-103, 144-146`; `REC/Recorder.cpp:175-187` |
 | PLAY / STOP | KÉSZ | `UI/kick_LoopRecorder.cpp:105-136`; `REC/Recorder.cpp:93-102` |
-| SEQ-szinkron | RÉSZLEGES (fázis-mérés hiányzik: H7/Z2b; AC2) | `UI/kick_LoopRecorder.cpp:115-127, 133-134, 150-157`; `known-issues` H7; `TODO_MASTER.md:62` |
+| SEQ-szinkron | RÉSZLEGES (fázis-mérés hiányzik: H7/Z2b; AC2) | `UI/kick_LoopRecorder.cpp:115-127, 133-134, 150-157`; `known-issues` H7; `todo-master.md:62` |
 | Reverse | RÉSZLEGES (csak lejátszás közben engedett; felvételkor a kód FORWARD-ra állít, a gomb állapota marad; az állapot-visszatükrözés elírt) | `UI/kick_LoopRecorder.cpp:91, 159, 367-370` |
 | Gain / Pan (kimenet) | **BUGOS** (L4: kétszer alkalmazódik) | `UI/kick_LoopRecorder.cpp:81-82`; `REC/Recorder.cpp:163-172, 184` |
 | „Gain” csúszka (opciók) | KÉSZ, de **küszöb**, nem erősítés | `UI/kick_LoopRecorder.cpp:76`; `REC/Recorder.cpp:176` |
@@ -87,8 +87,8 @@ A hardveres REC-hez tartozó engine-viselkedés (a szekvenciafelvétel és a loo
 
 ## 4. Tervben / hiányzik (az Akai MPC Standalone-hoz képest, a docs-ból ismert tervek)
 
-- A Looper az Akai-bejárás **WP-B** hatókörében van (`WALKTHROUGH_PLAN.md:20`: „…Song, Looper”), de a `walkthrough/WP-B.raw.json` 80 állítása között **Looper-állítás nincs** (grep 0 találat), `WP-B.md` nem készült el. Az Akai-paritási lista ezért **NEM ELLENŐRIZHETŐ a repóból**; teendő: LO-19.
-- Dokumentált nyitott tételek: **H7** Looper SYNC fázis (Z2b) mérése hiányzik, AC2 (a Looper szinkronos REC elindíthat szekvencia-take-et; „javítás úton”: `a2cf876a`, `0193d9dd`, `cd9de309`) — `known-issues` H7; `TODO_MASTER.md:4, 62` (H2: „nyomkövető sorok egy buildben, injektált forgatókönyv”). **H17** audio bemenet (INPUT 1/2, +48 V) igazolatlan.
+- A Looper az Akai-bejárás **WP-B** hatókörében van (`walkthrough-plan.md:20`: „…Song, Looper”), de a `walkthrough/wp-b.raw.json` 80 állítása között **Looper-állítás nincs** (grep 0 találat), `wp-b.md` nem készült el. Az Akai-paritási lista ezért **NEM ELLENŐRIZHETŐ a repóból**; teendő: LO-19.
+- Dokumentált nyitott tételek: **H7** Looper SYNC fázis (Z2b) mérése hiányzik, AC2 (a Looper szinkronos REC elindíthat szekvencia-take-et; „javítás úton”: `a2cf876a`, `0193d9dd`, `cd9de309`) — `known-issues` H7; `todo-master.md:4, 62` (H2: „nyomkövető sorok egy buildben, injektált forgatókönyv”). **H17** audio bemenet (INPUT 1/2, +48 V) igazolatlan.
 - A REC/OVERDUB gombok routingja és LED-je felhasználói döntés (`MD:75, 90`); a Looper-LED „kamerás ellenőrzése hiányzik”.
 - Terv-hiány (a kódból látható szándék, de nincs kész): Undo/Redo (`looperUndo/Redo` API, tesztelt), hurok-ki/be (`setLooperLooping`), egymenetes felvétel.
 - 04-screen-audit §6: a Looper-re külön tétel nincs; az 5. pontban a Preferences Project Defaults NUMERATOR/DENOMINATOR „csak a Looper-felvevőre hat” (`04-screen-audit.md` §8.2).
@@ -141,7 +141,7 @@ Hiányzó funkciók / hardver:
 - [x] **LO-12** (P1, M) Undo/Redo kivezetése a UI-ra és a hardverre (Undo a Looper képernyőn a looper-szintű visszavonásra); Clear megerősítése — `ENG/mt_audio_interface_looper.cpp:79-80`; `REC/Recorder.cpp:113-118`.
 - [ ] **LO-13** (P1, S) Looper megnyitása a Key 61-ről: gomb-kiosztás **owner-döntés** (nincs szabad Looper-gomb a térképen); LED a képernyőhöz — `Kick/apps/kick/hardware/akai_map.h`; `led_map.h`; `bridge:1293-1300` mintára.
 - [x] **LO-14** (P2, S) Key 61 4-Q-Link kiosztás (küszöb, monitor, gain, pan); az 5-ös Q-Link hivatkozás kivezetése — `UI/kick_LoopRecorder.cpp:177-191`; `kick_IOComponent.cpp`.
-- [ ] **LO-15** (P1, M) SYNC-fázis (H7/Z2b) és AC2 mérése MPC-n, javítás, az eredmény rögzítése a `known-issues`-ban — `UI/kick_LoopRecorder.cpp:115-127, 138-161`; `ENG/mt_audio_manager.cpp:620-640`; `TODO_MASTER.md:62`.
+- [ ] **LO-15** (P1, M) SYNC-fázis (H7/Z2b) és AC2 mérése MPC-n, javítás, az eredmény rögzítése a `known-issues`-ban — `UI/kick_LoopRecorder.cpp:115-127, 138-161`; `ENG/mt_audio_manager.cpp:620-640`; `todo-master.md:62`.
 - [ ] **LO-16** (P2, S) A „gain” csúszka átnevezése küszöbre, bemeneti trim, clip-jelzés, halott mérő-ág törlése — `UI/kick_LoopRecorder.cpp:76, 375-384`. Közös: SA-10.
 
 Tesztek:
@@ -155,7 +155,7 @@ Kész (kód + host-teszt `LooperLogicTests`, Mac build + smoke): **LO-02** (az o
 
 Részben: **LO-07** (UI-oldal kész: `<project>/samples`, egyedi név, lemezen ellenőrzött mentés, hibaüzenet a motor `lastError()`-jából, `addAsset` ellenőrzés, a program a dialógus választása szerint; az ütem-pontos export a `Recorder::save`-ben van: R-2), **LO-09** (a tempó lekérése minden használatkor friss, nincs nyers mutató; ütem-egységes hossz és a szekvencia taktusát követő skála NYITOTT), **LO-10** (a képernyő elhagyása már nem állítja meg a szekvenciát; a háttérben szóló looper owner-döntés), **LO-16** (halott mérő-ág törölve; a „gain" -> „threshold" átnevezés a közös `KickIOComponent`-ben van, SA-10), **LO-17/18** (`LooperLogicTests`; a Recorder-motor tesztjei R-2).
 
-Nem érintve (R-2 vagy `AudIO/Recorder`): **LO-01** (overdub alatt a hurok némán fut: `Recorder::process` ágai), **LO-04** (gain/pan kétszer), **LO-06** (hullámforma-pillanatkép spinlock alatt, ~-0,04 s/s drift: mérést kér, R-2), **LO-11** (egymenetes felvétel). Owner-döntés / ember: **LO-13** (Key 61 gomb-kiosztás), **LO-15** (SYNC fázis és AC2 mérése MPC-n), **LO-19** (WP-B Looper-szakasz; MPC-s lista: `AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md` 36-37.).
+Nem érintve (R-2 vagy `AudIO/Recorder`): **LO-01** (overdub alatt a hurok némán fut: `Recorder::process` ágai), **LO-04** (gain/pan kétszer), **LO-06** (hullámforma-pillanatkép spinlock alatt, ~-0,04 s/s drift: mérést kér, R-2), **LO-11** (egymenetes felvétel). Owner-döntés / ember: **LO-13** (Key 61 gomb-kiosztás), **LO-15** (SYNC fázis és AC2 mérése MPC-n), **LO-19** (WP-B Looper-szakasz; MPC-s lista: `hw-test-checklist.md` 36-37.).
 
 ## 9. Állapot (R-11 befejező kör, 2026-11-04)
 

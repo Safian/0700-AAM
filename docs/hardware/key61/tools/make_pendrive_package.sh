@@ -205,7 +205,7 @@ cp -f "$BINARY_PATH" "$ROOT_DIR/bin/Kick"
 chmod 755 "$ROOT_DIR/bin/Kick"
 
 # Copy bootstrap and uninstall scripts
-TOOLS_DIR="$TOP_DIR/docs/akai_mpc_hardware/tools"
+TOOLS_DIR="$TOP_DIR/docs/hardware/key61/tools"
 if [ ! -f "$TOOLS_DIR/tkgl_bootstrap" ]; then
     echo "make_pendrive_package.sh: ERROR $TOOLS_DIR/tkgl_bootstrap missing!" >&2
     exit 1

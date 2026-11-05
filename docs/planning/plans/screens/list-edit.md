@@ -33,7 +33,7 @@
 | Szerkesztés: érték érintés + Data Dial / +/-; dupla érintés = numerikus billentyűzet; Shift+dial = TC szerinti hossz; Shift+dial a Pad/Note-on = pad-bank; Nudge gomb; Play (jegyzet lejátszása); Delete | Érték + Data Dial (a megérintett cellára a vezérlő sajátja; sorléptetés a dial alapja), Delete, Nudge (csoportos), **Play gomb** (a kijelölt jegyzet egyszer megszólal), **Shift+dial = a kijelölt események TC-osztásnyi eltolása**, **Shift+Q-Link 1 = pad-bank (±16), Shift+Q-Link 2 = hossz TC-osztásban** KÉSZ. **Nincs**: Mute/Solo On/Off kapcsoló (nincs Mute-esemény); a dupla érintés numerikus billentyűzete a KickNumber saját viselkedése (eszközön ellenőrizendő, HW lista R8-4). A hardveres kiosztás (Shift+Q-Link) a mi választásunk: a kézikönyv a cellát érintés után, Shift+dial-lal szerkeszti, a Kick dialja a sorokat lépteti |
 
 
-Rövidítések (a repó gyökeréhez képest): `LE/` = `Kick/modules/kick_ui/modes/` (`kick_ListEdit.cpp/.h`); `B:` = `Kick/apps/kick/kick_hardware_bridge.h`; `Home:` = `Kick/modules/kick_ui/dialogs/kick_AppHome.cpp`; `Eng/` = `Kick/modules/engine/audio_engine/engine/`; `Ctl/` = `Kick/modules/kick_ui_controls/source/`; `RPT` = `docs/AKAI_MPC_KEY61_HW_TEST_REPORT.md`; `DVK` = `docs/akai_mpc_hardware/KEY61_DOC_VS_KICK.md`; `KIR` = `docs/plans/research/known-issues-and-roadmap.md`; `CHK` = `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md`.
+Rövidítések (a repó gyökeréhez képest): `LE/` = `Kick/modules/kick_ui/modes/` (`kick_ListEdit.cpp/.h`); `B:` = `Kick/apps/kick/kick_hardware_bridge.h`; `Home:` = `Kick/modules/kick_ui/dialogs/kick_AppHome.cpp`; `Eng/` = `Kick/modules/engine/audio_engine/engine/`; `Ctl/` = `Kick/modules/kick_ui_controls/source/`; `RPT` = `docs/hardware/key61/hw-test-report.md`; `DVK` = `docs/hardware/key61/doc-vs-kick.md`; `KIR` = `docs/planning/plans/research/known-issues-and-roadmap.md`; `CHK` = `docs/hardware/key61/hw-test-checklist.md`.
 
 ## 1. Áttekintés
 **Mit csinál.** Az aktuális sáv **jegyzet-eseményeinek táblázata** (`ListEditMode`, `LE/kick_ListEdit.h:58-103`): sor, idő (BAR:BEAT:TICK), pad/note, hossz, velocity, Mod Type, Value, Prob, Rat (`headerTitles`, `.h:92`). Fejléc: Back, sáv-választó, FILTER, TC gomb, Settings (Hitting pads / Auto Advance / Auto Scroll, `Kick/modules/kick_ui/audio_components/gridview/kick_GridData.cpp:68-84`); alul Snap, Delete, Insert. A **Timing Correct ablak** (`ListEditTimingCorrect`, `.h:26-55`) is itt él: Global TC Off/On, időosztás + triplet, TYPE (Start/End/Length/Legato), EVENTS (All/Selected/Range), SWING, SHIFT TIMING, WINDOW, STRENGTH.
@@ -92,7 +92,7 @@ Az engedélyezett, de a híd által nem vizsgált út: a Data Dial a **kiválasz
 - A `KickListBox::knobRotated` az aszinkron `setSelected`-re épít (`Ctl/kick_listbox.cpp:559-566,577-583`): két gyors forgatás ugyanabból az indexből indul, a második felülírja az elsőt (léptékvesztés).
 
 ### 3.2 Data Dial / +/- eldobása (LE-03, P1) — KIR H4
-- `ListEditMode::handleCommand` a `knob != EN_KNOB_CENTER` feltétellel a dialt eldobja (`:268`), a gombágon csak PLAY/PLAY START/STOP/TC van (`:275-281`). Az MPC-n ez az elsődleges navigáció-eszköz; a `Track` és más képernyők kezelik (`docs/AKAI_MPC_KEY61_MORNING_DECISIONS.md` AD1b, (a) pont).
+- `ListEditMode::handleCommand` a `knob != EN_KNOB_CENTER` feltétellel a dialt eldobja (`:268`), a gombágon csak PLAY/PLAY START/STOP/TC van (`:275-281`). Az MPC-n ez az elsődleges navigáció-eszköz; a `Track` és más képernyők kezelik (`docs/hardware/key61/morning-decisions.md` AD1b, (a) pont).
 
 ### 3.3 Delete: rossz jegyzet törlődhet, kijelölés nélkül is töröl (LE-04, P1)
 - `ae.eraseNote( number, start, -1 )` a „-1 hossz” ágon **a pad első, a kezdőpontot lefedő** jegyzetét törli (`Eng/mt_audio_note.cpp:449-457`, lista kezdőpont szerint rendezett), ami egy korábban kezdődő, átnyúló jegyzet is lehet, nem a kijelölt sor (`:133-137`). Megoldás: törlés id/ValueTree alapján (`eraseNote( juce::ValueTree )` létezik, `:633-646`).
@@ -114,7 +114,7 @@ Az engedélyezett, de a híd által nem vizsgált út: a Data Dial a **kiválasz
 
 ### 3.7 Undo-határok és a „TC = egy undo-lépés” állítás (LE-08, P1; közös SS-10)
 - A cellák közvetlen `vt.setProperty( …, &um )`-et hívnak (`:453-467`), tranzakció-határ nélkül → az előző nyitott tranzakcióhoz csatlakoznak (a `beginNewTransaction` csak néhány helyen van: `Eng/mt_audio_manager.cpp:466,647`, `mt_audio_interface.cpp:1803,1815,1885`).
-- A TC Apply `beginNewTransaction("Timing Correct")`-et hív (`mt_audio_interface.cpp:1803`), de a belső `MTNote` írások (`updateNote`: `Note.length = …; Note.start = …`, `mt_audio_note.cpp:1329-1340,1708-1712`) `CachedValue`-n át mennek, ami **minden változásnál új tranzakciót kezd** (`Kick/modules/common/source/kick_CachedValue.h:128-137`). Így a TODO T30 / CHK sora szerinti „egy undo-lépés” (`docs/AKAI_MPC_KEY61_TODO.md:68`, `CHK:33`) a kód alapján **nem teljesül**: N módosított jegyzet → N tranzakció. Hardveres UNDO-val kell ellenőrizni (a host-teszt csak a tiszta logikát fedi, `Kick/tests/platform/TimingCorrectTests.cpp`).
+- A TC Apply `beginNewTransaction("Timing Correct")`-et hív (`mt_audio_interface.cpp:1803`), de a belső `MTNote` írások (`updateNote`: `Note.length = …; Note.start = …`, `mt_audio_note.cpp:1329-1340,1708-1712`) `CachedValue`-n át mennek, ami **minden változásnál új tranzakciót kezd** (`Kick/modules/common/source/kick_CachedValue.h:128-137`). Így a TODO T30 / CHK sora szerinti „egy undo-lépés” (`docs/hardware/key61/todo.md:68`, `CHK:33`) a kód alapján **nem teljesül**: N módosított jegyzet → N tranzakció. Hardveres UNDO-val kell ellenőrizni (a host-teszt csak a tiszta logikát fedi, `Kick/tests/platform/TimingCorrectTests.cpp`).
 
 ### 3.8 Egyéb (P2)
 - **Aszinkron visszaírás (LE-09):** a `refreshData` `note.setSelected( n, sendNotification )`-t hív (`:500`), ami `callAsync`-kel fut (`Ctl/kick_listbox.cpp:559-566`); az `onSelectionChanged` a **pillanatnyi** `vt`-re ír (`:453-455`). Újrahasznosított sornál (`setValues` másik jegyzetre) az előző sor értéke átmenetileg a másik jegyzetre kerülhet, majd a következő callAsync visszaírja; közben undo-bejegyzés és motor-frissítés keletkezhet. A `prob`/`rat` `setValue( …, sendNotification )` (`:503-504`) tartományon kívüli tárolt értéknél (pl. ratchet 0) adat-visszaírást vált ki a megnyitás során.
@@ -125,14 +125,14 @@ Az engedélyezett, de a híd által nem vizsgált út: a Data Dial a **kiválasz
 - **Pad-nevek:** a Pad oszlop mindig a `padNames` (A1…H16) címkét használja (`.h:120`), program-típustól függetlenül; Keygroup/MIDI sávon a note-név (pl. C3) hiánya NEM ELLENŐRIZHETŐ kódból.
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest, a docs-ból)
-- **Az Akai List Edit szakasza nincs átvéve:** a `WALKTHROUGH_PLAN.md` E csomagja (Grid, Step Sequencer, **List Edit**, Track Edit; 165–212, 252–255 o.) **nem készült el**; csak WP-D és WP-G van (`KIR` 3.1). A List Edit funkciólistája (események típusai, szerkeszthető mezők, törlés/beszúrás/szűrő/kijelölés) a dokumentáció szerint NEM ELLENŐRIZHETŐ; ez a review Akai-paritást nem állít. → LE-26.
-- **TC elhelyezése:** az Akai felső sávjában TC ikon van, hosszú nyomásra ablak (WP-G G-213), a Track listán Shift+TC (WP-D D-160); a Kickben a TC ablak a List Edit-ben van, nincs TC ikon a felső sávon (`Home:519`) — mindkét sor „ELTÉR / döntés”. Grid-ből sem érhető el (`docs/plans/research/grid-and-piano-view.md:29`).
+- **Az Akai List Edit szakasza nincs átvéve:** a `walkthrough-plan.md` E csomagja (Grid, Step Sequencer, **List Edit**, Track Edit; 165–212, 252–255 o.) **nem készült el**; csak WP-D és WP-G van (`KIR` 3.1). A List Edit funkciólistája (események típusai, szerkeszthető mezők, törlés/beszúrás/szűrő/kijelölés) a dokumentáció szerint NEM ELLENŐRIZHETŐ; ez a review Akai-paritást nem állít. → LE-26.
+- **TC elhelyezése:** az Akai felső sávjában TC ikon van, hosszú nyomásra ablak (WP-G G-213), a Track listán Shift+TC (WP-D D-160); a Kickben a TC ablak a List Edit-ben van, nincs TC ikon a felső sávon (`Home:519`) — mindkét sor „ELTÉR / döntés”. Grid-ből sem érhető el (`docs/planning/plans/research/grid-and-piano-view.md:29`).
 - **Timing Correct:** a Range nem támogatott, a beállítások nem perzisztensek, rövid track Start-mód csavar, TC LED (`KIR` H26; a `updateTimingCorrectLed` hívás a hídban már megvan, `B:328` — a H8/H26 „nincs TC LED” állítás elavult lehet, hardveren nem mért).
 - **Nem-jegyzet események és automáció-sávok:** nincs lane-szerkesztő UI, track PAN nem automatizálható, a Write nem undo-zható (`KIR` H25). A List Edit „Mod Type/Value” oszlopai erre készültek, de üresek.
 - **Q-Link oszlopváltás, Shift+Q-Link ablak:** nem vizsgált (DVK 3., 5. sor).
 - **Locate ablak** (a `<` `>` lépés mértékét adná, DVK 6., 7. sor), **Erase / Copy / Delete** gombok szerepe a lista-szerkesztésben (DVK 31–32. sor „nem vizsgált”).
 - **Step record + Auto Advance:** a Settings-ben megvan a kapcsoló, step-record mód nincs.
-- Nincs külön terv a `docs/plans/` alatt a List Edit-re.
+- Nincs külön terv a `docs/planning/plans/` alatt a List Edit-re.
 
 ## 5. Javaslataim
 1. **Dial-first használat (UX + MPC).** A Key 61 fő navigációja a Data Dial és a +/-: a List Edit-ben a dial léptesse a **kijelölt sort**, ENTER/dial-nyomás válassza a szerkesztendő oszlopot, majd a dial állítsa az értéket; a Q-Link 1-4 a kijelölt sor Pad/Hossz/Velocity/Prob oszlopa legyen (nem a képernyő legfelső sora). Indok: ma a hardvernek ebben a képernyőben nincs használható navigációja (3.1, 3.2).
@@ -150,7 +150,7 @@ Az engedélyezett, de a híd által nem vizsgált út: a Data Dial a **kiválasz
 **Ma ezt fedi.** Automatikus teszt a List Edit képernyőre és a jegyzetlista-API-ra **nincs** (`rg` a `Kick/tests` és `Kick/clap_host/tests` alatt: nincs ListEdit/`MTNoteList`/`addOrModifyNote`/`deleteNotesInRange` találat). Host-tesztek közelről: `TimingCorrectTests` (a tiszta `mt_timing_correct.h` logika: snap, strength, window, swing), `ModalDialogKeysTests` (a TC ablak gomb→művelet táblája), `EventSeekTests`, `SeqRecordTests`. Hardveren igazolt (`KIR` 1. tábla, RPT): a pad-felvétel eredménye a List Edit-ben (6 A1 jegyzet, velocity 32–127), a TC gomb ablaknyitása érintéssel, **ENTER = Apply**. Nem igazolt: a TC tényleges kvantálási hatása a lejátszásban/UNDO-ban, a Cancel, a Data Dial a List Edit-en (H4), a Q-Link.
 **Hiányzik / javasolt.**
 - Host (ValueTree-vel, mint `clap_host/tests`): `MTNoteList` — `find` hossz-egyezés és „-1 hossz” (lefedő) szemantika, `eraseNote` id-alapon, undo-lépésszám egy TC Apply után — LE-40/LE-41.
-- Szkript: `kick_cmd` + `snapshot` md5 (RPT módszere): `btn TC`, `touch` a TC gombon, `btn ENTER`, `rawmidi B0 10 01` (Q-Link), `jog`; majd `snapshot`. A `KICK_SMOKE_SCREENS="MenuListEdit"` képernyőkép-futtatás (`docs/AKAI_MPC_KEY61_TODO.md:78-82`) nagy eseményszámú projekttel (LE-43).
+- Szkript: `kick_cmd` + `snapshot` md5 (RPT módszere): `btn TC`, `touch` a TC gombon, `btn ENTER`, `rawmidi B0 10 01` (Q-Link), `jog`; majd `snapshot`. A `KICK_SMOKE_SCREENS="MenuListEdit"` képernyőkép-futtatás (`docs/hardware/key61/todo.md:78-82`) nagy eseményszámú projekttel (LE-43).
 **MPC-n ellenőrzendő** (a CHK bővítéséhez):
 1. TC gomb: List Edit-re vált, a 2. nyomás/érintés nyitja az ablakot; ENTER = Apply, STOP = Apply, Shift+STOP és MAIN = Cancel; beágyazott TYPE/EVENTS popup nyitva ugyanezek.
 2. Egy TC Apply után UNDO: hány nyomás kell a teljes visszaálláshoz (3.7).
@@ -188,7 +188,7 @@ Függőségek: `SS-xx` = `step-sequencer.md`. Méret: S < fél nap, M ~1–2 nap
 - [ ] **LE-23** (P2, M) FILTER (esemény-típus, pad, tartomány) és Snap megvalósítása — függ: LE-12
 - [ ] **LE-24** (P2, M) Q-Link oszlopváltás a hídban (4x4 → `EN_KNOB_1..16`), közös **SS-22**
 - [ ] **LE-25** (P2, S) Döntés a hardveres belépésről (mód-LED/gomb, TC-gomb szerepe, Menü) — `B:253-273`; `Home:518-519`
-- [ ] **LE-26** (P1, M) WP-E (Akai útmutató 165–212, 252–255 o.) végigvétele List Edit-re: Akai-hiánylista (csak dokumentum) — `docs/akai_mpc_hardware/WALKTHROUGH_PLAN.md:23`
+- [ ] **LE-26** (P1, M) WP-E (Akai útmutató 165–212, 252–255 o.) végigvétele List Edit-re: Akai-hiánylista (csak dokumentum) — `docs/hardware/key61/walkthrough-plan.md:23`
 - [ ] **LE-27** (P2, S) Note-név megjelenítése a program típusa szerint (Keygroup/MIDI) — `.h:120` — előbb vizsgálat
 
 **Javaslatok**
@@ -201,5 +201,5 @@ Függőségek: `SS-xx` = `step-sequencer.md`. Méret: S < fél nap, M ~1–2 nap
 **Tesztek**
 - [ ] **LE-40** (P1, M) Jegyzetlista-API teszt ValueTree-vel (find, „-1 hossz”, eraseNote id, undo-lépésszám) — közös **SS-41**
 - [ ] **LE-41** (P1, S) TC integrációs teszt: All/Selected, duplikátum-törlés, undo-lépésszám egy Apply után — `Eng/mt_audio_note.cpp:1667-1720`; függ: LE-08
-- [ ] **LE-42** (P1, S) MPC-s `kick_cmd`+`snapshot` forgatókönyv és CHK-bővítés a 6. pont listájával — `docs/AKAI_MPC_KEY61_HW_TEST_CHECKLIST.md`
-- [ ] **LE-43** (P2, S) Smoke-képernyőkép MenuListEdit 1000+ eseménnyel, megnyitási idő mérése — `docs/AKAI_MPC_KEY61_TODO.md:78-82`; függ: LE-07
+- [ ] **LE-42** (P1, S) MPC-s `kick_cmd`+`snapshot` forgatókönyv és CHK-bővítés a 6. pont listájával — `docs/hardware/key61/hw-test-checklist.md`
+- [ ] **LE-43** (P2, S) Smoke-képernyőkép MenuListEdit 1000+ eseménnyel, megnyitási idő mérése — `docs/hardware/key61/todo.md:78-82`; függ: LE-07

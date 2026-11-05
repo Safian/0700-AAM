@@ -1,6 +1,6 @@
 # Pad Mute / Track Mute — review és TODO
 
-Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül), 2026-11-04, ág `claude/kick-plans`. „KÉSZ” = van bekötött handler az engine-ig, nem hardveres igazolás. Ahol a régi docs és a kód ellentmond, a **kód az igazság**. `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `MD/` = `Kick/modules/kick_ui/modes/`. Alap: `research/screen-inventory.md` §4.12/4.13 (ott „nem követtem az engine-ig”, itt követtem), `research/known-issues-and-roadmap.md`, `walkthrough/WP-D.md` (D-071..D-143), `KEY61_DOC_VS_KICK.md` (#17), `KEY61_LED_COLOURS.md`. A Q-Link közös hibái: `knob-edit-qlinks.md` (QL-01..QL-03). Két képernyő, közös szerkezet; a jelölés `[Pad]` / `[Track]` / `[Mind]`.
+Állapot: **statikus kódolvasás** (build/futtatás/hardver nélkül), 2026-11-04, ág `claude/kick-plans`. „KÉSZ” = van bekötött handler az engine-ig, nem hardveres igazolás. Ahol a régi docs és a kód ellentmond, a **kód az igazság**. `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `MD/` = `Kick/modules/kick_ui/modes/`. Alap: `research/screen-inventory.md` §4.12/4.13 (ott „nem követtem az engine-ig”, itt követtem), `research/known-issues-and-roadmap.md`, `walkthrough/wp-d.md` (D-071..D-143), `doc-vs-kick.md` (#17), `led-colours.md`. A Q-Link közös hibái: `knob-edit-qlinks.md` (QL-01..QL-03). Két képernyő, közös szerkezet; a jelölés `[Pad]` / `[Track]` / `[Mind]`.
 
 ## 1. Áttekintés
 
@@ -75,7 +75,7 @@
 
 ## 4. Tervben / hiányzik (Akai MPC Standalone-hoz képest)
 
-Forrás: WP-D D-071..D-143, `KEY61_DOC_VS_KICK.md`.
+Forrás: WP-D D-071..D-143, `doc-vs-kick.md`.
 - **Event Mute vs Audio Mute** (kapcsoló, ikonok; MIDI/CV track mindig Event, audio track mindig Audio mute): hiányzik (D-076, D-077, D-094, D-098, D-099). A motorban a némítás mindig „új note nem indul, a lecsengés marad”.
 - **Timing Correct / Time Division kvantálás**: a mute az Akai-n a következő időosztásnál lép életbe (1/16 … 2 Bar, triola); a Kick kapcsolója/listája (1/16 … 1) hatástalan, nincs 2 Bar és triola (D-080..D-083, D-120..D-122).
 - **Settings**: Track Mute State Per Sequence (a Kickben alapból per-szekvencia), Mute Events Write Automation, Mute and Solo Events are Undoable, Use Track/Pad Colors, **Solo Behavior Single/Multi** (D-087..D-091, D-126..D-128). A Kick rögzített Single, a mute undo-zható (ValueTree), a solo nem.
@@ -105,7 +105,7 @@ Forrás: WP-D D-071..D-143, `KEY61_DOC_VS_KICK.md`.
 
 **MPC-n ellenőrzendők** (`kick_cmd`: `btn MUTE`/`btn TRACK_MUTE`/`btn PAD_MUTE`, `pad <n> <vel>`, `encoder <idx> <delta>`, `snapshot`):
 - [ ] Pad-ütés a Track Mute és a Pad Mute képernyőn: **egy** ütés = **egy** váltás; több képernyőváltás után is (MU-H10).
-- [ ] Pad-LED színe nyomásra vált-e (Pad Mute: nem fog — MU-H1); Track Mute igen. Fényerő, narancs/piros/zöld szemmel, a `KEY61_LED_COLOURS.md`-hez rögzítve.
+- [ ] Pad-LED színe nyomásra vált-e (Pad Mute: nem fog — MU-H1); Track Mute igen. Fényerő, narancs/piros/zöld szemmel, a `led-colours.md`-hez rögzítve.
 - [ ] **Clear Solos** két szólózott trackkel, majd lejátszás: hallható-e a némítás (MU-H3).
 - [ ] Mute-csoport: két track azonos csoportban — az egyik némítása a másikat is némítja-e (képernyőről és a Mixerből, MU-H7).
 - [ ] Q-Link 1–4: friss képernyőn és érintés után; B bankban melyik pad kap csoportot; a program-index (MU-H2); None-ra visszalépés.

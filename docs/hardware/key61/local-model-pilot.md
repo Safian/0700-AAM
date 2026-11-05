@@ -1,6 +1,6 @@
 # Helyi modell kísérlet: dokumentum → állítás-lap (WP-A, Key 61 vezérlő-leírás)
 
-**Cél:** megmérni, hogy egy helyi modell megbízhatóan alakítja-e át az útmutató szövegét a [WALKTHROUGH_PLAN.md](WALKTHROUGH_PLAN.md) állítás-lap soraivá. A cél nem a modell képességeinek találgatása, hanem mérés a már kézzel ellenőrzött WP-A anyagon.
+**Cél:** megmérni, hogy egy helyi modell megbízhatóan alakítja-e át az útmutató szövegét a [walkthrough-plan.md](walkthrough-plan.md) állítás-lap soraivá. A cél nem a modell képességeinek találgatása, hanem mérés a már kézzel ellenőrzött WP-A anyagon.
 
 ## Környezet (mért)
 - Gép: Apple M5 Pro, 64 GB memória.

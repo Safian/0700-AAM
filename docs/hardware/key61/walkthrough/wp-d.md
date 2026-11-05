@@ -74,8 +74,8 @@ Terület: a Track Mixer (137-141), a Pad Mixer (142-145), a Track/Pad Mute mód 
 | D-066 | 145 | MIDI Out Note: a pad által küldött MIDI hang kiválasztása | Nincs ilyen beállítás | HIÁNYZIK | keresve (kick_PadMixer.*: MIDI Out Note, nincs találat) | döntés |
 | D-067 | 145 | MIDI Out Channel: a MIDI csatorna kiválasztása | Nincs ilyen beállítás | HIÁNYZIK | keresve (kick_PadMixer.*: MIDI Out Channel, nincs találat) | döntés |
 | D-068 | 145 | Audio Out: a pad kimenetének útvonala (Track vagy közvetlen kimenet) | Nincs pad-szintű kimenet-választó | HIÁNYZIK | keresve (kick_PadMixer.*: Audio Out, nincs találat) | döntés |
-| D-069 | 146 | Az oldal a Sounds módot írja le, nem mixer-tartalom (lásd WP-G, G-sorok a 146. oldalról) | - | NEM VIZSGÁLT | az oldal nem a mixerhez tartozik; a Sounds mód állításai a WP-G.md fájlban vannak | nincs |
-| D-070 | 147 | Az oldal a Sounds, Favorites és Setlists szakaszokat írja le, nem mixer-tartalom (lásd WP-G, G-sorok a 147. oldalról) | - | NEM VIZSGÁLT | az oldal nem a mixerhez tartozik; az állítások a WP-G.md fájlban vannak | nincs |
+| D-069 | 146 | Az oldal a Sounds módot írja le, nem mixer-tartalom (lásd WP-G, G-sorok a 146. oldalról) | - | NEM VIZSGÁLT | az oldal nem a mixerhez tartozik; a Sounds mód állításai a wp-g.md fájlban vannak | nincs |
+| D-070 | 147 | Az oldal a Sounds, Favorites és Setlists szakaszokat írja le, nem mixer-tartalom (lásd WP-G, G-sorok a 147. oldalról) | - | NEM VIZSGÁLT | az oldal nem a mixerhez tartozik; az állítások a wp-g.md fájlban vannak | nincs |
 | D-071 | 256 | A Track Mute Mode sávokat némít egy szekvencián belül, vagy sávcsoportokat állít, így több sáv némítható egyszerre | KickTrackMute képernyő: pad-gombok sávot némítanak; Track Group fül csoportot rendel | OK | Kick/modules/kick_ui/modes/kick_trackMute.cpp:203; Kick/modules/kick_ui/modes/kick_trackMute.cpp:209-212 | teszt |
 | D-072 | 256 | Belépés: Menu, majd Track Mute érintése | Menü elem "Track Mutes" | OK | Kick/modules/kick_ui/dialogs/kick_AppMenuOptions.cpp:29; Kick/modules/kick_ui/dialogs/kick_AppMenuOptions.cpp:87 | teszt |
 | D-073 | 256 | Belépés a Track Mute (Key 61: Mute) gombbal | Kódban EN_TRACK_MUTE nyitja a MenuTrackMute képernyőt (gombot nem mértem) | NEM VIZSGÁLT | kód: Kick/modules/kick_ui/dialogs/kick_AppHome.cpp:506; fizikai gomb és LED nem mérve | teszt |
@@ -211,8 +211,8 @@ Minden `NEM VIZSGÁLT` sor azonosítóval, oldallal és az ok megjelölésével 
 - D-048 (142. oldal): A Pad Mixer megnyitása Shift és Mixer gombbal. Ok: kód: Kick/modules/kick_ui/dialogs/kick_AppHome.cpp:503; Shift-kombináció és gomb nem mérve
 - D-051 (142. oldal): Pad kijelölése a hardveres pad megérintésével. Ok: kód: Kick/modules/kick_ui/modes/mixers/kick_PadMixer.cpp:231-255 (handleCommand: noteOn/noteOff); fizikai pad nem mérve
 - D-053 (142. oldal): Balra-jobbra húzással további padok láthatók. Ok: érintéses görgetés nem mérve; Kick/modules/kick_ui/modes/mixers/kick_PadMixer.cpp:296-311
-- D-069 (146. oldal): Az oldal a Sounds módot írja le, nem mixer-tartalom (lásd WP-G, G-sorok a 146. oldalról). Ok: az oldal nem a mixerhez tartozik; a Sounds mód állításai a WP-G.md fájlban vannak
-- D-070 (147. oldal): Az oldal a Sounds, Favorites és Setlists szakaszokat írja le, nem mixer-tartalom (lásd WP-G, G-sorok a 147. oldalról). Ok: az oldal nem a mixerhez tartozik; az állítások a WP-G.md fájlban vannak
+- D-069 (146. oldal): Az oldal a Sounds módot írja le, nem mixer-tartalom (lásd WP-G, G-sorok a 146. oldalról). Ok: az oldal nem a mixerhez tartozik; a Sounds mód állításai a wp-g.md fájlban vannak
+- D-070 (147. oldal): Az oldal a Sounds, Favorites és Setlists szakaszokat írja le, nem mixer-tartalom (lásd WP-G, G-sorok a 147. oldalról). Ok: az oldal nem a mixerhez tartozik; az állítások a wp-g.md fájlban vannak
 - D-073 (256. oldal): Belépés a Track Mute (Key 61: Mute) gombbal. Ok: kód: Kick/modules/kick_ui/dialogs/kick_AppHome.cpp:506; fizikai gomb és LED nem mérve
 - D-081 (256. oldal): Példa: 1 Bar időosztásnál a némítás a pad megnyomása utáni ütem elejéhez igazodik. Ok: motor nem vizsgált; UI-kezelő nincs: Kick/modules/kick_ui/modes/kick_trackMute.cpp:240-242
 - D-096 (258. oldal): A némított sáv padja narancssárgán világít. Ok: kód: Kick/modules/kick_ui/modes/kick_trackMute.cpp:351; LED nem mérve
