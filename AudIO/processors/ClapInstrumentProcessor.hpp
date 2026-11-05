@@ -37,6 +37,7 @@
 
 // MIT-Licensed CLAP C ABI headers (AudIO/third_party/clap/include/clap/clap.h)
 #include "clap/clap.h"
+#include "MancerMap.hpp"
 
 namespace AudIO {
 
@@ -172,6 +173,12 @@ public:
         hybridAnalogLoopEnabled_.store(enabled, std::memory_order_relaxed);
     }
 
+    // Dynamic macro mapping schema (MancerMap) for declarative hardware binding
+    bool applyMancerMap(const MancerMap& map) noexcept;
+    bool loadMancerMapFromFile(const char* jsonFilePath) noexcept;
+    const MancerMap* getActiveMancerMap() const noexcept { return hasActiveMap_ ? &activeMap_ : nullptr; }
+    const char* getMacroName(uint8_t index) const noexcept;
+
     // Real-Time Audio Thread Entrypoint (Zero allocations, zero locks)
     void processAudioBlock(const float* inLeft, const float* inRight,
                            float* outLeft, float* outRight,
@@ -203,6 +210,9 @@ private:
 
     // Pre-allocated CLAP parameter IDs bound to the 8 hardware macros
     std::array<clap_id, kNumMacros> macroParamIds_{};
+    std::array<std::string, kNumMacros> macroNames_{};
+    MancerMap activeMap_{};
+    bool hasActiveMap_{false};
 
     // Persistent 0-5V analog CV Cutoff & Resonance states across audio blocks
     float lastCvCutoffNormalized_{0.0f};

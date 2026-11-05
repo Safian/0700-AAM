@@ -67,6 +67,7 @@ file(GLOB_RECURSE daw "AudIO/Daw/*.cpp" "AudIO/Daw/*.h")
 file(GLOB_RECURSE devices "AudIO/Devices/*.cpp" "AudIO/Devices/*.c" "AudIO/Devices/*.h")
 file(GLOB_RECURSE dsp "AudIO/Dsp/*.cpp" "AudIO/Dsp/*.h")
 file(GLOB_RECURSE objects "AudIO/Objects/*.cpp" "AudIO/Objects/*.h")
+file(GLOB_RECURSE processors "processors/*.cpp" "processors/*.hpp")
 
 file(GLOB_RECURSE airwindows "AudIO/airwindows/airwindows_base.h" "AudIO/airwindows/audioeffectx.h" "AudIO/airwindows/airwindows.cpp" "AudIO/airwindows/airwindows2.cpp")
 
@@ -81,9 +82,10 @@ add_library(AudIO_Core
 
     ${dsp}
     ${objects}
+    ${processors}
 )
 
-target_include_directories(AudIO_Core PUBLIC "AudIO/Includes" "AudIO/3rdparty" "AudIO/Devices" "AudIO/Objects" "AudIO/Dsp" )
+target_include_directories(AudIO_Core PUBLIC "AudIO/Includes" "AudIO/3rdparty" "AudIO/Devices" "AudIO/Objects" "AudIO/Dsp" "third_party/clap/include" "processors" )
 target_include_directories(AudIO_Core PRIVATE "AudIO/core" )
 
 ####
@@ -115,9 +117,9 @@ target_include_directories(AirWindows_plugins PRIVATE "AudIO/airwindows" "AudIO/
 get_target_property(AUDIO_CORE_SOURCES AudIO_Core SOURCES)
 get_target_property(DAW_CORE_SOURCES DAW_Core SOURCES)
 get_target_property(AIRWINDOWS_SOURCES AirWindows_plugins SOURCES)
-source_group(TREE ${CMAKE_SOURCE_DIR}/AudIO FILES ${AUDIO_CORE_SOURCES})
-source_group(TREE ${CMAKE_SOURCE_DIR}/AudIO FILES ${DAW_CORE_SOURCES})
-source_group(TREE ${CMAKE_SOURCE_DIR}/AudIO FILES ${AIRWINDOWS_SOURCES})
+source_group(TREE ${CMAKE_SOURCE_DIR} FILES ${AUDIO_CORE_SOURCES})
+source_group(TREE ${CMAKE_SOURCE_DIR} FILES ${DAW_CORE_SOURCES})
+source_group(TREE ${CMAKE_SOURCE_DIR} FILES ${AIRWINDOWS_SOURCES})
 
 set_target_properties(AudIO_Core PROPERTIES FOLDER "Libraries" )
 set_target_properties(DAW_Core PROPERTIES FOLDER "Libraries" )
@@ -130,3 +132,12 @@ target_compile_features(AirWindows_plugins PRIVATE cxx_std_17)
 # Find packages go here.
 # Add 
 add_subdirectory(AudIO/Example)
+
+enable_testing()
+add_executable(mancer_map_tests
+    ../Kick/tests/platform/MancerMapTests.cpp
+    processors/ClapInstrumentProcessor.cpp
+)
+target_include_directories(mancer_map_tests PRIVATE "third_party/clap/include" "processors")
+target_compile_features(mancer_map_tests PRIVATE cxx_std_17)
+add_test(NAME MancerMapTests COMMAND mancer_map_tests)
