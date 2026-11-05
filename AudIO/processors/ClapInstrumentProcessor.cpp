@@ -102,18 +102,63 @@ void ClapInstrumentProcessor::unloadPlugin() noexcept {
 
 void ClapInstrumentProcessor::bindMacroParameters() noexcept {
     macroParamIds_.fill(CLAP_INVALID_ID);
+    for (size_t i = 0; i < kNumMacros; ++i) {
+        macroNames_[i].clear();
+    }
+
     paramsExt_ = static_cast<const clap_plugin_params_t*>(
         plugin_->get_extension(plugin_, CLAP_EXT_PARAMS));
     if (!paramsExt_) return;
 
-    const uint32_t count = paramsExt_->count(plugin_);
-    const uint32_t bindCount = std::min<uint32_t>(count, kNumMacros);
-    for (uint32_t i = 0; i < bindCount; ++i) {
-        clap_param_info_t info{};
-        if (paramsExt_->get_info(plugin_, i, &info)) {
-            macroParamIds_[i] = info.id;
+    if (hasActiveMap_) {
+        for (const auto& binding : activeMap_.macros) {
+            if (binding.macroIndex < kNumMacros) {
+                macroParamIds_[binding.macroIndex] = binding.paramId;
+                macroNames_[binding.macroIndex] = binding.name;
+            }
+        }
+    } else {
+        const uint32_t count = paramsExt_->count(plugin_);
+        const uint32_t bindCount = std::min<uint32_t>(count, kNumMacros);
+        for (uint32_t i = 0; i < bindCount; ++i) {
+            clap_param_info_t info{};
+            if (paramsExt_->get_info(plugin_, i, &info)) {
+                macroParamIds_[i] = info.id;
+                macroNames_[i] = info.name;
+            }
         }
     }
+}
+
+bool ClapInstrumentProcessor::applyMancerMap(const MancerMap& map) noexcept {
+    activeMap_ = map;
+    hasActiveMap_ = true;
+
+    for (size_t i = 0; i < kNumMacros; ++i) {
+        macroNames_[i].clear();
+    }
+
+    for (const auto& binding : map.macros) {
+        if (binding.macroIndex < kNumMacros) {
+            macroParamIds_[binding.macroIndex] = binding.paramId;
+            macroNames_[binding.macroIndex] = binding.name;
+        }
+    }
+    return true;
+}
+
+bool ClapInstrumentProcessor::loadMancerMapFromFile(const char* jsonFilePath) noexcept {
+    if (!jsonFilePath) return false;
+    MancerMap map;
+    if (MancerMap::loadFromFile(jsonFilePath, map)) {
+        return applyMancerMap(map);
+    }
+    return false;
+}
+
+const char* ClapInstrumentProcessor::getMacroName(uint8_t index) const noexcept {
+    if (index >= kNumMacros) return "";
+    return macroNames_[index].c_str();
 }
 
 uint32_t ClapInstrumentProcessor::clapInputEventsSize(const struct clap_input_events* list) noexcept {
