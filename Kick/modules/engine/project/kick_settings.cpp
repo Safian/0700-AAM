@@ -74,8 +74,31 @@ namespace mt
         // Apply hardware settings to platform services
         auto& ps = PlatformServices::getInstance();
         ps.setBrightness( hardware.brightness() );
-        juce::String tz = hardware.timezone();
-        ps.setTimeZone( tz );
+
+        juce::String currentTz = hardware.timezone();
+        bool userExplicit = hardware.timeZoneUserSet();
+        if( !userExplicit || currentTz.isEmpty() || currentTz == "Asia/Kolkata" )
+        {
+            juce::String detected = ps.detectSystemTimezone();
+            if( detected.isNotEmpty() )
+            {
+                hardware.timezone = detected;
+                currentTz = detected;
+            }
+        }
+        ps.setTimeZone( currentTz );
+
+        // If not explicitly set by user, asynchronously check network/GeoIP
+        if( !userExplicit )
+        {
+            ps.detectTimezoneAsync( [this]( const juce::String& netTz ) {
+                if( !hardware.timeZoneUserSet() && netTz.isNotEmpty() )
+                {
+                    hardware.timezone = netTz;
+                    PlatformServices::getInstance().setTimeZone( netTz );
+                }
+            } );
+        }
 
         // Enable auto-save for settings file.
         setAutoSave( true );
@@ -291,7 +314,8 @@ namespace mt
         sensitivity.attachTo( vTree, IDs::padSensitivity, Undo, "4" );
         curve.attachTo( vTree, IDs::padCurve, Undo, "4" );
         numTaps.attachTo( vTree, IDs::noOftaps, Undo, "2" );
-        timezone.attachTo( vTree, IDs::timeZone, Undo, "Asia/Kolkata" );
+        timezone.attachTo( vTree, IDs::timeZone, Undo, "Europe/Budapest" );
+        timeZoneUserSet.attachTo( vTree, IDs::timeZoneUserSet, Undo, false );
     }
     bool KickHardware::isValid() { return vTree.hasType( IDs::PREFHARDWARE ); }
 

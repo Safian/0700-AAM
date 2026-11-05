@@ -47,6 +47,15 @@ int main()
     assert( formatSetTimezoneCommand( "Europe/Budapest" ) == "timedatectl set-timezone Europe/Budapest" );
     assert( formatSetTimezoneCommand( "Europe/Budapest; rm -rf /" ).empty() );
 
+    assert( parseTimezoneFromZoneinfoLink( "/var/db/timezone/zoneinfo/Europe/Budapest" ) == "Europe/Budapest" );
+    assert( parseTimezoneFromZoneinfoLink( "/usr/share/zoneinfo/America/New_York" ) == "America/New_York" );
+    assert( parseTimezoneFromZoneinfoLink( "../zoneinfo/UTC" ) == "UTC" );
+    assert( parseTimezoneFromZoneinfoLink( "/etc/localtime" ).empty() );
+
+    assert( parseTimezoneFromGeoIpJson( "{\"status\":\"success\",\"timezone\":\"Europe/Budapest\"}" ) == "Europe/Budapest" );
+    assert( parseTimezoneFromGeoIpJson( "{\"status\": \"success\", \"timezone\": \"America/Chicago\"}" ) == "America/Chicago" );
+    assert( parseTimezoneFromGeoIpJson( "{\"status\":\"fail\",\"message\":\"invalid query\"}" ).empty() );
+
     assert( formatSetIpCommand( "end0", "192.168.0.50", "255.255.255.0", "192.168.0.1" )
             == "ifconfig end0 192.168.0.50 netmask 255.255.255.0 && ip route replace default via 192.168.0.1 dev end0" );
 

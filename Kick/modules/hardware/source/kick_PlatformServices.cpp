@@ -121,6 +121,65 @@ public:
         return 1;
     }
 
+    juce::String detectSystemTimezone() override
+    {
+        // 1. Try reading /etc/timezone
+        std::ifstream tzFile( "/etc/timezone" );
+        if( tzFile.is_open() )
+        {
+            std::string line;
+            if( std::getline( tzFile, line ) )
+            {
+                std::string tz = trimString( line );
+                if( platform_cmd::validateTimezone( tz ) )
+                    return juce::String::fromUTF8( tz.c_str() );
+            }
+        }
+
+        // 2. Try reading /etc/localtime symlink
+#if !defined(_WIN32)
+        char buf[1024] = { 0 };
+        ssize_t len = ::readlink( "/etc/localtime", buf, sizeof( buf ) - 1 );
+        if( len > 0 )
+        {
+            buf[len] = '\0';
+            std::string parsed = platform_cmd::parseTimezoneFromZoneinfoLink( std::string( buf ) );
+            if( platform_cmd::validateTimezone( parsed ) )
+                return juce::String::fromUTF8( parsed.c_str() );
+        }
+#endif
+
+        // 3. Fallback default
+        return "Europe/Budapest";
+    }
+
+    void detectTimezoneAsync( std::function<void( const juce::String& )> onComplete ) override
+    {
+        juce::Thread::launch( [this, onComplete]() {
+            // First check local system
+            juce::String detected = detectSystemTimezone();
+
+            // Try GeoIP lookup via HTTP (fast 2s timeout)
+            juce::URL url( "http://ip-api.com/json/?fields=status,timezone" );
+            auto opts = juce::URL::InputStreamOptions( juce::URL::ParameterHandling::inAddress )
+                            .withConnectionTimeoutMs( 2000 )
+                            .withNumRedirectsToFollow( 0 );
+            std::unique_ptr<juce::InputStream> in = url.createInputStream( opts );
+            if( in != nullptr )
+            {
+                juce::String json = in->readEntireStreamAsString();
+                std::string parsed = platform_cmd::parseTimezoneFromGeoIpJson( json.toStdString() );
+                if( platform_cmd::validateTimezone( parsed ) )
+                    detected = juce::String::fromUTF8( parsed.c_str() );
+            }
+
+            juce::MessageManager::callAsync( [onComplete, detected]() {
+                if( onComplete )
+                    onComplete( detected );
+            } );
+        } );
+    }
+
     juce::String getControlSurfaceVersion() override
     {
         std::lock_guard<std::mutex> lock( m_mutex );

@@ -215,6 +215,40 @@ namespace platform_cmd
         return "timedatectl set-timezone " + tz;
     }
 
+    // Extracts timezone name from a zoneinfo symlink target (e.g. "/var/db/timezone/zoneinfo/Europe/Budapest" -> "Europe/Budapest")
+    inline std::string parseTimezoneFromZoneinfoLink( const std::string& target )
+    {
+        const std::string marker = "zoneinfo/";
+        auto pos = target.rfind( marker );
+        if( pos == std::string::npos )
+            return "";
+        std::string tz = target.substr( pos + marker.length() );
+        if( validateTimezone( tz ) )
+            return tz;
+        return "";
+    }
+
+    // Parses timezone from GeoIP JSON response (e.g. {"status":"success","timezone":"Europe/Budapest"})
+    inline std::string parseTimezoneFromGeoIpJson( const std::string& json )
+    {
+        auto pos = json.find( "\"timezone\"" );
+        if( pos == std::string::npos )
+            return "";
+        auto colon = json.find( ':', pos );
+        if( colon == std::string::npos )
+            return "";
+        auto startQuote = json.find( '"', colon );
+        if( startQuote == std::string::npos )
+            return "";
+        auto endQuote = json.find( '"', startQuote + 1 );
+        if( endQuote == std::string::npos )
+            return "";
+        std::string tz = json.substr( startQuote + 1, endQuote - startQuote - 1 );
+        if( validateTimezone( tz ) )
+            return tz;
+        return "";
+    }
+
     // Formats IP assignment and optional default gateway
     inline std::string formatSetIpCommand( const std::string& iface, const std::string& ip,
                                           const std::string& netmask, const std::string& gateway = "" )
