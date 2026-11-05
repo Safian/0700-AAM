@@ -290,6 +290,7 @@ namespace mt
         DECLARE_ID( tapTempoLed )
         DECLARE_ID( noOftaps )
         DECLARE_ID( timeZone )
+        DECLARE_ID( timeZoneUserSet )
 
         DECLARE_ID( PREFMIDICONTROL )
         DECLARE_ID( MidiInputName )

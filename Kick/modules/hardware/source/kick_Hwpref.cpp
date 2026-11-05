@@ -634,9 +634,19 @@ namespace mt
         return PlatformServices::getInstance().getDateTime( date, time, timezone );
     }
 
-    int HwPref::setTimeZone( juce::String& str )
+    int HwPref::setTimeZone( const juce::String& str )
     {
         return PlatformServices::getInstance().setTimeZone( str );
+    }
+
+    juce::String HwPref::detectSystemTimezone()
+    {
+        return PlatformServices::getInstance().detectSystemTimezone();
+    }
+
+    void HwPref::detectTimezoneAsync( std::function<void( const juce::String& )> onComplete )
+    {
+        PlatformServices::getInstance().detectTimezoneAsync( onComplete );
     }
 
     int HwPref::setBrightness( int value )

@@ -469,7 +469,7 @@ private:
                 bool onThis = true, onChildren = true;
                 c->getInterceptsMouseClicks(onThis, onChildren);
                 if (!onThis && !onChildren) continue;
-                const auto rel = c->getLocalPoint(nullptr, juce::Point<int>(ix, iy));
+                const auto rel = c->getLocalPoint(m_window, juce::Point<int>(ix, iy));
                 if (!c->getLocalBounds().contains(rel)) continue;
                 auto* t = c->getComponentAt(rel);
                 return t != nullptr ? t : c;
@@ -496,6 +496,8 @@ private:
         auto* top = comp->getTopLevelComponent();
         if (top != nullptr && !isMainWindowTop(top) && top->isOnDesktop())
             return comp->getLocalPoint(top, juce::Point<int>(ix, iy) - top->getPosition());
+        if (m_window != nullptr && comp != m_window)
+            return comp->getLocalPoint(m_window, juce::Point<int>(ix, iy));
         return comp->getLocalPoint(nullptr, juce::Point<int>(ix, iy));
     }
 

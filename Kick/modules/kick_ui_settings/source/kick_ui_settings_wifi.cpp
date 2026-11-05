@@ -108,6 +108,18 @@ namespace kick_ui
                     {
                         statusLabel.setText( "Connected to " + ssid, juce::dontSendNotification );
                         connect.setToggleState( true, juce::dontSendNotification );
+
+                        // If timezone has not been explicitly set by user, detect via network
+                        if( !settings.hardware.timeZoneUserSet() )
+                        {
+                            mt::HwPref::getHwPref().detectTimezoneAsync( [this]( const juce::String& netTz ) {
+                                if( !settings.hardware.timeZoneUserSet() && netTz.isNotEmpty() )
+                                {
+                                    settings.hardware.timezone = netTz;
+                                    mt::HwPref::getHwPref().setTimeZone( netTz );
+                                }
+                            } );
+                        }
                     }
                     else
                     {

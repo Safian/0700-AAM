@@ -106,6 +106,7 @@ namespace kick_ui
         };
         timezone.onSelectionChanged = [&]( int index, juce::String str ) {
             settings.hardware.timezone = ( str );
+            settings.hardware.timeZoneUserSet = true;
             mt::HwPref::getHwPref().setTimeZone( str );
         };
 

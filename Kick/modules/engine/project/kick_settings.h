@@ -120,6 +120,7 @@ namespace mt
         AtomicString curve;
         AtomicString numTaps;
         AtomicString timezone;
+        Atomic<bool> timeZoneUserSet;
     };
 
     /// ///////////////////////////////////

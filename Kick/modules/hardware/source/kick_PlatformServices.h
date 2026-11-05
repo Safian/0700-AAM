@@ -56,6 +56,8 @@ namespace mt
         virtual int getDateTime( dateInfo& date, timeInfo& time, const juce::String& timezone ) = 0;
         virtual int setTimeZone( const juce::String& tz ) = 0;
         virtual juce::String getTimeZone() = 0;
+        virtual juce::String detectSystemTimezone() = 0;
+        virtual void detectTimezoneAsync( std::function<void( const juce::String& )> onComplete ) = 0;
         virtual int getDaysInMonth( int month, int year ) = 0;
 
         // Ethernet
