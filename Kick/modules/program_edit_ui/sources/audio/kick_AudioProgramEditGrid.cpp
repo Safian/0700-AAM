@@ -777,7 +777,7 @@ namespace kick_ui
 
     // Fade In / Fade Out, Semi, Fine, TC and Don't Snap have no model field and no audio processing behind them (no handler at
     // all): they are not shown instead of being dead controls. Fades / pitch of an audio clip need a model property and the
-    // clip player to apply it first (an MPC listening test: docs/planning/plans/screens/program-edit.md PE-10). true brings them back.
+    // clip player to apply it first (an MPC listening test: docs/planning/screen-backlog.md, Program Edit PE-10). true brings them back.
     static constexpr bool kAudioStubControlsVisible = false;
 
     AudioProgramGrid::AudioProgramGrid( mt::MTAudioProgram*& Audio )

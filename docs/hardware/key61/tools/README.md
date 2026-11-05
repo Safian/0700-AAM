@@ -12,8 +12,6 @@
 | `pilot_wpa.py` | a Key 61 vezérlő-leírás (45 tétel) JSON-sorokká helyi modellel (lásd [../local-model-pilot.md](../local-model-pilot.md)) |
 | `walk.py` | egy oldaltartomány állítás-lap sorokká helyi modellel: `python walk.py <be.txt> <ki.json> <WP-betű> <első-sorszám>` (MLX, `mlx-community/Qwen3.6-35B-A3B-8bit`, `enable_thinking=False`) |
 
-A `walkthrough/wp-b.raw.json` a **nyers, nem ellenőrzött** helyi-modell kimenet a Locate/TC/Metronome oldalakra (71–74): az `oldal` mező sok sorban `null`, a sorokat a Key 61-specifikusságra és a Kick-megfelelőre még át kell nézni.
-
 ## Bekapcsoló gomb és leállítás (R-12)
 - A Kick a gombot maga kezeli: a hardver-híd mellett egy szál olvassa a `/dev/input/eventN` eszközt (KEY_POWER, value 1), a rövid
   nyomás a "Power" ablakot nyitja (Shut Down / Restart / Cancel); ugyanez a Menü "Power" csempéje (a gomb nélkül is mindig működik).
