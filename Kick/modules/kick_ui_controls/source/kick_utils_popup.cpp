@@ -76,12 +76,21 @@ namespace mt
             isInUse = true;
             setVisible( true );
             toFront( true );
-            enterModalState( true, juce::ModalCallbackFunction::create( [Callback, this]( int R ) {
+            // Modal windows are logged (open / close and who closed: X, Cancel, Apply, outside tap, hardware key, the content).
+            const juce::String name = describe();
+            closeReason             = nullptr;
+            enterModalState( true, juce::ModalCallbackFunction::create( [Callback, this, name]( int R ) {
+                                 kick_log( "info", "[INFO] [MODAL] close '%s' code=%d by=%s\n", name.toRawUTF8(), R, closeReason ? closeReason : "content button" );
+                                 closeReason = nullptr;
                                  if( Callback ) Callback( R );
                                  reset();
                              } ),
                              false );
+            kick_log( "info", "[INFO] [MODAL] open '%s' (%d modal)\n", name.toRawUTF8(), juce::Component::getNumCurrentlyModalComponents() );
         }
+
+        /// What the modal log calls this window: the content's name.
+        virtual juce::String describe() const { return pCont ? pCont->getName() : juce::String( "popup" ); }
 
         void close( int exitCode = UI::CLOSE )
         {
@@ -117,6 +126,8 @@ namespace mt
 
     public:
         std::atomic<bool> isInUse{ false };
+        /// Who is about to close this window (a string literal), for the modal log; null = the content's own button / code closed it.
+        const char* closeReason{ nullptr };
 
     protected:
         juce::Rectangle<int> dialogArea{ ui::layout::dialog };
@@ -154,9 +165,9 @@ namespace mt
             utils::addAndMakeVisible( this, title, closeButton );
             utils::addChildComponents( this, apply, cancel );
 
-            apply.onClick       = [&]() { utils::exitDialog( this, UI::APPLY ); };
-            cancel.onClick      = [&]() { utils::exitDialog( this, UI::CANCEL ); };
-            closeButton.onClick = [&]() { utils::exitDialog( this, UI::CANCEL ); };
+            apply.onClick       = [&]() { closeReason = "Apply button"; utils::exitDialog( this, UI::APPLY ); };
+            cancel.onClick      = [&]() { closeReason = "Cancel button"; utils::exitDialog( this, UI::CANCEL ); };
+            closeButton.onClick = [&]() { closeReason = "X button"; utils::exitDialog( this, UI::CANCEL ); };
 
             apply.setClickingTogglesState( false );
             cancel.setClickingTogglesState( false );
@@ -223,6 +234,12 @@ namespace mt
         }
 
         bool hasApplyButton() const { return showYesNoButtons; }
+
+        juce::String describe() const override
+        {
+            const auto t = title.getText();
+            return t.isNotEmpty() ? t : fsPopup::describe();
+        }
 
         void reset() override
         {
@@ -339,6 +356,7 @@ namespace mt
             const bool confirmation = pCont != nullptr && pCont->getProperties().getWithDefault( "outsideTapCancels", false );
             if( showYesNoButtons && !confirmation )
                 return;
+            closeReason = "outside tap";
             utils::exitDialog( this, UI::CANCEL );
         }
 

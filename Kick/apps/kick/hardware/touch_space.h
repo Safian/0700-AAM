@@ -94,5 +94,23 @@ inline bool exceedsTouchSlop(int downX, int downY, int x, int y, int slopPx = 8)
     return dx * dx + dy * dy > (long long)slopPx * slopPx;
 }
 
+// "At most one log line per interval" with a count of what was left out. Used for the warning that a touch fell behind an
+// open modal dialog: a finger can send hundreds of events per second, the log must stay readable.
+struct LogThrottle
+{
+    long long last{ -1 };
+    int       suppressed{ 0 };
+
+    // true: log now; `skipped` = how many calls were suppressed since the previous line. false: stay silent (counted).
+    bool allow(long long nowMs, long long intervalMs, int& skipped)
+    {
+        if (last >= 0 && nowMs >= last && nowMs - last < intervalMs) { ++suppressed; return false; }
+        last       = nowMs;
+        skipped    = suppressed;
+        suppressed = 0;
+        return true;
+    }
+};
+
 } // namespace probe
 } // namespace kick_hw

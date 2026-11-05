@@ -65,6 +65,19 @@ int main()
     rawToUi(5000, -5, 2048, 2048, 1280, 800, 1024, 600, x, y);
     check(x == 1023 && y == 599, "raw out of range is clamped");
 
+    // Log throttle (the "touch swallowed by modal" warning): first call passes, the rest of the second is counted, then it passes again.
+    {
+        LogThrottle t;
+        int skipped = -1;
+        check(t.allow(5000, 1000, skipped) && skipped == 0, "throttle: first call logs");
+        check(!t.allow(5001, 1000, skipped), "throttle: 1 ms later is suppressed");
+        check(!t.allow(5999, 1000, skipped), "throttle: 999 ms later is suppressed");
+        check(t.allow(6000, 1000, skipped) && skipped == 2, "throttle: after the interval it logs and reports 2 skipped");
+        check(!t.allow(6500, 1000, skipped), "throttle: restarts from the last line");
+        check(t.allow(7000, 1000, skipped) && skipped == 1, "throttle: second window reports 1 skipped");
+        check(t.allow(0, 1000, skipped), "throttle: a clock that went backwards logs instead of staying silent");
+    }
+
     if (g_fail) return 1;
     std::puts("touch-space-tests OK");
     return 0;

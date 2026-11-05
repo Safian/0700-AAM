@@ -10,7 +10,8 @@ namespace ui::power
 {
     // Opens the Power window. Ignored (logged) while a shutdown / restart is already running or the window is already open.
     // Also called from a power button press that arrives while a project loads: it waits for the load.
-    void showPowerWindow();
+    // `source` (a string literal) is only for the log: who asked ("power key", "Menu tile", ...).
+    void showPowerWindow( const char* source = "code" );
 
     // Runs the sequence directly (the Power window buttons, the smoke test). `finished` gets the result.
     void request( kick_power::Action action, std::function<void( kick_power::Result )> finished = {} );
