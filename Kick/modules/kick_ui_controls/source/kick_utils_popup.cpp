@@ -137,6 +137,20 @@ namespace mt
         juce::Image image;
     };
 
+    /// Transparent touch target over the small close icon: a finger does not hit a 24 px square (MPC, owner test 2026-11-04),
+    /// the icon itself keeps its size.
+    class CloseTouchArea : public juce::Component
+    {
+    public:
+        std::function<void()> onClick;
+
+        void mouseUp( const juce::MouseEvent& e ) override
+        {
+            if( onClick && contains( e.getPosition() ) )
+                onClick();
+        }
+    };
+
     class dialogDisplayer : public ui::KickControlBase<fsPopup>
     {
     public:
@@ -163,6 +177,9 @@ namespace mt
             closeButton.setPlacementFlag( juce::RectanglePlacement::centred );
 
             utils::addAndMakeVisible( this, title, closeButton );
+            addAndMakeVisible( closeArea );
+            closeButton.setInterceptsMouseClicks( false, false ); // the icon only; closeArea takes the touch
+            closeArea.onClick = [this]() { closeReason = "X button"; utils::exitDialog( this, UI::CANCEL ); };
             utils::addChildComponents( this, apply, cancel );
 
             apply.onClick       = [&]() { closeReason = "Apply button"; utils::exitDialog( this, UI::APPLY ); };
@@ -278,6 +295,7 @@ namespace mt
         juce::Colour         buttonBackgroundColour{ ui::Theme::backgroundColour( 1 ) };
 
         ui::KickImageButton closeButton{ "Close", "Icon Close" };
+        CloseTouchArea      closeArea;
         ui::KickImageButton apply{ "Apply", "Icon_Apply" };
         ui::KickImageButton cancel{ "Cancel", "Icon_Cancel" };
 
@@ -325,8 +343,9 @@ namespace mt
             auto bTitle  = b.removeFromTop( ( ui::layout::screen == dialogArea ) ? 76 : 40 );
             auto cBounds = bTitle.removeFromRight( std::max( 56, 16 + closeButtonSize ) );
             // The whole end of the title bar is the touch target: a 24 px square was not hit by a finger on the MPC (owner test 2026-11-04).
-            closeBounds = cBounds;
+            closeBounds = cBounds.withSizeKeepingCentre( closeButtonSize, closeButtonSize ); // the icon: its original size
             closeButton.setBounds( closeBounds );
+            closeArea.setBounds( cBounds );                                                      // the touch target: the end of the title bar
             title.setBounds( bTitle );
 
             // If options, Setup Apply/Cancel buttons
