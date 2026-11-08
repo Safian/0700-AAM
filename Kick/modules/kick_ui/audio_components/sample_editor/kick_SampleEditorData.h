@@ -406,6 +406,7 @@ namespace mt
             juce::int64                      convertTimeToSamples( double time );
             double                           convertSamplesToTime( juce::int64 sample );
             bool                             performAction( unsigned int actionId, const std::list<juce::var>& params );
+            bool                             revert();
             juce::int64                      getNextZeroSnapPos( juce::int64 pos, bool forward );
             void                             splitByBpm( std::vector<juce::var>& params );
             void                             splitByThresh( std::vector<juce::var>& params );

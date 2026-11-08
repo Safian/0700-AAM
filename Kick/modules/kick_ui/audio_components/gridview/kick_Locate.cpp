@@ -6,6 +6,22 @@ namespace mt::ac
     //LocateDialog
     ////////////////////////////////////////
 
+    struct QuickLocatorSlot
+    {
+        int bar = 1;
+        int beat = 1;
+        int tick = 0;
+    };
+
+    static std::array<QuickLocatorSlot, 6> s_quickLocators = {{
+        { 1, 1, 0 },
+        { 2, 1, 0 },
+        { 3, 1, 0 },
+        { 5, 1, 0 },
+        { 9, 1, 0 },
+        { 17, 1, 0 }
+    }};
+
     class LocateDialog : public juce::Component
         , public juce::Button::Listener
     {
@@ -20,6 +36,8 @@ namespace mt::ac
         void buttonClicked( juce::Button* ) override;
         void close();
         void applyTimeSignature(); // beat / tick ranges follow the time signature of the selected sequence
+        juce::String getLocatorText( int idx ) const;
+        void updateStoreBtnStyle();
 
         ui::KickImageButton timeSigBtn{ "Time signature", "" };
         ui::KickSlider      start{ "SEQ LENGTH", juce::Slider::LinearBar };
@@ -27,6 +45,11 @@ namespace mt::ac
         ui::KickSlider      beat{ "BEAT", juce::Slider::LinearBar };
         ui::KickSlider      tick{ "TICKS", juce::Slider::LinearBar };
         ui::KickImageButton cancelBtn{ "Cancel", "Icon_Cancel" }, applyBtn{ "Apply", "Icon_Apply" };
+
+        ui::KickLabel locatorsTitle{ "QUICK LOCATORS" };
+        ui::KickButton storeBtn{ "Store", "STORE" };
+        std::array<ui::KickButton, 6> locButtons;
+        bool m_storeActive = false;
 
         ui::KickLabel startLable{ "START" };
         ui::KickLabel barLable{ "BAR" };
@@ -40,7 +63,7 @@ namespace mt::ac
     LocateDialog::LocateDialog( int barValue, int beatValue, int tickvalue )
         : barInt( barValue ), beatInt( beatValue ), tickInt( tickvalue )
     {
-        setSize( 650, 520 );
+        setSize( 700, 480 );
         // The UI counts bars and beats from 1 (the engine from 0); a tick is 0..95 (96 per quarter note).
         auto& ae = getAudioInterface();
         bar.setRange( 1, juce::jmax( 1, ae.getSequenceLength( ae.getSelectedSequence() ) ), 1 );
@@ -78,6 +101,41 @@ namespace mt::ac
         tickLable.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
         tickLable.setValueFontHeight( 18.f );
 
+        locatorsTitle.setValueJustification( juce::Justification::centred );
+        locatorsTitle.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+        locatorsTitle.setValueFontHeight( 16.f );
+        utils::addAndMakeVisible( this, locatorsTitle, storeBtn );
+
+        updateStoreBtnStyle();
+        storeBtn.onClick = [this]() {
+            m_storeActive = !m_storeActive;
+            updateStoreBtnStyle();
+        };
+
+        for( size_t i = 0; i < 6; ++i )
+        {
+            locButtons[i].setButtonText( getLocatorText( (int)i ) );
+            locButtons[i].setValueFontHeight( 14.f );
+            utils::addAndMakeVisible( this, locButtons[i] );
+            locButtons[i].onClick = [this, idx = (int)i]() {
+                if( m_storeActive )
+                {
+                    s_quickLocators[(size_t)idx].bar = (int)bar.getValue();
+                    s_quickLocators[(size_t)idx].beat = (int)beat.getValue();
+                    s_quickLocators[(size_t)idx].tick = (int)tick.getValue();
+                    locButtons[(size_t)idx].setButtonText( getLocatorText( idx ) );
+                    m_storeActive = false;
+                    updateStoreBtnStyle();
+                }
+                else
+                {
+                    bar.setValue( s_quickLocators[(size_t)idx].bar, juce::sendNotification );
+                    beat.setValue( s_quickLocators[(size_t)idx].beat, juce::sendNotification );
+                    tick.setValue( s_quickLocators[(size_t)idx].tick, juce::sendNotification );
+                }
+            };
+        }
+
         applyBtn.onClick = [this]() {
             startInt = (int)start.getValue();
             barInt   = (int)bar.getValue();
@@ -94,10 +152,31 @@ namespace mt::ac
         themeConn = ui::themeChanged.connect( [this]() {
             cancelBtn.setImages( "Icon_Cancel" );
             applyBtn.setImages( "Icon_Apply" );
+            updateStoreBtnStyle();
         } );
     }
 
     LocateDialog::~LocateDialog() {}
+
+    juce::String LocateDialog::getLocatorText( int idx ) const
+    {
+        const auto& loc = s_quickLocators[(size_t)idx];
+        return juce::String( idx + 1 ) + ":  " + juce::String( loc.bar ) + "." + juce::String( loc.beat ) + "." + juce::String( loc.tick );
+    }
+
+    void LocateDialog::updateStoreBtnStyle()
+    {
+        if( m_storeActive )
+        {
+            storeBtn.setButtonText( "STORE (ACTIVE)" );
+            storeBtn.setColours( juce::Colours::white, ui::Theme::outlineColour( 2 ), juce::Colour( 0xffe53935 ), 2 );
+        }
+        else
+        {
+            storeBtn.setButtonText( "STORE" );
+            storeBtn.setColours( ui::Theme::textColour( 1 ), ui::Theme::outlineColour( 1 ), ui::Theme::backgroundColour( 9 ), 1 );
+        }
+    }
 
     void LocateDialog::applyTimeSignature()
     {
@@ -118,23 +197,39 @@ namespace mt::ac
     void LocateDialog::paint( juce::Graphics& g )
     {
         g.setColour( ui::Theme::textColour( 5 ) );
-        g.drawLine( { 20, 116, 580, 116 } );
-        g.drawLine( { 20, 232, 580, 232 } );
-        g.drawLine( { 20, 342, 580, 342 } );
+        // Vertical divider between left sliders and right locators
+        g.drawLine( { 375.0f, 20.0f, 375.0f, 390.0f } );
+        // Horizontal divider above Cancel / Apply
+        g.drawLine( { 20.0f, 405.0f, (float)getWidth() - 20.0f, 405.0f } );
     }
 
     void LocateDialog::resized()
     {
-        bar.setBoundsRelative( .1738f, .0576f, .6538f, .1900f );
-        beat.setBoundsRelative( .1738f, .3100f, .6538f, .1900f );
-        tick.setBoundsRelative( .1738f, .5600f, .6538f, .1900f );
-        timeSigBtn.setBoundsRelative( .1738f, .7800f, .6538f, .0800f );
-        cancelBtn.setBoundsRelative( .0307f, .8980f, .2692f, .0634f );
-        applyBtn.setBoundsRelative( .7f, .8980f, .2692f, .0634f );
-        /* startLable.setBoundsRelative( 0.031f, 0.084f, 0.078f, 0.036f );
-        barLable.setBoundsRelative( 0.031f, 0.307f, 0.051f, 0.036f );
-        beatLable.setBoundsRelative( 0.031f, 0.53f, 0.063f, 0.036f );
-        tickLable.setBoundsRelative( 0.031f, 0.74f, 0.056f, 0.036f );*/
+        const int leftX = 20;
+        const int leftW = 340;
+        bar.setBounds( leftX, 20, leftW, 70 );
+        beat.setBounds( leftX, 100, leftW, 70 );
+        tick.setBounds( leftX, 180, leftW, 70 );
+        timeSigBtn.setBounds( leftX, 260, leftW, 40 );
+
+        cancelBtn.setBounds( leftX, 420, 150, 40 );
+        applyBtn.setBounds( getWidth() - 170, 420, 150, 40 );
+
+        // Right column: Quick locators
+        const int rightX = 390;
+        const int rightW = getWidth() - rightX - 20; // 290
+        locatorsTitle.setBounds( rightX, 20, rightW, 25 );
+        storeBtn.setBounds( rightX, 55, rightW, 35 );
+
+        const int colW = ( rightW - 10 ) / 2; // ~140
+        for( int i = 0; i < 6; ++i )
+        {
+            const int r = i / 2;
+            const int c = i % 2;
+            const int bx = rightX + c * ( colW + 10 );
+            const int by = 105 + r * 55;
+            locButtons[(size_t)i].setBounds( bx, by, colW, 45 );
+        }
     }
 
     void LocateDialog::close()
@@ -192,7 +287,7 @@ namespace mt::ac
             barBeatTickLabel.setText( getBarBeatTickInfo( barValue, beatValue, tickValue ).paddedLeft( '0', 3 ), juce::dontSendNotification );
         };
         const auto bounds = dlg->getBounds();
-        utils::showDialogOwned<LocateDialog>( "BBT SETTINGS", std::move( dlg ), nullptr, bounds );
+        utils::showDialogOwned<LocateDialog>( "LOCATE", std::move( dlg ), nullptr, bounds );
     }
 
     void Locate::updatePlayHead()

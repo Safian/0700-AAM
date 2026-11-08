@@ -47,7 +47,9 @@ namespace kick_ui
         ui::KickSlider  velocity{ "VELOCITY", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
         ui::KickSlider  afterTouch{ "AFTERTOUCH", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
 
-        ui::KickSlider brightness{ "BRIGHTNESS", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
+        ui::KickListBox dimAfter{ ui::KickListBox::withTitleBar, "Dim after", { "Off", "1 min", "5 min", "10 min", "30 min" }, 1 };
+        ui::KickSlider  brightness{ "BRIGHTNESS", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
+        ui::KickListBox dimLevel{ ui::KickListBox::withTitleBar, "Dim level", { "10%", "20%", "30%", "50%" }, 1 };
 
         ui::KickNumberT<int> date_DD{ "Day", 1, 31, 1, 1, true };
         ui::KickNumberT<int> date_MM{ "Month", 1, 12, 1, 1, true };

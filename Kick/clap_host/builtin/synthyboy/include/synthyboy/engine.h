@@ -6,9 +6,20 @@
 #include <cstdint>
 #include <memory>
 
+#include "engine_caps.h"
 #include "events.h"
 #include "params.h"
 #include "quality.h"
+
+namespace synthyboy
+{
+struct StateContent;
+class IContentStore;
+namespace tuning
+{
+class ITuningSource;
+}
+} // namespace synthyboy
 
 namespace synthyboy
 {
@@ -42,6 +53,32 @@ public:
     virtual void setParam (uint32_t id, float plain) noexcept = 0;
     virtual float getParam (uint32_t id) const noexcept = 0;
 
+    /** The areas of functionality added after state version 2 that this engine implements (engine_caps.h). The default is none: the
+        keys of version 3 are stored and read back but not live, and supportsParam () is false for them until the bits they need
+        (requiredCaps ()) are all set. Constant for the lifetime of the engine; any thread. */
+    virtual EngineCapsMask capabilities() const noexcept { return kCapNone; }
+
+    /** The host transport at the start of the next process() call (audio thread, before process(); no allocation). Tempo sync,
+        the beat units of the envelopes and the HOST mode of the LFOs read it. Without a call the engine runs at 120 BPM with a stopped
+        transport. Engines without tempo sync ignore it. */
+    virtual void setTransport (const TransportInfo&) noexcept {}
+
+    /** The `content` section of the state (custom LFO shapes, velocity / note curves, the tuning file; content_state.h). NOT real-time:
+        call it from the message thread (it may allocate), it is handed to the audio thread at the start of its next block without a lock.
+        It is kept across prepare() and reset(); an engine ignores the parts it has no capability for (capabilities ()). */
+    virtual void setContent (const StateContent&) {}
+
+    /** The store that turns the references of `content` (wavetables, samples, impulse responses) into bytes (content_store.h). NOT real-time,
+        message thread; the store must outlive the engine or be replaced by nullptr first. Setting it (or a new `content` by setContent ())
+        decodes the referenced files and hands them to the audio thread without a lock; a reference the store cannot resolve falls back as
+        documented in 13-new-keys.md 5 (Preset table: saw, Sample: silence, Preset IR: bypass). Engines without these capabilities ignore it. */
+    virtual void setContentStore (const IContentStore*) {}
+
+    /** The MTS-ESP seam (docs/ui-design/13-new-keys.md 4.7): an external dynamic tuning source that master.tuning.mts_esp uses while it
+        reports itself connected. The pointer is not owned and must stay valid until it is replaced by nullptr; the shell links the
+        MTS-ESP client library (the core never does) and wraps it in a tuning::ITuningSource. Any thread, lock free. */
+    virtual void setTuningSource (const tuning::ITuningSource*) noexcept {}
+
     /** True if the engine acts on this parameter. The value of every parameter of the table is stored and read back by every
         engine, the others are simply ignored (the own engine implements a subset: core/engine-own/README.md). */
     virtual bool supportsParam (uint32_t id) const noexcept = 0;
@@ -55,6 +92,12 @@ public:
 
     /** Number of sounding voices (including released ones that are still fading out) after the last process(). */
     virtual int activeVoices() const noexcept = 0;
+
+    /** Latency of the output in samples at the host rate, as of the last process() (any thread). engine-vital: Bode's Hilbert filter
+        delays the signal path it sits in, the engine delays every other path to match (the Direct output, the other buses, the bands of
+        a splitter, the voices that bypass the rack), so the whole output is late by this value and a host can compensate it. 0 without
+        such an effect. It changes when Bode is switched on or off or moved to another rack. */
+    virtual int latencySamples() const noexcept { return 0; }
 };
 
 /** The engine written for this project (always built; the only engine on iOS). */
