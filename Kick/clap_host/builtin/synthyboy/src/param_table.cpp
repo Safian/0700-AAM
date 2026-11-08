@@ -59,7 +59,9 @@ constexpr const char* const kRandomSyncTypes[] = { "Retrigger", "Free-run" };
 constexpr const char* const kRandomStyles[] = { "Perlin", "Sample and hold", "Sine interpolate", "Lorenz attractor", "Rossler attractor" };
 constexpr const char* const kDelayStyles[] = { "Mono", "Stereo", "Ping pong", "Mid ping pong" };
 constexpr const char* const kCompressorBands[] = { "Multiband", "Low band", "High band", "Single band" };
-constexpr const char* const kDistortionTypes[] = { "Soft clip", "Hard clip", "Linear fold", "Sine fold", "Bit crush", "Down sample" };
+constexpr const char* const kDistortionTypes[] = { "Soft clip", "Hard clip", "Linear fold", "Sine fold", "Bit crush", "Down sample",
+                                                   // appended in B17 (13-new-keys.md 4.17, G75)
+                                                   "Tube", "Diode 1", "Diode 2", "Zero square", "Asym", "Rectify", "X-Shaper", "X-Shaper (Asym)" };
 constexpr const char* const kDistortionFilterOrder[] = { "None", "Pre", "Post" };
 constexpr const char* const kEqLowModes[] = { "Shelf", "High pass" };
 constexpr const char* const kEqBandModes[] = { "Peak", "Notch" };
@@ -90,6 +92,14 @@ constexpr const char* const kBusDestinations[] = { "Main", "Direct", "Other bus"
 constexpr const char* const kRacks[] = { "Main", "Bus 1", "Bus 2", "Splitter L/H low", "Splitter L/H high", "Splitter L/M/H low",
                                          "Splitter L/M/H mid", "Splitter L/M/H high", "Splitter M/S mid", "Splitter M/S side" };
 constexpr const char* const kConvolveImpulses[] = { "None", "Preset IR" };
+constexpr const char* const kRemapSlots[] = { "Remap 1", "Remap 2", "Remap 3", "Remap 4" };
+constexpr const char* const kPitchModes[] = { "Semitones", "Harmonics", "Ratio", "Step" };
+constexpr const char* const kUnisonModes[] = { "Linear", "Super", "Exp", "Inv", "Random" };
+constexpr const char* const kUnisonStackRepeats[] = { "1x", "2x", "3x" };
+constexpr const char* const kPhaseMemories[] = { "All Voices", "Contiguous", "Per Voice" };
+// B17: reverb algorithms and room modes (13-new-keys.md 4.17, G77)
+constexpr const char* const kReverbTypes[] = { "Vital", "Plate", "Hall", "Vintage", "Nitrous", "Basin" };
+constexpr const char* const kReverbRooms[] = { "Space", "Marble", "Rectangle", "Hexagon", "Box" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -339,7 +349,31 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     SB_PCT_RANGE (KEY ".pan", NAME " Pan", GROUP, -100.0f, 100.0f, 0.0f, kMod),                                                                  \
     cont (KEY ".level", NAME " Level", GROUP, -60.0f, 12.0f, 0.0f, Unit::dB, kMod)
 
+// B16: the wavetable position remap of one oscillator (13-new-keys.md 4.14): on, the preset slot, RISE and FALL
+#define SB_REMAP(N)                                                                                                                              \
+    onOff ("osc" #N ".remap.on", "Osc " #N " Remap On", "Osc " #N " / Remap", false),                                                            \
+    pick ("osc" #N ".remap.slot", "Osc " #N " Remap Slot", "Osc " #N " / Remap", kRemapSlots, 0),                                                \
+    cont ("osc" #N ".remap.rise", "Osc " #N " Remap Rise", "Osc " #N " / Remap", 0.0f, 2000.0f, 0.0f, Unit::ms, kAuto, 1, 0.3f),                \
+    cont ("osc" #N ".remap.fall", "Osc " #N " Remap Fall", "Osc " #N " / Remap", 0.0f, 2000.0f, 0.0f, Unit::ms, kAuto, 1, 0.3f)
+
+// B16: the output LEVEL trim of one of the Vital effects (G72)
+#define SB_FXLEVEL(KEY, NAME) cont (KEY ".level", NAME " Level", "FX / " NAME, -24.0f, 12.0f, 0.0f, Unit::dB, kMod)
+
 #define SB_FXRACK(KEY, NAME) pick (KEY ".rack", NAME " Rack", "FX / Racks", kRacks, 0)
+
+#define SB_OSC_PITCH_UNI(N)                                                                                                                      \
+    pick ("osc" #N ".pitch_mode", "Osc " #N " Pitch Mode", "Oscillator " #N, kPitchModes, 0),                                                   \
+    cont ("osc" #N ".pitch_coarse", "Osc " #N " Pitch Coarse", "Oscillator " #N, -48.0f, 48.0f, 0.0f, Unit::semitone, kMod, 2),               \
+    onOff ("osc" #N ".pitch_track", "Osc " #N " Pitch Tracking", "Oscillator " #N, true),                                                       \
+    onOff ("osc" #N ".pitch_bend_track", "Osc " #N " Pitch Bend Tracking", "Oscillator " #N, true),                                             \
+    cont ("osc" #N ".fixed_pitch", "Osc " #N " Fixed Pitch", "Oscillator " #N, 0.0f, 127.0f, 48.0f, Unit::none, kMod, 1),                         \
+    whole ("osc" #N ".transpose_snap", "Osc " #N " Transpose Snap", "Oscillator " #N, 0.0f, 8191.0f, 0.0f, Unit::none, kAuto),                 \
+    pick ("osc" #N ".unison.mode", "Osc " #N " Unison Mode", "Oscillator " #N, kUnisonModes, 0),                                                \
+    cont ("osc" #N ".unison.range", "Osc " #N " Unison Range", "Oscillator " #N, 0.0f, 48.0f, 2.0f, Unit::semitone, kMod, 1),                  \
+    SB_PCT_RANGE ("osc" #N ".unison.blend_shape", "Osc " #N " Unison Blend Shape", "Osc " #N, -100.0f, 100.0f, 0.0f, kMod),                    \
+    pick ("osc" #N ".unison.stack_repeat", "Osc " #N " Unison Stack Repeat", "Osc " #N, kUnisonStackRepeats, 0),                                \
+    onOff ("osc" #N ".phase_legato", "Osc " #N " Phase Legato", "Oscillator " #N, false),                                                       \
+    pick ("osc" #N ".phase_memory", "Osc " #N " Phase Memory", "Oscillator " #N, kPhaseMemories, 0)
 
 // ---------------------------------------------------------------------------------------------------------------------
 // the table
@@ -655,11 +689,41 @@ constexpr ParamInfo kRaw[] = {
     onOff ("splitter_ms.mid_bypass", "Splitter M/S Mid Bypass", "FX / Splitter M/S", false),
     onOff ("splitter_ms.side_bypass", "Splitter M/S Side Bypass", "FX / Splitter M/S", false),
     cont ("splitter_ms.level", "Splitter M/S Level", "FX / Splitter M/S", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
+
+    // --- B16: wavetable remap with RISE / FALL (G69), per-module FX level (G72), Clean Mode (G54) (positions 1484..1506) ---------------------
+    SB_REMAP (1), SB_REMAP (2), SB_REMAP (3),
+    SB_FXLEVEL ("chorus", "Chorus"), SB_FXLEVEL ("compressor", "Compressor"), SB_FXLEVEL ("delay", "Delay"),
+    SB_FXLEVEL ("distortion", "Distortion"), SB_FXLEVEL ("eq", "EQ"), SB_FXLEVEL ("flanger", "Flanger"), SB_FXLEVEL ("phaser", "Phaser"),
+    SB_FXLEVEL ("reverb", "Reverb"),
+    onOff ("filter1.clean_mode", "Filter 1 Clean Mode", "Filter 1", false),
+    onOff ("filter2.clean_mode", "Filter 2 Clean Mode", "Filter 2", false),
+    onOff ("fxfilter.clean_mode", "FX Filter Clean Mode", "FX Filter", false),
+
+    // --- B14: Pitch modes, CRS, snap, unison, phase legato (G25-G27, G31, G32) -----------------------------
+    SB_OSC_PITCH_UNI (1),
+    SB_OSC_PITCH_UNI (2),
+    SB_OSC_PITCH_UNI (3),
+    onOff ("voice.phase_legato", "Voice Phase Legato", "Master / Voicing", false),
+    // --- B17: compressor / delay / distortion / phaser / reverb extras (1544..1557) ------------------------------------------------------
+    onOff ("compressor.limit", "Compressor Limit", "FX / Compressor", false),
+    onOff ("compressor.limit_latency_comp", "Compressor Limiter Latency Comp", "FX / Compressor", true),
+    cont ("compressor.crossover_low", "Compressor Low Crossover", "FX / Compressor", 20.0f, 1000.0f, 120.0f, Unit::Hz, kMod, 0, 0.4f),
+    cont ("compressor.crossover_high", "Compressor High Crossover", "FX / Compressor", 200.0f, 16000.0f, 2500.0f, Unit::Hz, kMod, 0, 0.4f),
+    onOff ("delay.hq", "Delay High Quality", "FX / Delay", false),
+    cont ("delay.offset", "Delay Offset", "FX / Delay", 0.25f, 4.0f, 1.0f, Unit::none, kMod, 3, 0.5f),
+    SB_PCT_RANGE ("distortion.filter_keytrack", "Distortion Filter Key Track", "FX / Distortion", -100.0f, 100.0f, 0.0f, kMod),
+    cont ("phaser.depth2", "Phaser Depth 2", "FX / Phaser", -48.0f, 48.0f, 0.0f, Unit::semitone, kMod),
+    pick ("reverb.type", "Reverb Type", "FX / Reverb", kReverbTypes, 0),
+    pick ("reverb.room", "Reverb Room", "FX / Reverb", kReverbRooms, 2),
+    SB_PCT_RANGE ("reverb.width", "Reverb Width", "FX / Reverb", 0.0f, 200.0f, 100.0f, kMod),
+    SB_PCT ("reverb.er_size", "Reverb ER Size", "FX / Reverb", 50.0f, kAuto),
+    SB_PCT ("reverb.diff_a", "Reverb Diffusion A", "FX / Reverb", 70.0f, kMod),
+    SB_PCT ("reverb.diff_b", "Reverb Diffusion B", "FX / Reverb", 60.0f, kMod),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1484, "880 keys of state version 2 plus the 604 keys appended in version 3");
+static_assert (kCount == 1558, "880 keys of state version 2 plus the 678 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17)");
 
 struct Table
 {
