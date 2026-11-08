@@ -221,6 +221,8 @@ namespace mt
                 case seActionStereoToMono:
                     actionObject = new MTSampleEditorStereoToMonoAction;
                     break;
+                case seActionRevert:
+                    return revert();
             }
 
             if( !actionObject )
@@ -273,6 +275,28 @@ namespace mt
             thumbnailCache.clear();
             if( sourceFile != juce::File{} )
                 thumbnail.setSource( new juce::FileInputSource( sourceFile ) );
+        }
+
+        bool revert()
+        {
+            if( !sourceFile.existsAsFile() )
+                return false;
+
+            while( undoManager.canUndo() )
+            {
+                undoManager.undo();
+            }
+
+            undoManager.clearUndoHistory();
+            ::mt::getAudioSoundCache().remove( sourceFile.getFullPathName() );
+            setSource( sourceFile );
+
+            for( MTSamplePlayerListener* listener : listeners )
+            {
+                listener->sampleModified();
+            }
+            kick_log( "SampleEditor", "[SE] Sample reverted to original state: %s\n", sourceFile.getFileName().toRawUTF8() );
+            return true;
         }
 
         std::list<juce::int64> splitByThreshold( int thresholdDb, int minTime, juce::int64 startSample, juce::int64 endSample )
@@ -495,7 +519,14 @@ namespace mt
 
     bool MTSampleEditorInterface::performAction( const MTSampleRegion& region, MTSampleEditorAction action, const std::list<juce::var>& params )
     {
+        if( action == seActionRevert )
+            return revert();
         return pimpl->performAction( region, action, params );
+    }
+
+    bool MTSampleEditorInterface::revert()
+    {
+        return pimpl->revert();
     }
 
     std::list<juce::int64> MTSampleEditorInterface::splitByThreshold( int threshold, int minTime, juce::int64 startSample, juce::int64 endSample )

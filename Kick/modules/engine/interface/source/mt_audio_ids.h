@@ -287,6 +287,8 @@ namespace mt
         DECLARE_ID( padVelocity )
         DECLARE_ID( afterTouch )
         DECLARE_ID( screenBrightness )
+        DECLARE_ID( screenDimMinutes )
+        DECLARE_ID( screenDimLevel )
         DECLARE_ID( tapTempoLed )
         DECLARE_ID( noOftaps )
         DECLARE_ID( timeZone )

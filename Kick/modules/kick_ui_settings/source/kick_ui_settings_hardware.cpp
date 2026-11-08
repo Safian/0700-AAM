@@ -48,9 +48,13 @@ namespace kick_ui
         afterTouch.showTitle( true, juce::Justification::centred );
         addComponent( afterTouch, 1, 2 );
 
+        addComponent( dimAfter, 2, 0 );
+
         brightness.showTitle( true, juce::Justification::centred );
         brightness.setRange( 0, 100, 1.0 );
         addComponent( brightness, 2, 1 );
+
+        addComponent( dimLevel, 2, 2 );
 
         addComponent( date_DD, 3, 0 );
         addComponent( date_MM, 3, 1 );
@@ -85,6 +89,26 @@ namespace kick_ui
                 if( token == logToken ) kick_log( "info", "[INFO] [BACKLIGHT] %d%% set with the Settings slider\n", value );
             } );
             mt::HwPref::getHwPref().setBrightness( settings.hardware.brightness() );
+        };
+
+        dimAfter.onSelectionChanged = [this]( int /*index*/, const juce::String& str ) {
+            int mins = 0;
+            if( str == "1 min" ) mins = 1;
+            else if( str == "5 min" ) mins = 5;
+            else if( str == "10 min" ) mins = 10;
+            else if( str == "30 min" ) mins = 30;
+            settings.hardware.screenDimMinutes = mins;
+            kick_log( "info", "[INFO] [BACKLIGHT] Screen dim after set to %d min\n", mins );
+        };
+
+        dimLevel.onSelectionChanged = [this]( int /*index*/, const juce::String& str ) {
+            int lvl = 20;
+            if( str == "10%" ) lvl = 10;
+            else if( str == "20%" ) lvl = 20;
+            else if( str == "30%" ) lvl = 30;
+            else if( str == "50%" ) lvl = 50;
+            settings.hardware.screenDimLevel = lvl;
+            kick_log( "info", "[INFO] [BACKLIGHT] Screen dim level set to %d%%\n", lvl );
         };
 
         date_DD.onValueChanged = [&]( int Value ) {
@@ -144,6 +168,23 @@ namespace kick_ui
         padCurve.setSelected( settings.hardware.curve(), juce::dontSendNotification );
 
         brightness.setValue( settings.hardware.brightness(), juce::dontSendNotification );
+
+        const int mins = settings.hardware.screenDimMinutes();
+        juce::String dimStr = "Off";
+        if( mins == 1 ) dimStr = "1 min";
+        else if( mins == 5 ) dimStr = "5 min";
+        else if( mins == 10 ) dimStr = "10 min";
+        else if( mins == 30 ) dimStr = "30 min";
+        dimAfter.setSelected( dimStr, juce::dontSendNotification );
+
+        const int lvl = settings.hardware.screenDimLevel();
+        juce::String lvlStr = "20%";
+        if( lvl == 10 ) lvlStr = "10%";
+        else if( lvl == 20 ) lvlStr = "20%";
+        else if( lvl == 30 ) lvlStr = "30%";
+        else if( lvl == 50 ) lvlStr = "50%";
+        dimLevel.setSelected( lvlStr, juce::dontSendNotification );
+
         timezone.setSelected( settings.hardware.timezone(), juce::dontSendNotification );
     }
 

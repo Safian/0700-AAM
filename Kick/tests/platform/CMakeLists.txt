@@ -570,4 +570,10 @@ target_include_directories(kick-drum-voice-dsp-tests PRIVATE
 add_test(NAME kick-drum-voice-dsp COMMAND kick-drum-voice-dsp-tests)
 set_tests_properties(kick-drum-voice-dsp PROPERTIES TIMEOUT 10)
 
+# Screen dimmer idle timer, waking touch swallow, transport/record/modal inhibits
+add_executable(kick-screen-dimmer-tests ScreenDimmerTests.cpp)
+add_test(NAME kick-screen-dimmer COMMAND kick-screen-dimmer-tests)
+set_tests_properties(kick-screen-dimmer PROPERTIES TIMEOUT 10)
+
+
 

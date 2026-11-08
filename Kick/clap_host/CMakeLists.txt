@@ -19,7 +19,11 @@ add_library(kick_clap_host STATIC
     ../modules/3rdParty/tweetnacl/sha256.c
     ../modules/3rdParty/tweetnacl/crypto_utils.cpp
     builtin/synthyboy/src/content_pack.cpp
+    builtin/synthyboy/src/content_state.cpp
+    builtin/synthyboy/src/content_store.cpp
+    builtin/synthyboy/src/engine_caps.cpp
     builtin/synthyboy/src/engine_factory.cpp
+    builtin/synthyboy/src/kick_pages.cpp
     builtin/synthyboy/src/modulation.cpp
     builtin/synthyboy/src/number.cpp
     builtin/synthyboy/src/param_table.cpp
