@@ -20,6 +20,7 @@
  */
 
 #include "config.h"
+#include "../../project/kick_settings.h"
 
 void createSampleProject()
 {
@@ -1887,12 +1888,66 @@ namespace mt
         return -1;
     }
 
+    void MTAudioInterface::setTimingCorrectEnabled( bool On )
+    {
+        tcEnabled.store( On );
+        getSettings().timingCorrect.enabled = On;
+    }
+
+    bool MTAudioInterface::isTimingCorrectEnabled() const
+    {
+        return tcEnabled.load();
+    }
+
+    bool MTAudioInterface::toggleTimingCorrectEnabled()
+    {
+        const bool n = !tcEnabled.load();
+        setTimingCorrectEnabled( n );
+        return n;
+    }
+
+    void MTAudioInterface::setTimingCorrectParams( const track::timingCorrectInfo& Info )
+    {
+        tcParams = Info;
+        tcParamsLoaded = true;
+        auto& tc = getSettings().timingCorrect;
+        tc.type        = (int)Info.type;
+        tc.events      = (int)Info.events;
+        tc.gridTicks   = Info.gridTicks;
+        tc.swingPct    = Info.swingPct;
+        tc.shiftTicks  = Info.shiftTicks;
+        tc.windowPct   = Info.windowPct;
+        tc.strengthPct = Info.strengthPct;
+        tc.startBar    = Info.startBar;
+        tc.endBar      = Info.endBar;
+    }
+
+    const track::timingCorrectInfo& MTAudioInterface::getTimingCorrectParams()
+    {
+        if( !tcParamsLoaded )
+        {
+            auto& tc = getSettings().timingCorrect;
+            tcParams.type        = (track::timingCorrectInfo::Type)juce::jlimit( 0, 3, tc.type.get() );
+            tcParams.events      = (track::timingCorrectInfo::Events)juce::jlimit( 0, 2, tc.events.get() );
+            tcParams.gridTicks   = tc.gridTicks.get() > 0 ? tc.gridTicks.get() : 24;
+            tcParams.swingPct    = juce::jlimit( 50, 75, tc.swingPct.get() );
+            tcParams.shiftTicks  = juce::jlimit( -48, 48, tc.shiftTicks.get() );
+            tcParams.windowPct   = juce::jlimit( 0, 100, tc.windowPct.get() );
+            tcParams.strengthPct = juce::jlimit( 0, 100, tc.strengthPct.get() );
+            tcParams.startBar    = juce::jmax( 1, tc.startBar.get() );
+            tcParams.endBar      = juce::jmax( 1, tc.endBar.get() );
+            tcEnabled.store( tc.enabled.get() );
+            tcParamsLoaded = true;
+        }
+        return tcParams;
+    }
+
     int MTAudioInterface::timingCorrect( const MTSelected& Selection, const track::timingCorrectInfo& Info )
     {
         auto t = manager->getTrack( Selection );
         if( !t )
             return -1;
-        tcParams = Info;
+        setTimingCorrectParams( Info );
         // ONE undo step for the whole pass: every note change inside goes through CachedValues, which would
         // otherwise each open an undo transaction of their own (N notes = N UNDO presses).
         ScopedUndoTransaction undoScope( manager->getUndoManager(), "Timing Correct" );

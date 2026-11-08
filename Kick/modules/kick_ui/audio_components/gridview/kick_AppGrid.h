@@ -287,6 +287,7 @@ namespace kick_ui
         void setViewType( mt::MTProgramType Program );
 
         void redraw( int Seq, int Trk );
+        void openTimingCorrectPopUp();
 
     private:
         void resized() override;

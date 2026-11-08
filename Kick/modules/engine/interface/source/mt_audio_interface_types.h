@@ -753,7 +753,7 @@ namespace mt
             int  noteLength{ 2 };
         };
 
-        // Timing correct (note quantize). gridTicks: 0 = one bar. Events::Range is not supported (no range selection exists).
+        // Timing correct (note quantize). gridTicks: 0 = one bar.
         struct timingCorrectInfo
         {
             enum class Type { Start, End, Length, Legato };
@@ -765,6 +765,10 @@ namespace mt
             int    shiftTicks{ 0 };    // -48..48
             int    windowPct{ 100 };   // 0..100
             int    strengthPct{ 100 }; // 0..100
+            int    startBar{ 1 };
+            int    endBar{ 2 };
+            int    rangeStartTicks{ 0 };
+            int    rangeEndTicks{ 0 }; // <= 0: up to sequence length
         };
 
         struct pitchQuantizeInfo

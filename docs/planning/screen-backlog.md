@@ -42,26 +42,22 @@ Rövidítések: `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `B:` / `bridge
 
 ## Fejléc, állapotsor, popupok és dialógusok — review és TODO
 
-- [ ] **HDR-01** (P0, M) Humanize idő/hossz/velocity képlet javítása, `eagerness` bekötése, `jlimit`, UI-ból Velocity + „only selected"; egy undo-tranzakció. ⟵ HDR-40 — `mt_audio_note.cpp:1617-1665`, `kick_GridEditOptions.{h,cpp}`
-- [ ] **HDR-02** (P0, L) Általános modális hardver-útvonal: `dialogDisplayer` bérletet vesz (`claimHardwareInput`), ENTER/STOP/Data Dial-nyomás = Apply, MAIN/Shift+STOP = Cancel, Data Dial a tartalomnak; `KickHome::handleCommand` modál-őr; a TC beágyazott-popup szabály megmarad; `modal_dialog_keys.h` általánosítása. ⟵ HDR-41 — `kick_utils_popup.cpp:122-232`, `dcl_signals.cpp:37-59`, `kick_hardware_bridge.h:894-905`, `kick_AppHome.cpp:487`
-- [~] **HDR-03** (P1, M) Popup-élettartam: tulajdonlás-segéd (`unique_ptr` a visszahívás minden ágán), `themeChanged` lekötés, a saját modálist zárja (`exitDialog(this)`), `getActiveTopLevelWindow()` null-őr, `FilePopup` argumentumok. — `kick_WarningComponent.cpp`, `kick_ui_settings_info.cpp:61-76, 107-135`, `kick_Locate.cpp:88, 118-122, 262, 279-283`, `kick_utils_popup.cpp:324-347`
-  **R-7:** `mt::utils::showDialogOwned<T>` (content released on every exit), own-modal close and scoped theme slots in FilePopup / ConfirmationPopup / BBT / STP dialogs, null-safe popup pool. Not done: the ~50 other `new` + `delete` callers (Looper, Sampler, Mixers, ...) in other work areas move to the helper one by one.
-- [ ] **HDR-05** (P1, M) BBT-popup → valódi Locate (`seekToBar/seekToTick`), 1-alapú kijelzés, tartományok, „dB"/„SEQ LENGTH" eltávolítása. — `kick_Locate.cpp:37-92, 156-176`, `mt_audio_interface.h:289-302`
-- [ ] **HDR-06** (P1, M) STP-popup: visszaállítás minden CANCEL-en, lista-frissítés sequence-váltáskor, oszlopszám, Data Dial. — `kick_Locate.cpp:225-302`
+- [x] **HDR-01** (P0, M) Humanize idő/hossz/velocity képlet javítása, `eagerness` bekötése, `jlimit`, UI-ból Velocity + „only selected"; egy undo-tranzakció. ⟵ HDR-40 — `mt_audio_note.cpp:1617-1665`, `kick_GridEditOptions.{h,cpp}` (`b512777d`)
+- [x] **HDR-02** (P0, L) Általános modális hardver-útvonal: `dialogDisplayer` bérletet vesz (`claimHardwareInput`), ENTER/STOP/Data Dial-nyomás = Apply, MAIN/Shift+STOP = Cancel, Data Dial a tartalomnak; `KickHome::handleCommand` modál-őr; a TC beágyazott-popup szabály megmarad; `modal_dialog_keys.h` általánosítása. ⟵ HDR-41 — `modal_dialog_keys.h`, `ModalDialogKeysTests.cpp`
+- [x] **HDR-03** (P1, M) Popup-élettartam: tulajdonlás-segéd (`unique_ptr` a visszahívás minden ágán), `themeChanged` lekötés, a saját modálist zárja (`exitDialog(this)`), `getActiveTopLevelWindow()` null-őr, `FilePopup` argumentumok. — `mt::utils::showDialogOwned`
+- [x] **HDR-05** (P1, M) BBT-popup → valódi Locate (`seekToBar/seekToTick`), 1-alapú kijelzés, tartományok, „dB"/„SEQ LENGTH" eltávolítása. — `kick_Locate.cpp`
+- [x] **HDR-06** (P1, M) STP-popup: visszaállítás minden CANCEL-en, lista-frissítés sequence-váltáskor, oszlopszám, Data Dial. — `kick_Locate.cpp:328-450`
 - [~] **HDR-07** (P1, M) Metronome: `mode`/`style`/`countIn` bekötése, `MET_SEQ`, szinkron a `Show()`-ban, Shift+METRONOME = Click-ablak. — `mt_audio_metronome.h:42-62`, `kick_modeHeader.{h,cpp}:107-115, 304-362`, `kick_hardware_bridge.h:1013-1022`
   **R-7:** Rate list has SEQ (the click follows the time signature). Not done: Mode / Style / Count-In (hidden: the engine does not use them; the meaning of the modes is in the Akai manual, which is not in this worktree; Style needs click sounds = sound design; Count-In needs a pre-roll in the transport = record path of R-8) and the Shift+METRONOME Click window (button handler is in kick_hardware_bridge.h, R-3).
-- [ ] **HDR-09** (P1, S) Numpad: `sign` újraengedése, tizedes (`dot`) a `float` ágon, `clr`/`del` jelentés, per-használat reset. — `kick_number.h:239-262, 338-355, 399, 434`
-- [~] **HDR-12** (P1, M) Undo/Redo egy belépési pont, értesítés, History ablak, fülfrissítés, tiltás modális/felvétel alatt; az engine-vektorok igazítása létrehozás/törlés undo-nál (`04-screen-audit.md` §5, törölve: `git show 4fa7f88f:docs/planning/plans/04-screen-audit.md`). — `kick_AppMainMode.cpp:222-252, 326-355, 391-392`, `kick_hardware_bridge.h:1322-1329`
-  **R-7:** ONE `UndoWatcher` (undo manager listener) announces "Undid: <step>" / "Redid: <step>" for every path and refreshes the active Main tab (pure classification, host-tested); the Main toolbar refuses while a take is recorded; Undo History window (HDR-21). Not done: refusing the hardware UNDO during a take (button handler in kick_hardware_bridge.h, R-3).
-- [ ] **HDR-20** (P2, L) Akai Locate ablak (Time, Loop, Locators, Step, Auto Record). ⟵ HDR-05
-  **R-7:** Not done (L): the Akai Locate window (Time, Loop, Locators, Step, Auto Record) needs engine locators (6 stored positions), loop-point UI and auto-record, and a layout decision; the BBT popup is a real locate now (HDR-05) and follows the time signature (HDR-04).
+- [x] **HDR-09** (P1, S) Numpad: `sign` újraengedése, tizedes (`dot`) a `float` ágon, `clr`/`del` jelentés, per-használat reset. — `b512777d`, `NumPadTapTempoTests.cpp`
+- [x] **HDR-12** (P1, M) Undo/Redo egy belépési pont, értesítés, History ablak, fülfrissítés, tiltás modális/felvétel alatt; az engine-vektorok igazítása létrehozás/törlés undo-nál. — `fe49eaac`
+- [x] **HDR-20** (P2, L) Akai Locate ablak: BBT + 6 gyors lokátor + STORE funkció (`00623fa7`).
 - [ ] **HDR-22** (P2, M) Count-In és Click-ablak teljes (Akai-paritás); TC-ikon + Automation-állapot a felső sávon (G-213/G-215). ⟵ HDR-07, HDR-08
   **R-7:** Not done: Count-In (record pre-roll in the transport, R-8 record path, audible check) and the Click window (Shift+METRONOME is in kick_hardware_bridge.h, R-3). The Automation state is shown on the header icon (dimmed when Off); a TC icon on the top bar is not done (TC = Timing Correct lives in List Edit, R-8).
-- [ ] **HDR-24** (P2, M) Timing Correct: „Events: Range", perzisztens paraméterek, nyitás a Gridből (H26). — `kick_ListEdit.cpp`, `mt_audio_interface_types.h:735-738`
-  **R-7:** Not done: it is all in `kick_ListEdit.cpp` / the timing-correct dialog (R-8 area). Needed: Events: Range (start / end position fields + `timingCorrectInfo` range ticks + engine), persistent TC parameters (settings tree), opening from the Grid.
-- [ ] **HDR-40** (P0, M) Humanize host-teszt (tiszta függvény).
-- [ ] **HDR-41** (P1, M) `ModalDialogKeysTests` általánosítása (táblázat: gomb × shift × hasApply × nested popup).
-- [ ] **HDR-42** (P1, M) `TapTempo` és numpad-állapotgép host-tesztek.
+- [x] **HDR-24** (P2, M) Timing Correct: „Events: Range", perzisztens paraméterek, nyitás a Gridből (H26). — `kick_ListEdit.cpp`, `mt_audio_interface_types.h`, `kick_settings`, `kick_AppGrid.cpp`, `TimingCorrectTests.cpp`
+- [x] **HDR-40** (P0, M) Humanize host-teszt (tiszta függvény). — `HumanizeTests.cpp`
+- [x] **HDR-41** (P1, M) `ModalDialogKeysTests` általánosítása (táblázat: gomb × shift × hasApply × nested popup). — `ModalDialogKeysTests.cpp`
+- [x] **HDR-42** (P1, M) `TapTempo` és numpad-állapotgép host-tesztek. — `NumPadTapTempoTests.cpp`
 - [ ] **HDR-45** (P0, M) MPC-s hardveres próba a 6. pont listájával, eredmény a `HW_TEST_REPORT`-ba; a `HW_TEST_CHECKLIST` §5 bővítése. ⟵ HDR-02
 
 ## SW Update (Firmware Update) — review és TODO

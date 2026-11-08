@@ -108,6 +108,26 @@ int main()
     v = { { 36, 24, 24 }, { 36, 48, 24 } };
     CHECK_EQ( correct( v, p, 96 ), 0 );
 
+    // Range filtering (HDR-24): only notes inside [rangeStart, rangeEnd) are marked target
+    {
+        const int rangeStart = 96;
+        const int rangeEnd   = 288;
+        // Notes at ticks 25 (out), 100 (in), 200 (in), 300 (out)
+        std::vector<int> rawStarts = { 25, 100, 200, 300 };
+        v.clear();
+        for( int s : rawStarts )
+        {
+            const bool inRange = ( s >= rangeStart && s < rangeEnd );
+            v.push_back( { 36, s, 24, inRange } );
+        }
+        p = Params{}; // 24 ticks (1/16)
+        CHECK_EQ( correct( v, p, 384 ), 2 ); // only the 2 notes in range move
+        CHECK_EQ( v[0].start, 25 );  // untouched (outside range)
+        CHECK_EQ( v[1].start, 96 );  // snapped 100 -> 96
+        CHECK_EQ( v[2].start, 192 ); // snapped 200 -> 192
+        CHECK_EQ( v[3].start, 300 ); // untouched (outside range)
+    }
+
     if( g_fail ) { std::printf( "%d failure(s)\n", g_fail ); return 1; }
     std::printf( "timing-correct tests passed\n" );
     return 0;

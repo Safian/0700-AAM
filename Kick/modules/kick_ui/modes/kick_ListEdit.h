@@ -21,43 +21,11 @@
 #pragma once
 #include "kick_ui/audio_components/gridview/kick_GridData.h"
 #include "kick_ui/audio_components/step_sequencer/kick_NoteListWatcher.h"
+#include "kick_ListEditTimingCorrect.h"
 
 namespace kick_ui
 {
     class ListEntry;
-
-    class ListEditTimingCorrect : public juce::Component
-    {
-    public:
-        ListEditTimingCorrect();
-        ~ListEditTimingCorrect();
-
-        // Explicit "dialog is open" state for the hardware bridge (the dialog is modal and has touch-only buttons).
-        // Message thread only. closeFromHardware() ends the modal state with APPLY / CANCEL (same as the buttons);
-        // false (and nothing closed) when no dialog is open or a nested popup is the foremost modal component.
-        static bool isOpen();
-        static bool closeFromHardware( bool apply );
-
-        // Current dialog values as engine params (Apply -> MTAudioInterface::timingCorrect).
-        mt::track::timingCorrectInfo getData();
-        // Global TC Off/On choice; the caller commits it to the engine on Apply only.
-        bool getGlobalEnabled();
-
-    private:
-        ui::KickToggleOptions globalTC{ "GLOBAL TIMING CORRECT", { "Off", "On" } };
-        ui::KickLabel         timeDivisionLabel{ "TIME DIVISION" };
-        ui::KickListBox       timeDivList{ ui::KickListBox::withoutTitleBar, "", CommonUtils::getDefaultTimeDivisions(), 3 };
-        ui::KickImageButton   triplet{ "TRIPLET" };
-        ui::KickListBox       type{ "TYPE", { "Start", "End", "Length", "Legato" } };
-        // "Range" is not supported by the engine (it always answered "range not supported"): not offered.
-        ui::KickListBox       events{ "EVENTS", { "All", "Selected" } };
-        ui::KickSlider        swing{ "SWING", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
-        ui::KickSlider        shiftTiming{ "SHIFT  TIMING", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
-        ui::KickSlider        window{ "WINDOW", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
-        ui::KickSlider        strength{ "STRENGTH", juce::Slider::LinearBar, juce::Slider::TextBoxBelow };
-
-        void resized() override;
-    };
 
     class AutomationEntry;
 

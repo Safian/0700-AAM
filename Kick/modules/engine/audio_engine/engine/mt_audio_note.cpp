@@ -1668,8 +1668,6 @@ namespace mt
     {
         using E = track::timingCorrectInfo::Events;
         using T = track::timingCorrectInfo::Type;
-        if( Info.events == E::Range ) // no range selection exists in Kick
-            return -1;
 
         tc::Params p;
         p.gridTicks   = Info.gridTicks > 0 ? Info.gridTicks : seq.getTicksPerBar( 0 );
@@ -1679,6 +1677,10 @@ namespace mt
         p.strengthPct = Info.strengthPct;
         p.type        = Info.type == T::Start ? tc::Type::Start : Info.type == T::End ? tc::Type::End : Info.type == T::Length ? tc::Type::Length : tc::Type::Legato;
 
+        const int maxSeqTicks = trackLenTicks > 0 ? trackLenTicks : (int)seq.getLengthInTicks();
+        const int rangeStart  = juce::jmax( 0, Info.rangeStartTicks );
+        const int rangeEnd    = Info.rangeEndTicks > 0 ? Info.rangeEndTicks : maxSeqTicks;
+
         std::vector<tc::Note>        v;
         std::vector<juce::ValueTree> vts;
         for( auto vt : vTree )
@@ -1686,12 +1688,25 @@ namespace mt
             if( !vt.hasType( IDs::NOTE ) )
                 continue;
             MTNote n( vt, um );
-            bool   target = onlyIds ? onlyIds->count( n.id.get() ) > 0 : ( Info.events == E::All || selected.contains( vt ) );
+            bool   target = false;
+            if( onlyIds != nullptr )
+            {
+                target = ( onlyIds->count( n.id.get() ) > 0 );
+            }
+            else
+            {
+                if( Info.events == E::All )
+                    target = true;
+                else if( Info.events == E::Selected )
+                    target = selected.contains( vt );
+                else if( Info.events == E::Range )
+                    target = ( n.start.get() >= rangeStart && ( rangeEnd <= 0 || n.start.get() < rangeEnd ) );
+            }
             v.push_back( { n.number.get(), n.start.get(), n.length.get(), target } );
             vts.push_back( vt );
         }
         const auto orig    = v;
-        const int  changed = tc::correct( v, p, trackLenTicks > 0 ? trackLenTicks : (int)seq.getLengthInTicks() );
+        const int  changed = tc::correct( v, p, maxSeqTicks );
         if( changed <= 0 )
             return 0;
 

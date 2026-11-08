@@ -492,7 +492,15 @@ namespace kick_ui
                             if( auto* pp = dynamic_cast<PadPerform*>( findScreen( Screen::MenuPadPerform ) ) ) pp->toggleSixteenLevels();
                             break;
                         case contracts::DeviceControlContracts::EN_TC:
-                            if( getCurrentScreen() != Screen::MenuListEdit ) signals::sigScreenClose( Screen::MenuListEdit ); // TC dialog lives in List Edit
+                            if( getCurrentScreen() == Screen::HomeGridView )
+                            {
+                                if( auto* grid = dynamic_cast<AppGrid*>( findScreen( Screen::HomeGridView ) ) )
+                                    grid->openTimingCorrectPopUp();
+                            }
+                            else if( getCurrentScreen() != Screen::MenuListEdit )
+                            {
+                                signals::sigScreenClose( Screen::MenuListEdit ); // TC dialog lives in List Edit
+                            }
                             break;
 
                         // Bank buttons...

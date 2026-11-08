@@ -350,6 +350,18 @@ namespace mt
         DECLARE_ID( IsPreviewOn )
         DECLARE_ID( IsPreviewAuto )
 
+        DECLARE_ID( TIMINGCORRECT )
+        DECLARE_ID( tcEnabled )
+        DECLARE_ID( tcType )
+        DECLARE_ID( tcEvents )
+        DECLARE_ID( tcGridTicks )
+        DECLARE_ID( tcSwingPct )
+        DECLARE_ID( tcShiftTicks )
+        DECLARE_ID( tcWindowPct )
+        DECLARE_ID( tcStrengthPct )
+        DECLARE_ID( tcStartBar )
+        DECLARE_ID( tcEndBar )
+
 #undef DECLARE_ID
     }
 
