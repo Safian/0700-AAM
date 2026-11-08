@@ -266,6 +266,26 @@ namespace mt
     };
 
     /// ///////////////////////////////////
+    ///    Timing Correct (HDR-24)
+    /// ///////////////////////////////////
+    struct KickTimingCorrect : public MTIVTBase
+    {
+        void setup( juce::ValueTree VT, juce::UndoManager* Undo );
+        bool isValid();
+
+        Atomic<bool> enabled;
+        Atomic<int>  type;
+        Atomic<int>  events;
+        Atomic<int>  gridTicks;
+        Atomic<int>  swingPct;
+        Atomic<int>  shiftTicks;
+        Atomic<int>  windowPct;
+        Atomic<int>  strengthPct;
+        Atomic<int>  startBar;
+        Atomic<int>  endBar;
+    };
+
+    /// ///////////////////////////////////
     ///    KickSettings
     /// ///////////////////////////////////
 
@@ -287,6 +307,7 @@ namespace mt
         KickWifi             wifi;
         KickCloudSources     cloudSources;
         KickPadColourDefaults padColours;
+        KickTimingCorrect    timingCorrect;
 
         // Runtime settings, not saved in XML
         KickPreview     preview;

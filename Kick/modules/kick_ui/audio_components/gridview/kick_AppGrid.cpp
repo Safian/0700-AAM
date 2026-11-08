@@ -18,6 +18,9 @@
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+#pragma once
+#include "../../modes/kick_ListEditTimingCorrect.h"
+
 namespace kick_ui
 {
     constexpr int gNotesWidth              = 140;
@@ -491,6 +494,13 @@ namespace kick_ui
         {
             int  btnNum   = contracts::DclContractsHelper::getButtonCode( f_HwMsg );
             auto btnState = contracts::DclContractsHelper::getButtonState( f_HwMsg );
+
+            if( btnNum == contracts::DeviceControlContracts::EN_TC && btnState == contracts::DeviceControlContracts::BTN_PRESSED )
+            {
+                openTimingCorrectPopUp();
+                return;
+            }
+
             auto state    = ( btnState == contracts::DeviceControlContracts::BTN_PRESSED )
                                ? grid_logic::ButtonState::Pressed
                                : grid_logic::ButtonState::Released;
@@ -1004,6 +1014,25 @@ namespace kick_ui
     {
         auto wP = new ui::FilePopup( Text, false, false );
         mt::utils::showDialog( "WARNING!", wP, [wP, this]( int R ) { delete wP; }, { 0, 0, 600, 360 } );
+    }
+
+    void AppGrid::openTimingCorrectPopUp()
+    {
+        if( ListEditTimingCorrect::isOpen() )
+            return;
+        ListEditTimingCorrect* pTc = new ListEditTimingCorrect();
+        mt::utils::showOptions( "TIMING CORRECT", pTc, [pTc, this]( int R ) {
+            if( R == UI::APPLY )
+            {
+                ae.setTimingCorrectEnabled( pTc->getGlobalEnabled() );
+                auto tcData = pTc->getData();
+                ae.setTimingCorrectParams( tcData );
+                if( ae.timingCorrect( ae.getSelected(), tcData ) < 0 )
+                    mt::utils::showNotification( "Timing correct failed" );
+                gridComponent.repaint();
+            }
+            delete pTc;
+        }, { 0, 0, 650, 520 } );
     }
 
 } //namespace kick_ui

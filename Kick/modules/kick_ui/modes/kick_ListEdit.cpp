@@ -252,7 +252,9 @@ namespace kick_ui
                 if( R == UI::APPLY )
                 {
                     ae.setTimingCorrectEnabled( pTc->getGlobalEnabled() );
-                    if( ae.timingCorrect( ae.getSelected(), pTc->getData() ) < 0 )
+                    auto tcData = pTc->getData();
+                    ae.setTimingCorrectParams( tcData );
+                    if( ae.timingCorrect( ae.getSelected(), tcData ) < 0 )
                         mt::utils::showNotification( "Timing correct failed" );
                 }
                 delete pTc;
@@ -1378,12 +1380,22 @@ namespace kick_ui
     {
         mt::track::timingCorrectInfo d;
         d.type        = (mt::track::timingCorrectInfo::Type)juce::jlimit( 0, 3, type.getSelectedIndex() );
-        d.events      = (mt::track::timingCorrectInfo::Events)juce::jlimit( 0, 1, events.getSelectedIndex() );
+        d.events      = (mt::track::timingCorrectInfo::Events)juce::jlimit( 0, 2, events.getSelectedIndex() );
         d.gridTicks   = timeDivToTicks( timeDivList.getSelectedValue() );
         d.swingPct    = (int)swing.getValue();
         d.shiftTicks  = (int)shiftTiming.getValue();
         d.windowPct   = (int)window.getValue();
         d.strengthPct = (int)strength.getValue();
+        d.startBar    = (int)startBar.getValue();
+        d.endBar      = (int)endBar.getValue();
+
+        auto& ae = mt::getAudioInterface();
+        const int seq = ae.getSelectedSequence();
+        int num = 4, den = 4;
+        ae.getTimeSignature( seq, num, den );
+        const int ticksPerBar = juce::jmax( 1, num * 4 * mt::defaultPPQN / juce::jmax( 1, den ) );
+        d.rangeStartTicks = juce::jmax( 0, ( d.startBar - 1 ) * ticksPerBar );
+        d.rangeEndTicks   = d.endBar * ticksPerBar;
         return d;
     }
 
@@ -1429,21 +1441,21 @@ namespace kick_ui
     ListEditTimingCorrect::ListEditTimingCorrect()
     {
         g_openTimingCorrect = this;
-        mt::utils::addAndMakeVisible( this, globalTC, timeDivisionLabel, timeDivList, triplet, type, events, swing, shiftTiming, window, strength );
+        mt::utils::addAndMakeVisible( this, globalTC, timeDivisionLabel, timeDivList, triplet, type, events, startBar, endBar, swing, shiftTiming, window, strength );
 
-        mt::utils::setTitleFontHeight( 16, globalTC, type, events, swing, shiftTiming, window, strength );
-        mt::utils::setValueFontHeight( 16, globalTC, type, events, swing, shiftTiming, window, strength, timeDivList );
+        mt::utils::setTitleFontHeight( 16, globalTC, type, events, startBar, endBar, swing, shiftTiming, window, strength );
+        mt::utils::setValueFontHeight( 16, globalTC, type, events, startBar, endBar, swing, shiftTiming, window, strength, timeDivList );
 
         mt::utils::setValueBackgroundColour( ui::Theme::backgroundColour( 9 ), timeDivisionLabel );
         mt::utils::setValueJustification( juce::Justification::centred, timeDivisionLabel );
-        mt::utils::setValueColour( ui::Theme::textColour( 1 ), timeDivisionLabel );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), timeDivisionLabel, startBar, endBar );
         mt::utils::setValueFontHeight( 20, timeDivList, type, events );
         mt::utils::setValueFontHeight( 16, timeDivisionLabel );
         mt::utils::setJustificationType( juce::Justification::centred, timeDivList, type, events );
 
-        mt::utils::setTitleProportion( .36f, globalTC, type, events, swing, shiftTiming, window, strength );
+        mt::utils::setTitleProportion( .36f, globalTC, type, events, startBar, endBar, swing, shiftTiming, window, strength );
         mt::utils::setValueProportion( .36f, swing, shiftTiming, window, strength );
-        mt::utils::setTitleJustification( juce::Justification::centredTop, globalTC, type, events, swing, shiftTiming, window, strength );
+        mt::utils::setTitleJustification( juce::Justification::centredTop, globalTC, type, events, startBar, endBar, swing, shiftTiming, window, strength );
         mt::utils::setValueJustification( juce::Justification::centredBottom, swing, shiftTiming, window, strength );
 
         swing.showTitleAndValue( true, juce::Slider::TextBoxBelow, juce::Justification::centred );
@@ -1465,7 +1477,9 @@ namespace kick_ui
             auto  d  = ae.getTimingCorrectParams();
             globalTC.setSelected( ae.isTimingCorrectEnabled() ? 1 : 0, juce::dontSendNotification );
             type.setSelected( (int)d.type, juce::dontSendNotification );
-            events.setSelected( juce::jmin( 1, (int)d.events ), juce::dontSendNotification ); // Range is not offered
+            events.setSelected( juce::jlimit( 0, 2, (int)d.events ), juce::dontSendNotification );
+            startBar.setValue( juce::jmax( 1, d.startBar ), juce::dontSendNotification );
+            endBar.setValue( juce::jmax( 1, d.endBar ), juce::dontSendNotification );
             swing.setValue( d.swingPct, juce::dontSendNotification );
             shiftTiming.setValue( d.shiftTicks, juce::dontSendNotification );
             window.setValue( d.windowPct, juce::dontSendNotification );
@@ -1496,7 +1510,9 @@ namespace kick_ui
 
         type.onSelectionChanged = [&]( int Index, const juce::String& Selected ) {};
 
-        events.onSelectionChanged = [&]( int Index, const juce::String& Selected ) {};
+        events.onSelectionChanged = [&]( int Index, const juce::String& Selected ) {
+            resized();
+        };
 
         swing.onValueChanged = [&]( int Value ) {};
 
@@ -1517,7 +1533,22 @@ namespace kick_ui
         timeDivisionLabel.setBoundsRelative( .523f, .0985f, .3876f, .0394f );
         timeDivList.setBoundsRelative( .523f, .1576f, .2553f, .1083f );
         triplet.setBoundsRelative( .7876f, .1576f, .123f, .1083f );
-        events.setBoundsRelative( .523f, .3177f, .3876f, .1822f );
+
+        if( events.getSelectedIndex() == 2 ) // Range
+        {
+            events.setBoundsRelative( .523f, .3177f, .16f, .1822f );
+            startBar.setBoundsRelative( .693f, .3177f, .105f, .1822f );
+            endBar.setBoundsRelative( .808f, .3177f, .105f, .1822f );
+            startBar.setVisible( true );
+            endBar.setVisible( true );
+        }
+        else
+        {
+            events.setBoundsRelative( .523f, .3177f, .3876f, .1822f );
+            startBar.setVisible( false );
+            endBar.setVisible( false );
+        }
+
         shiftTiming.setBoundsRelative( .523f, .5344f, .3876f, .1822f );
         strength.setBoundsRelative( .523f, .7487f, .3876f, .1822f );
     }

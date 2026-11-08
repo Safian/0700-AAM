@@ -56,6 +56,7 @@ namespace mt
             cloudSources.setup( getState().getOrCreateChildWithName( IDs::CloudSources, nullptr ), nullptr );
             padColours.setup( getState().getOrCreateChildWithName( IDs::PADCOLOURDEFAULTS, nullptr ), nullptr );
             knobControl.setup( getState().getOrCreateChildWithName( IDs::KNOBCONTROL, nullptr ), nullptr );
+            timingCorrect.setup( getState().getOrCreateChildWithName( IDs::TIMINGCORRECT, nullptr ), nullptr );
         };
 
         auto settingsFile = getAppDirs( MTPrefs ).getChildFile( __settingsFileName );
@@ -119,6 +120,7 @@ namespace mt
         metronome.makeDefaults();
         padColours.makeDefaults();
         knobControl.makeDefaults();
+        timingCorrect.makeDefaults();
 
         // Ensure autoSave stays true on defaults
         projects.isAutoSave = true;
@@ -356,6 +358,26 @@ namespace mt
         automationLaneFollowsQLinks.attachTo( vTree, IDs::automationLaneFollowsQLinks, Undo, false );
     }
     bool KickKnobControl::isValid() { return vTree.hasType( IDs::KNOBCONTROL ); }
+
+    /// ///////////////////////////////////
+    ///    Timing Correct (HDR-24)
+    /// ///////////////////////////////////
+    void KickTimingCorrect::setup( juce::ValueTree VT, juce::UndoManager* Undo )
+    {
+        setupBase( VT, Undo );
+
+        enabled.attachTo( vTree, IDs::tcEnabled, Undo, false );
+        type.attachTo( vTree, IDs::tcType, Undo, 0 );
+        events.attachTo( vTree, IDs::tcEvents, Undo, 0 );
+        gridTicks.attachTo( vTree, IDs::tcGridTicks, Undo, 24 );
+        swingPct.attachTo( vTree, IDs::tcSwingPct, Undo, 50 );
+        shiftTicks.attachTo( vTree, IDs::tcShiftTicks, Undo, 0 );
+        windowPct.attachTo( vTree, IDs::tcWindowPct, Undo, 100 );
+        strengthPct.attachTo( vTree, IDs::tcStrengthPct, Undo, 100 );
+        startBar.attachTo( vTree, IDs::tcStartBar, Undo, 1 );
+        endBar.attachTo( vTree, IDs::tcEndBar, Undo, 2 );
+    }
+    bool KickTimingCorrect::isValid() { return vTree.hasType( IDs::TIMINGCORRECT ); }
 
     /// ///////////////////////////////////
     ///    Ethernet .

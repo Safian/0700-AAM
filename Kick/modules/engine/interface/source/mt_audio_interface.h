@@ -488,12 +488,12 @@ namespace mt
         // track or unsupported Events::Range.
         int timingCorrect( const MTSelected& Selection, const track::timingCorrectInfo& Info );
         // Global TC flag (MPC "Timing Correct on"): when on, notes committed by RECALL are corrected with the stored
-        // params (the last ones passed to setTimingCorrectParams / timingCorrect). Session-only, not persisted.
-        void                        setTimingCorrectEnabled( bool On ) { tcEnabled.store( On ); }
-        bool                        isTimingCorrectEnabled() const { return tcEnabled.load(); }
-        bool                        toggleTimingCorrectEnabled() { const bool n = !tcEnabled.load(); tcEnabled.store( n ); return n; } // UI thread
-        void                        setTimingCorrectParams( const track::timingCorrectInfo& Info ) { tcParams = Info; }
-        const track::timingCorrectInfo& getTimingCorrectParams() const { return tcParams; }
+        // params (the last ones passed to setTimingCorrectParams / timingCorrect). Persisted in settings.
+        void                        setTimingCorrectEnabled( bool On );
+        bool                        isTimingCorrectEnabled() const;
+        bool                        toggleTimingCorrectEnabled(); // UI thread
+        void                        setTimingCorrectParams( const track::timingCorrectInfo& Info );
+        const track::timingCorrectInfo& getTimingCorrectParams();
         // AUTOMATION: per track a LEVEL lane and a PAN lane. The track's own pan has no consumer, so the PAN lane is keyed
         // to the PROGRAM the track plays (it drives/records the program's pan, the property the mixer knob writes).
         // Mode (0 Off, 1 Read, 2 Write; global, session-only, not persisted): Read plays the lanes back (level on the tick
@@ -714,6 +714,7 @@ namespace mt
         MTPadColors                     keyGroupPadColour;
         std::atomic<bool>               tcEnabled{ false };
         track::timingCorrectInfo        tcParams; // message thread only
+        bool                            tcParamsLoaded{ false };
     }; // Class MTAudioInterface
 
     /// @brief This function returns global audio interface.
