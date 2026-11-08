@@ -562,6 +562,13 @@ namespace kick_ui
                     mt::utils::makeVisible( sampleName, left );
                     params.push_back( left.getSelected() );
                     break;
+                case 14:
+                    mt::utils::makeHidden( rotary, warningIcon, linear, beat, ratio, originalTempo, newTempo, pointing, left, sampleName );
+                    mt::utils::makeVisible( image, text );
+                    image.setImages( "sEdit_Gdiscard" );
+                    text.setText( "Pressing Apply will revert all edits", juce::dontSendNotification );
+                    text.setLine2Text( "to original on-disk state" );
+                    break;
             }
         };
         process.setSelected( index, juce::sendNotification );

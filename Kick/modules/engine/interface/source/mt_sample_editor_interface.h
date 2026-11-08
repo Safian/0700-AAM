@@ -65,7 +65,8 @@ namespace mt
         seActionGainChange,
         seActionCopy,
         seActionBitReduce,
-        seActionStereoToMono
+        seActionStereoToMono,
+        seActionRevert
     };
 
     class MTSampleEditorInterface
@@ -78,6 +79,7 @@ namespace mt
         double                 detectBpm();
         double                 getNumberOfBeats();
         bool                   performAction( const MTSampleRegion& region, MTSampleEditorAction action, const std::list<juce::var>& params );
+        bool                   revert();
         std::list<juce::int64> splitByThreshold( int thresholdDb, int minTime, juce::int64 startSample, juce::int64 endSample );
         juce::int64            getLengthInSamples();
         double                 getLengthInSec();

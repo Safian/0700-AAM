@@ -544,6 +544,7 @@ namespace mt
             supportedActions.push_back( "Copy" );
             supportedActions.push_back( "Bit Reduce" );
             supportedActions.push_back( "Stereo > Mono" );
+            supportedActions.push_back( "Revert" );
 
             regions.setSedata( this );
 
@@ -1109,12 +1110,29 @@ namespace mt
 
         bool SampleEditorData::performAction( unsigned int actionId, const std::list<juce::var>& params )
         {
+            if( actionId == MTSampleEditorAction::seActionRevert )
+                return revert();
+
             const Region& selRegion = getSelectedRegion();
             if( !selRegion.isValid() )
                 return false; // no valid selection: nothing to process
 
             MTSampleRegion smpRegion( selRegion.getStart(), selRegion.getEnd() );
             return sei->performAction( smpRegion, MTSampleEditorAction( actionId ), params );
+        }
+
+        bool SampleEditorData::revert()
+        {
+            if( sei )
+            {
+                bool ok = sei->revert();
+                if( ok )
+                {
+                    createValueTreeItem();
+                }
+                return ok;
+            }
+            return false;
         }
 
         juce::int64 SampleEditorData::getNextZeroSnapPos( juce::int64 pos, bool forward )
