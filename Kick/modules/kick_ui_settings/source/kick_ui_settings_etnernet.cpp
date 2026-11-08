@@ -23,6 +23,7 @@
 
 #include "kick_ui_settings_etnernet.h"
 #include "../modules/hardware/source/kick_Hwpref.h"
+#include "../modules/hardware/source/kick_PlatformServices.h"
 
 namespace kick_ui
 {
@@ -162,22 +163,20 @@ namespace kick_ui
         else
         {
             mt::sysEthInfo info;
-            mt::HwPref::getHwPref().getIP( "eth0", info );
+            std::string iface = mt::PlatformServices::getInstance().getEthernetInterfaceName();
+            mt::HwPref::getHwPref().getIP( iface, info );
             if( info.IP.empty() || info.IP == "0.0.0.0" )
             {
                 statusLabel.setText( isDhcp ? "Acquiring IP..." : "No IP", juce::dontSendNotification );
             }
             else
             {
-                statusLabel.setText( juce::String( "Online (" ) + ( isDhcp ? "DHCP" : "Manual" ) + ")", juce::dontSendNotification );
+                statusLabel.setText( juce::String( "Online (" ) + ( isDhcp ? "DHCP: " : "Manual: " ) + info.IP + ")", juce::dontSendNotification );
             }
 
-            if( isDhcp )
-            {
-                ipAddr.setText( info.IP, juce::dontSendNotification );
-                subnet.setText( info.subnet, juce::dontSendNotification );
-                gateway.setText( info.gateway, juce::dontSendNotification );
-            }
+            ipAddr.setText( info.IP.empty() ? "0.0.0.0" : info.IP, juce::dontSendNotification );
+            subnet.setText( info.subnet.empty() ? "0.0.0.0" : info.subnet, juce::dontSendNotification );
+            gateway.setText( info.gateway.empty() ? "0.0.0.0" : info.gateway, juce::dontSendNotification );
         }
     }
 
@@ -221,7 +220,8 @@ namespace kick_ui
         juce::String sub  = settings.eth.subnetMask();
         juce::String gate = settings.eth.gateway();
         juce::String dnsServer = settings.eth.dns();
-        mt::HwPref::getHwPref().setIP( "eth0", ip.toStdString(), sub.toStdString(), gate.toStdString(), dnsServer.toStdString() );
+        std::string iface = mt::PlatformServices::getInstance().getEthernetInterfaceName();
+        mt::HwPref::getHwPref().setIP( iface, ip.toStdString(), sub.toStdString(), gate.toStdString(), dnsServer.toStdString() );
     }
 
     void SettingsEthernet::setupHeader( kick_ui::KickModeHeader& Hdr )

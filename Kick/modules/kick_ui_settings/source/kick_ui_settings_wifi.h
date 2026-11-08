@@ -39,19 +39,22 @@ namespace kick_ui
         void handleEnabledClick();
         void initializeInterfaceState();
         void connectWifi( bool connect );
+        void openPasswordKeyboard();
+        void updatePasswordDisplay();
 
     private:
         mt::KickSettings&    settings{ mt::getSettings() };
         ui::KickToggleButton enabled{ "WiFi", "ENABLED", "DISABLED" };
         ui::KickLabel        statusLabel{ "Status: Ready" };
 
-        ui::KickLabel        password{ "", "" };
-        ui::KickListBox      wifiList{ "availableWifi" };
+        ui::KickNameLabel    password{ "PASSWORD", "(Tap to enter password)" };
+        ui::KickButton       setPasswordBtn{ "ENTER PASSWORD" };
+        ui::KickListBox      wifiList{ "NETWORKS", 1 };
         ui::KickToggleButton scanWifi{ "SCAN WIFI", "SCAN", "SCAN" };
         ui::KickToggleButton connect{ "CONNECT", "DISCONNECT", "CONNECT" };
 
-        ui::KickLabel wifIP{ "IP ADDRESS", "" };
-        ui::KickLabel gateway{ "GATEWAY", "" };
-        ui::KickLabel subnet{ "SUBNET", "" };
+        ui::KickLabel wifIP{ "IP ADDRESS", "0.0.0.0" };
+        ui::KickLabel gateway{ "GATEWAY", "0.0.0.0" };
+        ui::KickLabel subnet{ "SUBNET", "0.0.0.0" };
     };
 }
