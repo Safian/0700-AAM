@@ -312,6 +312,8 @@ namespace mt
         velocity.attachTo( vTree, IDs::padVelocity, Undo, MIDI::MAX );
         aftertouch.attachTo( vTree, IDs::afterTouch, Undo, MIDI::MAX );
         brightness.attachTo( vTree, IDs::screenBrightness, Undo, MIDI::LEVEL_DEFAULT );
+        screenDimMinutes.attachTo( vTree, IDs::screenDimMinutes, Undo, 0 );
+        screenDimLevel.attachTo( vTree, IDs::screenDimLevel, Undo, 20 );
         threshold.attachTo( vTree, IDs::padThreshold, Undo, "4" );
         sensitivity.attachTo( vTree, IDs::padSensitivity, Undo, "4" );
         curve.attachTo( vTree, IDs::padCurve, Undo, "4" );

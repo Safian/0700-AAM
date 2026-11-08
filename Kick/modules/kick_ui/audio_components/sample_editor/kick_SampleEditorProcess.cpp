@@ -348,6 +348,12 @@ namespace mt
             {
                 actionComponent.reset( new StereoMonoOptions() );
             }
+            else if( actionId == 14 )
+            {
+                auto* lbl = new ui::KickLabel( "RevertMsg", "Revert sample to original on-disk state?" );
+                lbl->setValueJustification( juce::Justification::centred );
+                actionComponent.reset( lbl );
+            }
 
             addAndMakeVisible( actionComponent.get() );
             setSize( 360, 316 );
@@ -360,7 +366,7 @@ namespace mt
 
         void SampleEditorProcessAction::resized()
         {
-            if( actionId <= 4 )
+            if( actionId <= 4 || actionId == 14 )
                 actionComponent.get()->setBounds( 10, 77, 338, 60 );
             else if( actionId == 5 || actionId == 6 )
                 actionComponent.get()->setBounds( 46, 10, 268, 190 );
@@ -435,16 +441,20 @@ namespace mt
             sliceActions[10] = ui::MenuItem( "N", "sEdit_gainchange" );
             sliceActions[11] = ui::MenuItem( "N", "sEdit_copy" );
 
-            std::vector<ui::MenuItem> sliceActions1( 2 );
+            std::vector<ui::MenuItem> sliceActions1( 3 );
             sliceActions1[0] = ui::MenuItem( "", "sEdit_bitreduce" );
             sliceActions1[1] = ui::MenuItem( "", "sEdit_steromono" );
+            sliceActions1[2] = ui::MenuItem( "Revert", "sEdit_discard" );
 
             // disable inactive actions
             const std::vector<unsigned int>& disabledActions = d.getDisabledAction();
             for( unsigned int disAct : disabledActions )
             {
                 if( disAct > 11 )
-                    sliceActions1[disAct - 12].enabled = false;
+                {
+                    if( disAct - 12 < sliceActions1.size() )
+                        sliceActions1[disAct - 12].enabled = false;
+                }
                 else
                     sliceActions[disAct].enabled = false;
             }

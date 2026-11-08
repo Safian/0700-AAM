@@ -16,6 +16,8 @@
 #include "hardware/touch_space.h"
 #include "hardware/qlink_bank.h"
 #include "hardware/transport_router.h"
+#include "hardware/screen_dimmer.h"
+#include "hardware/source/kick_PlatformServices.h"
 #include "contracts/dcl/dcl_signals.h"
 #include "contracts/dcl/dcl_contracts.h"
 #include "contracts/dcl/dcl_contracts_helper.h"
@@ -39,6 +41,8 @@ private:
     juce::Component* m_root = nullptr;
     juce::DocumentWindow* m_window = nullptr;
     juce::Image m_framebuffer_img;
+    kick_hw::ScreenDimmer m_screen_dimmer;
+    std::atomic<bool> m_is_playing{ false };
     static constexpr int kFbW = 1280; // framebuffer / touch reporting space (see timerCallback, touch()->start)
     static constexpr int kFbH = 800;
     int m_last_touch_x[10] = { 0 };
@@ -560,6 +564,18 @@ private:
             m_last_touch_y[slot] = y;
         }
 
+        // Screen dimmer waking touch swallow and activity tracking
+        if (is_down) {
+            if (m_screen_dimmer.onTouchDown(slot)) {
+                kick_log("touch", "[TOUCH] slot %d woke screen from dim; touch swallowed\n", slot);
+                return;
+            }
+        } else if (m_screen_dimmer.shouldSwallowTouch(slot, is_up)) {
+            return;
+        } else {
+            m_screen_dimmer.noteActivity();
+        }
+
         // W3-A: when the finger event was read (reader thread): carried to the widgets through ui::TouchSlot (finger
         // speed from real time stamps, touch -> sound latency trace) and used for the manual MouseEvent time stamps.
         const int64_t touchUs   = ui::TouchSlot::nowUs();
@@ -850,6 +866,24 @@ private:
         flushDirtyPadColors();
         updateRecOverdubLeds();
 
+        // Screen dimmer
+        {
+            auto& hw = mt::getSettings().hardware;
+            m_screen_dimmer.setDimAfterMinutes(hw.screenDimMinutes());
+            m_screen_dimmer.setDimLevelPercent(hw.screenDimLevel());
+            m_screen_dimmer.setNormalBrightnessPercent(hw.brightness());
+
+            static int s_dimmerFrame = 0;
+            if (++s_dimmerFrame >= 30) {
+                s_dimmerFrame = 0;
+                auto& ae = mt::getAudioInterface();
+                const bool isPlaying = m_is_playing.load() || (ae.isProjectLoaded() && ae.isSequencePlaying());
+                const bool isRecording = ae.isProjectLoaded() && (ae.isRecorderRunning() || ae.isLooperRecording() || ae.isLooperOverdubbing() || ae.isSequenceRecording() || ae.isSequenceOverdub());
+                const bool isModal = (juce::Component::getCurrentlyModalComponent(0) != nullptr);
+                m_screen_dimmer.checkIdle(isPlaying, isRecording, isModal);
+            }
+        }
+
         if (!m_hw || !m_root || !m_hw->display()) return;
 
         auto* targetComp = (m_window != nullptr) ? (juce::Component*)m_window : m_root;
@@ -942,6 +976,13 @@ public:
         : m_framebuffer_img(juce::Image::ARGB, 1280, 800, false)
     {
         for (int i = 0; i < 128; ++i) m_key_pitch_map[i] = -1;
+        m_screen_dimmer.setClockFn([]() -> int64_t {
+            return juce::Time::currentTimeMillis();
+        });
+        m_screen_dimmer.setBrightnessFn([](int percent) {
+            kick_log("prefs", "[PREFS] Screen dimmer setBrightness: %d%%\n", percent);
+            mt::PlatformServices::getInstance().setBrightness(percent);
+        });
     }
 
     ~KickHardwareBridge() override
@@ -1033,6 +1074,7 @@ public:
 
             if (!m_play_conn.connected()) m_play_conn = mt::signals::playStateChanged.connect([this](mt::TransportState state) {
                 bool isPlaying = (state == mt::TransportState::Playing);
+                m_is_playing.store(isPlaying);
                 if (m_hw && m_hw->control_surface()) {
                     m_hw->control_surface()->set_led(HW_LED_PLAY, isPlaying);
                     m_hw->control_surface()->set_led(HW_LED_STOP, !isPlaying);
@@ -1096,6 +1138,7 @@ public:
     // on the message thread) calls the handle* bodies directly.
     void on_button_press(HardwareButton btn) override
     {
+        m_screen_dimmer.noteActivity();
         // H5: strip mode is cycled on the reader thread (same thread as on_touch_strip_touch/fine), not via callAsync.
         if (btn == HW_BTN_TOUCH_STRIP) {
             if (isShiftDown()) {
@@ -1112,10 +1155,12 @@ public:
     }
     void on_button_release(HardwareButton btn) override
     {
+        m_screen_dimmer.noteActivity();
         juce::MessageManager::callAsync([this, alive = m_alive, btn]() { if (!alive->load()) return; handleButtonRelease(btn); });
     }
     void on_jog_dial(int delta) override
     {
+        m_screen_dimmer.noteActivity();
         juce::MessageManager::callAsync([this, alive = m_alive, delta]() { if (!alive->load()) return; handleJogDial(delta); });
     }
 
@@ -1810,6 +1855,7 @@ public:
 
     void on_encoder_turn(int encoder_idx, int delta) override
     {
+        m_screen_dimmer.noteActivity();
         if (encoder_idx >= 0 && encoder_idx < 4)
         {
             const int knobCode = contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1
@@ -2119,6 +2165,7 @@ public:
 
     void on_pad_note_on(int pad_num, int rawVel) override
     {
+        m_screen_dimmer.noteActivity();
         const int thr = m_pad_threshold.load();
         if (rawVel > 0 && rawVel < thr) return;
 
@@ -2249,6 +2296,7 @@ public:
 
     void on_keybed_note_on(int pitch, int vel) override
     {
+        m_screen_dimmer.noteActivity();
         int sounding_pitch;
         {
             std::lock_guard<std::mutex> lk(m_transpose_mutex);

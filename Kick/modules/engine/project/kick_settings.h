@@ -115,6 +115,8 @@ namespace mt
         Atomic<int>  velocity;
         Atomic<int>  aftertouch;
         Atomic<int>  brightness;
+        Atomic<int>  screenDimMinutes;
+        Atomic<int>  screenDimLevel;
         AtomicString threshold;
         AtomicString sensitivity;
         AtomicString curve;

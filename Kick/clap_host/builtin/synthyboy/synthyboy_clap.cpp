@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <atomic>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -14,10 +15,13 @@
 
 #include "synthyboy/engine.h"
 #include "synthyboy/events.h"
+#include "synthyboy/kick_pages.h"
+#include "synthyboy/midi_events.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/quality.h"
 #include "synthyboy/state.h"
+#include <clap/ext/remote-controls.h>
 
 namespace synthyboy
 {
@@ -55,17 +59,20 @@ struct SynthyBoyClap
     const clap_host_t* host = nullptr;
     std::unique_ptr<IEngine> engine;
     ParamValues values;
+    StateContent content; // the `content` section of the state (not parameters): custom LFO shapes, curves and the tuning go to the engine (setContent), main thread only
     Quality quality;
     std::vector<Event> events;
     double sampleRate = 48000.0;
     uint32_t maxBlockSize = 512;
     bool active = false;
+    std::atomic<int> reportedLatency { 0 };   // the latency the host was told (ext_latency_get)
     bool processing = false;
 
     SynthyBoyClap (const clap_host_t* h)
         : host (h), values (ParamValues::defaults()), quality (qualityForTier (Tier::high))
     {
         events.reserve (256);
+        quality.realtime = true; // live: the audio thread never waits for the engine's helper thread (Quality::realtime)
 #if SYNTHYBOY_HAS_VITAL
         engine = createEngine (EngineKind::vital);
 #else
@@ -178,6 +185,37 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                     self->events.push_back (e);
                     break;
                 }
+                case CLAP_EVENT_NOTE_EXPRESSION:
+                {
+                    // per-note expressions (MPE through CLAP, docs/ui-design/13-new-keys.md 4.7): TUNING (semitones), PRESSURE, BRIGHTNESS
+                    const auto* ev = reinterpret_cast<const clap_event_note_expression_t*> (hdr);
+                    Event e {};
+                    e.frame = static_cast<int32_t> (ev->header.time);
+                    e.type = Event::NoteExpression;
+                    e.channel = static_cast<int16_t> (std::clamp<int> (ev->channel, 0, 15));
+                    e.key = static_cast<int16_t> (ev->key);
+                    e.noteId = ev->note_id;
+                    e.value = static_cast<float> (ev->value);
+                    if (ev->expression_id == CLAP_NOTE_EXPRESSION_TUNING)
+                        e.expression = Event::Tuning;
+                    else if (ev->expression_id == CLAP_NOTE_EXPRESSION_PRESSURE)
+                        e.expression = Event::Pressure;
+                    else if (ev->expression_id == CLAP_NOTE_EXPRESSION_BRIGHTNESS)
+                        e.expression = Event::Brightness;
+                    else
+                        break; // volume, pan, vibrato, expression: not used
+                    self->events.push_back (e);
+                    break;
+                }
+                case CLAP_EVENT_MIDI:
+                {
+                    // the MIDI dialect of the note port: CC 64 sustain pedal, CC 1, CC 74, pressure, bend, note on/off
+                    const auto* ev = reinterpret_cast<const clap_event_midi_t*> (hdr);
+                    Event e {};
+                    if (translateMidiMessage (ev->data, 3, static_cast<int32_t> (ev->header.time), e))
+                        self->events.push_back (e);
+                    break;
+                }
                 case CLAP_EVENT_PARAM_VALUE:
                 {
                     const auto* ev = reinterpret_cast<const clap_event_param_value_t*> (hdr);
@@ -197,6 +235,21 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
         }
     }
 
+    // host transport (tempo sync, beat units, LFO HOST mode)
+    {
+        TransportInfo transport;
+        if (process->transport != nullptr)
+        {
+            const clap_event_transport_t* t = process->transport;
+            if ((t->flags & CLAP_TRANSPORT_HAS_TEMPO) != 0 && t->tempo > 0.0)
+                transport.bpm = t->tempo;
+            if ((t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) != 0)
+                transport.songPosBeats = static_cast<double> (t->song_pos_beats) / static_cast<double> (CLAP_BEATTIME_FACTOR);
+            transport.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
+        }
+        self->engine->setTransport (transport);
+    }
+
     // 2. Render audio
     if (process->audio_outputs_count > 0 && process->audio_outputs[0].data32 != nullptr)
     {
@@ -205,6 +258,14 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
 
         self->engine->process (self->events.data(), static_cast<int> (self->events.size()),
                                outL, outR, static_cast<int> (process->frames_count));
+        // Bode's latency changed (the effect was switched on / off or moved): the host reads the new value after the restart
+        const int latency = self->engine->latencySamples();
+        if (latency != self->reportedLatency.load (std::memory_order_relaxed))
+        {
+            self->reportedLatency.store (latency, std::memory_order_relaxed);
+            if (self->host != nullptr && self->host->request_restart != nullptr)
+                self->host->request_restart (self->host);
+        }
     }
 
     return (self->engine->activeVoices() > 0) ? CLAP_PROCESS_CONTINUE : CLAP_PROCESS_SLEEP;
@@ -380,7 +441,7 @@ bool ext_state_save (const clap_plugin_t* p, const clap_ostream_t* stream) noexc
     if (stream == nullptr)
         return false;
 
-    const std::string s = saveState (toClap (p)->values);
+    const std::string s = saveState (toClap (p)->values, toClap (p)->content);
     const int64_t written = stream->write (stream, s.data(), s.size());
     return (written == static_cast<int64_t> (s.size()));
 }
@@ -404,13 +465,14 @@ bool ext_state_load (const clap_plugin_t* p, const clap_istream_t* stream) noexc
     if (buffer.empty())
         return false;
 
-    const LoadResult res = loadState (buffer.data(), buffer.size(), self->values);
+    const LoadResult res = loadStateWithContent (buffer.data(), buffer.size(), self->values, self->content);
     if (res.status == LoadStatus::ok || res.status == LoadStatus::newer_version)
     {
         if (self->engine)
         {
             for (size_t i = 0; i < paramCount(); ++i)
                 self->engine->setParam (paramTable()[i].id, self->values.plain[i]);
+            self->engine->setContent (self->content); // main thread: allocates, handed to the audio thread lock free
         }
         return true;
     }
@@ -441,9 +503,12 @@ const clap_plugin_voice_info_t s_voice_info = {
 };
 
 // latency & tail
-uint32_t ext_latency_get (const clap_plugin_t*) noexcept
+uint32_t ext_latency_get (const clap_plugin_t* plugin) noexcept
 {
-    return 0;
+    auto* self = static_cast<SynthyBoyClap*> (plugin->plugin_data);
+    const int latency = self->engine ? self->engine->latencySamples() : 0;
+    self->reportedLatency.store (latency, std::memory_order_relaxed);
+    return static_cast<uint32_t> (latency);
 }
 
 const clap_plugin_latency_t s_latency = {
@@ -459,6 +524,47 @@ const clap_plugin_tail_t s_tail = {
     ext_tail_get
 };
 
+// remote-controls
+uint32_t ext_remote_controls_count (const clap_plugin_t*) noexcept
+{
+    return static_cast<uint32_t> (kickPageCount());
+}
+
+bool ext_remote_controls_get (const clap_plugin_t*, uint32_t page_index, clap_remote_controls_page_t* page) noexcept
+{
+    if (page == nullptr || page_index >= kickPageCount())
+        return false;
+
+    const Page& src = kickPageTable()[page_index];
+
+    std::memset (page, 0, sizeof (*page));
+
+    std::strncpy (page->section_name, src.section, sizeof (page->section_name) - 1);
+    page->page_id = page_index;
+    std::strncpy (page->page_name, src.title, sizeof (page->page_name) - 1);
+
+    for (size_t i = 0; i < CLAP_REMOTE_CONTROLS_COUNT; ++i)
+    {
+        if (i < src.count && src.keys[i] != nullptr)
+        {
+            const ParamInfo* p = findParamByKey (src.keys[i]);
+            page->param_ids[i] = (p != nullptr) ? p->id : CLAP_INVALID_ID;
+        }
+        else
+        {
+            page->param_ids[i] = CLAP_INVALID_ID;
+        }
+    }
+
+    page->is_for_preset = false;
+    return true;
+}
+
+const clap_plugin_remote_controls_t s_remote_controls = {
+    ext_remote_controls_count,
+    ext_remote_controls_get
+};
+
 // Extension query
 const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
 {
@@ -472,6 +578,9 @@ const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
     if (std::strcmp (id, CLAP_EXT_VOICE_INFO) == 0) return &s_voice_info;
     if (std::strcmp (id, CLAP_EXT_LATENCY) == 0) return &s_latency;
     if (std::strcmp (id, CLAP_EXT_TAIL) == 0) return &s_tail;
+    if (std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS) == 0 ||
+        std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS_COMPAT) == 0 ||
+        std::strcmp (id, "clap.remote-controls") == 0) return &s_remote_controls;
 
     return nullptr;
 }
