@@ -387,10 +387,10 @@ namespace mt
         setupBase( VT, Undo );
 
         enabled.attachTo( vTree, IDs::status, Undo, true );
-        mode.attachTo( vTree, IDs::mode, Undo, "MANUAL" );
-        ipAddress.attachTo( vTree, IDs::ipAdd, Undo, "192.168.0.1" );
+        mode.attachTo( vTree, IDs::mode, Undo, "DHCP" );
+        ipAddress.attachTo( vTree, IDs::ipAdd, Undo, "0.0.0.0" );
         subnetMask.attachTo( vTree, IDs::subnetMask, Undo, "255.255.255.0" );
-        gateway.attachTo( vTree, IDs::gateway, Undo, "192.168.0.1" );
+        gateway.attachTo( vTree, IDs::gateway, Undo, "0.0.0.0" );
         dns.attachTo( vTree, IDs::dns, Undo, "0.0.0.0" );
     }
     bool KickEthernet::isValid() { return vTree.hasType( IDs::ETHERNET ); }

@@ -248,11 +248,37 @@ protected:
     std::string queryIpAddress( const std::string& interface )
     {
 #if( JUCE_LINUX || __linux__ )
-        std::string cmd = "ip -4 addr show " + interface + " | awk '/inet / {split($2, a, \"/\"); print a[1]}'";
+        int sockfd = socket( AF_INET, SOCK_DGRAM, 0 );
+        if( sockfd >= 0 )
+        {
+            struct ifreq ifr;
+            std::memset( &ifr, 0, sizeof( ifr ) );
+            ifr.ifr_addr.sa_family = AF_INET;
+            std::strncpy( ifr.ifr_name, interface.c_str(), IFNAMSIZ - 1 );
+            if( ioctl( sockfd, SIOCGIFADDR, &ifr ) == 0 )
+            {
+                auto* addr = reinterpret_cast<struct sockaddr_in*>( &ifr.ifr_addr );
+                const char* addrStr = inet_ntoa( addr->sin_addr );
+                if( addrStr && std::string( addrStr ) != "0.0.0.0" )
+                {
+                    close( sockfd );
+                    return addrStr;
+                }
+            }
+            close( sockfd );
+        }
+
+        std::string cmd = "ip -4 addr show " + interface + " 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2";
         std::string res = runPipedCommand( cmd );
         std::string ip = trimString( res );
         if( platform_cmd::validateIpAddress( ip ) )
             return ip;
+
+        std::string ifcCmd = "ifconfig " + interface + " 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2";
+        std::string ifcRes = runPipedCommand( ifcCmd );
+        std::string ifcIp = trimString( ifcRes );
+        if( platform_cmd::validateIpAddress( ifcIp ) )
+            return ifcIp;
 #else
         juce::ignoreUnused( interface );
 #endif
@@ -525,18 +551,18 @@ public:
 
     int startDhcp() override
     {
-        kick_log( "prefs", "[PREFS] MPC starting DHCP on end0 via udhcpc\n" );
-        std::string cmd = "killall udhcpc 2>/dev/null; /sbin/udhcpc -i end0 -b -s /usr/share/udhcpc/default.script &";
+        kick_log( "prefs", "[PREFS] MPC starting DHCP on end0\n" );
+        std::string cmd = "killall udhcpc 2>/dev/null; /sbin/udhcpc -i end0 -b 2>/dev/null || udhcpc -i end0 -b 2>/dev/null & dhclient end0 2>/dev/null &";
         return runBoardCommand( cmd.c_str() );
     }
 
     int stopDhcp() override
     {
         kick_log( "prefs", "[PREFS] MPC stopping udhcpc\n" );
-        return runBoardCommand( "killall udhcpc 2>/dev/null" );
+        return runBoardCommand( "killall udhcpc 2>/dev/null; killall dhclient 2>/dev/null" );
     }
 
-    // WiFi interface on MPC is wlan0 via iwd
+    // WiFi interface on MPC is wlan0
     std::string getWiFiInterfaceName() const override { return "wlan0"; }
 
     bool isWiFiAvailable() const override
@@ -546,14 +572,17 @@ public:
 
     bool enableWiFi() override
     {
-        kick_log( "prefs", "[PREFS] MPC enable WiFi: ip link set wlan0 up\n" );
-        return ( runBoardCommand( "ip link set wlan0 up" ) == 0 );
+        kick_log( "prefs", "[PREFS] MPC enable WiFi: unblocking radio and bringing link up\n" );
+        runBoardCommand( "rfkill unblock wifi 2>/dev/null; rfkill unblock all 2>/dev/null" );
+        return ( runBoardCommand( "ip link set wlan0 up 2>/dev/null || ifconfig wlan0 up 2>/dev/null" ) == 0 );
     }
 
     bool disableWiFi() override
     {
         kick_log( "prefs", "[PREFS] MPC disable WiFi: ip link set wlan0 down\n" );
-        return ( runBoardCommand( "ip link set wlan0 down" ) == 0 );
+        runBoardCommand( "killall -9 wpa_supplicant 2>/dev/null" );
+        runBoardCommand( "killall udhcpc 2>/dev/null" );
+        return ( runBoardCommand( "ip link set wlan0 down 2>/dev/null || ifconfig wlan0 down 2>/dev/null" ) == 0 );
     }
 
     std::vector<juce::String> scanWiFiNetworks() override
@@ -561,72 +590,132 @@ public:
         std::vector<juce::String> networks;
         kick_log( "prefs", "[PREFS] MPC scanning WiFi networks...\n" );
 
-        // 1. Try iwd / iwctl
-        runBoardCommand( "iwctl station wlan0 scan 2>/dev/null" );
-        std::string output = runPipedCommand( "iwctl station wlan0 get-networks 2>/dev/null" );
+        // Ensure radio is unblocked and interface is up before scanning
+        runBoardCommand( "rfkill unblock wifi 2>/dev/null; rfkill unblock all 2>/dev/null" );
+        runBoardCommand( "ip link set wlan0 up 2>/dev/null || ifconfig wlan0 up 2>/dev/null" );
 
-        if( !output.empty() && output.find( "Network name" ) != std::string::npos )
+        auto addNetwork = [&]( const std::string& name ) {
+            std::string s = trimString( name );
+            if( s.size() >= 2 && s.front() == '"' && s.back() == '"' )
+                s = s.substr( 1, s.size() - 2 );
+            s = trimString( s );
+            if( s.empty() || s == ">" || s == "*" || s.find( "\\x00" ) != std::string::npos )
+                return;
+            juce::String jName = juce::String::fromUTF8( s.c_str() );
+            if( std::find( networks.begin(), networks.end(), jName ) == networks.end() )
+                networks.push_back( jName );
+        };
+
+        // 1. Try ConnMan (Akai MPC default)
+        runBoardCommand( "connmanctl enable wifi 2>/dev/null; connmanctl scan wifi 2>/dev/null" );
+        std::string cmOut = runPipedCommand( "connmanctl services 2>/dev/null" );
+        if( !cmOut.empty() )
         {
-            std::istringstream iss( output );
+            std::istringstream iss( cmOut );
             std::string line;
-            bool pastHeader = false;
-
             while( std::getline( iss, line ) )
             {
-                if( !pastHeader )
+                size_t wifiPos = line.find( "wifi_" );
+                if( wifiPos != std::string::npos )
                 {
-                    if( line.find( "----" ) != std::string::npos )
-                        pastHeader = true;
-                    continue;
-                }
-
-                // Strip ANSI escape codes
-                std::string clean;
-                bool inEscape = false;
-                for( char c : line )
-                {
-                    if( c == '\033' ) inEscape = true;
-                    else if( inEscape && c == 'm' ) inEscape = false;
-                    else if( !inEscape ) clean.push_back( c );
-                }
-
-                std::string trimmed = trimString( clean );
-                if( trimmed.empty() )
-                    continue;
-
-                // Extract network name (first column)
-                std::istringstream lineStream( trimmed );
-                std::string name;
-                lineStream >> name;
-                if( !name.empty() && name != ">" && name != "*" )
-                {
-                    juce::String jName( name );
-                    if( std::find( networks.begin(), networks.end(), jName ) == networks.end() )
-                        networks.push_back( jName );
+                    std::string namePart = line.substr( 0, wifiPos );
+                    addNetwork( namePart );
                 }
             }
         }
 
-        // 2. Fallback to iwlist wlan0 scan if iwctl didn't find networks
+        // 2. Try iw dev wlan0 scan
         if( networks.empty() )
         {
-            std::string iwOut = runPipedCommand( "iwlist wlan0 scan 2>/dev/null" );
+            std::string iwOut = runPipedCommand( "iw dev wlan0 scan 2>/dev/null | grep -E '^[ \t]*SSID: '" );
             std::istringstream iss( iwOut );
             std::string line;
             while( std::getline( iss, line ) )
             {
-                size_t essidPos = line.find( "ESSID:\"" );
-                if( essidPos != std::string::npos )
+                size_t pos = line.find( "SSID: " );
+                if( pos != std::string::npos )
                 {
-                    size_t start = essidPos + 7;
+                    addNetwork( line.substr( pos + 6 ) );
+                }
+            }
+        }
+
+        // 3. Try iwlist wlan0 scan
+        if( networks.empty() )
+        {
+            std::string iwlOut = runPipedCommand( "iwlist wlan0 scan 2>/dev/null | grep 'ESSID:'" );
+            std::istringstream iss( iwlOut );
+            std::string line;
+            while( std::getline( iss, line ) )
+            {
+                size_t pos = line.find( "ESSID:\"" );
+                if( pos != std::string::npos )
+                {
+                    size_t start = pos + 7;
                     size_t end = line.find( '"', start );
                     if( end != std::string::npos )
+                        addNetwork( line.substr( start, end - start ) );
+                }
+            }
+        }
+
+        // 4. Try wpa_cli scan
+        if( networks.empty() )
+        {
+            runBoardCommand( "wpa_cli -i wlan0 scan 2>/dev/null; sleep 1" );
+            std::string wpaOut = runPipedCommand( "wpa_cli -i wlan0 scan_results 2>/dev/null" );
+            std::istringstream iss( wpaOut );
+            std::string line;
+            bool pastHdr = false;
+            while( std::getline( iss, line ) )
+            {
+                if( !pastHdr )
+                {
+                    if( line.find( "ssid" ) != std::string::npos || line.find( "SSID" ) != std::string::npos )
+                        pastHdr = true;
+                    continue;
+                }
+                std::istringstream ls( line );
+                std::string bssid, freq, sig, flags, ssid;
+                if( ls >> bssid >> freq >> sig >> flags )
+                {
+                    std::getline( ls, ssid );
+                    addNetwork( ssid );
+                }
+            }
+        }
+
+        // 5. Try iwctl
+        if( networks.empty() )
+        {
+            runBoardCommand( "iwctl station wlan0 scan 2>/dev/null" );
+            std::string output = runPipedCommand( "iwctl station wlan0 get-networks 2>/dev/null" );
+            if( !output.empty() && output.find( "Network name" ) != std::string::npos )
+            {
+                std::istringstream iss( output );
+                std::string line;
+                bool pastHeader = false;
+                while( std::getline( iss, line ) )
+                {
+                    if( !pastHeader )
                     {
-                        std::string ssid = line.substr( start, end - start );
-                        juce::String jName = juce::String::fromUTF8( ssid.c_str() ).trim();
-                        if( !jName.isEmpty() && std::find( networks.begin(), networks.end(), jName ) == networks.end() )
-                            networks.push_back( jName );
+                        if( line.find( "----" ) != std::string::npos ) pastHeader = true;
+                        continue;
                     }
+                    std::string clean;
+                    bool inEscape = false;
+                    for( char c : line )
+                    {
+                        if( c == '\033' ) inEscape = true;
+                        else if( inEscape && c == 'm' ) inEscape = false;
+                        else if( !inEscape ) clean.push_back( c );
+                    }
+                    std::string trimmed = trimString( clean );
+                    if( trimmed.empty() ) continue;
+                    std::istringstream lineStream( trimmed );
+                    std::string name;
+                    lineStream >> name;
+                    addNetwork( name );
                 }
             }
         }
@@ -638,44 +727,126 @@ public:
     bool connectToWiFi( const juce::String& ssid, const juce::String& password ) override
     {
         kick_log( "prefs", "[PREFS] MPC connecting to WiFi SSID: '%s'\n", ssid.toRawUTF8() );
+        std::string sSsid = ssid.toStdString();
+        std::string sPass = password.toStdString();
 
-        // 1. Try iwctl
-        std::string cmd = platform_cmd::formatIwdConnectCommand( "wlan0", ssid.toStdString(), password.toStdString() );
-        int res = runBoardCommand( cmd.c_str() );
+        // 1. Unblock radio and bring link up
+        runBoardCommand( "rfkill unblock wifi 2>/dev/null; rfkill unblock all 2>/dev/null" );
+        runBoardCommand( "ip link set wlan0 up 2>/dev/null || ifconfig wlan0 up 2>/dev/null" );
 
-        // 2. Fallback to wpa_supplicant if needed
-        if( res != 0 )
+        // 2. Try connmanctl (native to Akai MPC firmware)
+        std::string connmanServices = runPipedCommand( "connmanctl services 2>/dev/null" );
+        if( !connmanServices.empty() && connmanServices.find( "wifi_" ) != std::string::npos )
         {
-            std::string wpaConf = platform_cmd::formatWifiWpaSupplicantConfig( ssid.toStdString(), password.toStdString() );
-            std::ofstream conf( "/data/prefs/wpa_supplicant.conf" );
-            if( conf.is_open() )
+            std::istringstream iss( connmanServices );
+            std::string line;
+            std::string serviceId;
+            while( std::getline( iss, line ) )
             {
-                conf << wpaConf;
-                conf.close();
-                ::chmod( "/data/prefs/wpa_supplicant.conf", 0600 );
-                runBoardCommand( "killall -9 wpa_supplicant 2>/dev/null; wpa_supplicant -B -i wlan0 -c /data/prefs/wpa_supplicant.conf" );
+                if( line.find( sSsid ) != std::string::npos )
+                {
+                    size_t pos = line.find( "wifi_" );
+                    if( pos != std::string::npos )
+                    {
+                        serviceId = trimString( line.substr( pos ) );
+                        break;
+                    }
+                }
+            }
+            if( !serviceId.empty() )
+            {
+                kick_log( "prefs", "[PREFS] MPC ConnMan service found: %s\n", serviceId.c_str() );
+                if( !sPass.empty() )
+                {
+                    std::string cfgDir = "/var/lib/connman";
+                    std::string cfgPath = cfgDir + "/wifi_" + platform_cmd::sanitizeWifiSsid( sSsid ) + ".config";
+                    std::ofstream cf( cfgPath );
+                    if( cf.is_open() )
+                    {
+                        cf << "[service_" << serviceId << "]\n"
+                           << "Type = wifi\n"
+                           << "Name = " << sSsid << "\n"
+                           << "Passphrase = " << sPass << "\n"
+                           << "AutoConnect = true\n";
+                        cf.close();
+                    }
+                }
+                runBoardCommand( ( "connmanctl connect " + serviceId + " 2>/dev/null" ).c_str() );
             }
         }
 
-        // Save credentials with secure permissions (0600)
-        std::string credFile = "/data/prefs/wifi_credentials.txt";
-        std::ofstream cf( credFile, std::ios::app );
-        if( cf.is_open() )
+        // 3. Standard wpa_supplicant + DHCP
+        std::string wpaConf = platform_cmd::formatWifiWpaSupplicantConfig( sSsid, sPass );
+        juce::File confDir( "/data/prefs" );
+        if( !confDir.exists() )
+            confDir.createDirectory();
+
+        std::ofstream conf( "/data/prefs/wpa_supplicant.conf" );
+        if( conf.is_open() )
         {
-            cf << platform_cmd::sanitizeWifiSsid( ssid.toStdString() ) << ":"
-               << platform_cmd::sanitizeWifiPassword( password.toStdString() ) << "\n";
-            cf.close();
-            ::chmod( credFile.c_str(), 0600 );
+            conf << wpaConf;
+            conf.close();
+            ::chmod( "/data/prefs/wpa_supplicant.conf", 0600 );
+
+            std::ofstream tmpConf( "/tmp/wpa_supplicant.conf" );
+            if( tmpConf.is_open() )
+            {
+                tmpConf << wpaConf;
+                tmpConf.close();
+                ::chmod( "/tmp/wpa_supplicant.conf", 0600 );
+            }
+
+            runBoardCommand( "killall -9 wpa_supplicant 2>/dev/null; sleep 1" );
+            runBoardCommand( "wpa_supplicant -B -i wlan0 -c /data/prefs/wpa_supplicant.conf 2>/dev/null || wpa_supplicant -B -i wlan0 -c /tmp/wpa_supplicant.conf 2>/dev/null" );
+
+            for( int i = 0; i < 6; ++i )
+            {
+                std::string st = runPipedCommand( "wpa_cli -i wlan0 status 2>/dev/null | grep 'wpa_state=COMPLETED'" );
+                if( !st.empty() )
+                    break;
+                ::sleep( 1 );
+            }
+
+            runBoardCommand( "killall udhcpc 2>/dev/null; /sbin/udhcpc -i wlan0 -b 2>/dev/null || udhcpc -i wlan0 -b 2>/dev/null & dhclient wlan0 2>/dev/null &" );
         }
 
-        return ( res == 0 );
+        // 4. Try iwctl fallback (if iwd was used)
+        std::string iwdCmd = platform_cmd::formatIwdConnectCommand( "wlan0", sSsid, sPass );
+        runBoardCommand( ( iwdCmd + " 2>/dev/null" ).c_str() );
+
+        // 5. Poll for valid IPv4 on wlan0 (up to 12 seconds)
+        for( int i = 0; i < 12; ++i )
+        {
+            ::sleep( 1 );
+            std::string ip = queryIpAddress( "wlan0" );
+            if( !ip.empty() && ip != "0.0.0.0" )
+            {
+                kick_log( "prefs", "[PREFS] MPC WiFi connection succeeded, IP: %s\n", ip.c_str() );
+
+                std::string credFile = "/data/prefs/wifi_credentials.txt";
+                std::ofstream cf( credFile, std::ios::app );
+                if( cf.is_open() )
+                {
+                    cf << platform_cmd::sanitizeWifiSsid( sSsid ) << ":"
+                       << platform_cmd::sanitizeWifiPassword( sPass ) << "\n";
+                    cf.close();
+                    ::chmod( credFile.c_str(), 0600 );
+                }
+                return true;
+            }
+        }
+
+        kick_log( "warn", "[PREFS] MPC WiFi connection timed out: no IP acquired on wlan0\n" );
+        return false;
     }
 
     bool disconnectWiFi() override
     {
         kick_log( "prefs", "[PREFS] MPC disconnecting WiFi\n" );
+        runBoardCommand( "connmanctl disable wifi 2>/dev/null" );
         runBoardCommand( "iwctl station wlan0 disconnect 2>/dev/null" );
         runBoardCommand( "killall -9 wpa_supplicant 2>/dev/null" );
+        runBoardCommand( "killall udhcpc 2>/dev/null" );
         return true;
     }
 
