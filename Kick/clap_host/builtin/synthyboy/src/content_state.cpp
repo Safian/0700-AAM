@@ -140,12 +140,17 @@ bool operator== (const StateContent& a, const StateContent& b) noexcept
                              && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); })
         && sameVector (a.velocityCurve, b.velocityCurve, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; })
         && sameVector (a.noteCurve, b.noteCurve, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; })
+        && sameVector (a.shaperA, b.shaperA, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; })
+        && sameVector (a.shaperB, b.shaperB, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; })
         && a.tuning.present == b.tuning.present && a.tuning.scl == b.tuning.scl && a.tuning.hasKbm == b.tuning.hasKbm && a.tuning.kbm == b.tuning.kbm
         && sameVector (a.impulses, b.impulses, [] (const ContentFileRef& x, const ContentFileRef& y) { return same (x, y); })
         && sameVector (a.filterCurves, b.filterCurves, [] (const ContentFilterCurve& x, const ContentFilterCurve& y)
                        { return x.filter == y.filter
                              && sameVector (x.points, y.points, [] (const ContentFilterCurvePoint& p, const ContentFilterCurvePoint& q)
-                                            { return p.x == q.x && p.y == q.y; }); });
+                                            { return p.x == q.x && p.y == q.y; }); })
+        && sameVector (a.remaps, b.remaps, [] (const ContentRemap& x, const ContentRemap& y)
+                       { return x.osc == y.osc && x.slot == y.slot && x.name == y.name
+                             && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); });
 }
 
 bool validateContent (const StateContent& c) noexcept
@@ -185,7 +190,8 @@ bool validateContent (const StateContent& c) noexcept
                 || ! pointsOk (l.points, kMaxLfoShapePoints, true, true) || l.loopPoint < -1 || l.loopPoint >= static_cast<int> (l.points.size()))
                 return false;
 
-        if (! pointsOk (c.velocityCurve, kMaxCurvePoints, false, false) || ! pointsOk (c.noteCurve, kMaxCurvePoints, false, false))
+        if (! pointsOk (c.velocityCurve, kMaxCurvePoints, false, false) || ! pointsOk (c.noteCurve, kMaxCurvePoints, false, false)
+            || ! pointsOk (c.shaperA, kMaxCurvePoints, false, false) || ! pointsOk (c.shaperB, kMaxCurvePoints, false, false))
             return false;
 
         if (c.tuning.present)
@@ -232,6 +238,14 @@ bool validateContent (const StateContent& c) noexcept
                 previous = p.x;
             }
         }
+
+        if (c.remaps.size() > static_cast<size_t> (kMaxContentRemaps))
+            return false;
+        std::set<int> remapKeys;
+        for (const auto& r : c.remaps)
+            if (r.osc < 1 || r.osc > 3 || r.slot < 1 || r.slot > kNumRemapSlots || ! remapKeys.insert (r.osc * 10 + r.slot).second
+                || ! plainString (r.name, kMaxContentStringBytes) || ! pointsOk (r.points, kMaxRemapPoints, false, true))
+                return false;
         return true;
     }
     catch (...)

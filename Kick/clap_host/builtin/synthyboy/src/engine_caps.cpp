@@ -5,6 +5,7 @@
 #include "synthyboy/engine_caps.h"
 
 #include <cstring>
+#include <initializer_list>
 
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
@@ -37,6 +38,15 @@ int numberAfter (const char* s, const char* prefix) noexcept
 
 EngineCapsMask classify (const char* key) noexcept
 {
+    // block B16 (WTREMAP): before the module prefixes (osc..., filter..., reverb.... would claim these keys)
+    if (std::strstr (key, ".remap.") != nullptr)
+        return kCapWtRemap;
+    if (endsWith (key, ".clean_mode"))
+        return kCapCleanMode;
+    if (endsWith (key, ".level"))
+        for (const char* fx : { "chorus.", "compressor.", "delay.", "distortion.", "eq.", "flanger.", "phaser.", "reverb." })
+            if (startsWith (key, fx))
+                return kCapFxLevel;
     if (endsWith (key, ".rack"))
         return kCapFxRacks; // before the module prefixes: fxfilter.rack is not a filter key
     if (startsWith (key, "macro."))
@@ -65,6 +75,12 @@ EngineCapsMask classify (const char* key) noexcept
 
     if (startsWith (key, "osc"))
     {
+        if (std::strstr (key, ".pitch_") != nullptr || std::strstr (key, ".fixed_pitch") != nullptr
+            || std::strstr (key, ".transpose_snap") != nullptr || std::strstr (key, ".unison.mode") != nullptr
+            || std::strstr (key, ".unison.range") != nullptr || std::strstr (key, ".unison.blend_shape") != nullptr
+            || std::strstr (key, ".unison.stack_repeat") != nullptr || std::strstr (key, ".phase_legato") != nullptr
+            || std::strstr (key, ".phase_memory") != nullptr)
+            return kCapPitchUnison;
         if (std::strstr (key, ".map.") != nullptr)
             return kCapOscMapping;
         if (std::strstr (key, ".warp2.") != nullptr)
@@ -73,6 +89,8 @@ EngineCapsMask classify (const char* key) noexcept
             return kCapMixerGraph;
         return kCapSampleOsc; // oscN.type, oscN.sample.*
     }
+    if (std::strcmp (key, "voice.phase_legato") == 0)
+        return kCapPitchUnison;
     if (startsWith (key, "noise."))
         return kCapMixerGraph; // filter_blend, bus sends
 
@@ -87,6 +105,18 @@ EngineCapsMask classify (const char* key) noexcept
 
     if (startsWith (key, "fx.order."))
         return kCapFxRacks;
+    // block B17 (before the module prefixes of the version 2 effects)
+    if (std::strcmp (key, "compressor.limit") == 0 || std::strcmp (key, "compressor.limit_latency_comp") == 0
+        || endsWith (key, "compressor.crossover_low") || endsWith (key, "compressor.crossover_high"))
+        return kCapFxCompressorLimit;
+    if (std::strcmp (key, "delay.hq") == 0 || std::strcmp (key, "delay.offset") == 0)
+        return kCapFxDelayExtras;
+    if (std::strcmp (key, "distortion.filter_keytrack") == 0)
+        return kCapFxDistortionExtras;
+    if (std::strcmp (key, "phaser.depth2") == 0)
+        return kCapFxPhaserDepth2;
+    if (std::strcmp (key, "reverb.force_enable") != 0 && startsWith (key, "reverb."))
+        return kCapFxReverbAlgos;
     if (startsWith (key, "reverb."))
         return kCapReverbForce;
     if (startsWith (key, "hyperdim."))
@@ -164,6 +194,9 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
         caps |= kCapMixerGraph;
     else if (startsWith (key, "fx.order.") && v >= kNumLegacyFxSlots)
         caps |= kCapFxRacks;
+    else if (std::strcmp (key, "distortion.type") == 0 && v >= kNumLegacyDistortionTypes)
+        caps |= kCapFxDistortionExtras;
+
     return caps;
 }
 
@@ -197,6 +230,15 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapFxConvolve:       return "fx_convolve";
         case kCapFxSplitters:      return "fx_splitters";
         case kCapReverbForce:      return "reverb_force";
+        case kCapWtRemap:          return "wt_remap";
+        case kCapFxLevel:          return "fx_level";
+        case kCapCleanMode:        return "clean_mode";
+        case kCapPitchUnison:      return "pitch_unison";
+        case kCapFxCompressorLimit: return "fx_compressor_limit";
+        case kCapFxDelayExtras:    return "fx_delay_extras";
+        case kCapFxDistortionExtras: return "fx_distortion_extras";
+        case kCapFxPhaserDepth2:   return "fx_phaser_depth2";
+        case kCapFxReverbAlgos:    return "fx_reverb_algos";
         case kCapNone:             break;
     }
     return "";

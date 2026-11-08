@@ -718,6 +718,8 @@ private:
                     h = true;
                     if (std::strcmp (k, "velocity") == 0) return readCurve (c.velocityCurve, vd);
                     if (std::strcmp (k, "note") == 0) return readCurve (c.noteCurve, vd);
+                    if (std::strcmp (k, "shaper_a") == 0) return readCurve (c.shaperA, vd);
+                    if (std::strcmp (k, "shaper_b") == 0) return readCurve (c.shaperB, vd);
                     h = false;
                     return true;
                 });
@@ -768,6 +770,22 @@ private:
                                     return true;
                                 });
                             });
+                        h = false;
+                        return true;
+                    });
+                });
+            if (std::strcmp (key, "remaps") == 0)
+                return readArray (d, static_cast<size_t> (kMaxContentRemaps), [&] (size_t, int ed)
+                {
+                    c.remaps.emplace_back();
+                    auto& r = c.remaps.back();
+                    return readObject (ed, [&] (const char* k, int vd, bool& h)
+                    {
+                        h = true;
+                        if (std::strcmp (k, "osc") == 0) return readInt (r.osc, vd);
+                        if (std::strcmp (k, "slot") == 0) return readInt (r.slot, vd);
+                        if (std::strcmp (k, "name") == 0) return readText (r.name, kMaxContentStringBytes, vd);
+                        if (std::strcmp (k, "points") == 0) return readPoints (r.points, static_cast<size_t> (kMaxRemapPoints), vd, false);
                         h = false;
                         return true;
                     });
@@ -1073,7 +1091,7 @@ void putContent (std::string& s, const StateContent& c)
         }
         s += ']';
     }
-    if (! c.velocityCurve.empty() || ! c.noteCurve.empty())
+    if (! c.velocityCurve.empty() || ! c.noteCurve.empty() || ! c.shaperA.empty() || ! c.shaperB.empty())
     {
         section ("curves");
         s += '{';
@@ -1092,6 +1110,8 @@ void putContent (std::string& s, const StateContent& c)
         };
         curve ("velocity", c.velocityCurve);
         curve ("note", c.noteCurve);
+        curve ("shaper_a", c.shaperA);
+        curve ("shaper_b", c.shaperB);
         s += '}';
     }
     if (c.tuning.present)
@@ -1146,6 +1166,29 @@ void putContent (std::string& s, const StateContent& c)
                 s += '}';
             }
             s += "]}";
+        }
+        s += ']';
+    }
+    if (! c.remaps.empty())
+    {
+        section ("remaps");
+        s += '[';
+        for (size_t i = 0; i < c.remaps.size(); ++i)
+        {
+            const auto& r = c.remaps[i];
+            s += i > 0 ? ",{" : "{";
+            putKey (s, "osc");
+            putJsonInt (s, r.osc);
+            s += ',';
+            putKey (s, "slot");
+            putJsonInt (s, r.slot);
+            s += ',';
+            putKey (s, "name");
+            putJsonString (s, r.name);
+            s += ',';
+            putKey (s, "points");
+            putPoints (s, r.points);
+            s += '}';
         }
         s += ']';
     }
