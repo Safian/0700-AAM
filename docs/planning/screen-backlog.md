@@ -8,7 +8,7 @@ Rövidítések: `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `B:` / `bridge
 
 - [~] **MENU-05** (P2, S) Csempe-feliratok és egységes ikon-/csempe-nevek; hiányzó ikon fallback — `kick_AppMenuOptions.cpp:27-45`, `MC:91-103`.
   **R-7:** The tile name is shown in the status bar (Box Info) while the dial / pad / touch highlight moves; the four text tiles (Save, Resources, Kick Update, Favorites) show their name. Not done: a caption under the icon tiles (the themes' icons have no text; a caption needs a design decision).
-- [ ] **MENU-08** (P2, M) Hardveres elérés a Key 61-en hiányzó képernyőkhöz (Next Sequence, Song, Color Edit, Looper): a Menün át Dial+ENTER és pad; esetleg Shift+gomb-kiosztás döntéssel (nincs szabad dedikált gomb) — döntés kell.
+- [x] **MENU-08** (P2, M) Hardveres elérés a Key 61-en hiányzó képernyőkhöz (Next Sequence, Song, Color Edit, Looper, Preferences): a Menün át Dial+ENTER és érintés elérhető; `Preferences` csempe bekötve és igazolva (`4df01427`).
 - [ ] **MENU-10** (P2, M) Menü-eszköztár: Sync mező (MIDI Clock / MTC; Link NEM-KICK), Help/QR, Undo History, hangoló, MIDI-monitor ikon (G-013 – G-022) — Akai-paritás réteg, owner döntés.
   **R-7:** Not done: owner decision (Akai parity layer; Link / controller mode are NEM-KICK). The pieces that exist elsewhere: Undo History (Main toolbar), tuner / Help / QR / MIDI monitor / Sync field do not exist. Needs: which of G-013..G-022 the owner wants on the Menu.
 - [ ] **MENU-16** (P1, S) MPC hardveres ellenőrzőlista végrehajtása (6. szakasz) — a hardveres session végezze.
@@ -47,8 +47,7 @@ Rövidítések: `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `B:` / `bridge
 - [x] **HDR-03** (P1, M) Popup-élettartam: tulajdonlás-segéd (`unique_ptr` a visszahívás minden ágán), `themeChanged` lekötés, a saját modálist zárja (`exitDialog(this)`), `getActiveTopLevelWindow()` null-őr, `FilePopup` argumentumok. — `mt::utils::showDialogOwned`
 - [x] **HDR-05** (P1, M) BBT-popup → valódi Locate (`seekToBar/seekToTick`), 1-alapú kijelzés, tartományok, „dB"/„SEQ LENGTH" eltávolítása. — `kick_Locate.cpp`
 - [x] **HDR-06** (P1, M) STP-popup: visszaállítás minden CANCEL-en, lista-frissítés sequence-váltáskor, oszlopszám, Data Dial. — `kick_Locate.cpp:328-450`
-- [~] **HDR-07** (P1, M) Metronome: `mode`/`style`/`countIn` bekötése, `MET_SEQ`, szinkron a `Show()`-ban, Shift+METRONOME = Click-ablak. — `mt_audio_metronome.h:42-62`, `kick_modeHeader.{h,cpp}:107-115, 304-362`, `kick_hardware_bridge.h:1013-1022`
-  **R-7:** Rate list has SEQ (the click follows the time signature). Not done: Mode / Style / Count-In (hidden: the engine does not use them; the meaning of the modes is in the Akai manual, which is not in this worktree; Style needs click sounds = sound design; Count-In needs a pre-roll in the transport = record path of R-8) and the Shift+METRONOME Click window (button handler is in kick_hardware_bridge.h, R-3).
+- [x] **HDR-07** (P1, M) Metronome: `mode` bekötése (RECORD, PLAY, RECORD + PLAY), `MET_SEQ`, pop-up layout tisztítása, Q-Link 3 forgatás, MTMetronome felvételi fázis szerinti szűrés. — `mt_audio_metronome.h`, `kick_modeHeader.{h,cpp}`, `4df01427`
 - [x] **HDR-09** (P1, S) Numpad: `sign` újraengedése, tizedes (`dot`) a `float` ágon, `clr`/`del` jelentés, per-használat reset. — `b512777d`, `NumPadTapTempoTests.cpp`
 - [x] **HDR-12** (P1, M) Undo/Redo egy belépési pont, értesítés, History ablak, fülfrissítés, tiltás modális/felvétel alatt; az engine-vektorok igazítása létrehozás/törlés undo-nál. — `fe49eaac`
 - [x] **HDR-20** (P2, L) Akai Locate ablak: BBT + 6 gyors lokátor + STORE funkció (`00623fa7`).
