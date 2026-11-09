@@ -26,8 +26,8 @@ namespace mt
     class MTMetronome
     {
     public:
-        explicit MTMetronome( AudIO::DawEngine& engine, const juce::ValueTree& VT )
-            : _engine( engine ), _vt( VT )
+        explicit MTMetronome( AudIO::DawEngine& engine, const juce::ValueTree& VT, std::function<bool()> isRecordingFn = nullptr )
+            : _engine( engine ), _vt( VT ), _isRecordingFn( std::move( isRecordingFn ) )
         {
             if( auto pMetronome = std::make_unique<Metronome>( engine, _vt ) )
             {
@@ -69,25 +69,36 @@ namespace mt
             _metronome = nullptr;
         }
 
+        bool isMetronomeAudible() const
+        {
+            if( !_met.enabled() )
+                return false;
+            const auto m = _met.mode();
+            const bool isRec = _isRecordingFn ? _isRecordingFn() : false;
+            if( m == MTMetronomeMode::MET_RECORD )
+                return isRec;
+            if( m == MTMetronomeMode::MET_PLAY )
+                return !isRec;
+            return true; // MET_RECORD_PLAY
+        }
+
         void triggerBar()
         {
-            //DBG( "Bar: " << juce::String( juce::Time::getMillisecondCounterHiRes() ) );
-            if( _metronome && _met.enabled() )
+            if( _metronome && isMetronomeAudible() )
                 _metronome->noteOn( 0, 127 );
         }
 
         void triggerBeat()
         {
-            //DBG( "Beat: " << juce::String( juce::Time::getMillisecondCounterHiRes() ) );
-            if( _metronome && _met.enabled() )
+            if( _metronome && isMetronomeAudible() )
                 _metronome->noteOn( 1, 64 );
         }
 
     private:
-    private:
-        juce::ValueTree   _vt{ IDs::METRONOME };
-        AudIO::DawEngine& _engine;
-        KickMetronome&    _met{ getSettings().metronome };
+        juce::ValueTree       _vt{ IDs::METRONOME };
+        AudIO::DawEngine&     _engine;
+        KickMetronome&        _met{ getSettings().metronome };
+        std::function<bool()> _isRecordingFn;
 
         Metronome* _metronome{ nullptr };
     };

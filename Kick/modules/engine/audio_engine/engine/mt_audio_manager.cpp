@@ -81,7 +81,10 @@ namespace mt
         //} );
 
         // Metronome object...
-        _metronome = std::make_unique<MTMetronome>( engine, getSettings().metronome.vTree );
+        _metronome = std::make_unique<MTMetronome>( engine, getSettings().metronome.vTree, [this]() {
+            const auto c = getSeqRecControl();
+            return c.phase == seqrec::Phase::Recording || c.phase == seqrec::Phase::Armed;
+        } );
 
         // Initialize Audio device...
         juce::MessageManager::callAsync( [&]() {

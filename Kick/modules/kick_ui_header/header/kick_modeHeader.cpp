@@ -453,9 +453,8 @@ namespace kick_ui
             // The click follows the time signature of the selected sequence (RATE: SEQ clicks every beat of it).
             TimeSignatureDialog::show( mt::getAudioInterface().getSelectedSequence(), [this]() { syncFromSettings(); } );
         };
-        // The engine metronome reads enabled, gain, rate and source only: mode, count-in and style change nothing, so those
-        // controls are hidden until the engine uses them (kShowUnusedControls).
-        mode.setVisible( kShowUnusedControls );
+        // Mode is active in the engine (Record / Play / Record+Play).
+        mode.setVisible( true );
         countIn.setVisible( kShowUnusedControls );
         style.setVisible( kShowUnusedControls );
 
@@ -505,11 +504,10 @@ namespace kick_ui
         level.setBoundsRelative( 0.084f, 0.417f, 0.332f, 0.165f );
         mode.setBoundsRelative( 0.084f, 0.708f, 0.332f, 0.165f );
 
-        countIn.setBoundsRelative( 0.583f, 0.125f, 0.332f, 0.165f );
-        // Without the unused controls the rate takes the top right slot.
-        rate.setBoundsRelative( 0.583f, kShowUnusedControls ? 0.417f : 0.125f, 0.332f, 0.165f );
+        rate.setBoundsRelative( 0.583f, 0.125f, 0.332f, 0.165f );
+        timeSig.setBoundsRelative( 0.583f, 0.417f, 0.332f, 0.165f );
+        countIn.setBoundsRelative( 0.583f, 0.708f, 0.332f, 0.165f );
         style.setBoundsRelative( 0.583f, 0.708f, 0.332f, 0.165f );
-        timeSig.setBoundsRelative( 0.583f, kShowUnusedControls ? 0.708f : 0.417f, 0.332f, 0.165f );
     }
 
     void MetronomePopup::close()
@@ -524,6 +522,7 @@ namespace kick_ui
             case 0: level.knobRotated( value ); break;
             case 1: rate.knobRotated( value ); break;
             case 2: onOffButton.knobRotated( value ); break;
+            case 3: mode.knobRotated( value ); break;
         }
     }
 }
