@@ -3,9 +3,12 @@
 Kész és `safian/main`-ben van (nem itt követjük): W1-A..D, W2-A..D, W3-A/E, S-A..F, R-1..R-12 egységek (a maradékok lent) (Preferences, Grid, MIDI program, CLAP-FX host, indítás, főképernyő tabok, fájlböngésző-források, érintő-zongora, `.kickplug`, mixer/mute, szekvencer-szerkesztők, minta/sampler, Inserts/XY FX/Q-Link/MIDI Control/Looper, Power-ablak), a mobil hardverkinézet kivétele. Kapuk, amik lefutottak: Mac-build, ARM-build 0 hiba, ctest 102/102, smoke-ok, az MPC-n a képernyők megnyílnak. Amit hang, LED vagy ujj nélkül nem lehet igazolni, az B-ben van. A VST/FX-fejlesztés külön repóban fut (SynthyBoyVST, KickEQ).
 Szabályok minden egységre: saját worktree és ág, csak a felsorolt fájlok, nincs "egyelőre így" ág, a híd (`kick_hardware_bridge.h`) közös fájl: egyszerre egy egység érintse. Egy MPC, egy ARM-build.
 
-## A. Nyitott hiba
-- **A-MODAL (részben kész): modális ablakok X gombja ujjal nem zár.** A Cancel és az ablakon kívüli érintés zár; az X (`closeButton`) találati területe a teljes cím sáv végére nőtt (40 px), MPC-n injektálva zár, **ujjal a tulajdonos igazolja** (B). Gyökérok volt: a modális ablak (`fsPopup`: Power, BPM Selector, megerősítések) a főablak második gyereke, a bridge érintés-keresése csak a tartalomban keresett (javítva: `findDesktopPopupAt`, `kick_hardware_bridge.h`).
-- **A-PREFS owner-döntés:** az upstream alapértelmezett időzóna `Asia/Kolkata` (a Hardware fülön az óra 0:36, a valós idő 19:36 CET): legyen `Europe/Budapest`?
+## A. Nyitott hibák és javítások
+- **A-MODAL (KÉSZ, 4df01427): modális ablakok X gombja ujjal és injektálva is megbízhatóan zár.** Gyökérok: a `CloseTouchArea` nem `juce::Button`-ból származott, így a bridge 32 px érintés-holtjáték (touch slop) rögzítése nem aktiválódott finger-release wobble esetén. Javítva: `CloseTouchArea` immár `juce::Button` kiterjesztett (16 px) `hitTest`-tel; hardveren és szoftveresen ellenőrizve (`close 'METRONOME' code=-80 by=X button`).
+- **A-PREFS (KÉSZ):** Az alapértelmezett időzóna `Europe/Budapest` (`KickHardware::setup`, `kick_settings.cpp`).
+- **Screen Dimmer (KÉSZ, c680071a):** Alapértelmezett `screenDimMinutes` 0-ról (kikapcsolva) 5 percre állítva. MPC hardveren tesztelve (193 -> 52 PWM lehalványulás, érintés ébreszt és lenyeli a kezdő érintést).
+- **MENU-08 (KÉSZ, 4df01427):** Preferences közvetlen elérése a menü 2. oldaláról (`kCommandPreferences`, 23. menüelem), hardveren tesztelve és igazolva (`screen=1005`).
+- **HDR-07 (KÉSZ, 4df01427):** Metronome Mode választó megjelenítve, Q-Link 3-ra kötve; `MTMetronome` felvétel/lejátszás fázis szerinti kattogás logikája bekötve.
 
 ## B. Egységek (nyitott maradékok)
 | ID | Tartalom | Megjegyzés |
