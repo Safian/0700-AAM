@@ -139,15 +139,17 @@ namespace mt
 
     /// Transparent touch target over the small close icon: a finger does not hit a 24 px square (MPC, owner test 2026-11-04),
     /// the icon itself keeps its size.
-    class CloseTouchArea : public juce::Component
+    class CloseTouchArea : public juce::Button
     {
     public:
-        std::function<void()> onClick;
-
-        void mouseUp( const juce::MouseEvent& e ) override
+        CloseTouchArea() : juce::Button( "CloseArea" )
         {
-            if( onClick && contains( e.getPosition() ) )
-                onClick();
+            setClickingTogglesState( false );
+        }
+        void paintButton( juce::Graphics&, bool, bool ) override {}
+        bool hitTest( int x, int y ) override
+        {
+            return getLocalBounds().expanded( 16, 16 ).contains( x, y );
         }
     };
 
