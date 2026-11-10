@@ -121,6 +121,11 @@ namespace mt
         return PlatformServices::getInstance().disconnectWiFi();
     }
 
+    juce::String WifiManager::getConnectedWiFiSSID()
+    {
+        return PlatformServices::getInstance().getConnectedWiFiSSID();
+    }
+
     void WifiManager::addSSID( const juce::String& ssid, const juce::String& password, int priority )
     {
         if (!hardwareEnabled()) return;

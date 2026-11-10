@@ -67,21 +67,29 @@ namespace kick_ui
             }
             statusLabel.setText( "Scanning WiFi networks...", juce::dontSendNotification );
             wifiList.setListOptions( { "Scanning..." } );
-            juce::Thread::launch( [this]() {
+            juce::Component::SafePointer<SettingsWifi> safeThis( this );
+            juce::Thread::launch( [safeThis]() {
                 std::vector<juce::String> list = mt::WifiManager().scanWiFiNetworks();
-                juce::MessageManager::callAsync( [this, list]() {
+                juce::String connectedSsid = mt::WifiManager::getWifiInterface()->getConnectedWiFiSSID();
+                juce::MessageManager::callAsync( [safeThis, list, connectedSsid]() {
+                    if( safeThis == nullptr )
+                        return;
                     if( list.empty() )
                     {
-                        wifiList.setListOptions( { "(No networks found)" } );
-                        statusLabel.setText( "0 networks found - Tap SCAN to retry", juce::dontSendNotification );
+                        safeThis->wifiList.setListOptions( { "(No networks found)" } );
+                        safeThis->statusLabel.setText( "0 networks found - Tap SCAN to retry", juce::dontSendNotification );
                     }
                     else
                     {
-                        wifiList.setListOptions( list );
-                        juce::String savedSsid = settings.wifi.ssid();
-                        if( !savedSsid.isEmpty() )
-                            wifiList.setSelected( savedSsid, juce::dontSendNotification );
-                        statusLabel.setText( juce::String( (int)list.size() ) + " networks found", juce::dontSendNotification );
+                        safeThis->wifiList.setListOptions( list );
+                        juce::String targetSsid = connectedSsid.isNotEmpty() ? connectedSsid : safeThis->settings.wifi.ssid();
+                        if( !targetSsid.isEmpty() )
+                            safeThis->wifiList.setSelected( targetSsid, juce::dontSendNotification );
+
+                        if( connectedSsid.isNotEmpty() )
+                            safeThis->statusLabel.setText( juce::String( (int)list.size() ) + " networks found - Connected to " + connectedSsid, juce::dontSendNotification );
+                        else
+                            safeThis->statusLabel.setText( juce::String( (int)list.size() ) + " networks found", juce::dontSendNotification );
                     }
                 } );
             } );
@@ -166,26 +174,29 @@ namespace kick_ui
             juce::String pwd = settings.wifi.pwd();
             statusLabel.setText( "Connecting to " + ssid + "...", juce::dontSendNotification );
 
-            juce::Thread::launch( [this, ssid, pwd]() {
+            juce::Component::SafePointer<SettingsWifi> safeThis( this );
+            juce::Thread::launch( [safeThis, ssid, pwd]() {
                 bool ok = mt::WifiManager().getWifiInterface()->connectToWiFi( ssid, pwd );
-                juce::MessageManager::callAsync( [this, ok, ssid]() {
+                juce::MessageManager::callAsync( [safeThis, ok, ssid]() {
+                    if( safeThis == nullptr )
+                        return;
                     if( ok )
                     {
-                        refresh();
-                        juce::String ip = wifIP.getText();
+                        safeThis->refresh();
+                        juce::String ip = safeThis->wifIP.getText();
                         if( ip.isNotEmpty() && ip != "0.0.0.0" )
-                            statusLabel.setText( "Connected: " + ip, juce::dontSendNotification );
+                            safeThis->statusLabel.setText( "Connected to " + ssid + " (" + ip + ")", juce::dontSendNotification );
                         else
-                            statusLabel.setText( "Connected to " + ssid, juce::dontSendNotification );
-                        connect.setToggleState( true, juce::dontSendNotification );
+                            safeThis->statusLabel.setText( "Connected to " + ssid, juce::dontSendNotification );
+                        safeThis->connect.setToggleState( true, juce::dontSendNotification );
 
                         // If timezone has not been explicitly set by user, detect via network
-                        if( !settings.hardware.timeZoneUserSet() )
+                        if( !safeThis->settings.hardware.timeZoneUserSet() )
                         {
-                            mt::HwPref::getHwPref().detectTimezoneAsync( [this]( const juce::String& netTz ) {
-                                if( !settings.hardware.timeZoneUserSet() && netTz.isNotEmpty() )
+                            mt::HwPref::getHwPref().detectTimezoneAsync( [safeThis]( const juce::String& netTz ) {
+                                if( safeThis != nullptr && !safeThis->settings.hardware.timeZoneUserSet() && netTz.isNotEmpty() )
                                 {
-                                    settings.hardware.timezone = netTz;
+                                    safeThis->settings.hardware.timezone = netTz;
                                     mt::HwPref::getHwPref().setTimeZone( netTz );
                                 }
                             } );
@@ -193,8 +204,8 @@ namespace kick_ui
                     }
                     else
                     {
-                        statusLabel.setText( "Connection failed. Check password or signal.", juce::dontSendNotification );
-                        connect.setToggleState( false, juce::dontSendNotification );
+                        safeThis->statusLabel.setText( "Connection failed. Check password or signal.", juce::dontSendNotification );
+                        safeThis->connect.setToggleState( false, juce::dontSendNotification );
                     }
                 } );
             } );
@@ -237,26 +248,53 @@ namespace kick_ui
         if( !info.IP.empty() && info.IP != "0.0.0.0" )
         {
             connect.setToggleState( true, juce::dontSendNotification );
+            juce::String connectedSsid = mt::WifiManager::getWifiInterface()->getConnectedWiFiSSID();
+            if( connectedSsid.isNotEmpty() )
+            {
+                if( settings.wifi.ssid().isEmpty() )
+                    settings.wifi.ssid = connectedSsid;
+                statusLabel.setText( "Connected to " + connectedSsid + " (" + juce::String( info.IP ) + ")", juce::dontSendNotification );
+            }
+        }
+        else
+        {
+            connect.setToggleState( false, juce::dontSendNotification );
         }
     }
 
     void SettingsWifi::initializeInterfaceState()
     {
+        juce::String connectedSsid = mt::WifiManager::getWifiInterface()->getConnectedWiFiSSID();
         bool isWifiEnabled = settings.wifi.enabled();
+        if( !isWifiEnabled && connectedSsid.isNotEmpty() )
+        {
+            isWifiEnabled = true;
+            settings.wifi.enabled = true;
+        }
         enabled.setToggleState( isWifiEnabled, juce::dontSendNotification );
         updatePasswordDisplay();
 
-        juce::String savedSsid = settings.wifi.ssid();
-        if( !savedSsid.isEmpty() )
+        juce::String activeSsid = settings.wifi.ssid();
+        if( activeSsid.isEmpty() && connectedSsid.isNotEmpty() )
         {
-            wifiList.setListOptions( { savedSsid } );
-            wifiList.setSelected( savedSsid, juce::dontSendNotification );
+            activeSsid = connectedSsid;
+            settings.wifi.ssid = activeSsid;
+        }
+
+        if( !activeSsid.isEmpty() )
+        {
+            wifiList.setListOptions( { activeSsid } );
+            wifiList.setSelected( activeSsid, juce::dontSendNotification );
         }
 
         if( isWifiEnabled )
         {
-            mt::WifiManager().enableWiFi();
-            statusLabel.setText( "WiFi Ready", juce::dontSendNotification );
+            if( connectedSsid.isEmpty() )
+                mt::WifiManager().enableWiFi();
+            if( connectedSsid.isNotEmpty() )
+                statusLabel.setText( "Connected to " + connectedSsid, juce::dontSendNotification );
+            else
+                statusLabel.setText( "WiFi Ready", juce::dontSendNotification );
         }
         else
         {

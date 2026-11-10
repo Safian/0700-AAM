@@ -326,6 +326,237 @@ namespace platform_cmd
         return oss.str();
     }
 
+    // Converts hex string (e.g. "53616669616e") to ASCII ("Safian")
+    inline std::string hexToString( const std::string& hex )
+    {
+        if( hex.empty() || ( hex.length() % 2 ) != 0 )
+            return "";
+        std::string result;
+        result.reserve( hex.length() / 2 );
+        for( size_t i = 0; i < hex.length(); i += 2 )
+        {
+            char h1 = hex[i];
+            char h2 = hex[i + 1];
+            if( !std::isxdigit( static_cast<unsigned char>( h1 ) ) || !std::isxdigit( static_cast<unsigned char>( h2 ) ) )
+                return "";
+            int v1 = ( h1 >= 'a' && h1 <= 'f' ) ? ( h1 - 'a' + 10 ) : ( h1 >= 'A' && h1 <= 'F' ) ? ( h1 - 'A' + 10 ) : ( h1 - '0' );
+            int v2 = ( h2 >= 'a' && h2 <= 'f' ) ? ( h2 - 'a' + 10 ) : ( h2 >= 'A' && h2 <= 'F' ) ? ( h2 - 'A' + 10 ) : ( h2 - '0' );
+            result.push_back( static_cast<char>( ( v1 << 4 ) | v2 ) );
+        }
+        return result;
+    }
+
+    // Converts ASCII string ("Safian") to lowercase hex ("53616669616e")
+    inline std::string stringToHex( const std::string& str )
+    {
+        static const char hexChars[] = "0123456789abcdef";
+        std::string result;
+        result.reserve( str.length() * 2 );
+        for( unsigned char c : str )
+        {
+            result.push_back( hexChars[( c >> 4 ) & 0x0f] );
+            result.push_back( hexChars[c & 0x0f] );
+        }
+        return result;
+    }
+
+    /**
+     * Strips control/newline characters for INI config values without adding shell backslashes.
+     */
+    inline std::string sanitizeIniValue( const std::string& val )
+    {
+        std::string out;
+        out.reserve( val.length() );
+        for( char c : val )
+        {
+            if( c != '\r' && c != '\n' && c != '\0' )
+                out.push_back( c );
+        }
+        return out;
+    }
+
+    /**
+     * Splits busctl ConnMan Manager GetServices output into individual Wi-Fi service blocks.
+     * Splitting at every "/net/connman/service/" boundary ensures an adjacent ethernet or
+     * bluetooth service block never bleeds into a preceding wifi block.
+     */
+    inline std::vector<std::string> splitBusctlConnmanWifiBlocks( const std::string& text )
+    {
+        std::vector<std::string> blocks;
+        const std::string servicePrefix = "/net/connman/service/";
+        const std::string wifiPrefix    = "/net/connman/service/wifi_";
+        size_t pos = 0;
+        while( ( pos = text.find( servicePrefix, pos ) ) != std::string::npos )
+        {
+            size_t nextPos = text.find( servicePrefix, pos + servicePrefix.size() );
+            std::string block = ( nextPos == std::string::npos ) ? text.substr( pos ) : text.substr( pos, nextPos - pos );
+            if( block.compare( 0, wifiPrefix.size(), wifiPrefix ) == 0 )
+                blocks.push_back( std::move( block ) );
+            pos = ( nextPos == std::string::npos ) ? text.size() : nextPos;
+        }
+        return blocks;
+    }
+
+    /**
+     * Extracts a string property formatted as `"Key" s "Value"` from a busctl service block.
+     */
+    inline std::string extractBusctlStringProperty( const std::string& block, const std::string& keyName )
+    {
+        const std::string key = "\"" + keyName + "\" s \"";
+        size_t pos = block.find( key );
+        if( pos == std::string::npos )
+            return "";
+        size_t start = pos + key.size();
+        size_t end   = block.find( '"', start );
+        if( end == std::string::npos )
+            return "";
+        return block.substr( start, end - start );
+    }
+
+    /**
+     * Parses unique Wi-Fi SSIDs from busctl ConnMan Manager GetServices output.
+     */
+    inline std::vector<std::string> parseBusctlConnmanServices( const std::string& text )
+    {
+        std::vector<std::string> list;
+        for( const auto& block : splitBusctlConnmanWifiBlocks( text ) )
+        {
+            std::string ssid = extractBusctlStringProperty( block, "Name" );
+            if( !ssid.empty() && std::find( list.begin(), list.end(), ssid ) == list.end() )
+                list.push_back( std::move( ssid ) );
+        }
+        return list;
+    }
+
+    /**
+     * Parses currently connected Wi-Fi SSID from busctl ConnMan Manager GetServices output.
+     */
+    inline std::string parseBusctlConnectedService( const std::string& text )
+    {
+        for( const auto& block : splitBusctlConnmanWifiBlocks( text ) )
+        {
+            std::string state = extractBusctlStringProperty( block, "State" );
+            if( state == "online" || state == "ready" )
+            {
+                std::string ssid = extractBusctlStringProperty( block, "Name" );
+                if( !ssid.empty() )
+                    return ssid;
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Finds the ConnMan Wi-Fi service object path for a given SSID in busctl GetServices output.
+     */
+    inline std::string parseBusctlServicePathForSsid( const std::string& text, const std::string& ssid )
+    {
+        if( text.empty() || ssid.empty() )
+            return "";
+
+        for( const auto& block : splitBusctlConnmanWifiBlocks( text ) )
+        {
+            if( extractBusctlStringProperty( block, "Name" ) == ssid )
+            {
+                size_t endPath = block.find( '"' );
+                if( endPath != std::string::npos )
+                    return block.substr( 0, endPath );
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Resolves the iwd Station D-Bus object path (e.g. "/net/connman/iwd/0/4") from `busctl tree --list net.connman.iwd`.
+     */
+    inline std::string parseIwdStationPath( const std::string& treeOutput )
+    {
+        const std::string prefix = "/net/connman/iwd/";
+        std::istringstream iss( treeOutput );
+        std::string line;
+        auto isDigits = []( const std::string& s ) {
+            if( s.empty() ) return false;
+            for( unsigned char c : s )
+                if( !std::isdigit( c ) ) return false;
+            return true;
+        };
+        while( std::getline( iss, line ) )
+        {
+            size_t start = line.find( prefix );
+            if( start == std::string::npos )
+                continue;
+            // Trim trailing CR/whitespace
+            while( !line.empty() && ( line.back() == '\r' || line.back() == ' ' || line.back() == '\t' ) )
+                line.pop_back();
+            std::string path = line.substr( start );
+            std::string tail = path.substr( prefix.size() );
+            size_t slash1 = tail.find( '/' );
+            if( slash1 == std::string::npos )
+                continue;
+            std::string phy = tail.substr( 0, slash1 );
+            std::string rest = tail.substr( slash1 + 1 );
+            if( isDigits( phy ) && isDigits( rest ) )
+                return path;
+        }
+        return "";
+    }
+
+    /**
+     * Formats an iwd provisioning filename under `/var/lib/iwd/`, using `=<hex>` encoding
+     * whenever the SSID contains unsafe characters or path separators.
+     */
+    inline std::string formatIwdNetworkFilename( const std::string& ssid, bool hasPassphrase )
+    {
+        bool needsHex = ssid.empty() || ssid.front() == '.';
+        if( !needsHex )
+        {
+            for( unsigned char c : ssid )
+            {
+                if( !std::isalnum( c ) && c != '-' && c != '_' && c != ' ' && c != '.' )
+                {
+                    needsHex = true;
+                    break;
+                }
+            }
+        }
+        std::string stem = needsHex ? ( "=" + stringToHex( ssid ) ) : ssid;
+        return "/var/lib/iwd/" + stem + ( hasPassphrase ? ".psk" : ".open" );
+    }
+
+    /**
+     * Generates ConnMan provisioning `.config` file content using INI-safe raw values.
+     */
+    inline std::string formatConnmanConfig( const std::string& ssid, const std::string& passphrase )
+    {
+        std::string iniSsid = sanitizeIniValue( ssid );
+        std::string iniPass = sanitizeIniValue( passphrase );
+        std::string hexSsid = stringToHex( iniSsid );
+
+        std::ostringstream oss;
+        oss << "[global]\n"
+            << "Name = wifi_" << hexSsid << "\n\n"
+            << "[service_wifi_" << hexSsid << "]\n"
+            << "Type = wifi\n"
+            << "Name = " << iniSsid << "\n";
+        if( !iniPass.empty() )
+            oss << "Passphrase = " << iniPass << "\n";
+        oss << "AutoConnect = true\n";
+        return oss.str();
+    }
+
+    /**
+     * Generates iwd provisioning `.psk` file content using INI-safe raw passphrase.
+     */
+    inline std::string formatIwdPskConfig( const std::string& passphrase )
+    {
+        std::ostringstream oss;
+        oss << "[Security]\n"
+            << "Passphrase=" << sanitizeIniValue( passphrase ) << "\n\n"
+            << "[Settings]\n"
+            << "AutoConnect=true\n";
+        return oss.str();
+    }
+
     // ------------------------------------------------------------------------
     // Factory Reset Commands
     // ------------------------------------------------------------------------

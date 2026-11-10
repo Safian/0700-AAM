@@ -70,6 +70,61 @@ int main()
     std::string iwdCmd = formatIwdConnectCommand( "wlan0", "Test Net", "pass123" );
     assert( iwdCmd == "iwctl --passphrase \"pass123\" station wlan0 connect \"Test Net\"" );
 
+    // 4b. Hex / D-Bus ConnMan & iwd parsing helpers
+    assert( hexToString( "53616669616e" ) == "Safian" );
+    assert( hexToString( "537a61626957696669" ) == "SzabiWifi" );
+    assert( hexToString( "invalid" ).empty() );
+    assert( hexToString( "123" ).empty() );
+    assert( stringToHex( "Safian" ) == "53616669616e" );
+    assert( stringToHex( "SzabiWifi" ) == "537a61626957696669" );
+    assert( hexToString( stringToHex( "Hello World! 123" ) ) == "Hello World! 123" );
+
+    std::string sampleBusctl =
+        "a(oa{sv}) 2 \"/net/connman/service/wifi_08e9f686864c_54656c656b6f6d2d396238636534_managed_psk\" 24 "
+        "\"Type\" s \"wifi\" \"Security\" as 1 \"psk\" \"State\" s \"online\" \"Name\" s \"Telekom-9b8ce4\" "
+        "\"/net/connman/service/wifi_08e9f686864c_53616669616e_managed_psk\" 24 "
+        "\"Type\" s \"wifi\" \"Security\" as 1 \"psk\" \"State\" s \"idle\" \"Name\" s \"Safian\" ";
+
+    auto services = parseBusctlConnmanServices( sampleBusctl );
+    assert( services.size() == 2 );
+    assert( services[0] == "Telekom-9b8ce4" );
+    assert( services[1] == "Safian" );
+
+    assert( parseBusctlConnectedService( sampleBusctl ) == "Telekom-9b8ce4" );
+    assert( parseBusctlServicePathForSsid( sampleBusctl, "Safian" ) == "/net/connman/service/wifi_08e9f686864c_53616669616e_managed_psk" );
+    assert( parseBusctlServicePathForSsid( sampleBusctl, "Telekom-9b8ce4" ) == "/net/connman/service/wifi_08e9f686864c_54656c656b6f6d2d396238636534_managed_psk" );
+    assert( parseBusctlServicePathForSsid( sampleBusctl, "NonExistent" ).empty() );
+
+    // Adjacent ethernet service ("online", "Wired") must not pollute Wi-Fi scan or trigger false connected state on idle wifi
+    std::string mixedBusctl =
+        "a(oa{sv}) 2 \"/net/connman/service/wifi_08e9f686864c_53616669616e_managed_psk\" 24 "
+        "\"Type\" s \"wifi\" \"State\" s \"idle\" \"Name\" s \"Safian\" "
+        "\"/net/connman/service/ethernet_001122334455_cable\" 18 "
+        "\"Type\" s \"ethernet\" \"State\" s \"online\" \"Name\" s \"Wired\" ";
+    auto wifiOnly = parseBusctlConnmanServices( mixedBusctl );
+    assert( wifiOnly.size() == 1 && wifiOnly[0] == "Safian" );
+    assert( parseBusctlConnectedService( mixedBusctl ).empty() );
+
+    std::string cmCfg = formatConnmanConfig( "MyWifi", "Pass$123;!\n" );
+    assert( cmCfg.find( "Name = MyWifi\n" ) != std::string::npos );
+    assert( cmCfg.find( "Passphrase = Pass$123;!\n" ) != std::string::npos );
+    assert( cmCfg.find( "\\$" ) == std::string::npos );
+
+    std::string iwdPsk = formatIwdPskConfig( "Pass$123;!\n" );
+    assert( iwdPsk.find( "Passphrase=Pass$123;!\n" ) != std::string::npos );
+    assert( iwdPsk.find( "\\$" ) == std::string::npos );
+    assert( iwdPsk.find( "AutoConnect=true" ) != std::string::npos );
+
+    std::string iwdTree =
+        "/\n/net\n/net/connman\n/net/connman/iwd\n/net/connman/iwd/0\n/net/connman/iwd/0/7\n/net/connman/iwd/0/7/53616669616e_psk\n";
+    assert( parseIwdStationPath( iwdTree ) == "/net/connman/iwd/0/7" );
+    assert( parseIwdStationPath( "/\n/net\n" ).empty() );
+
+    assert( formatIwdNetworkFilename( "Safian", true ) == "/var/lib/iwd/Safian.psk" );
+    assert( formatIwdNetworkFilename( "Guest Wifi", false ) == "/var/lib/iwd/Guest Wifi.open" );
+    assert( formatIwdNetworkFilename( "../bad/ssid", true ) == "/var/lib/iwd/=" + stringToHex( "../bad/ssid" ) + ".psk" );
+    assert( formatIwdNetworkFilename( ".hidden", true ) == "/var/lib/iwd/=" + stringToHex( ".hidden" ) + ".psk" );
+
     // 5. Brightness scaling
     assert( formatBrightnessPercentToValue( 0 ) == 20 );
     assert( formatBrightnessPercentToValue( 100 ) == 255 );
