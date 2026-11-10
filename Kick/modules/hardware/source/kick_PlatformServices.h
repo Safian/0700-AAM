@@ -79,6 +79,7 @@ namespace mt
         virtual bool connectToWiFi( const juce::String& ssid, const juce::String& password ) = 0;
         virtual bool disconnectWiFi() = 0;
         virtual void getWiFiIP( sysEthInfo& info ) = 0;
+        virtual juce::String getConnectedWiFiSSID() { return {}; }
 
         // System actions
         virtual int factoryReset() = 0;

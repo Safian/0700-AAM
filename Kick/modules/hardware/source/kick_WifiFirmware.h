@@ -36,6 +36,7 @@ namespace mt
         void                            displayWiFiNetworks( const std::vector<juce::String>& networks );
         bool                            connectToWiFi( const juce::String& ssid, const juce::String& password, int priority = 5 );
         bool                            disconnectWiFi();
+        juce::String                    getConnectedWiFiSSID();
 
         static WifiManager* getWifiInterface()
         {
