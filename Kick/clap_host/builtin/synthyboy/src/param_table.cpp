@@ -22,13 +22,15 @@ constexpr const char* const kOffOn[] = { "Off", "On" };
 // choice lists that grew in version 3 only ever get entries appended (docs/ui-design/13-new-keys.md R3, section 3)
 constexpr const char* const kWavetables[kNumWavetableChoices] = {
     "Sine", "Saw", "Square", "Triangle", "Pulse 25%", "Saw to Square", "Sine to Saw", "Harmonic Series", "Odd Harmonics",
-    "Formant Sweep", "FM Sweep", "PWM Sweep", "Bell Partials", "Preset table"
+    "Formant Sweep", "FM Sweep", "PWM Sweep", "Bell Partials", "Preset table", "Saw Down" // "Saw Down": GROUPB WP-18, appended after the Preset table
 };
 constexpr const char* const kLfoShapes[kNumLfoShapes + 1] = {
     "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Pulse 25%", "Steps Up", "Steps Down", "Random Steps", "Exp Up", "Exp Down",
     "Half Sine", "Custom"
 };
 static_assert (kLfoShapeCustom == kNumLfoShapes, "the Custom LFO shape is the entry after the built-in ones");
+constexpr const char* const kSubWaveforms[] = { "Sine", "Rounded Rect", "Triangle", "Saw", "Square", "Pulse" };
+constexpr const char* const kNoiseSamples[] = { "White Noise", "Pink Noise", "Brown Noise", "Geiger", "Tape Hiss", "Vinyl Clicks", "Digital Hash", "Velvet Noise", "Atmosphere" };
 constexpr const char* const kOscDestinations[] = { "Filter 1", "Filter 2", "Filters 1+2", "Effects only", "Direct out", "Filter blend", "None" };
 constexpr const char* const kStackStyles[] = {
     "Unison", "Center Drop 12", "Center Drop 24", "Octaves", "Two Octaves", "Power Chord", "Two Power Chords", "Major Chord",
@@ -38,15 +40,38 @@ constexpr const char* const kMorphTypes[] = {
     "None", "Vocode", "Formant Scale", "Harmonic Stretch", "Inharmonic Stretch", "Smear", "Random Amplitudes", "Low Pass",
     "High Pass", "Phase Disperse", "Shepard Tone", "Time Skew"
 };
+// Block B21 (13-new-keys.md 4.22): the Serum 2 warp modes appended to the shared warp list of both slots (index 11 on). X and Y are the
+// two other oscillators in the order of the Vital FM / RM entries. The legacy ids 0 .. 10 never move (legacyChoiceMax).
+#define SB_WARP_APPENDED(X, Y)                                                                                                                   \
+    "Sync Var", "Bend +", "Bend -", "Bend +/-", "Asym +", "Asym -", "Asym +/-", "Flip", "Mirror", "Remap 1", "Remap 2", "Remap 3", "Remap 4",     \
+    "Odd/Even", "Filter LPF", "Filter HPF", "Dist Tube", "Dist Soft Clip", "Dist Hard Clip", "Dist Diode 1", "Dist Diode 2",                      \
+    "Dist Linear Fold", "Dist Sine Fold", "Dist Zero-Square", "Dist Asym", "Dist Rectify", "Dist Sine Shaper", "Dist Stomp Box",                \
+    "Dist Tape Sat.", "Dist Soft Sat.", "FM Thru-Zero from " X, "FM Thru-Zero from " Y, "FM Exp from " X, "FM Exp from " Y,                      \
+    "FM Linear from " X, "FM Linear from " Y, "PD from " X, "PD from " Y, "PD Self", "AM from " X, "AM from " Y,                                 \
+    /* GROUPB WP-06: from the Noise, Sub, Filter 1, Filter 2 (entries 52 .. 75) */                                                               \
+    "FM Thru-Zero from Noise", "FM Thru-Zero from Sub", "FM Thru-Zero from Filter 1", "FM Thru-Zero from Filter 2",                              \
+    "FM Exp from Noise", "FM Exp from Sub", "FM Exp from Filter 1", "FM Exp from Filter 2",                                                      \
+    "FM Linear from Noise", "FM Linear from Sub", "FM Linear from Filter 1", "FM Linear from Filter 2",                                          \
+    "PD from Noise", "PD from Sub", "PD from Filter 1", "PD from Filter 2", "AM from Noise", "AM from Sub", "AM from Filter 1", "AM from Filter 2", \
+    "RM from Noise", "RM from Sub", "RM from Filter 1", "RM from Filter 2",                                                                       \
+    /* GROUPC WP-12 (13-new-keys.md 4.38): the spectral warps of the spectral oscillator (entries 76 .. 98; inert on the other oscillator types) */       \
+    "Spectral Comb", "Add Harmonics", "Add Subharmonics", "Spectral Detune", "Shepard Narrow", "Shepard Filter", "Peak Octave Down", "Peak Octave Up",  \
+    "Peak Harmonic Down", "Peak Harmonic Up", "Spectral Gate", "Spectral Pitch Shift", "Phase Twist", "Spectral Spread", "Spectral Shift",             \
+    "Spectral Smear", "Spectral Mirror", "Mask from " X, "Mask from " Y, "Mask from Noise", "Vocode from " X, "Vocode from " Y, "Vocode from Noise"
 constexpr const char* const kWarpTypes1[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
-                                              "FM from Osc 2", "FM from Osc 3", "RM from Osc 2", "RM from Osc 3" };
+                                              "FM from Osc 2", "FM from Osc 3", "RM from Osc 2", "RM from Osc 3",
+                                              SB_WARP_APPENDED("Osc 2", "Osc 3") };
 constexpr const char* const kWarpTypes2[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
-                                              "FM from Osc 1", "FM from Osc 3", "RM from Osc 1", "RM from Osc 3" };
+                                              "FM from Osc 1", "FM from Osc 3", "RM from Osc 1", "RM from Osc 3",
+                                              SB_WARP_APPENDED("Osc 1", "Osc 3") };
 constexpr const char* const kWarpTypes3[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
-                                              "FM from Osc 1", "FM from Osc 2", "RM from Osc 1", "RM from Osc 2" };
+                                              "FM from Osc 1", "FM from Osc 2", "RM from Osc 1", "RM from Osc 2",
+                                              SB_WARP_APPENDED("Osc 1", "Osc 2") };
 constexpr const char* const kFilterModels[] = { "Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser", "Multi SVF",
                                                 "Slope", "EQ 6 dB", "Ring Mod", "Sample Hold", "Smear", "French LP", "Add Bass", "Scream",
-                                                "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF" };
+                                                "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF",
+                                                // WP-03 (FILTERS80): the remaining 43 Serum filter types
+                                                "Normal", "Multi Morph", "Flanges", "Misc", "New" };
 constexpr const char* const kFilterStyles[] = { "Style A (12 dB)", "Style B (24 dB)", "Style C (notch swap)", "Style D (dual notch)",
                                                 "Style E (band peak notch)", "Style F (shelf)", "Style G", "Style H", "Style I", "Style J",
                                                 "Style K", "Style L" };
@@ -57,11 +82,13 @@ constexpr const char* const kDivisions[] = { "Freeze", "32 bars", "16 bars", "8 
 constexpr const char* const kLfoSyncTypes[] = { "Retrigger", "Free-run", "Envelope", "Sustain envelope", "Loop at point", "Loop and hold" };
 constexpr const char* const kRandomSyncTypes[] = { "Retrigger", "Free-run" };
 constexpr const char* const kRandomStyles[] = { "Perlin", "Sample and hold", "Sine interpolate", "Lorenz attractor", "Rossler attractor" };
-constexpr const char* const kDelayStyles[] = { "Mono", "Stereo", "Ping pong", "Mid ping pong" };
+constexpr const char* const kDelayStyles[] = { "Mono", "Stereo", "Ping pong", "Mid ping pong",
+                                                // appended (Serum 2 manual p.166): both delays mono and in series
+                                                "Tap->Delay" };
 constexpr const char* const kCompressorBands[] = { "Multiband", "Low band", "High band", "Single band" };
 constexpr const char* const kDistortionTypes[] = { "Soft clip", "Hard clip", "Linear fold", "Sine fold", "Bit crush", "Down sample",
                                                    // appended in B17 (13-new-keys.md 4.17, G75)
-                                                   "Tube", "Diode 1", "Diode 2", "Zero square", "Asym", "Rectify", "X-Shaper", "X-Shaper (Asym)" };
+                                                   "Tube", "Diode 1", "Diode 2", "Zero-Square", "Asym", "Rectify", "X-Shaper", "X-Shaper (Asym)" };
 constexpr const char* const kDistortionFilterOrder[] = { "None", "Pre", "Post" };
 constexpr const char* const kEqLowModes[] = { "Shelf", "High pass" };
 constexpr const char* const kEqBandModes[] = { "Peak", "Notch" };
@@ -81,7 +108,11 @@ constexpr const char* const kScaleTypes[] = { "Chromatic (off)", "Major", "Natur
                                               "Hirajoshi" };
 constexpr const char* const kScaleModes[] = { "Conform", "Mark only" };
 constexpr const char* const kTuningScales[] = { "12-TET", "Pythagorean", "Just intonation", "User file" };
-constexpr const char* const kOscTypes[] = { "Wavetable", "Sample" };
+constexpr const char* const kOscTypes[] = { "Wavetable", "Sample",
+                                             // GROUPC WP-11 (B28): the granular oscillator, WP-12 (B29): the spectral oscillator
+                                             "Granular", "Spectral",
+                                             // GROUPC WP-13 (B30): the multisample oscillator (an SFZ instrument)
+                                             "Multisample" };
 constexpr const char* const kLoopModes[] = { "One-shot", "Forward loop", "Reverse loop", "Forward/reverse loop", "Tailed" };
 constexpr const char* const kFadeEdges[] = { "None", "1 ms", "2 ms", "4 ms", "8 ms", "16 ms", "32 ms", "64 ms", "128 ms" };
 constexpr const char* const kSliceModes[] = { "Off", "Auto", "Manual" };
@@ -92,7 +123,7 @@ constexpr const char* const kBusDestinations[] = { "Main", "Direct", "Other bus"
 constexpr const char* const kRacks[] = { "Main", "Bus 1", "Bus 2", "Splitter L/H low", "Splitter L/H high", "Splitter L/M/H low",
                                          "Splitter L/M/H mid", "Splitter L/M/H high", "Splitter M/S mid", "Splitter M/S side" };
 constexpr const char* const kConvolveImpulses[] = { "None", "Preset IR" };
-constexpr const char* const kRemapSlots[] = { "Remap 1", "Remap 2", "Remap 3", "Remap 4" };
+constexpr const char* const kRemapSlots[] = { "Curve 1", "Curve 2", "Curve 3", "Curve 4" }; // (not Serum's warp modes Remap 1-4, 13-new-keys.md 4.14)
 constexpr const char* const kPitchModes[] = { "Semitones", "Harmonics", "Ratio", "Step" };
 constexpr const char* const kUnisonModes[] = { "Linear", "Super", "Exp", "Inv", "Random" };
 constexpr const char* const kUnisonStackRepeats[] = { "1x", "2x", "3x" };
@@ -100,6 +131,33 @@ constexpr const char* const kPhaseMemories[] = { "All Voices", "Contiguous", "Pe
 // B17: reverb algorithms and room modes (13-new-keys.md 4.17, G77)
 constexpr const char* const kReverbTypes[] = { "Vital", "Plate", "Hall", "Vintage", "Nitrous", "Basin" };
 constexpr const char* const kReverbRooms[] = { "Space", "Marble", "Rectangle", "Hexagon", "Box" };
+constexpr const char* const kSameNoteModes[] = { "Steal", "Stack", "Ignore" };
+constexpr const char* const kVoiceStealPriorities[] = { "Newest", "Oldest", "Highest", "Lowest", "Velocity" };
+// B20: voice override choices (13-new-keys.md 4.20, G5)
+constexpr const char* const kVoiceOverrides[] = { "Kill", "Steal" };
+// B22: the effect instance pool (13-new-keys.md 4.23, 18-FX-INSTANCES.md): the type of a slot (the module index of instance 0 plus one) and its racks
+constexpr const char* const kFxInstanceTypes[] = { "None", "Chorus", "Compressor", "Delay", "Distortion", "EQ", "FX Filter", "Flanger", "Phaser",
+                                                   "Reverb", "Hyper/Dimension", "Utility", "Bode", "Convolve" };
+constexpr const char* const kPoolRacks[] = { "Main", "Bus 1", "Bus 2" };
+// B23 (GROUPA1, WP-04): the noise source plays a generator or a user sample
+constexpr const char* const kNoiseTypes[] = { "Noise", "Sample" };
+// B24 (GROUPA1, WP-09): the MPE axis mappings to the macros (Serum 2 manual p.326)
+constexpr const char* const kMpeMacroMaps[] = { "Off", "XYZ -> Macro 1, 2, 3", "YZ -> Macro 1, 2" };
+// B27 (GROUPB, WP-05): the Ratio SRC of an oscillator (Serum 2 manual p.30) and its smooth interpolation of the frame position
+constexpr const char* const kRatioSources[] = { "Base note", "Osc 1", "Osc 2", "Osc 3", "Sub" };
+// B28 (GROUPC, WP-11): the granular oscillator (Serum 2 manual p.85 - 103, 13-new-keys.md 4.37)
+constexpr const char* const kGrainWindows[] = { "Hann", "Welch", "Gaussian", "Blackman-Harris", "Sinc", "Tukey", "Triangle", "Trapezoid", "ExpDec", "Exp Dec Rev" };
+constexpr const char* const kGrainRateModes[] = { "Free", "BPM Sync", "Grains" };
+constexpr const char* const kGrainLengthModes[] = { "Free", "BPM Sync", "Percent" };
+constexpr const char* const kGrainDivisions[] = { "1/1", "1/1T", "1/1.", "1/2", "1/2T", "1/2.", "1/4", "1/4T", "1/4.", "1/8", "1/8T", "1/8.", "1/16", "1/16T", "1/16.",
+                                                  "1/32", "1/32T", "1/32.", "1/64", "1/64T", "1/64.", "1/128", "1/128T", "1/128." };
+constexpr const char* const kSpawnPatterns[] = { "Together", "Even", "Exp", "Random" };
+constexpr const char* const kGrainYAxes[] = { "None", "Level", "Warp", "Warp 2", "Density", "Grain Length", "Window Amt", "Window Skew", "Rand Offset", "Rand Dir",
+                                              "Rand Pitch", "Rand Length", "Rand Pan", "Rand Gain", "Rand Window", "Rand Skew", "Rand Warp", "Rand Warp 2" };
+// B29 (GROUPC, WP-12): the spectral oscillator (Serum 2 manual p.104 - 122, 13-new-keys.md 4.38)
+constexpr const char* const kSpecYAxes[] = { "None", "Level", "Warp", "Warp 2", "Spec Flt Cutoff", "Spec Flt Wet/Dry", "Freq Lo", "Freq Hi" };
+// B26 (GROUPA2, WP-07): the voice control LFO scaling is set as a percentage of the time or as a rate (Serum 2 manual p.318)
+constexpr const char* const kVoiceCtlLfoScaleModes[] = { "Percent", "Rate" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -272,6 +330,21 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     cont ("eq." KEY ".gain", "EQ " NAME " Gain", "FX / EQ", -15.0f, 15.0f, 0.0f, Unit::dB, kMod),                                                \
     SB_PCT ("eq." KEY ".resonance", "EQ " NAME " Resonance", "FX / EQ", 30.0f, kMod)
 
+// B27 (GROUPB, WP-05): per oscillator the Ratio SRC, the smooth interpolation and the slice destination of Play Single Slice
+#define SB_OSC_EXTRA2(N)                                                                                                                         \
+    pick ("osc" #N ".ratio_src", "Osc " #N " Ratio Source", "Oscillator " #N, kRatioSources, 0),                                                \
+    onOff ("osc" #N ".smooth_interp", "Osc " #N " Smooth Interpolation", "Oscillator " #N, false),                                   \
+    SB_PCT_RANGE ("osc" #N ".sample.slice", "Osc " #N " Sample Slice Select", "Osc " #N " / Sample", -100.0f, 100.0f, 0.0f, kMod)
+
+// B26 (GROUPA2, WP-07): one step of the voice control sequence (Serum 2 manual p.316 - 318): the six per voice values of step N
+#define SB_VCTL_STEP(N)                                                                                                                          \
+    SB_PCT_RANGE ("voicectl.s" #N ".pan", "Voice Control Step " #N " Pan", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, kAuto),            \
+    cont ("voicectl.s" #N ".detune", "Voice Control Step " #N " Detune", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, Unit::cents, kAuto), \
+    SB_PCT_RANGE ("voicectl.s" #N ".cutoff", "Voice Control Step " #N " Cutoff", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, kAuto),      \
+    SB_PCT_RANGE ("voicectl.s" #N ".env", "Voice Control Step " #N " Envelope Time", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, kAuto), \
+    SB_PCT_RANGE ("voicectl.s" #N ".mod1", "Voice Control Step " #N " Mod 1", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, kAuto),         \
+    SB_PCT_RANGE ("voicectl.s" #N ".mod2", "Voice Control Step " #N " Mod 2", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, kAuto)
+
 // ---------------------------------------------------------------------------------------------------------------------
 // repeated groups of the keys appended in state version 3 (docs/ui-design/13-new-keys.md, blocks B01 .. B12)
 // ---------------------------------------------------------------------------------------------------------------------
@@ -290,6 +363,15 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     cont ("env" #N ".decay_beats", "Env " #N " Decay (Beats)", "Envelope " #N " / Beat Units", 0.0f, 16.0f, 1.0f, Unit::beats, kMod, 3, 0.3f), \
     cont ("env" #N ".release_beats", "Env " #N " Release (Beats)", "Envelope " #N " / Beat Units", 0.0f, 16.0f, 0.5f, Unit::beats, kMod, 3,    \
           0.3f)
+
+// B31 (REMAINDER item 1, 13-new-keys.md 4.41): per slot of the modulation matrix the RISE / FALL slew limiter on the source (Serum 2 manual p.211) and the DELAY before
+// the connection acts (the DelayOffset / DelayBeatSync of the Serum slots). All modulatable, like the other time controls.
+#define SB_SLOT_SLEW(S)                                                                                                                          \
+    cont ("mod" #S ".rise", "Mod " #S " Rise", "Mod Matrix / Slot " #S, 0.0f, 5000.0f, 0.0f, Unit::ms, kMod, 1, 0.3f),                           \
+    cont ("mod" #S ".fall", "Mod " #S " Fall", "Mod Matrix / Slot " #S, 0.0f, 5000.0f, 0.0f, Unit::ms, kMod, 1, 0.3f),                           \
+    cont ("mod" #S ".delay", "Mod " #S " Delay", "Mod Matrix / Slot " #S, 0.0f, 4000.0f, 0.0f, Unit::ms, kMod, 1, 0.4f),                        \
+    cont ("mod" #S ".delay_beats", "Mod " #S " Delay (Beats)", "Mod Matrix / Slot " #S, 0.0f, 8.0f, 0.0f, Unit::beats, kMod, 3, 0.4f),           \
+    onOff ("mod" #S ".delay_sync", "Mod " #S " Delay Tempo Sync", "Mod Matrix / Slot " #S, false)
 
 #define SB_SLOT_AUX(S)                                                                                                                           \
     modSource ("mod" #S ".aux_source", "Mod " #S " Aux Source", "Mod Matrix / Slot " #S),                                                        \
@@ -340,6 +422,78 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     cont ("osc" #N ".warp2.phase", "Osc " #N " Warp 2 Phase", "Osc " #N " / Warp 2", 0.0f, 360.0f, 180.0f, Unit::degrees, kMod, 0),             \
     SB_PCT_RANGE ("osc" #N ".warp2.spread", "Osc " #N " Warp 2 Spread", "Osc " #N " / Warp 2", -100.0f, 100.0f, 0.0f, kMod)
 
+// B28 (GROUPC, WP-11): per oscillator the type specific keys of the granular oscillator (the region, loop, scan, slice and unison keys are the oscN.sample.* ones)
+#define SB_OSC_GRAN(N)                                                                                                                           \
+    SB_PCT ("osc" #N ".gran.window_amount", "Osc " #N " Grain Window Amount", "Osc " #N " / Granular", 50.0f, kMod),                             \
+    SB_PCT_RANGE ("osc" #N ".gran.window_skew", "Osc " #N " Grain Window Skew", "Osc " #N " / Granular", -100.0f, 100.0f, 0.0f, kMod),         \
+    pick ("osc" #N ".gran.window_shape", "Osc " #N " Grain Window Shape", "Osc " #N " / Granular", kGrainWindows, 0),                            \
+    pick ("osc" #N ".gran.density_mode", "Osc " #N " Grain Density Mode", "Osc " #N " / Granular", kGrainRateModes, 0),                          \
+    cont ("osc" #N ".gran.density", "Osc " #N " Grain Density", "Osc " #N " / Granular", 0.1f, 1000.0f, 20.0f, Unit::Hz, kMod, 1, 0.3f),         \
+    pick ("osc" #N ".gran.density_sync", "Osc " #N " Grain Density Division", "Osc " #N " / Granular", kGrainDivisions, 12),                     \
+    whole ("osc" #N ".gran.density_grains", "Osc " #N " Grain Density Grains", "Osc " #N " / Granular", 1.0f, 64.0f, 8.0f, Unit::none, kAuto),  \
+    pick ("osc" #N ".gran.length_mode", "Osc " #N " Grain Length Mode", "Osc " #N " / Granular", kGrainLengthModes, 0),                          \
+    cont ("osc" #N ".gran.length", "Osc " #N " Grain Length", "Osc " #N " / Granular", 1.0f, 4000.0f, 100.0f, Unit::ms, kMod, 1, 0.3f),         \
+    pick ("osc" #N ".gran.length_sync", "Osc " #N " Grain Length Division", "Osc " #N " / Granular", kGrainDivisions, 12),                       \
+    cont ("osc" #N ".gran.length_percent", "Osc " #N " Grain Length Percent", "Osc " #N " / Granular", 5.0f, 1000.0f, 200.0f, Unit::percent, kMod, 0, 0.5f), \
+    onOff ("osc" #N ".gran.jump_start", "Osc " #N " Grain Jump Start", "Osc " #N " / Granular", true),                                           \
+    whole ("osc" #N ".gran.max_grains", "Osc " #N " Grain Max Grains", "Osc " #N " / Granular", 1.0f, 128.0f, 64.0f, Unit::none, kAuto),        \
+    onOff ("osc" #N ".gran.loop_grains", "Osc " #N " Grain Loop Grains", "Osc " #N " / Granular", false),                                        \
+    onOff ("osc" #N ".gran.manual", "Osc " #N " Grain Manual Position", "Osc " #N " / Granular", false),                                         \
+    SB_PCT ("osc" #N ".gran.position", "Osc " #N " Grain Position", "Osc " #N " / Granular", 0.0f, kMod),                                        \
+    onOff ("osc" #N ".gran.scan_keytrack", "Osc " #N " Grain Scan Key Track", "Osc " #N " / Granular", false),                                   \
+    SB_PCT ("osc" #N ".gran.rand_offset", "Osc " #N " Grain Random Offset", "Osc " #N " / Granular", 0.0f, kMod),                                \
+    SB_PCT ("osc" #N ".gran.rand_dir", "Osc " #N " Grain Random Direction", "Osc " #N " / Granular", 0.0f, kMod),                                \
+    onOff ("osc" #N ".gran.reverse_grains", "Osc " #N " Grain Reverse Grains", "Osc " #N " / Granular", false),                                  \
+    cont ("osc" #N ".gran.rand_pitch", "Osc " #N " Grain Random Pitch", "Osc " #N " / Granular", 0.0f, 24.0f, 0.0f, Unit::semitone, kMod, 2, 0.4f), \
+    SB_PCT ("osc" #N ".gran.rand_length", "Osc " #N " Grain Random Length", "Osc " #N " / Granular", 0.0f, kMod),                                \
+    SB_PCT ("osc" #N ".gran.rand_pan", "Osc " #N " Grain Random Pan", "Osc " #N " / Granular", 0.0f, kMod),                                      \
+    SB_PCT ("osc" #N ".gran.rand_level", "Osc " #N " Grain Random Level", "Osc " #N " / Granular", 0.0f, kMod),                                  \
+    SB_PCT ("osc" #N ".gran.rand_window", "Osc " #N " Grain Random Window", "Osc " #N " / Granular", 0.0f, kMod),                               \
+    SB_PCT ("osc" #N ".gran.rand_skew", "Osc " #N " Grain Random Skew", "Osc " #N " / Granular", 0.0f, kMod),                                    \
+    SB_PCT ("osc" #N ".gran.rand_warp", "Osc " #N " Grain Random Warp", "Osc " #N " / Granular", 0.0f, kMod),                                    \
+    SB_PCT ("osc" #N ".gran.rand_warp2", "Osc " #N " Grain Random Warp 2", "Osc " #N " / Granular", 0.0f, kMod),                                \
+    pick ("osc" #N ".gran.spawn_pattern", "Osc " #N " Grain Spawn Pattern", "Osc " #N " / Granular", kSpawnPatterns, 0),                         \
+    pick ("osc" #N ".gran.y_axis", "Osc " #N " Grain Y Axis", "Osc " #N " / Granular", kGrainYAxes, 0),                                          \
+    SB_PCT ("osc" #N ".gran.xy_y", "Osc " #N " Grain Y Position", "Osc " #N " / Granular", 50.0f, kMod)
+
+// B29 (GROUPC, WP-12): per oscillator the type specific keys of the spectral oscillator (the region, loop, scan, slice and unison keys are the oscN.sample.* ones)
+#define SB_OSC_SPEC(N)                                                                                                                           \
+    cont ("osc" #N ".spec.freq_lo", "Osc " #N " Spectral Freq Lo", "Osc " #N " / Spectral", 20.0f, 20000.0f, 20.0f, Unit::Hz, kMod, 0, 0.3f),     \
+    cont ("osc" #N ".spec.freq_hi", "Osc " #N " Spectral Freq Hi", "Osc " #N " / Spectral", 20.0f, 20000.0f, 20000.0f, Unit::Hz, kMod, 0, 0.3f), \
+    onOff ("osc" #N ".spec.lohi_smooth", "Osc " #N " Spectral Smooth Band Edges", "Osc " #N " / Spectral", true),                                \
+    onOff ("osc" #N ".spec.lohi_post_warp", "Osc " #N " Spectral Band After Warp", "Osc " #N " / Spectral", false),                              \
+    SB_PCT_RANGE ("osc" #N ".spec.cut", "Osc " #N " Spectral Filter Cut", "Osc " #N " / Spectral", -100.0f, 100.0f, 0.0f, kMod),                \
+    SB_PCT ("osc" #N ".spec.mix", "Osc " #N " Spectral Filter Mix", "Osc " #N " / Spectral", 100.0f, kMod),                                      \
+    cont ("osc" #N ".spec.freq_shift", "Osc " #N " Spectral Frequency Shift", "Osc " #N " / Spectral", -2000.0f, 2000.0f, 0.0f, Unit::Hz, kMod, 0), \
+    onOff ("osc" #N ".spec.manual", "Osc " #N " Spectral Manual Position", "Osc " #N " / Spectral", false),                                      \
+    SB_PCT ("osc" #N ".spec.position", "Osc " #N " Spectral Position", "Osc " #N " / Spectral", 0.0f, kMod),                                     \
+    onOff ("osc" #N ".spec.scan_keytrack", "Osc " #N " Spectral Scan Key Track", "Osc " #N " / Spectral", false),                                \
+    onOff ("osc" #N ".spec.phase_lock", "Osc " #N " Spectral Phase Lock", "Osc " #N " / Spectral", false),                                       \
+    onOff ("osc" #N ".spec.transients", "Osc " #N " Spectral Transients", "Osc " #N " / Spectral", false),                                       \
+    pick ("osc" #N ".spec.y_axis", "Osc " #N " Spectral Y Axis", "Osc " #N " / Spectral", kSpecYAxes, 0),                                        \
+    SB_PCT ("osc" #N ".spec.xy_y", "Osc " #N " Spectral Y Position", "Osc " #N " / Spectral", 50.0f, kMod)
+
+// B32 (REMAINDER item 2, 13-new-keys.md 4.42): per oscillator the wavetable as the spectral filter (Serum 2 manual p.120): the switch, the table (the list of oscN.wavetable, Preset table = the
+// table of the oscillator) and the frame position over its frames
+#define SB_OSC_SPECFLT(N)                                                                                                                        \
+    onOff ("osc" #N ".spec.flt_use", "Osc " #N " Spectral Filter From Wavetable", "Osc " #N " / Spectral", false),                              \
+    pick ("osc" #N ".spec.flt_table", "Osc " #N " Spectral Filter Wavetable", "Osc " #N " / Spectral", kWavetables, kWavetableSaw),             \
+    SB_PCT ("osc" #N ".spec.flt_frame", "Osc " #N " Spectral Filter Wavetable Frame", "Osc " #N " / Spectral", 0.0f, kMod)
+
+// B30 (GROUPC, WP-13): per oscillator the keys of the multisample oscillator (Serum 2 manual p.58 - 67; the instrument is content.instruments[], RAND is oscN.random_phase,
+// the pan, level, unison and warp keys are the oscillator's own)
+#define SB_OSC_MULTI(N)                                                                                                                          \
+    onOff ("osc" #N ".multi.override", "Osc " #N " Multisample Envelope Override", "Osc " #N " / Multisample", false),                          \
+    cont ("osc" #N ".multi.delay", "Osc " #N " Multisample Delay", "Osc " #N " / Multisample", 0.0f, 2000.0f, 0.0f, Unit::ms, kAuto, 1, 0.4f), \
+    cont ("osc" #N ".multi.attack", "Osc " #N " Multisample Attack", "Osc " #N " / Multisample", 0.0f, 10000.0f, 0.0f, Unit::ms, kAuto, 1, 0.3f), \
+    cont ("osc" #N ".multi.hold", "Osc " #N " Multisample Hold", "Osc " #N " / Multisample", 0.0f, 10000.0f, 0.0f, Unit::ms, kAuto, 1, 0.3f),  \
+    cont ("osc" #N ".multi.decay", "Osc " #N " Multisample Decay", "Osc " #N " / Multisample", 0.0f, 10000.0f, 500.0f, Unit::ms, kAuto, 1, 0.3f), \
+    SB_PCT ("osc" #N ".multi.sustain", "Osc " #N " Multisample Sustain", "Osc " #N " / Multisample", 100.0f, kAuto),                              \
+    cont ("osc" #N ".multi.release", "Osc " #N " Multisample Release", "Osc " #N " / Multisample", 0.0f, 10000.0f, 100.0f, Unit::ms, kAuto, 1, 0.3f), \
+    SB_PCT ("osc" #N ".multi.vel_track", "Osc " #N " Multisample Velocity Tracking", "Osc " #N " / Multisample", 100.0f, kAuto),                 \
+    onOff ("osc" #N ".multi.vel_override", "Osc " #N " Multisample Velocity Override", "Osc " #N " / Multisample", false),                        \
+    SB_PCT_RANGE ("osc" #N ".multi.timbre", "Osc " #N " Multisample Timbre", "Osc " #N " / Multisample", -100.0f, 100.0f, 0.0f, kMod)
+
 #define SB_SENDS(KEY, NAME, GROUP)                                                                                                               \
     SB_PCT (KEY ".bus1_send", NAME " Bus 1 Send", GROUP, 0.0f, kMod),                                                                            \
     SB_PCT (KEY ".bus2_send", NAME " Bus 2 Send", GROUP, 0.0f, kMod)
@@ -361,12 +515,25 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
 
 #define SB_FXRACK(KEY, NAME) pick (KEY ".rack", NAME " Rack", "FX / Racks", kRacks, 0)
 
+// B22: one slot of the effect instance pool. fxiNN.pKK is the normalised (0..1) value of the K-th parameter of the slot's type
+// (core/src/fx_types.cpp says which key that is); the generic host name is "FX Slot NN PKK", the UI shows the real labels.
+#define SB_FXI_P(N, K) cont ("fxi" #N ".p" #K, "FX Slot " #N " P" #K, "FX / Slot " #N, 0.0f, 1.0f, 0.0f, Unit::none, kMod, 3)
+#define SB_FXI(N)                                                                                                                                \
+    pick ("fxi" #N ".type", "FX Slot " #N " Type", "FX / Slot " #N, kFxInstanceTypes, 0),                                                         \
+    onOff ("fxi" #N ".on", "FX Slot " #N " On", "FX / Slot " #N, false),                                                                         \
+    pick ("fxi" #N ".rack", "FX Slot " #N " Rack", "FX / Slot " #N, kPoolRacks, 0),                                                              \
+    whole ("fxi" #N ".order", "FX Slot " #N " Order", "FX / Slot " #N, 0.0f, 1023.0f, 1023.0f, Unit::none, kAuto),                              \
+    SB_FXI_P (N, 01), SB_FXI_P (N, 02), SB_FXI_P (N, 03), SB_FXI_P (N, 04), SB_FXI_P (N, 05), SB_FXI_P (N, 06), SB_FXI_P (N, 07),              \
+    SB_FXI_P (N, 08), SB_FXI_P (N, 09), SB_FXI_P (N, 10), SB_FXI_P (N, 11), SB_FXI_P (N, 12), SB_FXI_P (N, 13), SB_FXI_P (N, 14),              \
+    SB_FXI_P (N, 15), SB_FXI_P (N, 16), SB_FXI_P (N, 17), SB_FXI_P (N, 18), SB_FXI_P (N, 19), SB_FXI_P (N, 20), SB_FXI_P (N, 21),              \
+    SB_FXI_P (N, 22), SB_FXI_P (N, 23), SB_FXI_P (N, 24)
+
 #define SB_OSC_PITCH_UNI(N)                                                                                                                      \
     pick ("osc" #N ".pitch_mode", "Osc " #N " Pitch Mode", "Oscillator " #N, kPitchModes, 0),                                                   \
     cont ("osc" #N ".pitch_coarse", "Osc " #N " Pitch Coarse", "Oscillator " #N, -48.0f, 48.0f, 0.0f, Unit::semitone, kMod, 2),               \
     onOff ("osc" #N ".pitch_track", "Osc " #N " Pitch Tracking", "Oscillator " #N, true),                                                       \
     onOff ("osc" #N ".pitch_bend_track", "Osc " #N " Pitch Bend Tracking", "Oscillator " #N, true),                                             \
-    cont ("osc" #N ".fixed_pitch", "Osc " #N " Fixed Pitch", "Oscillator " #N, 0.0f, 127.0f, 48.0f, Unit::none, kMod, 1),                         \
+    cont ("osc" #N ".fixed_pitch", "Osc " #N " Fixed Pitch", "Oscillator " #N, 0.0f, 127.0f, 0.0f, Unit::none, kMod, 1),                         \
     whole ("osc" #N ".transpose_snap", "Osc " #N " Transpose Snap", "Oscillator " #N, 0.0f, 8191.0f, 0.0f, Unit::none, kAuto),                 \
     pick ("osc" #N ".unison.mode", "Osc " #N " Unison Mode", "Oscillator " #N, kUnisonModes, 0),                                                \
     cont ("osc" #N ".unison.range", "Osc " #N " Unison Range", "Oscillator " #N, 0.0f, 48.0f, 2.0f, Unit::semitone, kMod, 1),                  \
@@ -719,11 +886,123 @@ constexpr ParamInfo kRaw[] = {
     SB_PCT ("reverb.er_size", "Reverb ER Size", "FX / Reverb", 50.0f, kAuto),
     SB_PCT ("reverb.diff_a", "Reverb Diffusion A", "FX / Reverb", 70.0f, kMod),
     SB_PCT ("reverb.diff_b", "Reverb Diffusion B", "FX / Reverb", 60.0f, kMod),
+
+    // --- B18: sub oscillator and noise colours/extras (G23, G38) (positions 1558..1575) ------------------------------------- ---------------------------------------------------
+    // sub oscillator
+    onOff ("sub.on", "Sub On", "Sub", false),
+    pick ("sub.waveform", "Sub Waveform", "Sub", kSubWaveforms, 0),
+    whole ("sub.octave", "Sub Octave", "Sub", -4.0f, 4.0f, -1.0f, Unit::none, kMod),
+    cont ("sub.tune", "Sub Coarse", "Sub", -48.0f, 48.0f, 0.0f, Unit::semitone, kMod),
+    SB_PCT ("sub.level", "Sub Level", "Sub", 50.0f, kMod),
+    SB_PCT_RANGE ("sub.pan", "Sub Pan", "Sub", -100.0f, 100.0f, 0.0f, kMod),
+    pick ("sub.destination", "Sub Destination", "Sub", kOscDestinations, 3),
+    onOff ("sub.mono", "Sub Mono", "Sub", false),
+    SB_PCT ("sub.filter_blend", "Sub Filter Blend", "Sub", 0.0f, kMod),
+    SB_SENDS ("sub", "Sub", "Sub"),
+
+    // noise colours and sample extras
+    pick ("noise.sample", "Noise Sample", "Noise", kNoiseSamples, 0),
+    whole ("noise.pitch", "Noise Pitch", "Noise", -48.0f, 48.0f, 0.0f, Unit::semitone, kMod),
+    cont ("noise.fine", "Noise Fine", "Noise", -100.0f, 100.0f, 0.0f, Unit::cents, kMod),
+    SB_PCT ("noise.phase", "Noise Phase", "Noise", 0.0f, kMod),
+    onOff ("noise.random_phase", "Noise Random Phase", "Noise", false),
+    onOff ("noise.keytrack", "Noise Keytrack", "Noise", false),
+    onOff ("noise.loop", "Noise Loop", "Noise", true),
+
+    // --- B15: voice-global (G12, G13, G14, G15, G16, G18) (positions 1576..1593) ---------------------------------------------------------
+    pick ("master.voice.same_note", "Master Same Note Mode", "Master / Voicing", kSameNoteModes, 0),
+    pick ("master.voice.steal_priority", "Master Voice Steal Priority", "Master / Voicing", kVoiceStealPriorities, 0),
+    onOff ("master.poly_legato", "Master Poly Legato", "Master", false),
+    whole ("master.bend_down_range", "Master Pitch Bend Down Range", "Master", 0.0f, 24.0f, 2.0f, Unit::semitone, kAuto),
+    onOff ("master.bend_down_link", "Master Pitch Bend Down Same As Up", "Master", true), // On: down = master.bend_range (version 2 sound)
+    SB_PCT ("master.stereo_spread", "Master Stereo Spread", "Master", 100.0f, kMod),
+    SB_PCT ("lfo1.swing", "LFO 1 Swing", "LFO 1", 0.0f, kMod),
+    SB_PCT ("lfo2.swing", "LFO 2 Swing", "LFO 2", 0.0f, kMod),
+    SB_PCT ("lfo3.swing", "LFO 3 Swing", "LFO 3", 0.0f, kMod),
+    SB_PCT ("lfo4.swing", "LFO 4 Swing", "LFO 4", 0.0f, kMod),
+    SB_PCT ("lfo5.swing", "LFO 5 Swing", "LFO 5", 0.0f, kMod),
+    SB_PCT ("lfo6.swing", "LFO 6 Swing", "LFO 6", 0.0f, kMod),
+    SB_PCT ("lfo7.swing", "LFO 7 Swing", "LFO 7", 0.0f, kMod),
+    SB_PCT ("lfo8.swing", "LFO 8 Swing", "LFO 8", 0.0f, kMod),
+    SB_PCT ("lfo9.swing", "LFO 9 Swing", "LFO 9", 0.0f, kMod),
+    SB_PCT ("lfo10.swing", "LFO 10 Swing", "LFO 10", 0.0f, kMod),
+    onOff ("quality.oversample_4x", "Quality 4x Oversampling", "Quality", false),
+    onOff ("quality.no_smoothing", "Quality No Smoothing", "Quality", false),
+
+    // --- B20: mod-amount: stereo routing and voice override (G5, positions 1594..1595) -------------------------------------------
+    SB_PCT ("master.stereo_routing", "Master Stereo Routing", "Master / Voicing", 100.0f, kMod),
+    pick ("master.voice_override", "Master Voice Override", "Master / Voicing", kVoiceOverrides, 0),
+
+    // --- B21: warp-env: the ENV 1 button of the Main / Direct channels (G39, positions 1596..1602) -----------------------------------
+    onOff ("sub.env1", "Sub Env 1", "Sub", true),
+    onOff ("osc1.env1", "Osc 1 Env 1", "Osc 1", true),
+    onOff ("osc2.env1", "Osc 2 Env 1", "Osc 2", true),
+    onOff ("osc3.env1", "Osc 3 Env 1", "Osc 3", true),
+    onOff ("noise.env1", "Noise Env 1", "Noise", true),
+    onOff ("filter1.env1", "Filter 1 Env 1", "Filter 1", true),
+    onOff ("filter2.env1", "Filter 2 Env 1", "Filter 2", true),
+
+    // --- B22: fx-instances: the pool of 16 effect instance slots, 28 keys each (G73, positions 1603..2050) ------------------------------
+    SB_FXI (01), SB_FXI (02), SB_FXI (03), SB_FXI (04), SB_FXI (05), SB_FXI (06), SB_FXI (07), SB_FXI (08),
+    SB_FXI (09), SB_FXI (10), SB_FXI (11), SB_FXI (12), SB_FXI (13), SB_FXI (14), SB_FXI (15), SB_FXI (16),
+
+    // --- B23: GROUPA1 WP-04: Sub phase, Noise stereo / filter / type / bounce (13-new-keys.md 4.27, positions 2051..2056) ---------------
+    SB_PCT ("sub.phase", "Sub Phase", "Sub", 0.0f, kMod),
+    onOff ("sub.phase_contiguous", "Sub Phase Contiguous", "Sub", false),
+    SB_PCT ("noise.stereo", "Noise Stereo", "Noise", 0.0f, kMod),
+    SB_PCT_RANGE ("noise.filter", "Noise Filter", "Noise", -100.0f, 100.0f, 0.0f, kMod),
+    pick ("noise.type", "Noise Type", "Noise", kNoiseTypes, 0),
+    onOff ("noise.bounce", "Noise Bounce", "Noise", false),
+
+    // --- B24: GROUPA1 WP-09: MPE completion (13-new-keys.md 4.28, positions 2057..2060) -----------------------------------------------
+    pick ("master.mpe.xyz_macro", "MPE XYZ to Macros", "Master / MPE", kMpeMacroMaps, 0),
+    onOff ("master.mpe.y_modwheel", "MPE Y to Mod Wheel", "Master / MPE", false),
+    onOff ("master.mpe.bend_to_x", "MPE Pitch Bend also to X", "Master / MPE", false),
+    onOff ("master.mpe.y_bipolar", "MPE Y Bi-directional", "Master / MPE", false),
+
+    // --- B25: GROUPA1 WP-10: delay left offset and reverb feedback (13-new-keys.md 4.29, positions 2061..2062) ----------------------
+    cont ("delay.offset_left", "Delay Offset Left", "FX / Delay", 0.25f, 4.0f, 1.0f, Unit::none, kMod, 3, 0.5f),
+    SB_PCT ("reverb.feedback", "Reverb Feedback", "FX / Reverb", 50.0f, kMod),
+    // --- B26: GROUPA2 WP-07: voice control (13-new-keys.md 4.30, positions 2063..2124) ---------------------------------------------------
+    whole ("voicectl.length", "Voice Control Sequence Length", "Voice Control", 1.0f, 8.0f, 8.0f, Unit::none, kAuto),
+    SB_VCTL_STEP (1), SB_VCTL_STEP (2), SB_VCTL_STEP (3), SB_VCTL_STEP (4), SB_VCTL_STEP (5), SB_VCTL_STEP (6), SB_VCTL_STEP (7), SB_VCTL_STEP (8),
+    SB_PCT ("voicectl.rand.pan", "Voice Control Random Pan", "Voice Control / Random", 0.0f, kAuto),
+    cont ("voicectl.rand.detune", "Voice Control Random Detune", "Voice Control / Random", 0.0f, 100.0f, 0.0f, Unit::cents, kAuto),
+    SB_PCT ("voicectl.rand.cutoff", "Voice Control Random Cutoff", "Voice Control / Random", 0.0f, kAuto),
+    SB_PCT ("voicectl.rand.env", "Voice Control Random Envelope Time", "Voice Control / Random", 0.0f, kAuto),
+    onOff ("voicectl.rand.detune10x", "Voice Control Random Detune x10", "Voice Control / Random", false),
+    cont ("voicectl.scale.env", "Voice Control Envelope Time Scaling", "Voice Control / Scaling", 25.0f, 400.0f, 100.0f, Unit::percent, kAuto, 1, 0.43f),
+    cont ("voicectl.scale.lfo", "Voice Control LFO Time Scaling", "Voice Control / Scaling", 25.0f, 400.0f, 100.0f, Unit::percent, kAuto, 1, 0.43f),
+    pick ("voicectl.scale.lfo_mode", "Voice Control LFO Scaling Mode", "Voice Control / Scaling", kVoiceCtlLfoScaleModes, 0),
+    onOff ("voicectl.osc.a", "Voice Control Applies to Osc A", "Voice Control / Targets", true),
+    onOff ("voicectl.osc.b", "Voice Control Applies to Osc B", "Voice Control / Targets", true),
+    onOff ("voicectl.osc.c", "Voice Control Applies to Osc C", "Voice Control / Targets", true),
+    onOff ("voicectl.osc.noise", "Voice Control Applies to Noise", "Voice Control / Targets", true),
+    onOff ("voicectl.osc.sub", "Voice Control Applies to Sub", "Voice Control / Targets", true),
+    // --- B27: GROUPB WP-05: oscillator extras (13-new-keys.md 4.33, positions 2125..2133) ------------------------------------------------
+    SB_OSC_EXTRA2 (1), SB_OSC_EXTRA2 (2), SB_OSC_EXTRA2 (3),
+    // --- B28: GROUPC WP-11: the granular oscillator (13-new-keys.md 4.37, positions 2134..2226) ---------------------------------------------
+    SB_OSC_GRAN (1), SB_OSC_GRAN (2), SB_OSC_GRAN (3),
+    // --- B29: GROUPC WP-12: the spectral oscillator (13-new-keys.md 4.38, positions 2227..2268) ----------------------------------------------
+    SB_OSC_SPEC (1), SB_OSC_SPEC (2), SB_OSC_SPEC (3),
+    // --- B30: GROUPC WP-13: the multisample oscillator (13-new-keys.md 4.39, positions 2269..2298) -------------------------------------------
+    SB_OSC_MULTI (1), SB_OSC_MULTI (2), SB_OSC_MULTI (3),
+    // --- B31: REMAINDER item 1: RISE / FALL / DELAY of every modulation slot (13-new-keys.md 4.41, positions 2299..2618) ---------------------------------
+    SB_SLOT_SLEW (01), SB_SLOT_SLEW (02), SB_SLOT_SLEW (03), SB_SLOT_SLEW (04), SB_SLOT_SLEW (05), SB_SLOT_SLEW (06), SB_SLOT_SLEW (07), SB_SLOT_SLEW (08),
+    SB_SLOT_SLEW (09), SB_SLOT_SLEW (10), SB_SLOT_SLEW (11), SB_SLOT_SLEW (12), SB_SLOT_SLEW (13), SB_SLOT_SLEW (14), SB_SLOT_SLEW (15), SB_SLOT_SLEW (16),
+    SB_SLOT_SLEW (17), SB_SLOT_SLEW (18), SB_SLOT_SLEW (19), SB_SLOT_SLEW (20), SB_SLOT_SLEW (21), SB_SLOT_SLEW (22), SB_SLOT_SLEW (23), SB_SLOT_SLEW (24),
+    SB_SLOT_SLEW (25), SB_SLOT_SLEW (26), SB_SLOT_SLEW (27), SB_SLOT_SLEW (28), SB_SLOT_SLEW (29), SB_SLOT_SLEW (30), SB_SLOT_SLEW (31), SB_SLOT_SLEW (32),
+    SB_SLOT_SLEW (33), SB_SLOT_SLEW (34), SB_SLOT_SLEW (35), SB_SLOT_SLEW (36), SB_SLOT_SLEW (37), SB_SLOT_SLEW (38), SB_SLOT_SLEW (39), SB_SLOT_SLEW (40),
+    SB_SLOT_SLEW (41), SB_SLOT_SLEW (42), SB_SLOT_SLEW (43), SB_SLOT_SLEW (44), SB_SLOT_SLEW (45), SB_SLOT_SLEW (46), SB_SLOT_SLEW (47), SB_SLOT_SLEW (48),
+    SB_SLOT_SLEW (49), SB_SLOT_SLEW (50), SB_SLOT_SLEW (51), SB_SLOT_SLEW (52), SB_SLOT_SLEW (53), SB_SLOT_SLEW (54), SB_SLOT_SLEW (55), SB_SLOT_SLEW (56),
+    SB_SLOT_SLEW (57), SB_SLOT_SLEW (58), SB_SLOT_SLEW (59), SB_SLOT_SLEW (60), SB_SLOT_SLEW (61), SB_SLOT_SLEW (62), SB_SLOT_SLEW (63), SB_SLOT_SLEW (64),
+    // --- B32: REMAINDER item 2: a wavetable as the spectral filter (13-new-keys.md 4.42, positions 2619..2627) ----------------------------------------------
+    SB_OSC_SPECFLT (1), SB_OSC_SPECFLT (2), SB_OSC_SPECFLT (3),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1558, "880 keys of state version 2 plus the 678 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17)");
+static_assert (kCount == 2628, "880 keys of state version 2 plus the 1671 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30 + 320 B31 + 9 B32)");
 
 struct Table
 {
@@ -752,8 +1031,8 @@ constexpr size_t countModulatable() noexcept
     return n;
 }
 
-static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable(),
-               "kNumModDestinations must be 1 + the number of kParamModulatable parameters");
+static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29 + 3 of block B30 + 256 of block B31 + 3 of block B32) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

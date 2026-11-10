@@ -55,13 +55,87 @@ enum EngineCaps : EngineCapsMask
     kCapFxDistortionExtras = 1ull << 32, // G75: distortion.type 6 .. 13, distortion.filter_keytrack, content.curves.shaper_a / shaper_b
     kCapFxPhaserDepth2    = 1ull << 33, // G76: phaser.depth2
     kCapFxReverbAlgos     = 1ull << 34, // G77: reverb.type, room, width, er_size, diff_a, diff_b
+    // block B18 (osc-extras, 13-new-keys.md 4.18); bits 35 and 36 follow the B17 bits
+    kCapSubOsc            = 1ull << 35, // G23: sub.* (sub oscillator)
+    kCapNoiseExtras       = 1ull << 36, // G38: noise.sample / pitch / fine / phase / random_phase / keytrack / loop
+    // block B15 (voiceglb, 13-new-keys.md 4.14); bits 37 .. 42 follow the B18 bits
+    kCapVoiceSteal       = 1ull << 37, // G12: master.voice.same_note, master.voice.steal_priority
+    kCapPolyLegato       = 1ull << 38, // G13: master.poly_legato
+    kCapBendDownRange    = 1ull << 39, // G14: master.bend_down_range
+    kCapStereoSpread     = 1ull << 40, // G15: master.stereo_spread
+    kCapLfoSwing         = 1ull << 41, // G16: lfo1.swing .. lfo10.swing
+    kCapQualityOptions   = 1ull << 42, // G18: quality.oversample_4x, quality.no_smoothing
+    // block B20 (mod-amount, 13-new-keys.md 4.20); bit 43 follows the B15 bits
+    kCapModAmount        = 1ull << 43, // B20: mod-amount (G1-G6: amount modulation, mod curves, stereo source, stereo routing, voice override)
+    // block B21 (warp-env, 13-new-keys.md 4.22); bits 44 .. 49 follow the B20 bit
+    kCapWarpAlt          = 1ull << 44, // G34: warp modes Sync Var, Bend +/-, Asym +/-, Flip, Mirror, Remap 1-4, Odd/Even (warp list entries 11 .. 24)
+    kCapWarpFilter       = 1ull << 45, // G35: warp modes Filter LPF / HPF (25, 26)
+    kCapWarpDist         = 1ull << 46, // G35: the 14 distortion warp modes (27 .. 40)
+    kCapWarpFm           = 1ull << 47, // G36: warp modes FM Thru-Zero / Exp / Linear (41 .. 46)
+    kCapWarpPdAm         = 1ull << 48, // G37: warp modes PD (47 .. 49) and AM (50, 51)
+    kCapEnv1Toggle       = 1ull << 49, // G39: sub.env1, oscN.env1, noise.env1, filterN.env1
+    // block B22 (fx-instances, 13-new-keys.md 4.23); bit 50 follows the B21 bits
+    kCapFxInstances      = 1ull << 50, // G73: the pool of 16 effect instance slots fxi01 .. fxi16 (several instances of one effect)
+    // block B23 (filters80, 13-new-keys.md); bit 51 follows the B22 bit
+    kCapFilterModels2    = 1ull << 51, // WP-03 (FILTERS80): filter models 22..26 and styles for the remaining 43 Serum types
+    // block B23 (GROUPA1, 13-new-keys.md 4.27); bits 52 .. 54 follow the WP-03 bit
+    kCapSubPhase         = 1ull << 52, // WP-04: sub.phase, sub.phase_contiguous
+    kCapNoiseColour      = 1ull << 53, // WP-04: noise.stereo, noise.filter (the colour samples White / Pink / Brown / Geiger)
+    kCapNoiseSample      = 1ull << 54, // WP-04: noise.type = Sample (a content sample as the noise source), noise.bounce
+    // block B24 (GROUPA1, 13-new-keys.md 4.28); bit 55
+    kCapMpeRouting       = 1ull << 55, // WP-09: master.mpe.xyz_macro / y_modwheel / bend_to_x / y_bipolar
+    // block B25 (GROUPA1, 13-new-keys.md 4.29); bits 56 and 57
+    kCapFxDelayOffsetLeft = 1ull << 56, // WP-10: delay.offset_left
+    kCapReverbFeedback   = 1ull << 57, // WP-10: reverb.feedback (Nitrous, Basin)
+    // block B26 (GROUPA2, 13-new-keys.md 4.30); bits 58 and 59
+    kCapVoiceControl     = 1ull << 58, // WP-07: voicectl.* (per voice pan / detune / cutoff / envelope time, randomisation, envelope and LFO scaling, oscillator mask)
+    kCapVoiceSources     = 1ull << 59, // WP-07: the modulation sources Voice Index, Voice Mod 1, Voice Mod 2 (choice values 40 .. 42)
+    // block B27 (GROUPB, 13-new-keys.md 4.33); bit 60
+    kCapOscExtras2       = 1ull << 60, // WP-05: oscN.ratio_src, oscN.smooth_interp, oscN.sample.slice
+    // GROUPB WP-06 (13-new-keys.md 4.34): choices only, no keys; bits 61 and 62
+    kCapModSources2      = 1ull << 61, // WP-06: the modulation sources 43 .. 57 (Oscillator A .. Fixed)
+    kCapWarpSources      = 1ull << 62, // WP-06: the warp modes 52 .. 75 (FM / PD / AM / RM from the Noise, Sub, Filter 1, Filter 2)
+    // GROUPB WP-18 (13-new-keys.md 4.36): a choice only; bit 63, the last one
+    kCapWavetableSawDown = 1ull << 63, // WP-18: oscN.wavetable = 14 "Saw Down" (the built-in falling saw of Vital's Init table)
 };
+
+// ---- the second capability word (GROUPC, 13-new-keys.md 4.37): the 64 bits above are all in use, so the capabilities of the new oscillator types live in a
+// second word. IEngine::capabilities2 () reports it (a new engine reports none), requiredCaps2 () / requiredCapsForValue2 () name the bits a key / a value needs,
+// supportsParam () needs both words, the UI dims with both. Word 1 is untouched: every earlier bit keeps its value.
+using EngineCaps2Mask = uint64_t;
+
+enum EngineCaps2 : EngineCaps2Mask
+{
+    kCap2None            = 0,
+    kCap2Granular        = 1ull << 0, // WP-11 (B28): oscN.type = Granular, oscN.gran.*
+    kCap2Spectral        = 1ull << 1, // WP-12 (B29): oscN.type = Spectral, oscN.spec.*
+    kCap2SpectralWarps   = 1ull << 2, // WP-12: the spectral warp modes 76 .. 96 of the shared warp list
+    kCap2Multisample     = 1ull << 3, // WP-13 (B30): oscN.type = Multisample, oscN.multi.*, content.instruments
+    // block B31 (REMAINDER, 13-new-keys.md 4.41): the per slot RISE / FALL / DELAY of the modulation matrix
+    kCap2ModSlew         = 1ull << 4, // REMAINDER item 1: modNN.rise, modNN.fall (a slew limiter on the source of the slot, modulatable)
+    kCap2ModDelay        = 1ull << 5, // REMAINDER item 1: modNN.delay, modNN.delay_beats, modNN.delay_sync (the connection starts after the delay)
+    // block B32 (REMAINDER item 2, 13-new-keys.md 4.42)
+    kCap2SpectralFilterTable = 1ull << 6, // REMAINDER item 2: oscN.spec.flt_use / flt_table / flt_frame (a wavetable acts as the spectral filter)
+};
+
+constexpr EngineCaps2Mask kCap2AllKnown = kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample | kCap2ModSlew | kCap2ModDelay | kCap2SpectralFilterTable;
+
+/** The bits of the second word a key of the table needs (0 for every key that predates it). Total, no allocation. */
+EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept;
+/** The bits of the second word a value of a choice parameter needs (oscN.type 2 .. 4, the warp modes 76 .. 96, a modulation destination that is a key of the blocks above). */
+EngineCaps2Mask requiredCapsForValue2 (size_t paramIndex, float plain) noexcept;
+inline bool capsCover2 (EngineCaps2Mask caps, EngineCaps2Mask needed) noexcept { return (caps & needed) == needed; }
+/** Short stable name of a single bit of the second word ("granular"), "" for anything else. */
+const char* capName2 (EngineCaps2Mask bit) noexcept;
+
+/** The bits of block B21 that belong to the warp list (kCapEnv1Toggle is the switch of the mixer channels). */
+constexpr EngineCapsMask kCapWarpAll = kCapWarpAlt | kCapWarpFilter | kCapWarpDist | kCapWarpFm | kCapWarpPdAm;
 
 /** The bits of block B17. */
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = ((1ull << 30) - 1) | kCapFxExtrasAll;
+constexpr EngineCapsMask kCapAllKnown = ~0ull; // all 64 bits are defined
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

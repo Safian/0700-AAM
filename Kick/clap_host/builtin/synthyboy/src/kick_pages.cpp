@@ -35,73 +35,141 @@ constexpr const char* s_more_env6[] = {
 
 constexpr const char* s_more_lfo1[] = {
     "lfo1.smooth", "lfo1.smooth_time", "lfo1.stereo", "lfo1.keytrack_transpose", "lfo1.keytrack_tune",
-    "lfo1.mono", "lfo1.direction", "lfo1.host"
+    "lfo1.mono", "lfo1.direction", "lfo1.host", "lfo1.swing"
 };
 constexpr const char* s_more_lfo2[] = {
     "lfo2.smooth", "lfo2.smooth_time", "lfo2.stereo", "lfo2.keytrack_transpose", "lfo2.keytrack_tune",
-    "lfo2.mono", "lfo2.direction", "lfo2.host"
+    "lfo2.mono", "lfo2.direction", "lfo2.host", "lfo2.swing"
 };
 constexpr const char* s_more_lfo3[] = {
     "lfo3.smooth", "lfo3.smooth_time", "lfo3.stereo", "lfo3.keytrack_transpose", "lfo3.keytrack_tune",
-    "lfo3.mono", "lfo3.direction", "lfo3.host"
+    "lfo3.mono", "lfo3.direction", "lfo3.host", "lfo3.swing"
 };
 constexpr const char* s_more_lfo4[] = {
     "lfo4.smooth", "lfo4.smooth_time", "lfo4.stereo", "lfo4.keytrack_transpose", "lfo4.keytrack_tune",
-    "lfo4.mono", "lfo4.direction", "lfo4.host"
+    "lfo4.mono", "lfo4.direction", "lfo4.host", "lfo4.swing"
 };
 constexpr const char* s_more_lfo5[] = {
     "lfo5.smooth", "lfo5.smooth_time", "lfo5.stereo", "lfo5.keytrack_transpose", "lfo5.keytrack_tune",
-    "lfo5.mono", "lfo5.direction", "lfo5.host"
+    "lfo5.mono", "lfo5.direction", "lfo5.host", "lfo5.swing"
 };
 constexpr const char* s_more_lfo6[] = {
     "lfo6.smooth", "lfo6.smooth_time", "lfo6.stereo", "lfo6.keytrack_transpose", "lfo6.keytrack_tune",
-    "lfo6.mono", "lfo6.direction", "lfo6.host"
+    "lfo6.mono", "lfo6.direction", "lfo6.host", "lfo6.swing"
 };
 constexpr const char* s_more_lfo7[] = {
     "lfo7.smooth", "lfo7.smooth_time", "lfo7.stereo", "lfo7.keytrack_transpose", "lfo7.keytrack_tune",
-    "lfo7.mono", "lfo7.direction", "lfo7.host"
+    "lfo7.mono", "lfo7.direction", "lfo7.host", "lfo7.swing"
 };
 constexpr const char* s_more_lfo8[] = {
     "lfo8.smooth", "lfo8.smooth_time", "lfo8.stereo", "lfo8.keytrack_transpose", "lfo8.keytrack_tune",
-    "lfo8.mono", "lfo8.direction", "lfo8.host"
+    "lfo8.mono", "lfo8.direction", "lfo8.host", "lfo8.swing"
 };
 constexpr const char* s_more_lfo9[] = {
     "lfo9.smooth", "lfo9.smooth_time", "lfo9.stereo", "lfo9.keytrack_transpose", "lfo9.keytrack_tune",
-    "lfo9.mono", "lfo9.direction", "lfo9.host"
+    "lfo9.mono", "lfo9.direction", "lfo9.host", "lfo9.swing"
 };
 constexpr const char* s_more_lfo10[] = {
     "lfo10.smooth", "lfo10.smooth_time", "lfo10.stereo", "lfo10.keytrack_transpose", "lfo10.keytrack_tune",
-    "lfo10.mono", "lfo10.direction", "lfo10.host"
+    "lfo10.mono", "lfo10.direction", "lfo10.host", "lfo10.swing"
 };
 
 constexpr const char* s_more_osc1_sample_2[] = {
     "osc1.sample.loop_relative", "osc1.sample.loop_link", "osc1.sample.loop_exit",
     "osc1.sample.fade_edges", "osc1.sample.normalize", "osc1.sample.reverse",
-    "osc1.sample.slice_mode", "osc1.sample.slice_threshold", "osc1.sample.slice_play", "osc1.sample.slice_root"
+    "osc1.sample.slice_mode", "osc1.sample.slice_threshold", "osc1.sample.slice_play", "osc1.sample.slice_root",
+    "osc1.sample.slice" // B27
 };
 constexpr const char* s_more_osc2_sample_2[] = {
     "osc2.sample.loop_relative", "osc2.sample.loop_link", "osc2.sample.loop_exit",
     "osc2.sample.fade_edges", "osc2.sample.normalize", "osc2.sample.reverse",
-    "osc2.sample.slice_mode", "osc2.sample.slice_threshold", "osc2.sample.slice_play", "osc2.sample.slice_root"
+    "osc2.sample.slice_mode", "osc2.sample.slice_threshold", "osc2.sample.slice_play", "osc2.sample.slice_root",
+    "osc2.sample.slice" // B27
 };
 constexpr const char* s_more_osc3_sample_2[] = {
     "osc3.sample.loop_relative", "osc3.sample.loop_link", "osc3.sample.loop_exit",
     "osc3.sample.fade_edges", "osc3.sample.normalize", "osc3.sample.reverse",
-    "osc3.sample.slice_mode", "osc3.sample.slice_threshold", "osc3.sample.slice_play", "osc3.sample.slice_root"
+    "osc3.sample.slice_mode", "osc3.sample.slice_threshold", "osc3.sample.slice_play", "osc3.sample.slice_root",
+    "osc3.sample.slice" // B27
+};
+
+constexpr const char* s_more_osc1_gran_1[] = {
+    "osc1.gran.density_mode", "osc1.gran.density_sync", "osc1.gran.density_grains", "osc1.gran.length_mode", "osc1.gran.length_sync",
+    "osc1.gran.length_percent", "osc1.gran.max_grains", "osc1.gran.loop_grains", "osc1.gran.scan_keytrack"
+};
+constexpr const char* s_more_osc1_gran_2[] = {
+    "osc1.gran.rand_warp", "osc1.gran.rand_warp2", "osc1.gran.reverse_grains", "osc1.gran.spawn_pattern", "osc1.gran.y_axis", "osc1.gran.xy_y"
+};
+constexpr const char* s_more_osc2_gran_1[] = {
+    "osc2.gran.density_mode", "osc2.gran.density_sync", "osc2.gran.density_grains", "osc2.gran.length_mode", "osc2.gran.length_sync",
+    "osc2.gran.length_percent", "osc2.gran.max_grains", "osc2.gran.loop_grains", "osc2.gran.scan_keytrack"
+};
+constexpr const char* s_more_osc2_gran_2[] = {
+    "osc2.gran.rand_warp", "osc2.gran.rand_warp2", "osc2.gran.reverse_grains", "osc2.gran.spawn_pattern", "osc2.gran.y_axis", "osc2.gran.xy_y"
+};
+constexpr const char* s_more_osc3_gran_1[] = {
+    "osc3.gran.density_mode", "osc3.gran.density_sync", "osc3.gran.density_grains", "osc3.gran.length_mode", "osc3.gran.length_sync",
+    "osc3.gran.length_percent", "osc3.gran.max_grains", "osc3.gran.loop_grains", "osc3.gran.scan_keytrack"
+};
+constexpr const char* s_more_osc3_gran_2[] = {
+    "osc3.gran.rand_warp", "osc3.gran.rand_warp2", "osc3.gran.reverse_grains", "osc3.gran.spawn_pattern", "osc3.gran.y_axis", "osc3.gran.xy_y"
+};
+
+constexpr const char* s_more_osc1_spec_1[] = {
+    "osc1.spec.lohi_smooth", "osc1.spec.lohi_post_warp", "osc1.spec.scan_keytrack", "osc1.spec.transients", "osc1.spec.y_axis", "osc1.spec.xy_y",
+    "osc1.spec.flt_use", "osc1.spec.flt_table", "osc1.spec.flt_frame" // B32
+};
+constexpr const char* s_more_osc2_spec_1[] = {
+    "osc2.spec.lohi_smooth", "osc2.spec.lohi_post_warp", "osc2.spec.scan_keytrack", "osc2.spec.transients", "osc2.spec.y_axis", "osc2.spec.xy_y",
+    "osc2.spec.flt_use", "osc2.spec.flt_table", "osc2.spec.flt_frame" // B32
+};
+constexpr const char* s_more_osc3_spec_1[] = {
+    "osc3.spec.lohi_smooth", "osc3.spec.lohi_post_warp", "osc3.spec.scan_keytrack", "osc3.spec.transients", "osc3.spec.y_axis", "osc3.spec.xy_y",
+    "osc3.spec.flt_use", "osc3.spec.flt_table", "osc3.spec.flt_frame" // B32
+};
+
+constexpr const char* s_more_osc1_multi_1[] = {
+    "osc1.multi.vel_override", "osc1.multi.timbre"
+};
+constexpr const char* s_more_osc2_multi_1[] = {
+    "osc2.multi.vel_override", "osc2.multi.timbre"
+};
+constexpr const char* s_more_osc3_multi_1[] = {
+    "osc3.multi.vel_override", "osc3.multi.timbre"
 };
 
 constexpr const char* s_more_osc1_pitch_uni[] = {
-    "osc1.pitch_bend_track", "osc1.transpose_snap", "osc1.phase_legato", "osc1.phase_memory"
+    "osc1.pitch_bend_track", "osc1.transpose_snap", "osc1.phase_legato", "osc1.phase_memory",
+    "osc1.ratio_src", "osc1.smooth_interp" // B27
 };
 constexpr const char* s_more_osc2_pitch_uni[] = {
-    "osc2.pitch_bend_track", "osc2.transpose_snap", "osc2.phase_legato", "osc2.phase_memory"
+    "osc2.pitch_bend_track", "osc2.transpose_snap", "osc2.phase_legato", "osc2.phase_memory",
+    "osc2.ratio_src", "osc2.smooth_interp" // B27
 };
 constexpr const char* s_more_osc3_pitch_uni[] = {
-    "osc3.pitch_bend_track", "osc3.transpose_snap", "osc3.phase_legato", "osc3.phase_memory"
+    "osc3.pitch_bend_track", "osc3.transpose_snap", "osc3.phase_legato", "osc3.phase_memory",
+    "osc3.ratio_src", "osc3.smooth_interp" // B27
 };
 
 constexpr const char* s_more_reverb1[] = {
     "reverb.force_enable"
+};
+
+constexpr const char* s_more_sub[] = {
+    "sub.filter_blend", "sub.bus1_send", "sub.bus2_send",
+    "sub.phase", "sub.phase_contiguous" // B23
+};
+
+constexpr const char* s_more_voicectl_targets[] = { "voicectl.osc.sub" };   // B26
+constexpr const char* s_more_delay_offset[] = { "delay.offset_left" };   // B25
+constexpr const char* s_more_reverb_feedback[] = { "reverb.feedback" };  // B25
+constexpr const char* s_more_mpe[] = {
+    "master.mpe.xyz_macro", "master.mpe.y_modwheel", "master.mpe.bend_to_x", "master.mpe.y_bipolar" // B24
+};
+constexpr const char* s_more_noise[] = {
+    "noise.sample", "noise.pitch", "noise.fine", "noise.phase",
+    "noise.random_phase", "noise.keytrack", "noise.loop",
+    "noise.type", "noise.bounce", "noise.stereo", "noise.filter" // B23
 };
 
 constexpr const char* s_more_mod_matrix[] = {
@@ -212,8 +280,83 @@ constexpr const char* s_more_mod_matrix[] = {
     "mod59.aux_source", "mod59.aux_inv", "mod59.aux_power", "mod59.aux_output", "mod60.aux_source", "mod60.aux_inv",
     "mod60.aux_power", "mod60.aux_output", "mod61.aux_source", "mod61.aux_inv", "mod61.aux_power", "mod61.aux_output",
     "mod62.aux_source", "mod62.aux_inv", "mod62.aux_power", "mod62.aux_output", "mod63.aux_source", "mod63.aux_inv",
-    "mod63.aux_power", "mod63.aux_output", "mod64.aux_source", "mod64.aux_inv", "mod64.aux_power", "mod64.aux_output"
+    "mod63.aux_power", "mod63.aux_output", "mod64.aux_source", "mod64.aux_inv", "mod64.aux_power", "mod64.aux_output",
+    "mod05.rise", "mod05.fall", "mod05.delay", "mod05.delay_beats", "mod05.delay_sync", // B31
+    "mod06.rise", "mod06.fall", "mod06.delay", "mod06.delay_beats", "mod06.delay_sync", // B31
+    "mod07.rise", "mod07.fall", "mod07.delay", "mod07.delay_beats", "mod07.delay_sync", // B31
+    "mod08.rise", "mod08.fall", "mod08.delay", "mod08.delay_beats", "mod08.delay_sync", // B31
+    "mod09.rise", "mod09.fall", "mod09.delay", "mod09.delay_beats", "mod09.delay_sync", // B31
+    "mod10.rise", "mod10.fall", "mod10.delay", "mod10.delay_beats", "mod10.delay_sync", // B31
+    "mod11.rise", "mod11.fall", "mod11.delay", "mod11.delay_beats", "mod11.delay_sync", // B31
+    "mod12.rise", "mod12.fall", "mod12.delay", "mod12.delay_beats", "mod12.delay_sync", // B31
+    "mod13.rise", "mod13.fall", "mod13.delay", "mod13.delay_beats", "mod13.delay_sync", // B31
+    "mod14.rise", "mod14.fall", "mod14.delay", "mod14.delay_beats", "mod14.delay_sync", // B31
+    "mod15.rise", "mod15.fall", "mod15.delay", "mod15.delay_beats", "mod15.delay_sync", // B31
+    "mod16.rise", "mod16.fall", "mod16.delay", "mod16.delay_beats", "mod16.delay_sync", // B31
+    "mod17.rise", "mod17.fall", "mod17.delay", "mod17.delay_beats", "mod17.delay_sync", // B31
+    "mod18.rise", "mod18.fall", "mod18.delay", "mod18.delay_beats", "mod18.delay_sync", // B31
+    "mod19.rise", "mod19.fall", "mod19.delay", "mod19.delay_beats", "mod19.delay_sync", // B31
+    "mod20.rise", "mod20.fall", "mod20.delay", "mod20.delay_beats", "mod20.delay_sync", // B31
+    "mod21.rise", "mod21.fall", "mod21.delay", "mod21.delay_beats", "mod21.delay_sync", // B31
+    "mod22.rise", "mod22.fall", "mod22.delay", "mod22.delay_beats", "mod22.delay_sync", // B31
+    "mod23.rise", "mod23.fall", "mod23.delay", "mod23.delay_beats", "mod23.delay_sync", // B31
+    "mod24.rise", "mod24.fall", "mod24.delay", "mod24.delay_beats", "mod24.delay_sync", // B31
+    "mod25.rise", "mod25.fall", "mod25.delay", "mod25.delay_beats", "mod25.delay_sync", // B31
+    "mod26.rise", "mod26.fall", "mod26.delay", "mod26.delay_beats", "mod26.delay_sync", // B31
+    "mod27.rise", "mod27.fall", "mod27.delay", "mod27.delay_beats", "mod27.delay_sync", // B31
+    "mod28.rise", "mod28.fall", "mod28.delay", "mod28.delay_beats", "mod28.delay_sync", // B31
+    "mod29.rise", "mod29.fall", "mod29.delay", "mod29.delay_beats", "mod29.delay_sync", // B31
+    "mod30.rise", "mod30.fall", "mod30.delay", "mod30.delay_beats", "mod30.delay_sync", // B31
+    "mod31.rise", "mod31.fall", "mod31.delay", "mod31.delay_beats", "mod31.delay_sync", // B31
+    "mod32.rise", "mod32.fall", "mod32.delay", "mod32.delay_beats", "mod32.delay_sync", // B31
+    "mod33.rise", "mod33.fall", "mod33.delay", "mod33.delay_beats", "mod33.delay_sync", // B31
+    "mod34.rise", "mod34.fall", "mod34.delay", "mod34.delay_beats", "mod34.delay_sync", // B31
+    "mod35.rise", "mod35.fall", "mod35.delay", "mod35.delay_beats", "mod35.delay_sync", // B31
+    "mod36.rise", "mod36.fall", "mod36.delay", "mod36.delay_beats", "mod36.delay_sync", // B31
+    "mod37.rise", "mod37.fall", "mod37.delay", "mod37.delay_beats", "mod37.delay_sync", // B31
+    "mod38.rise", "mod38.fall", "mod38.delay", "mod38.delay_beats", "mod38.delay_sync", // B31
+    "mod39.rise", "mod39.fall", "mod39.delay", "mod39.delay_beats", "mod39.delay_sync", // B31
+    "mod40.rise", "mod40.fall", "mod40.delay", "mod40.delay_beats", "mod40.delay_sync", // B31
+    "mod41.rise", "mod41.fall", "mod41.delay", "mod41.delay_beats", "mod41.delay_sync", // B31
+    "mod42.rise", "mod42.fall", "mod42.delay", "mod42.delay_beats", "mod42.delay_sync", // B31
+    "mod43.rise", "mod43.fall", "mod43.delay", "mod43.delay_beats", "mod43.delay_sync", // B31
+    "mod44.rise", "mod44.fall", "mod44.delay", "mod44.delay_beats", "mod44.delay_sync", // B31
+    "mod45.rise", "mod45.fall", "mod45.delay", "mod45.delay_beats", "mod45.delay_sync", // B31
+    "mod46.rise", "mod46.fall", "mod46.delay", "mod46.delay_beats", "mod46.delay_sync", // B31
+    "mod47.rise", "mod47.fall", "mod47.delay", "mod47.delay_beats", "mod47.delay_sync", // B31
+    "mod48.rise", "mod48.fall", "mod48.delay", "mod48.delay_beats", "mod48.delay_sync", // B31
+    "mod49.rise", "mod49.fall", "mod49.delay", "mod49.delay_beats", "mod49.delay_sync", // B31
+    "mod50.rise", "mod50.fall", "mod50.delay", "mod50.delay_beats", "mod50.delay_sync", // B31
+    "mod51.rise", "mod51.fall", "mod51.delay", "mod51.delay_beats", "mod51.delay_sync", // B31
+    "mod52.rise", "mod52.fall", "mod52.delay", "mod52.delay_beats", "mod52.delay_sync", // B31
+    "mod53.rise", "mod53.fall", "mod53.delay", "mod53.delay_beats", "mod53.delay_sync", // B31
+    "mod54.rise", "mod54.fall", "mod54.delay", "mod54.delay_beats", "mod54.delay_sync", // B31
+    "mod55.rise", "mod55.fall", "mod55.delay", "mod55.delay_beats", "mod55.delay_sync", // B31
+    "mod56.rise", "mod56.fall", "mod56.delay", "mod56.delay_beats", "mod56.delay_sync", // B31
+    "mod57.rise", "mod57.fall", "mod57.delay", "mod57.delay_beats", "mod57.delay_sync", // B31
+    "mod58.rise", "mod58.fall", "mod58.delay", "mod58.delay_beats", "mod58.delay_sync", // B31
+    "mod59.rise", "mod59.fall", "mod59.delay", "mod59.delay_beats", "mod59.delay_sync", // B31
+    "mod60.rise", "mod60.fall", "mod60.delay", "mod60.delay_beats", "mod60.delay_sync", // B31
+    "mod61.rise", "mod61.fall", "mod61.delay", "mod61.delay_beats", "mod61.delay_sync", // B31
+    "mod62.rise", "mod62.fall", "mod62.delay", "mod62.delay_beats", "mod62.delay_sync", // B31
+    "mod63.rise", "mod63.fall", "mod63.delay", "mod63.delay_beats", "mod63.delay_sync", // B31
+    "mod64.rise", "mod64.fall", "mod64.delay", "mod64.delay_beats", "mod64.delay_sync", // B31
 };
+
+// Block B22 (13-new-keys.md 4.23): one page per slot of the effect instance pool. The generic names are all Kick sees (the pages are static);
+// the true labels come from the descriptor table (core/src/fx_types.cpp), which a Kick-side feature could export.
+#define SB_KICK_FXI_MORE(N)                                                                                                                      \
+    constexpr const char* s_more_fxi##N[] = {                                                                                                   \
+        "fxi" #N ".p05", "fxi" #N ".p06", "fxi" #N ".p07", "fxi" #N ".p08", "fxi" #N ".p09", "fxi" #N ".p10", "fxi" #N ".p11", "fxi" #N ".p12", \
+        "fxi" #N ".p13", "fxi" #N ".p14", "fxi" #N ".p15", "fxi" #N ".p16", "fxi" #N ".p17", "fxi" #N ".p18", "fxi" #N ".p19", "fxi" #N ".p20", \
+        "fxi" #N ".p21", "fxi" #N ".p22", "fxi" #N ".p23", "fxi" #N ".p24"                                                                      \
+    }
+SB_KICK_FXI_MORE (01); SB_KICK_FXI_MORE (02); SB_KICK_FXI_MORE (03); SB_KICK_FXI_MORE (04); SB_KICK_FXI_MORE (05); SB_KICK_FXI_MORE (06);
+SB_KICK_FXI_MORE (07); SB_KICK_FXI_MORE (08); SB_KICK_FXI_MORE (09); SB_KICK_FXI_MORE (10); SB_KICK_FXI_MORE (11); SB_KICK_FXI_MORE (12);
+SB_KICK_FXI_MORE (13); SB_KICK_FXI_MORE (14); SB_KICK_FXI_MORE (15); SB_KICK_FXI_MORE (16);
+#define SB_KICK_FXI_PAGE(N)                                                                                                                      \
+    { "fxi" #N, "FX Slot " #N, "FX", { "fxi" #N ".type", "fxi" #N ".on", "fxi" #N ".rack", "fxi" #N ".order", "fxi" #N ".p01", "fxi" #N ".p02",   \
+      "fxi" #N ".p03", "fxi" #N ".p04" }, 8, s_more_fxi##N, 20 }
 
 constexpr Page s_kickPages[kKickPageCount] = {
     // Page 1: Macros & Performance (Perf)
@@ -241,7 +384,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 12: Osc 3 Morph & Warp (Osc)
     { "osc3_shaping", "Osc 3 Morph & Warp", "Osc", { "osc3.morph.type", "osc3.morph.amount", "osc3.morph.spread", "osc3.warp.type", "osc3.warp.amount", "osc3.warp.phase", "osc3.warp.spread", "osc3.frame_spread" }, 8, nullptr, 0 },
     // Page 13: Noise & Osc Mix (Osc)
-    { "noise", "Noise & Osc Mix", "Osc", { "noise.on", "noise.level", "noise.pan", "noise.destination", "filter.routing", "osc1.level", "osc2.level", "osc3.level" }, 8, nullptr, 0 },
+    { "noise", "Noise & Osc Mix", "Osc", { "noise.on", "noise.level", "noise.pan", "noise.destination", "filter.routing", "osc1.level", "osc2.level", "osc3.level" }, 8, s_more_noise, 11 },
     // Page 14: Filter 1 Main (Filter)
     { "filter1_main", "Filter 1 Main", "Filter", { "filter1.on", "filter1.model", "filter1.style", "filter1.cutoff", "filter1.resonance", "filter1.drive", "filter1.blend", "filter1.mix" }, 8, nullptr, 0 },
     // Page 15: Filter 1 Key & Formant (Filter)
@@ -263,21 +406,21 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 23: Envelope 6 (Env)
     { "env6", "Envelope 6", "Env", { "env6.attack", "env6.hold", "env6.decay", "env6.sustain", "env6.release", "env6.delay", "env6.attack_curve", "env6.decay_curve" }, 8, s_more_env6, 8 },
     // Page 24: LFO 1 (LFO)
-    { "lfo1", "LFO 1", "LFO", { "lfo1.shape", "lfo1.sync", "lfo1.rate", "lfo1.division", "lfo1.sync_type", "lfo1.phase", "lfo1.fade_in", "lfo1.delay" }, 8, s_more_lfo1, 8 },
+    { "lfo1", "LFO 1", "LFO", { "lfo1.shape", "lfo1.sync", "lfo1.rate", "lfo1.division", "lfo1.sync_type", "lfo1.phase", "lfo1.fade_in", "lfo1.delay" }, 8, s_more_lfo1, sizeof (s_more_lfo1) / sizeof (s_more_lfo1[0]) },
     // Page 25: LFO 2 (LFO)
-    { "lfo2", "LFO 2", "LFO", { "lfo2.shape", "lfo2.sync", "lfo2.rate", "lfo2.division", "lfo2.sync_type", "lfo2.phase", "lfo2.fade_in", "lfo2.delay" }, 8, s_more_lfo2, 8 },
+    { "lfo2", "LFO 2", "LFO", { "lfo2.shape", "lfo2.sync", "lfo2.rate", "lfo2.division", "lfo2.sync_type", "lfo2.phase", "lfo2.fade_in", "lfo2.delay" }, 8, s_more_lfo2, sizeof (s_more_lfo2) / sizeof (s_more_lfo2[0]) },
     // Page 26: LFO 3 (LFO)
-    { "lfo3", "LFO 3", "LFO", { "lfo3.shape", "lfo3.sync", "lfo3.rate", "lfo3.division", "lfo3.sync_type", "lfo3.phase", "lfo3.fade_in", "lfo3.delay" }, 8, s_more_lfo3, 8 },
+    { "lfo3", "LFO 3", "LFO", { "lfo3.shape", "lfo3.sync", "lfo3.rate", "lfo3.division", "lfo3.sync_type", "lfo3.phase", "lfo3.fade_in", "lfo3.delay" }, 8, s_more_lfo3, sizeof (s_more_lfo3) / sizeof (s_more_lfo3[0]) },
     // Page 27: LFO 4 (LFO)
-    { "lfo4", "LFO 4", "LFO", { "lfo4.shape", "lfo4.sync", "lfo4.rate", "lfo4.division", "lfo4.sync_type", "lfo4.phase", "lfo4.fade_in", "lfo4.delay" }, 8, s_more_lfo4, 8 },
+    { "lfo4", "LFO 4", "LFO", { "lfo4.shape", "lfo4.sync", "lfo4.rate", "lfo4.division", "lfo4.sync_type", "lfo4.phase", "lfo4.fade_in", "lfo4.delay" }, 8, s_more_lfo4, sizeof (s_more_lfo4) / sizeof (s_more_lfo4[0]) },
     // Page 28: LFO 5 (LFO)
-    { "lfo5", "LFO 5", "LFO", { "lfo5.shape", "lfo5.sync", "lfo5.rate", "lfo5.division", "lfo5.sync_type", "lfo5.phase", "lfo5.fade_in", "lfo5.delay" }, 8, s_more_lfo5, 8 },
+    { "lfo5", "LFO 5", "LFO", { "lfo5.shape", "lfo5.sync", "lfo5.rate", "lfo5.division", "lfo5.sync_type", "lfo5.phase", "lfo5.fade_in", "lfo5.delay" }, 8, s_more_lfo5, sizeof (s_more_lfo5) / sizeof (s_more_lfo5[0]) },
     // Page 29: LFO 6 (LFO)
-    { "lfo6", "LFO 6", "LFO", { "lfo6.shape", "lfo6.sync", "lfo6.rate", "lfo6.division", "lfo6.sync_type", "lfo6.phase", "lfo6.fade_in", "lfo6.delay" }, 8, s_more_lfo6, 8 },
+    { "lfo6", "LFO 6", "LFO", { "lfo6.shape", "lfo6.sync", "lfo6.rate", "lfo6.division", "lfo6.sync_type", "lfo6.phase", "lfo6.fade_in", "lfo6.delay" }, 8, s_more_lfo6, sizeof (s_more_lfo6) / sizeof (s_more_lfo6[0]) },
     // Page 30: LFO 7 (LFO)
-    { "lfo7", "LFO 7", "LFO", { "lfo7.shape", "lfo7.sync", "lfo7.rate", "lfo7.division", "lfo7.sync_type", "lfo7.phase", "lfo7.fade_in", "lfo7.delay" }, 8, s_more_lfo7, 8 },
+    { "lfo7", "LFO 7", "LFO", { "lfo7.shape", "lfo7.sync", "lfo7.rate", "lfo7.division", "lfo7.sync_type", "lfo7.phase", "lfo7.fade_in", "lfo7.delay" }, 8, s_more_lfo7, sizeof (s_more_lfo7) / sizeof (s_more_lfo7[0]) },
     // Page 31: LFO 8 (LFO)
-    { "lfo8", "LFO 8", "LFO", { "lfo8.shape", "lfo8.sync", "lfo8.rate", "lfo8.division", "lfo8.sync_type", "lfo8.phase", "lfo8.fade_in", "lfo8.delay" }, 8, s_more_lfo8, 8 },
+    { "lfo8", "LFO 8", "LFO", { "lfo8.shape", "lfo8.sync", "lfo8.rate", "lfo8.division", "lfo8.sync_type", "lfo8.phase", "lfo8.fade_in", "lfo8.delay" }, 8, s_more_lfo8, sizeof (s_more_lfo8) / sizeof (s_more_lfo8[0]) },
     // Page 32: Random LFO 1 (LFO)
     { "rlfo1", "Random LFO 1", "LFO", { "rlfo1.style", "rlfo1.sync", "rlfo1.rate", "rlfo1.division", "rlfo1.sync_type", "rlfo1.stereo", "rlfo1.keytrack_transpose", "rlfo1.keytrack_tune" }, 8, nullptr, 0 },
     // Page 33: Random LFO 2 (LFO)
@@ -337,17 +480,17 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 60: Mod Amounts 1–8 (Matrix)
     { "mod_amounts_1_8", "Mod Amounts 1–8", "Matrix", { "mod01.amount", "mod02.amount", "mod03.amount", "mod04.amount", "mod05.amount", "mod06.amount", "mod07.amount", "mod08.amount" }, 8, nullptr, 0 },
     // Page 61: Mod Amounts 9–16 (Matrix)
-    { "mod_amounts_9_16", "Mod Amounts 9–16", "Matrix", { "mod09.amount", "mod10.amount", "mod11.amount", "mod12.amount", "mod13.amount", "mod14.amount", "mod15.amount", "mod16.amount" }, 8, s_more_mod_matrix, 648 },
+    { "mod_amounts_9_16", "Mod Amounts 9–16", "Matrix", { "mod09.amount", "mod10.amount", "mod11.amount", "mod12.amount", "mod13.amount", "mod14.amount", "mod15.amount", "mod16.amount" }, 8, s_more_mod_matrix, 948 },
     // Page 62: Macros 5–8 (Perf)
     { "macros_2", "Macros 5–8", "Perf", { "macro.5", "macro.6", "macro.7", "macro.8", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 63: LFO 9 (LFO)
-    { "lfo9", "LFO 9", "LFO", { "lfo9.shape", "lfo9.sync", "lfo9.rate", "lfo9.division", "lfo9.sync_type", "lfo9.phase", "lfo9.fade_in", "lfo9.delay" }, 8, s_more_lfo9, 8 },
+    { "lfo9", "LFO 9", "LFO", { "lfo9.shape", "lfo9.sync", "lfo9.rate", "lfo9.division", "lfo9.sync_type", "lfo9.phase", "lfo9.fade_in", "lfo9.delay" }, 8, s_more_lfo9, sizeof (s_more_lfo9) / sizeof (s_more_lfo9[0]) },
     // Page 64: LFO 10 (LFO)
-    { "lfo10", "LFO 10", "LFO", { "lfo10.shape", "lfo10.sync", "lfo10.rate", "lfo10.division", "lfo10.sync_type", "lfo10.phase", "lfo10.fade_in", "lfo10.delay" }, 8, s_more_lfo10, 8 },
+    { "lfo10", "LFO 10", "LFO", { "lfo10.shape", "lfo10.sync", "lfo10.rate", "lfo10.division", "lfo10.sync_type", "lfo10.phase", "lfo10.fade_in", "lfo10.delay" }, 8, s_more_lfo10, sizeof (s_more_lfo10) / sizeof (s_more_lfo10[0]) },
     // Page 65: Scale & Tuning (Master)
     { "master_scale_tuning", "Scale & Tuning", "Master", { "master.scale.key", "master.scale.type", "master.scale.mode", "master.tuning.a4", "master.tuning.scale", "master.tuning.mts_esp", "master.tuning.mts_note_on_only", nullptr }, 7, nullptr, 0 },
     // Page 66: Expression & MPE (Master)
-    { "master_expression", "Expression & MPE", "Master", { "master.mpe.on", "master.mpe.bend_range", "curve.velocity.legato", "curve.note.legato", "voice.phase_legato", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    { "master_expression", "Expression & MPE", "Master", { "master.mpe.on", "master.mpe.bend_range", "curve.velocity.legato", "curve.note.legato", "voice.phase_legato", "master.stereo_routing", "master.voice_override", nullptr }, 7, s_more_mpe, 4 },
     // Page 67: Osc 1 Type & Mapping (Osc)
     { "osc1_type_map", "Osc 1 Type & Mapping", "Osc", { "osc1.type", "osc1.map.key_low", "osc1.map.key_high", "osc1.map.vel_low", "osc1.map.vel_high", "osc1.map.key_fold", "osc1.map.key_warp", nullptr }, 7, nullptr, 0 },
     // Page 68: Osc 2 Type & Mapping (Osc)
@@ -357,23 +500,24 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 70: Osc 1 Sample Main (Osc)
     { "osc1_sample_1", "Osc 1 Sample Main", "Osc", { "osc1.sample.start", "osc1.sample.end", "osc1.sample.root", "osc1.sample.keytrack", "osc1.sample.loop_mode", "osc1.sample.loop_start", "osc1.sample.loop_end", "osc1.sample.loop_xfade" }, 8, nullptr, 0 },
     // Page 71: Osc 1 Sample Playback (Osc)
-    { "osc1_sample_2", "Osc 1 Sample Playback", "Osc", { "osc1.sample.scan", "osc1.sample.scan_range", "osc1.sample.scan_reverse", "osc1.sample.scan_lock_tempo", "osc1.sample.scan_to_bpm", "osc1.sample.length_beats", "osc1.sample.uni_start", "osc1.sample.uni_span" }, 8, s_more_osc1_sample_2, 10 },
+    { "osc1_sample_2", "Osc 1 Sample Playback", "Osc", { "osc1.sample.scan", "osc1.sample.scan_range", "osc1.sample.scan_reverse", "osc1.sample.scan_lock_tempo", "osc1.sample.scan_to_bpm", "osc1.sample.length_beats", "osc1.sample.uni_start", "osc1.sample.uni_span" }, 8, s_more_osc1_sample_2, 11 },
     // Page 72: Osc 2 Sample Main (Osc)
     { "osc2_sample_1", "Osc 2 Sample Main", "Osc", { "osc2.sample.start", "osc2.sample.end", "osc2.sample.root", "osc2.sample.keytrack", "osc2.sample.loop_mode", "osc2.sample.loop_start", "osc2.sample.loop_end", "osc2.sample.loop_xfade" }, 8, nullptr, 0 },
     // Page 73: Osc 2 Sample Playback (Osc)
-    { "osc2_sample_2", "Osc 2 Sample Playback", "Osc", { "osc2.sample.scan", "osc2.sample.scan_range", "osc2.sample.scan_reverse", "osc2.sample.scan_lock_tempo", "osc2.sample.scan_to_bpm", "osc2.sample.length_beats", "osc2.sample.uni_start", "osc2.sample.uni_span" }, 8, s_more_osc2_sample_2, 10 },
+    { "osc2_sample_2", "Osc 2 Sample Playback", "Osc", { "osc2.sample.scan", "osc2.sample.scan_range", "osc2.sample.scan_reverse", "osc2.sample.scan_lock_tempo", "osc2.sample.scan_to_bpm", "osc2.sample.length_beats", "osc2.sample.uni_start", "osc2.sample.uni_span" }, 8, s_more_osc2_sample_2, 11 },
     // Page 74: Osc 3 Sample Main (Osc)
     { "osc3_sample_1", "Osc 3 Sample Main", "Osc", { "osc3.sample.start", "osc3.sample.end", "osc3.sample.root", "osc3.sample.keytrack", "osc3.sample.loop_mode", "osc3.sample.loop_start", "osc3.sample.loop_end", "osc3.sample.loop_xfade" }, 8, nullptr, 0 },
     // Page 75: Osc 3 Sample Playback (Osc)
-    { "osc3_sample_2", "Osc 3 Sample Playback", "Osc", { "osc3.sample.scan", "osc3.sample.scan_range", "osc3.sample.scan_reverse", "osc3.sample.scan_lock_tempo", "osc3.sample.scan_to_bpm", "osc3.sample.length_beats", "osc3.sample.uni_start", "osc3.sample.uni_span" }, 8, s_more_osc3_sample_2, 10 },
+    { "osc3_sample_2", "Osc 3 Sample Playback", "Osc", { "osc3.sample.scan", "osc3.sample.scan_range", "osc3.sample.scan_reverse", "osc3.sample.scan_lock_tempo", "osc3.sample.scan_to_bpm", "osc3.sample.length_beats", "osc3.sample.uni_start", "osc3.sample.uni_span" }, 8, s_more_osc3_sample_2, 11 },
     // Page 76: Osc 1 Warp 2 (Osc)
     { "osc1_warp2", "Osc 1 Warp 2", "Osc", { "osc1.warp2.type", "osc1.warp2.amount", "osc1.warp2.phase", "osc1.warp2.spread", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 77: Osc 2 Warp 2 (Osc)
     { "osc2_warp2", "Osc 2 Warp 2", "Osc", { "osc2.warp2.type", "osc2.warp2.amount", "osc2.warp2.phase", "osc2.warp2.spread", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 78: Osc 3 Warp 2 (Osc)
     { "osc3_warp2", "Osc 3 Warp 2", "Osc", { "osc3.warp2.type", "osc3.warp2.amount", "osc3.warp2.phase", "osc3.warp2.spread", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
-    // Page 79: Mixer Routing (Osc)
+    // Page 80: Mixer Routing (Osc)
     { "mix_routing", "Mixer Routing", "Osc", { "osc1.filter_blend", "osc2.filter_blend", "osc3.filter_blend", "noise.filter_blend", "filter1.destination", "filter2.destination", "direct.level", "main.fx_bypass" }, 8, nullptr, 0 },
+    { "mix_env1", "Mixer ENV 1 Buttons", "Osc", { "osc1.env1", "osc2.env1", "osc3.env1", "sub.env1", "noise.env1", "filter1.env1", "filter2.env1" }, 7, nullptr, 0 },
     // Page 80: Mixer Buses (Osc)
     { "mix_bus", "Mixer Buses", "Osc", { "bus1.level", "bus1.destination", "bus1.fx_bypass", "bus2.level", "bus2.destination", "bus2.fx_bypass", nullptr, nullptr }, 6, nullptr, 0 },
     // Page 81: Mixer Osc Sends (Osc)
@@ -428,21 +572,66 @@ constexpr Page s_kickPages[kKickPageCount] = {
     { "osc3_remap", "Osc 3 Remap", "Osc", { "osc3.remap.on", "osc3.remap.slot", "osc3.remap.rise", "osc3.remap.fall", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     { "fx_levels", "FX Levels", "FX", { "chorus.level", "compressor.level", "delay.level", "distortion.level", "eq.level", "flanger.level", "phaser.level", "reverb.level" }, 8, nullptr, 0 },
     // Page 104: Osc 1 Pitch & Unison (Osc)
-    { "osc1_pitch_uni", "Osc 1 Pitch & Unison", "Osc", { "osc1.pitch_mode", "osc1.pitch_coarse", "osc1.pitch_track", "osc1.fixed_pitch", "osc1.unison.mode", "osc1.unison.range", "osc1.unison.blend_shape", "osc1.unison.stack_repeat" }, 8, s_more_osc1_pitch_uni, 4 },
+    { "osc1_pitch_uni", "Osc 1 Pitch & Unison", "Osc", { "osc1.pitch_mode", "osc1.pitch_coarse", "osc1.pitch_track", "osc1.fixed_pitch", "osc1.unison.mode", "osc1.unison.range", "osc1.unison.blend_shape", "osc1.unison.stack_repeat" }, 8, s_more_osc1_pitch_uni, 6 },
     // Page 105: Osc 2 Pitch & Unison (Osc)
-    { "osc2_pitch_uni", "Osc 2 Pitch & Unison", "Osc", { "osc2.pitch_mode", "osc2.pitch_coarse", "osc2.pitch_track", "osc2.fixed_pitch", "osc2.unison.mode", "osc2.unison.range", "osc2.unison.blend_shape", "osc2.unison.stack_repeat" }, 8, s_more_osc2_pitch_uni, 4 },
+    { "osc2_pitch_uni", "Osc 2 Pitch & Unison", "Osc", { "osc2.pitch_mode", "osc2.pitch_coarse", "osc2.pitch_track", "osc2.fixed_pitch", "osc2.unison.mode", "osc2.unison.range", "osc2.unison.blend_shape", "osc2.unison.stack_repeat" }, 8, s_more_osc2_pitch_uni, 6 },
     // Page 106: Osc 3 Pitch & Unison (Osc)
-    { "osc3_pitch_uni", "Osc 3 Pitch & Unison", "Osc", { "osc3.pitch_mode", "osc3.pitch_coarse", "osc3.pitch_track", "osc3.fixed_pitch", "osc3.unison.mode", "osc3.unison.range", "osc3.unison.blend_shape", "osc3.unison.stack_repeat" }, 8, s_more_osc3_pitch_uni, 4 },
+    { "osc3_pitch_uni", "Osc 3 Pitch & Unison", "Osc", { "osc3.pitch_mode", "osc3.pitch_coarse", "osc3.pitch_track", "osc3.fixed_pitch", "osc3.unison.mode", "osc3.unison.range", "osc3.unison.blend_shape", "osc3.unison.stack_repeat" }, 8, s_more_osc3_pitch_uni, 6 },
     // Page 110: Compressor Limit & Crossovers (FX), block B17 (13-new-keys.md 4.17)
     { "fx_comp_limit", "Compressor Limit & Crossovers", "FX", { "compressor.limit", "compressor.limit_latency_comp", "compressor.crossover_low", "compressor.crossover_high", "compressor.mix", "compressor.attack", "compressor.release", "compressor.on" }, 8, nullptr, 0 },
     // Page 111: Delay Quality & Offset (FX)
-    { "fx_delay_3", "Delay Quality & Offset", "FX", { "delay.hq", "delay.offset", "delay.time", "delay.time2", "delay.sync", "delay.feedback", "delay.mix", "delay.on" }, 8, nullptr, 0 },
+    { "fx_delay_3", "Delay Quality & Offset", "FX", { "delay.hq", "delay.offset", "delay.time", "delay.time2", "delay.sync", "delay.feedback", "delay.mix", "delay.on" }, 8, s_more_delay_offset, 1 },
     // Page 112: Distortion Key Track (FX)
     { "fx_distortion_2", "Distortion Key Track", "FX", { "distortion.type", "distortion.filter_keytrack", "distortion.filter_order", "distortion.filter_cutoff", "distortion.drive", "distortion.mix", "distortion.on", nullptr }, 7, nullptr, 0 },
     // Page 113: Phaser Depth 2 (FX)
     { "fx_phaser_3", "Phaser Depth 2", "FX", { "phaser.depth2", "phaser.depth", "phaser.center", "phaser.rate", "phaser.feedback", "phaser.mix", "phaser.on", nullptr }, 7, nullptr, 0 },
     // Page 114: Reverb Algorithm (FX)
-    { "fx_reverb_3", "Reverb Algorithm", "FX", { "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.mix", "reverb.on" }, 8, nullptr, 0 }
+    { "fx_reverb_3", "Reverb Algorithm", "FX", { "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.mix", "reverb.on" }, 8, s_more_reverb_feedback, 1 },
+    // Page 115: Sub Oscillator (Osc), block B18 (13-new-keys.md 4.18)
+    { "sub_main", "Sub Oscillator", "Osc", { "sub.on", "sub.waveform", "sub.octave", "sub.tune", "sub.level", "sub.pan", "sub.destination", "sub.mono" }, 8, s_more_sub, 5 },
+    // Page 116: Voice & Stereo (Master), block B15 (13-new-keys.md 4.19): same-note / steal modes, poly legato, bend up / down, stereo spread
+    { "voice_global", "Voice & Stereo", "Master", { "master.voice.same_note", "master.voice.steal_priority", "master.poly_legato", "master.bend_range", "master.bend_down_range", "master.bend_down_link", "master.stereo_spread", "master.polyphony" }, 8, nullptr, 0 },
+    // Page 117: Quality Options (Master)
+    { "quality_options", "Quality Options", "Master", { "quality.oversample_4x", "quality.no_smoothing", "reverb.force_enable", "master.polyphony", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
+    // Pages 120 - 135: the 16 slots of the effect instance pool (block B22)
+    SB_KICK_FXI_PAGE (01), SB_KICK_FXI_PAGE (02), SB_KICK_FXI_PAGE (03), SB_KICK_FXI_PAGE (04), SB_KICK_FXI_PAGE (05), SB_KICK_FXI_PAGE (06),
+    SB_KICK_FXI_PAGE (07), SB_KICK_FXI_PAGE (08), SB_KICK_FXI_PAGE (09), SB_KICK_FXI_PAGE (10), SB_KICK_FXI_PAGE (11), SB_KICK_FXI_PAGE (12),
+    SB_KICK_FXI_PAGE (13), SB_KICK_FXI_PAGE (14), SB_KICK_FXI_PAGE (15), SB_KICK_FXI_PAGE (16),
+    // Pages 136 - 143: the voice control (block B26, GROUPA2 WP-07; 13-new-keys.md 4.30)
+    { "voicectl_main", "Voice Control", "Master", { "voicectl.length", "voicectl.scale.env", "voicectl.scale.lfo", "voicectl.scale.lfo_mode", "voicectl.osc.a", "voicectl.osc.b", "voicectl.osc.c", "voicectl.osc.noise" }, 8, s_more_voicectl_targets, 1 },
+    { "voicectl_random", "Voice Control Random", "Master", { "voicectl.rand.pan", "voicectl.rand.detune", "voicectl.rand.cutoff", "voicectl.rand.env", "voicectl.rand.detune10x", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    // Voice control, the Pan of the eight steps (block B26)
+    { "voicectl_pan", "Voice Control Pan", "Master", { "voicectl.s1.pan", "voicectl.s2.pan", "voicectl.s3.pan", "voicectl.s4.pan", "voicectl.s5.pan", "voicectl.s6.pan", "voicectl.s7.pan", "voicectl.s8.pan" }, 8, nullptr, 0 },
+    // Voice control, the Detune of the eight steps (block B26)
+    { "voicectl_detune", "Voice Control Detune", "Master", { "voicectl.s1.detune", "voicectl.s2.detune", "voicectl.s3.detune", "voicectl.s4.detune", "voicectl.s5.detune", "voicectl.s6.detune", "voicectl.s7.detune", "voicectl.s8.detune" }, 8, nullptr, 0 },
+    // Voice control, the Cutoff of the eight steps (block B26)
+    { "voicectl_cutoff", "Voice Control Cutoff", "Master", { "voicectl.s1.cutoff", "voicectl.s2.cutoff", "voicectl.s3.cutoff", "voicectl.s4.cutoff", "voicectl.s5.cutoff", "voicectl.s6.cutoff", "voicectl.s7.cutoff", "voicectl.s8.cutoff" }, 8, nullptr, 0 },
+    // Voice control, the Envelope Time of the eight steps (block B26)
+    { "voicectl_env", "Voice Control Envelope Time", "Master", { "voicectl.s1.env", "voicectl.s2.env", "voicectl.s3.env", "voicectl.s4.env", "voicectl.s5.env", "voicectl.s6.env", "voicectl.s7.env", "voicectl.s8.env" }, 8, nullptr, 0 },
+    // Voice control, the Mod 1 of the eight steps (block B26)
+    { "voicectl_mod1", "Voice Control Mod 1", "Master", { "voicectl.s1.mod1", "voicectl.s2.mod1", "voicectl.s3.mod1", "voicectl.s4.mod1", "voicectl.s5.mod1", "voicectl.s6.mod1", "voicectl.s7.mod1", "voicectl.s8.mod1" }, 8, nullptr, 0 },
+    // Voice control, the Mod 2 of the eight steps (block B26)
+    { "voicectl_mod2", "Voice Control Mod 2", "Master", { "voicectl.s1.mod2", "voicectl.s2.mod2", "voicectl.s3.mod2", "voicectl.s4.mod2", "voicectl.s5.mod2", "voicectl.s6.mod2", "voicectl.s7.mod2", "voicectl.s8.mod2" }, 8, nullptr, 0 },
+    // Granular, block B28 (GROUPC WP-11; 13-new-keys.md 4.37): pages 144 - 149
+    { "osc1_gran_1", "Osc 1 Granular", "Osc", { "osc1.gran.density", "osc1.gran.length", "osc1.gran.window_amount", "osc1.gran.window_skew", "osc1.gran.window_shape", "osc1.gran.position", "osc1.gran.manual", "osc1.gran.jump_start" }, 8, s_more_osc1_gran_1, 9 },
+    { "osc1_gran_2", "Osc 1 Grain Random", "Osc", { "osc1.gran.rand_offset", "osc1.gran.rand_dir", "osc1.gran.rand_pitch", "osc1.gran.rand_length", "osc1.gran.rand_pan", "osc1.gran.rand_level", "osc1.gran.rand_window", "osc1.gran.rand_skew" }, 8, s_more_osc1_gran_2, 6 },
+    { "osc2_gran_1", "Osc 2 Granular", "Osc", { "osc2.gran.density", "osc2.gran.length", "osc2.gran.window_amount", "osc2.gran.window_skew", "osc2.gran.window_shape", "osc2.gran.position", "osc2.gran.manual", "osc2.gran.jump_start" }, 8, s_more_osc2_gran_1, 9 },
+    { "osc2_gran_2", "Osc 2 Grain Random", "Osc", { "osc2.gran.rand_offset", "osc2.gran.rand_dir", "osc2.gran.rand_pitch", "osc2.gran.rand_length", "osc2.gran.rand_pan", "osc2.gran.rand_level", "osc2.gran.rand_window", "osc2.gran.rand_skew" }, 8, s_more_osc2_gran_2, 6 },
+    { "osc3_gran_1", "Osc 3 Granular", "Osc", { "osc3.gran.density", "osc3.gran.length", "osc3.gran.window_amount", "osc3.gran.window_skew", "osc3.gran.window_shape", "osc3.gran.position", "osc3.gran.manual", "osc3.gran.jump_start" }, 8, s_more_osc3_gran_1, 9 },
+    { "osc3_gran_2", "Osc 3 Grain Random", "Osc", { "osc3.gran.rand_offset", "osc3.gran.rand_dir", "osc3.gran.rand_pitch", "osc3.gran.rand_length", "osc3.gran.rand_pan", "osc3.gran.rand_level", "osc3.gran.rand_window", "osc3.gran.rand_skew" }, 8, s_more_osc3_gran_2, 6 },
+    // Spectral, block B29 (GROUPC WP-12; 13-new-keys.md 4.38): pages 150 - 152
+    { "osc1_spec_1", "Osc 1 Spectral", "Osc", { "osc1.spec.freq_lo", "osc1.spec.freq_hi", "osc1.spec.cut", "osc1.spec.mix", "osc1.spec.freq_shift", "osc1.spec.position", "osc1.spec.manual", "osc1.spec.phase_lock" }, 8, s_more_osc1_spec_1, 9 },
+    { "osc2_spec_1", "Osc 2 Spectral", "Osc", { "osc2.spec.freq_lo", "osc2.spec.freq_hi", "osc2.spec.cut", "osc2.spec.mix", "osc2.spec.freq_shift", "osc2.spec.position", "osc2.spec.manual", "osc2.spec.phase_lock" }, 8, s_more_osc2_spec_1, 9 },
+    { "osc3_spec_1", "Osc 3 Spectral", "Osc", { "osc3.spec.freq_lo", "osc3.spec.freq_hi", "osc3.spec.cut", "osc3.spec.mix", "osc3.spec.freq_shift", "osc3.spec.position", "osc3.spec.manual", "osc3.spec.phase_lock" }, 8, s_more_osc3_spec_1, 9 },
+    // Multisample, block B30 (GROUPC WP-13; 13-new-keys.md 4.39): pages 153 - 155
+    { "osc1_multi_1", "Osc 1 Multisample", "Osc", { "osc1.multi.override", "osc1.multi.delay", "osc1.multi.attack", "osc1.multi.hold", "osc1.multi.decay", "osc1.multi.sustain", "osc1.multi.release", "osc1.multi.vel_track" }, 8, s_more_osc1_multi_1, 2 },
+    { "osc2_multi_1", "Osc 2 Multisample", "Osc", { "osc2.multi.override", "osc2.multi.delay", "osc2.multi.attack", "osc2.multi.hold", "osc2.multi.decay", "osc2.multi.sustain", "osc2.multi.release", "osc2.multi.vel_track" }, 8, s_more_osc2_multi_1, 2 },
+    { "osc3_multi_1", "Osc 3 Multisample", "Osc", { "osc3.multi.override", "osc3.multi.delay", "osc3.multi.attack", "osc3.multi.hold", "osc3.multi.decay", "osc3.multi.sustain", "osc3.multi.release", "osc3.multi.vel_track" }, 8, s_more_osc3_multi_1, 2 },
+    // Rise / Fall / Delay of the modulation slots, block B31 (REMAINDER item 1; 13-new-keys.md 4.41): slots 5 - 64 in the more keys of the Mod Amounts page
+    { "mod_slot_1_slew", "Mod Matrix Slot 1 Rise / Fall / Delay", "Matrix", { "mod01.rise", "mod01.fall", "mod01.delay", "mod01.delay_beats", "mod01.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    { "mod_slot_2_slew", "Mod Matrix Slot 2 Rise / Fall / Delay", "Matrix", { "mod02.rise", "mod02.fall", "mod02.delay", "mod02.delay_beats", "mod02.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    { "mod_slot_3_slew", "Mod Matrix Slot 3 Rise / Fall / Delay", "Matrix", { "mod03.rise", "mod03.fall", "mod03.delay", "mod03.delay_beats", "mod03.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    { "mod_slot_4_slew", "Mod Matrix Slot 4 Rise / Fall / Delay", "Matrix", { "mod04.rise", "mod04.fall", "mod04.delay", "mod04.delay_beats", "mod04.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };
 constexpr MacroTarget s_macro_targets_bass_2[] = { { "filter1.drive", 50.0f, false }, { "distortion.drive", 35.0f, false }, { "osc1.warp.amount", 25.0f, false } };

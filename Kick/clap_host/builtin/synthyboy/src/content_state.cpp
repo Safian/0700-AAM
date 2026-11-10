@@ -19,7 +19,7 @@ bool operator== (const ContentModRef& a, const ContentModRef& b) noexcept
 
 bool operator== (const ContentPoint& a, const ContentPoint& b) noexcept
 {
-    return a.x == b.x && a.y == b.y && a.power == b.power && a.modX == b.modX && a.modY == b.modY;
+    return a.x == b.x && a.y == b.y && a.power == b.power && a.modX == b.modX && a.modY == b.modY && a.modCurve == b.modCurve;
 }
 
 namespace
@@ -118,9 +118,9 @@ bool pointsOk (const std::vector<ContentPoint>& pts, int maxPoints, bool allowMo
     {
         if (! inRange (p.x, 0.0, 1.0) || ! inRange (p.y, 0.0, 1.0) || ! inRange (p.power, -kMaxPointPower, kMaxPointPower) || p.x < previousX)
             return false;
-        if (! allowMod && (p.modX.present || p.modY.present))
+        if (! allowMod && (p.modX.present || p.modY.present || p.modCurve.present))
             return false;
-        if (! modOk (p.modX) || ! modOk (p.modY))
+        if (! modOk (p.modX) || ! modOk (p.modY) || ! modOk (p.modCurve))
             return false;
         previousX = p.x;
     }
@@ -150,6 +150,13 @@ bool operator== (const StateContent& a, const StateContent& b) noexcept
                                             { return p.x == q.x && p.y == q.y; }); })
         && sameVector (a.remaps, b.remaps, [] (const ContentRemap& x, const ContentRemap& y)
                        { return x.osc == y.osc && x.slot == y.slot && x.name == y.name
+                             && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); })
+        && sameVector (a.spectralFilters, b.spectralFilters, [] (const ContentRemap& x, const ContentRemap& y)
+                       { return x.osc == y.osc && x.slot == y.slot && x.name == y.name
+                             && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); })
+        && sameVector (a.instruments, b.instruments, [] (const ContentInstrument& x, const ContentInstrument& y) { return x.osc == y.osc && same (x.ref, y.ref) && x.zones == y.zones; })
+        && sameVector (a.modCurves, b.modCurves, [] (const ContentModCurve& x, const ContentModCurve& y)
+                       { return x.slot == y.slot && x.riseMs == y.riseMs && x.fallMs == y.fallMs
                              && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); });
 }
 
@@ -170,7 +177,7 @@ bool validateContent (const StateContent& c) noexcept
         oscs.clear();
         for (const auto& s : c.samples)
         {
-            if (s.osc < 1 || s.osc > 3 || ! oscs.insert (s.osc).second || ! refOk (s.ref) || s.sampleRate < 0 || s.sampleRate > 768000
+            if (s.osc < 1 || s.osc > kNoiseSampleOsc || ! oscs.insert (s.osc).second || ! refOk (s.ref) || s.sampleRate < 0 || s.sampleRate > 768000
                 || s.frames < 0 || s.frames > (1 << 30) || s.channels < 0 || s.channels > 2 || s.slices.size() > static_cast<size_t> (kMaxSampleSlices))
                 return false;
             float previous = 0.0f;
@@ -245,6 +252,30 @@ bool validateContent (const StateContent& c) noexcept
         for (const auto& r : c.remaps)
             if (r.osc < 1 || r.osc > 3 || r.slot < 1 || r.slot > kNumRemapSlots || ! remapKeys.insert (r.osc * 10 + r.slot).second
                 || ! plainString (r.name, kMaxContentStringBytes) || ! pointsOk (r.points, kMaxRemapPoints, false, true))
+                return false;
+
+        if (c.spectralFilters.size() > static_cast<size_t> (kMaxContentSpectralFilters))
+            return false;
+        std::set<int> spectralOscs;
+        for (const auto& r : c.spectralFilters)
+            if (r.osc < 1 || r.osc > 3 || r.slot != 1 || ! spectralOscs.insert (r.osc).second || ! plainString (r.name, kMaxContentStringBytes)
+                || ! pointsOk (r.points, kMaxRemapPoints, false, true))
+                return false;
+
+        if (c.instruments.size() > static_cast<size_t> (kMaxContentInstruments))
+            return false;
+        std::set<int> instrumentOscs;
+        for (const auto& in : c.instruments)
+            if (in.osc < 1 || in.osc > 3 || ! instrumentOscs.insert (in.osc).second || ! refOk (in.ref) || in.zones < 0 || in.zones > 4096)
+                return false;
+
+        if (c.modCurves.size() > static_cast<size_t> (kMaxContentModCurves))
+            return false;
+        std::set<int> modCurveSlots;
+        for (const auto& mc : c.modCurves)
+            if (mc.slot < 1 || mc.slot > kMaxContentModCurves || ! modCurveSlots.insert (mc.slot).second
+                || ! (mc.points.empty() ? (mc.riseMs > 0.0f || mc.fallMs > 0.0f) : pointsOk (mc.points, kMaxModCurvePoints, false, true))
+                || ! (mc.riseMs >= 0.0f && mc.riseMs <= kMaxModSlewMs && mc.fallMs >= 0.0f && mc.fallMs <= kMaxModSlewMs)) // (NaN fails both)
                 return false;
         return true;
     }

@@ -18,10 +18,22 @@
 #include "synthyboy/kick_pages.h"
 #include "synthyboy/midi_events.h"
 #include "synthyboy/params.h"
+#include "synthyboy/preferences.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/quality.h"
+#include "synthyboy/shell_features.h"
 #include "synthyboy/state.h"
+#include "synthyboy/user_content.h"
+#include "synthyboy/wave_convert.h"
+#include "synthyboy/vital_plugin_import.h"
+#include "synthyboy_content_ext.h"
+#include "synthyboy_content_service.h"
 #include <clap/ext/remote-controls.h>
+#include <clap/ext/render.h>
+
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 
 namespace synthyboy
 {
@@ -58,8 +70,19 @@ struct SynthyBoyClap
     clap_plugin_t plugin {};
     const clap_host_t* host = nullptr;
     std::unique_ptr<IEngine> engine;
+    UserContentStore contentStore { userDataDirectory() }; // the user content library (WP-01): the engine resolves the references of `content` through it
     ParamValues values;
     StateContent content; // the `content` section of the state (not parameters): custom LFO shapes, curves and the tuning go to the engine (setContent), main thread only
+    MidiCcMap midiMap;                // MIDI learn table (G07): CC -> parameter, read on the audio thread; saved in the `shell` section
+    std::vector<std::string> locks;   // module locks (G08), main thread; kept for the round trip with the editor shell
+    Preferences prefs;                // the global preferences (GROUPA2 WP-02): read once when the plug-in is created (the editor shell writes the file)
+    TransportStopWatch stopWatch;     // audio thread: the host transport stops -> silence () when prefs.silenceOnStop
+    bool offlineRender = false;       // clap_plugin_render: the host renders offline
+    // the last note (audio thread writes, the main thread reads: Resample, the audio of the last note) and the host tempo
+    std::atomic<int> lastKey { -1 };
+    std::atomic<float> lastVelocity { 0.8f };
+    std::atomic<int64_t> lastOnSample { 0 }, lastOffSample { -1 }, samplesDone { 0 };
+    std::atomic<double> tempo { 120.0 };
     Quality quality;
     std::vector<Event> events;
     double sampleRate = 48000.0;
@@ -67,6 +90,13 @@ struct SynthyBoyClap
     bool active = false;
     std::atomic<int> reportedLatency { 0 };   // the latency the host was told (ext_latency_get)
     bool processing = false;
+    std::unique_ptr<ContentHost> contentHost; // the view of this plug-in for the extension synthyboy.content (synthyboy_content_service.h)
+
+    ~SynthyBoyClap()
+    {
+        if (engine)
+            engine->setContentStore (nullptr); // the store is destroyed before the engine (member order)
+    }
 
     SynthyBoyClap (const clap_host_t* h)
         : host (h), values (ParamValues::defaults()), quality (qualityForTier (Tier::high))
@@ -78,12 +108,145 @@ struct SynthyBoyClap
 #else
         engine = createEngine (EngineKind::own);
 #endif
+
+        contentStore.addPackRoot ((std::filesystem::path (userDataDirectory()) / "packs").string()); // installed content packs
+        if (engine)
+            engine->setContentStore (&contentStore); // before the first setContent: the references of the content decode against the library
+
+        prefs = loadPreferences (userDataDirectory());
+
+        // Save as Default (G02): a new instance starts from the user's default patch (written by the editor shell), if there is one
+        ShellState defaultShell;
+        if (loadUserDefault (userDataDirectory(), values, content, &defaultShell))
+        {
+            midiMap.setBindings (defaultShell.midiCc);
+            locks = defaultShell.locks;
+            if (engine)
+            {
+                for (size_t i = 0; i < paramCount(); ++i)
+                    engine->setParam (paramTable()[i].id, values.plain[i]);
+                engine->setContent (content);
+            }
+        }
+        else
+        {
+            // the preferences of a new instance (S p.314, A383): MPE on, pitch bend also to X, Y bi-directional
+            const auto set = [this] (const char* key, bool on)
+            {
+                if (const ParamInfo* info = findParamByKey (key); info != nullptr && on)
+                {
+                    values.plain[static_cast<size_t> (findParamIndex (info->id))] = 1.0f;
+                    if (engine) engine->setParam (info->id, 1.0f);
+                }
+            };
+            set ("master.mpe.on", prefs.mpeByDefault);
+            set ("master.mpe.bend_to_x", prefs.mpeBendToX);
+            set ("master.mpe.y_bipolar", prefs.mpeYBipolar);
+        }
+        applyDefaultMidiMap (false);
+    }
+
+    /** The default MIDI CC map file (S p.325): when `force`, it replaces the table; else only an empty table takes it (a new instance). */
+    void applyDefaultMidiMap (bool force)
+    {
+        std::vector<std::pair<int, std::string>> bindings;
+        if ((force || midiMap.numMappings() == 0) && loadDefaultMidiMap (userDataDirectory(), bindings))
+            midiMap.setBindings (bindings);
     }
 };
 
 inline SynthyBoyClap* toClap (const clap_plugin_t* p) noexcept
 {
     return static_cast<SynthyBoyClap*> (p->plugin_data);
+}
+
+/** The plug-in as the ContentHost of the extension synthyboy.content: the values and the content are the plug-in's own, so begin () has nothing to refresh. */
+class NativeContentHost final : public ContentHost
+{
+public:
+    explicit NativeContentHost (SynthyBoyClap& plugin) : self (plugin) {}
+
+    void begin() override {}
+    UserContentStore& store() override { return self.contentStore; }
+    EngineCapsMask engineCaps() override { return self.engine ? self.engine->capabilities() : kCapNone; }
+    ParamValues& values() override { return self.values; }
+    StateContent& content() override { return self.content; }
+    const Preferences& prefs() override { return self.prefs; }
+
+    void setValue (const ParamInfo& info, float constrained) override
+    {
+        self.values.plain[static_cast<size_t> (findParamIndex (info.id))] = constrained;
+        if (self.engine)
+            self.engine->setParam (info.id, constrained);
+    }
+
+    void applyAllValues() override
+    {
+        if (self.engine)
+            for (size_t i = 0; i < paramCount(); ++i)
+                self.engine->setParam (paramTable()[i].id, self.values.plain[i]);
+    }
+
+    void contentChanged() override
+    {
+        contentRefresh();
+        if (self.host != nullptr && self.host->get_extension != nullptr)
+            if (const auto* state = static_cast<const clap_host_state_t*> (self.host->get_extension (self.host, CLAP_EXT_STATE)))
+                if (state->mark_dirty != nullptr)
+                    state->mark_dirty (self.host);
+    }
+
+    void contentRefresh() override
+    {
+        if (self.engine)
+            self.engine->setContent (self.content);
+    }
+
+    void valuesRescan() override
+    {
+        if (self.host != nullptr && self.host->get_extension != nullptr)
+            if (const auto* params = static_cast<const clap_host_params_t*> (self.host->get_extension (self.host, CLAP_EXT_PARAMS)))
+                if (params->rescan != nullptr)
+                    params->rescan (self.host, CLAP_PARAM_RESCAN_VALUES);
+    }
+
+    bool renderOffline (const OfflineRequest& request, OfflineAudio& audio) override
+    {
+        if (! self.engine)
+            return false;
+        const EngineKind kind =
+#if SYNTHYBOY_HAS_VITAL
+            EngineKind::vital;
+#else
+            EngineKind::own;
+#endif
+        return renderOfflineAny (*self.engine, kind, &self.content, &self.contentStore, request, audio);
+    }
+
+    LastNote lastNote() override
+    {
+        LastNote note;
+        const int key = self.lastKey.load (std::memory_order_relaxed);
+        if (key < 0)
+            return note;
+        const int64_t on = self.lastOnSample.load (std::memory_order_relaxed), off = self.lastOffSample.load (std::memory_order_relaxed);
+        const int64_t end = off >= 0 ? off : self.samplesDone.load (std::memory_order_relaxed);
+        note.valid = true;
+        note.key = key;
+        note.velocity = self.lastVelocity.load (std::memory_order_relaxed);
+        note.heldSeconds = static_cast<double> (end - on) / std::max (self.sampleRate, 1.0);
+        return note;
+    }
+
+    double tempoBpm() override { return self.tempo.load (std::memory_order_relaxed); }
+
+private:
+    SynthyBoyClap& self;
+};
+
+ContentHost* resolveContentHost (const clap_plugin_t* p) noexcept
+{
+    return p != nullptr && p->plugin_data != nullptr ? static_cast<SynthyBoyClap*> (p->plugin_data)->contentHost.get() : nullptr;
 }
 
 // -----------------------------------------------------------------------------
@@ -105,8 +268,12 @@ bool clap_activate (const clap_plugin_t* p, double sample_rate, uint32_t, uint32
     auto* self = toClap (p);
     self->sampleRate = sample_rate > 0.0 ? sample_rate : 48000.0;
     self->maxBlockSize = std::max (max_frames_count, 32u);
+    self->stopWatch.reset();
     if (self->engine)
+    {
+        self->engine->setUltraRender (self->prefs.ultraRender && self->offlineRender);
         self->engine->prepare (self->sampleRate, static_cast<int> (self->maxBlockSize), self->quality);
+    }
     self->active = true;
     return true;
 }
@@ -169,6 +336,10 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                     e.value = static_cast<float> (ev->velocity);
                     e.noteId = ev->note_id;
                     self->events.push_back (e);
+                    self->lastKey.store (e.key, std::memory_order_relaxed);
+                    self->lastVelocity.store (e.value, std::memory_order_relaxed);
+                    self->lastOnSample.store (self->samplesDone.load (std::memory_order_relaxed) + e.frame, std::memory_order_relaxed);
+                    self->lastOffSample.store (-1, std::memory_order_relaxed);
                     break;
                 }
                 case CLAP_EVENT_NOTE_OFF:
@@ -183,11 +354,13 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                     e.value = static_cast<float> (ev->velocity);
                     e.noteId = ev->note_id;
                     self->events.push_back (e);
+                    if (e.key == self->lastKey.load (std::memory_order_relaxed))
+                        self->lastOffSample.store (self->samplesDone.load (std::memory_order_relaxed) + e.frame, std::memory_order_relaxed);
                     break;
                 }
                 case CLAP_EVENT_NOTE_EXPRESSION:
                 {
-                    // per-note expressions (MPE through CLAP, docs/ui-design/13-new-keys.md 4.7): TUNING (semitones), PRESSURE, BRIGHTNESS
+                    // per-note expressions (MPE through CLAP, docs/ui-design/13-new-keys.md 4.7): TUNING (semitones), PRESSURE, BRIGHTNESS, PAN
                     const auto* ev = reinterpret_cast<const clap_event_note_expression_t*> (hdr);
                     Event e {};
                     e.frame = static_cast<int32_t> (ev->header.time);
@@ -202,8 +375,10 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                         e.expression = Event::Pressure;
                     else if (ev->expression_id == CLAP_NOTE_EXPRESSION_BRIGHTNESS)
                         e.expression = Event::Brightness;
+                    else if (ev->expression_id == CLAP_NOTE_EXPRESSION_PAN)
+                        e.expression = Event::Pan; // the X axis of the MPE mappings
                     else
-                        break; // volume, pan, vibrato, expression: not used
+                        break; // volume, vibrato, expression: not used
                     self->events.push_back (e);
                     break;
                 }
@@ -211,6 +386,34 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                 {
                     // the MIDI dialect of the note port: CC 64 sustain pedal, CC 1, CC 74, pressure, bend, note on/off
                     const auto* ev = reinterpret_cast<const clap_event_midi_t*> (hdr);
+                    // a controller that is in the MIDI learn table sets its parameter (G07) and is reported to the host
+                    if ((ev->data[0] & 0xF0) == 0xB0)
+                    {
+                        const auto hit = self->midiMap.handleCc (ev->data[1] & 0x7F, ev->data[2] & 0x7F);
+                        if (hit.apply)
+                        {
+                            const auto& info = paramTable()[hit.paramIndex];
+                            self->values.plain[hit.paramIndex] = hit.plain;
+                            self->engine->setParam (info.id, hit.plain);
+                            if (process->out_events != nullptr)
+                            {
+                                clap_event_param_value_t out {};
+                                out.header.size = sizeof out;
+                                out.header.time = ev->header.time;
+                                out.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+                                out.header.type = CLAP_EVENT_PARAM_VALUE;
+                                out.header.flags = 0;
+                                out.param_id = info.id;
+                                out.cookie = nullptr;
+                                out.note_id = -1;
+                                out.port_index = -1;
+                                out.channel = -1;
+                                out.key = -1;
+                                out.value = static_cast<double> (hit.plain);
+                                process->out_events->try_push (process->out_events, &out.header);
+                            }
+                        }
+                    }
                     Event e {};
                     if (translateMidiMessage (ev->data, 3, static_cast<int32_t> (ev->header.time), e))
                         self->events.push_back (e);
@@ -242,11 +445,17 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
         {
             const clap_event_transport_t* t = process->transport;
             if ((t->flags & CLAP_TRANSPORT_HAS_TEMPO) != 0 && t->tempo > 0.0)
+            {
                 transport.bpm = t->tempo;
+                self->tempo.store (t->tempo, std::memory_order_relaxed);
+            }
             if ((t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) != 0)
                 transport.songPosBeats = static_cast<double> (t->song_pos_beats) / static_cast<double> (CLAP_BEATTIME_FACTOR);
             transport.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
         }
+        // the host stopped: notes end and the effect tails are cleared (S p.315, A381)
+        if (self->stopWatch.update (process->transport != nullptr, transport.playing) && self->prefs.silenceOnStop)
+            self->engine->silence();
         self->engine->setTransport (transport);
     }
 
@@ -258,6 +467,10 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
 
         self->engine->process (self->events.data(), static_cast<int> (self->events.size()),
                                outL, outR, static_cast<int> (process->frames_count));
+        self->samplesDone.fetch_add (process->frames_count, std::memory_order_relaxed);
+        // quality.oversample_4x changed: only prepare () can apply it (activate () calls it again after the restart)
+        if (self->engine->needsPrepare() && self->host != nullptr && self->host->request_restart != nullptr)
+            self->host->request_restart (self->host);
         // Bode's latency changed (the effect was switched on / off or moved): the host reads the new value after the restart
         const int latency = self->engine->latencySamples();
         if (latency != self->reportedLatency.load (std::memory_order_relaxed))
@@ -441,7 +654,11 @@ bool ext_state_save (const clap_plugin_t* p, const clap_ostream_t* stream) noexc
     if (stream == nullptr)
         return false;
 
-    const std::string s = saveState (toClap (p)->values, toClap (p)->content);
+    auto* self = toClap (p);
+    ShellState shell;
+    shell.midiCc = self->midiMap.bindings();
+    shell.locks = self->locks;
+    const std::string s = withShellSection (saveState (self->values, self->content), shell);
     const int64_t written = stream->write (stream, s.data(), s.size());
     return (written == static_cast<int64_t> (s.size()));
 }
@@ -465,9 +682,32 @@ bool ext_state_load (const clap_plugin_t* p, const clap_istream_t* stream) noexc
     if (buffer.empty())
         return false;
 
+    const ParamValues before = self->values;
+    const StateContent contentBefore = self->content;
     const LoadResult res = loadStateWithContent (buffer.data(), buffer.size(), self->values, self->content);
     if (res.status == LoadStatus::ok || res.status == LoadStatus::newer_version)
     {
+        // a session of ours carries the `shell` section (MIDI map, locks) and is restored as it is; a document without it is a preset
+        // change and the locked modules of this instance survive it (G08)
+        ShellState shell;
+        const ShellStatus shellStatus = loadShellSection (buffer.data(), buffer.size(), shell);
+        if (shellStatus == ShellStatus::ok || shellStatus == ShellStatus::rejected)
+        {
+            self->midiMap.setBindings (shell.midiCc);
+            self->locks = shell.locks;
+        }
+        else
+        {
+            self->applyDefaultMidiMap (true); // a preset change loads the default MIDI map (S p.315)
+            if (! self->locks.empty())
+            {
+                keepLockedValues (self->values, before, self->locks);
+                StateContent merged = self->content;
+                keepLockedContent (merged, contentBefore, self->locks);
+                if (validateContent (merged))
+                    self->content = std::move (merged);
+            }
+        }
         if (self->engine)
         {
             for (size_t i = 0; i < paramCount(); ++i)
@@ -565,6 +805,27 @@ const clap_plugin_remote_controls_t s_remote_controls = {
     ext_remote_controls_get
 };
 
+// render (offline bounce): "Use Ultra quality when rendering" (S p.315, A385)
+bool ext_render_has_hard_realtime_requirement (const clap_plugin_t*) noexcept { return false; }
+
+bool ext_render_set (const clap_plugin_t* p, clap_plugin_render_mode mode) noexcept
+{
+    auto* self = toClap (p);
+    self->offlineRender = mode == CLAP_RENDER_OFFLINE;
+    if (self->engine)
+    {
+        self->engine->setUltraRender (self->prefs.ultraRender && self->offlineRender); // the process call asks the host for a restart (needsPrepare)
+        self->quality.realtime = ! self->offlineRender;
+        self->engine->setQuality (self->quality);
+    }
+    return true;
+}
+
+const clap_plugin_render_t s_render = {
+    ext_render_has_hard_realtime_requirement,
+    ext_render_set
+};
+
 // Extension query
 const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
 {
@@ -578,6 +839,8 @@ const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
     if (std::strcmp (id, CLAP_EXT_VOICE_INFO) == 0) return &s_voice_info;
     if (std::strcmp (id, CLAP_EXT_LATENCY) == 0) return &s_latency;
     if (std::strcmp (id, CLAP_EXT_TAIL) == 0) return &s_tail;
+    if (std::strcmp (id, CLAP_EXT_RENDER) == 0) return &s_render;
+    if (std::strcmp (id, SYNTHYBOY_EXT_CONTENT) == 0) return contentExtension();
     if (std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS) == 0 ||
         std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS_COMPAT) == 0 ||
         std::strcmp (id, "clap.remote-controls") == 0) return &s_remote_controls;
@@ -607,6 +870,8 @@ const clap_plugin_t* factory_create_plugin (const clap_plugin_factory_t*, const 
         return nullptr;
 
     auto* self = new SynthyBoyClap (host);
+    self->contentHost = std::make_unique<NativeContentHost> (*self);
+    setContentHostResolver (resolveContentHost);
     self->plugin.desc = &s_descriptor;
     self->plugin.plugin_data = self;
     self->plugin.init = clap_init;

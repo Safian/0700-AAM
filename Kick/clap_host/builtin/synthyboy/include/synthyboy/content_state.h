@@ -16,7 +16,8 @@ namespace synthyboy
 {
 constexpr size_t kMaxContentStringBytes = 255;   // name, author, pack, file, filter, source
 constexpr int kMaxContentWavetables = 3;         // one per oscillator (oscN.wavetable = Preset table)
-constexpr int kMaxContentSamples = 3;            // one per oscillator (oscN.type = Sample)
+constexpr int kNoiseSampleOsc = 4;               // content.samples[].osc of the noise source (noise.type = Sample, GROUPA1 WP-04)
+constexpr int kMaxContentSamples = 4;            // one per oscillator (oscN.type = Sample) and one for the noise source (osc 4)
 constexpr int kMaxSampleSlices = 128;
 constexpr int kMaxContentLfoShapes = 10;         // one per LFO (lfoN.shape = Custom)
 constexpr int kMaxLfoShapePoints = 128;
@@ -27,6 +28,11 @@ constexpr int kMaxFilterCurvePoints = 16;
 constexpr int kMaxContentRemaps = 12;            // 3 oscillators x 4 slots (oscN.remap.slot)
 constexpr int kNumRemapSlots = 4;
 constexpr int kMaxRemapPoints = 64;
+constexpr int kMaxContentSpectralFilters = 3;    // one drawn spectral filter curve per oscillator (oscN.type = Spectral, GROUPC WP-12)
+constexpr int kMaxContentInstruments = 3;        // one multisample instrument per oscillator (oscN.type = Multisample, GROUPC WP-13)
+constexpr int kMaxContentModCurves = 64;         // one per modulation matrix slot (modNN, G2)
+constexpr float kMaxModSlewMs = 5000.0f;         // RISE / FALL of a modulation connection (GROUPB WP-08)
+constexpr int kMaxModCurvePoints = 100;
 constexpr size_t kMaxTuningSclBytes = 64 * 1024;
 constexpr size_t kMaxTuningKbmBytes = 4 * 1024;
 constexpr double kMaxPointModAmount = 1.0;       // |amount| of the point modulation of a custom LFO point
@@ -49,10 +55,19 @@ struct ContentWavetable
 
 struct ContentSample
 {
-    int osc = 0; // 1..3
+    int osc = 0; // 1..3 = the oscillator, 4 = the noise source (kNoiseSampleOsc)
     ContentFileRef ref;
     int sampleRate = 0, frames = 0, channels = 0;
     std::vector<float> slices; // 0..1, ascending
+};
+
+/** A multisample instrument of an oscillator (GROUPC WP-13, 13-new-keys.md 4.39): `ref` is the SFZ file of a content pack (or of the user library); the samples its regions name
+    are files of the same pack, relative to the folder of the SFZ file. `zones` is the number of regions the SFZ has (display only, 0 = unknown). */
+struct ContentInstrument
+{
+    int osc = 0; // 1..3
+    ContentFileRef ref;
+    int zones = 0;
 };
 
 /** Point modulation of a custom LFO point (G65): a modulation source key of docs/ui-design/13-new-keys.md section 2 and an amount. */
@@ -67,6 +82,7 @@ struct ContentPoint
 {
     float x = 0.0f, y = 0.0f, power = 0.0f;
     ContentModRef modX, modY; // only on LFO shape points
+    ContentModRef modCurve;   // REMAINDER item 4 (S13): the curve of the segment after the point; amount 1 = 10 power units (A457)
 
     ContentPoint() = default;
     ContentPoint (float xIn, float yIn, float powerIn = 0.0f) : x (xIn), y (yIn), power (powerIn) {}
@@ -89,6 +105,18 @@ struct ContentRemap
     int slot = 0; // 1..4
     std::string name;
     std::vector<ContentPoint> points; // 2 .. kMaxRemapPoints, ascending x in 0..1 (the engine clamps the ends)
+};
+
+/** A drawn per-connection modulation curve (G2, 13-new-keys.md B20): remaps source value before applying amount.
+    `slot` is the modulation slot index (1..64). */
+struct ContentModCurve
+{
+    int slot = 0; // 1..64
+    std::vector<ContentPoint> points; // 0 or 2 .. kMaxModCurvePoints, ascending x in 0..1 (no points: only the slew below)
+    /** LEGACY (GROUPB WP-08, 13-new-keys.md 4.35): the RISE / FALL of the connection used to be stored here (ms). They are the keys modNN.rise / modNN.fall since REMAINDER
+        item 1 (4.41); the state loader moves a document's values into the keys and clears them, the writer never writes them. Kept so that old documents parse. */
+    float riseMs = 0.0f;
+    float fallMs = 0.0f;
 };
 
 struct ContentFilterCurvePoint
@@ -124,11 +152,15 @@ struct StateContent
     std::vector<ContentFileRef> impulses;
     std::vector<ContentFilterCurve> filterCurves;
     std::vector<ContentRemap> remaps;
+    /** The drawn mask of the spectral filter of oscillator `osc` (GROUPC WP-12): x = position on the frequency axis (log, 20 Hz .. 20 kHz) 0..1, y = 0..1 with 0.5 = unity gain; `slot` is 1. */
+    std::vector<ContentRemap> spectralFilters;
+    std::vector<ContentInstrument> instruments;
+    std::vector<ContentModCurve> modCurves;
 
     bool empty() const noexcept
     {
         return wavetables.empty() && samples.empty() && lfoShapes.empty() && velocityCurve.empty() && noteCurve.empty() && shaperA.empty() && shaperB.empty()
-            && ! tuning.present && impulses.empty() && filterCurves.empty() && remaps.empty();
+            && ! tuning.present && impulses.empty() && filterCurves.empty() && remaps.empty() && spectralFilters.empty() && instruments.empty() && modCurves.empty();
     }
     void clear() noexcept { *this = StateContent {}; }
 };
