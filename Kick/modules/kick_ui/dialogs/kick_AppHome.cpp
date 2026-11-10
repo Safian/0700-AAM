@@ -249,6 +249,11 @@ namespace kick_ui
                 }
 
                 lazyScreensReady_ = true;
+#if ! (JUCE_LINUX && defined(KICK_ENABLE_HARDWARE) && KICK_ENABLE_HARDWARE)
+                // Re-apply theme with notification so lazily constructed screens load their icons;
+                // KickHardwareBridge performs this on Linux hardware builds.
+                ui::Theme::loadTheme( ui::Theme::getCurrentTheme(), true );
+#endif
                 if( startupScreen_ ) startupScreen_->toFront( false ); // the screens just added must not cover it
                 if( pendingScreen_ != Screen::Invalid )
                 {

@@ -437,7 +437,7 @@ namespace ui
     KickVirtualKeyBoard::KickVirtualKeyBoard( const juce::String& initialKeyvalue )
         : inputTextLabel( initialKeyvalue )
     {
-#if !(JUCE_IOS || JUCE_ANDROID)
+#if !((JUCE_IOS && defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD) || JUCE_ANDROID)
         mt::utils::addChildComponents( this, inputTextLabel, letterComp, numComp, speSym, upperCaseComp );
 #else
         mt::utils::addChildComponents( this, inputTextLabel, createButton );
@@ -457,7 +457,7 @@ namespace ui
         setBufferedToImage( true );
         getProperties().set( "outsideTapCancels", true );
 
-#if JUCE_IOS || JUCE_ANDROID
+#if (JUCE_IOS && defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD) || JUCE_ANDROID
         juce::Font fnt( 24.f );
 #else
         juce::Font fnt( 36.f );
@@ -473,7 +473,7 @@ namespace ui
         inputTextLabel.selectAll();
         inputTextLabel.setFocusContainerType( juce::Component::FocusContainerType::focusContainer );
         inputTextLabel.setJustification( juce::Justification::centredLeft );
-#if JUCE_IOS || JUCE_ANDROID
+#if (JUCE_IOS && defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD) || JUCE_ANDROID
         inputTextLabel.setMultiLine( false );
         inputTextLabel.setReturnKeyStartsNewLine( false );
         inputTextLabel.setKeyboardType( juce::TextInputTarget::textKeyboard );
@@ -550,7 +550,7 @@ namespace ui
         currentType = type;
 
         inputTextLabel.setVisible( true );
-#if !(JUCE_IOS || JUCE_ANDROID)
+#if !((JUCE_IOS && defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD) || JUCE_ANDROID)
         letterComp.setVisible( false );
         numComp.setVisible( false );
         speSym.setVisible( false );
@@ -566,7 +566,7 @@ namespace ui
     void KickVirtualKeyBoard::show( const juce::String& Title, Type KeyboardType, std::function<void( int )> Callback, juce::Rectangle<int> Bounds )
     {
         showKeyboard( KeyboardType );
-#if JUCE_IOS || JUCE_ANDROID
+#if (JUCE_IOS && defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD) || JUCE_ANDROID
         juce::String btnText = ( Title.containsIgnoreCase( "CREATE" ) || Title.containsIgnoreCase( "NEW" ) ) ? "CREATE" : "APPLY";
         createButton.setButtonText( btnText );
         createButton.setVisible( true );
@@ -614,7 +614,7 @@ namespace ui
 
     void KickVirtualKeyBoard::resized()
     {
-#if JUCE_IOS || JUCE_ANDROID
+#if (JUCE_IOS && defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD) || JUCE_ANDROID
         auto b = getLocalBounds().reduced( 8, 8 );
         auto btnW = 120;
         createButton.setBounds( b.removeFromRight( btnW ) );

@@ -58,7 +58,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 ## iOS: recent SDKs require the UIScene life cycle.
 set(KICK_IOS_PLIST_ARGS "")
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(KICK_IOS_PLIST_ARGS PLIST_TO_MERGE "<plist><dict><key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/><key>UISceneConfigurations</key><dict><key>UIWindowSceneSessionRoleApplication</key><array><dict><key>UISceneConfigurationName</key><string>Default Configuration</string><key>UISceneDelegateClassName</key><string>JuceAppSceneDelegate</string></dict></array></dict></dict><key>NSMicrophoneUsageDescription</key><string>Microphone access is required for audio recording and sampling.</string><key>UIFileSharingEnabled</key><true/><key>LSSupportsOpeningDocumentsInPlace</key><true/><key>UIBackgroundModes</key><array><string>audio</string></array></dict></plist>")
+    set(KICK_IOS_PLIST_ARGS PLIST_TO_MERGE "<plist><dict><key>UIStatusBarHidden</key><true/><key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/><key>UISceneConfigurations</key><dict><key>UIWindowSceneSessionRoleApplication</key><array><dict><key>UISceneConfigurationName</key><string>Default Configuration</string><key>UISceneDelegateClassName</key><string>JuceAppSceneDelegate</string></dict></array></dict></dict><key>NSMicrophoneUsageDescription</key><string>Microphone access is required for audio recording and sampling.</string><key>UIFileSharingEnabled</key><true/><key>LSSupportsOpeningDocumentsInPlace</key><true/><key>UIBackgroundModes</key><array><string>audio</string></array></dict></plist>")
 endif()
 
 set(KICK_BUNDLE_ID "hu.safian.MusicTribe.Kick.dev" CACHE STRING "Application bundle identifier")
