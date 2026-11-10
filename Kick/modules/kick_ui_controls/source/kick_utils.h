@@ -168,6 +168,10 @@ namespace mt
 
         void exitDialog( juce::Component* Comp, int exitCode );
 
+        // Optional 1024x600 container used by scaled mobile shells so modals and notifications render in DAW space.
+        void             setOverlayHost( juce::Component* host );
+        juce::Component* getOverlayHost();
+
         // Hardware access to the open dialogs (message thread): is one open, does the top one have Apply / Cancel buttons, and
         // close it (Apply = UI::APPLY, else UI::CANCEL). False when none is open or a popup sits on top of it.
         bool isDialogOpen();

@@ -42,7 +42,12 @@ set(KICK_THEME "Default" CACHE STRING "Initial theme for Kick (e.g. Default or P
 if(NOT KICK_THEME STREQUAL "Default")
     add_compile_definitions(KICK_DEFAULT_THEME="${KICK_THEME}")
 endif()
-option( KICK_TOUCH_SINGLE_TAP_LISTBOX "Single tap opens a KickListBox (touch-only Akai MPC bridge build); default is the original double-click" OFF )
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(_kick_touch_single_tap_default ON)
+else()
+    set(_kick_touch_single_tap_default OFF)
+endif()
+option( KICK_TOUCH_SINGLE_TAP_LISTBOX "Single tap opens a KickListBox (touch-only Akai MPC bridge build); default is the original double-click" ${_kick_touch_single_tap_default} )
 option( KICK_DESKTOP_KEYBOARD "Map the PC keyboard to the front panel buttons and pads (always on for Windows)" OFF )
 option( KICK_KEYBOARD_QWERTZ "Use QWERTZ layout for PC keyboard mapping (swaps Y and Z for physical pad layout)" OFF )
 

@@ -619,8 +619,22 @@ public:
         // Initialize Audio engine and interface ...
         mt::getAudioInterface();
 
+#if JUCE_IOS
+        if( !smoke )
+        {
+            const auto demo = getAppDirs( MTDemos ).getChildFile( "Demo 01/Demo 01.kickPrj" );
+            if( demo.existsAsFile() )
+                ui::LoadProjectAndAnimation::setDefaultProject( demo );
+        }
+#endif
+
         // Initialize User Interface...
         w = std::make_unique<HomeWindow>( getApplicationName() );
+
+#if ! (JUCE_LINUX && defined(KICK_ENABLE_HARDWARE) && KICK_ENABLE_HARDWARE)
+        // Populate non-lazy UI components (AppTopbar, RecentProject) with the active theme assets immediately.
+        ui::Theme::loadTheme( ui::Theme::getCurrentTheme(), true );
+#endif
 
 #if JUCE_MAC
         w->setUsingNativeTitleBar( true );
@@ -647,8 +661,10 @@ public:
 #endif
         w->setBounds( bounds );
 
+#if ! JUCE_IOS
         // Position ...
         w->setTopLeftPosition( 0, 0 );
+#endif
 #endif
 
         // Headless (no X server / display, e.g. the MPC framebuffer bridge): JUCE's Linux setKioskComponent()
@@ -867,17 +883,21 @@ public:
         KickMobileView()
         {
             setOpaque( true );
+            dawStage.setOpaque( true );
+            dawStage.setBounds( ui::layout::screen );
+            addAndMakeVisible( dawStage );
             kickHome = &kick_ui::KickHome::Instance();
-            addAndMakeVisible( kickHome );
+            kickHome->setBounds( ui::layout::screen );
+            dawStage.addAndMakeVisible( kickHome );
+            mt::utils::setOverlayHost( &dawStage );
         }
 
         ~KickMobileView() override
         {
+            mt::utils::setOverlayHost( nullptr );
+            dawStage.removeAllChildren();
             if( kickHome != nullptr )
-            {
                 kickHome->setTransform( juce::AffineTransform() );
-                removeChildComponent( kickHome );
-            }
         }
 
         void paint( juce::Graphics& g ) override
@@ -911,17 +931,17 @@ public:
             float dawX = ( (float)w - dawW ) * 0.5f;
             float dawY = ( (float)h - dawH ) * 0.5f;
 
+            dawStage.setBounds( ui::layout::screen );
+            dawStage.setTransform(
+                juce::AffineTransform::scale( scale, scale )
+                                     .translated( dawX, dawY )
+            );
             if( kickHome != nullptr )
-            {
-                kickHome->setBounds( 0, 0, 1024, 600 );
-                kickHome->setTransform(
-                    juce::AffineTransform::scale( scale, scale )
-                                         .translated( dawX, dawY )
-                );
-            }
+                kickHome->setBounds( ui::layout::screen );
         }
 
     private:
+        juce::Component    dawStage;
         kick_ui::KickHome* kickHome{ nullptr };
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( KickMobileView )
     };

@@ -30,6 +30,17 @@ namespace mt
 {
     namespace utils
     {
+        namespace
+        {
+            juce::Component::SafePointer<juce::Component>& overlayHostStorage()
+            {
+                static juce::Component::SafePointer<juce::Component> host;
+                return host;
+            }
+        } // namespace
+
+        void             setOverlayHost( juce::Component* host ) { overlayHostStorage() = host; }
+        juce::Component* getOverlayHost() { return overlayHostStorage().getComponent(); }
 
         ///
         /// Pop-ups and dialogs...

@@ -38,10 +38,17 @@ namespace mt
         {
             setOpaque( true );
 
-            auto display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
-            auto b       = display->totalArea;
-            setBounds( b ); // Overall component Area.
-            addToDesktop( compPeer::windowIsTemporary | compPeer::windowHasDropShadow );
+            if( utils::getOverlayHost() != nullptr )
+            {
+                setBounds( ui::layout::screen );
+            }
+            else
+            {
+                auto display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+                auto b       = display->totalArea;
+                setBounds( b ); // Overall component Area.
+                addToDesktop( compPeer::windowIsTemporary | compPeer::windowHasDropShadow );
+            }
         }
 
         virtual ~fsPopup() = default;
@@ -67,7 +74,12 @@ namespace mt
         {
             image.clear( ui::layout::screen );
 
-            if( auto w = juce::TopLevelWindow::getActiveTopLevelWindow() )
+            if( auto* host = utils::getOverlayHost() )
+            {
+                image = host->createComponentSnapshot( ui::layout::screen, false );
+                stack_blur<10>( image );
+            }
+            else if( auto w = juce::TopLevelWindow::getActiveTopLevelWindow() )
             {
                 image = w->createComponentSnapshot( ui::layout::screen, false );
                 stack_blur<10>( image );
@@ -330,10 +342,17 @@ namespace mt
         {
             auto b = dialogArea.constrainedWithin( getLocalBounds() );
 #if JUCE_IOS || JUCE_ANDROID
-            // Keep modal dialogs in the top portion of the screen on mobile so native keyboard doesn't occlude them
-            int targetY = ( b.getHeight() <= 140 ) ? juce::jmax( b.getHeight() / 2 + 10, 80 )
-                                                   : juce::jmax( b.getHeight() / 2 + 10, 115 );
-            b.setCentre( ui::layout::screen.getCentre().getX(), targetY );
+            if( utils::getOverlayHost() != nullptr )
+            {
+                b.setCentre( ui::layout::screen.getCentre() );
+            }
+            else
+            {
+                // Keep modal dialogs in the top portion of the screen on mobile so native keyboard doesn't occlude them
+                int targetY = ( b.getHeight() <= 140 ) ? juce::jmax( b.getHeight() / 2 + 10, 80 )
+                                                       : juce::jmax( b.getHeight() / 2 + 10, 115 );
+                b.setCentre( ui::layout::screen.getCentre().getX(), targetY );
+            }
 #else
             b.setCentre( ui::layout::screen.getCentre() );
 #endif
@@ -398,18 +417,32 @@ namespace mt
             if( !it->isInUse.load() )
             {
                 it->isInUse = true;
+                if( auto* host = utils::getOverlayHost() )
+                {
+                    if( it->getParentComponent() != host )
+                        host->addChildComponent( it.get() );
+                    it->setBounds( ui::layout::screen );
+                }
                 return it.get();
             }
         }
 
         _popups.emplace_back( new Type() );
         auto& p = _popups.back();
-        // The top-level window of the MPC is hidden (no "active" window): fall back to the first one that exists.
-        auto c = juce::TopLevelWindow::getActiveTopLevelWindow();
-        if( c == nullptr && juce::TopLevelWindow::getNumTopLevelWindows() > 0 )
-            c = juce::TopLevelWindow::getTopLevelWindow( 0 );
-        if( c != nullptr )
-            c->addAndMakeVisible( p.get() );
+        if( auto* host = utils::getOverlayHost() )
+        {
+            p->setBounds( ui::layout::screen );
+            host->addAndMakeVisible( p.get() );
+        }
+        else
+        {
+            // The top-level window of the MPC is hidden (no "active" window): fall back to the first one that exists.
+            auto c = juce::TopLevelWindow::getActiveTopLevelWindow();
+            if( c == nullptr && juce::TopLevelWindow::getNumTopLevelWindows() > 0 )
+                c = juce::TopLevelWindow::getTopLevelWindow( 0 );
+            if( c != nullptr )
+                c->addAndMakeVisible( p.get() );
+        }
         return p.get();
     }
 

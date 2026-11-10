@@ -27,7 +27,10 @@ namespace mt
         bubbleNotification()
             : juce::BubbleMessageComponent()
         {
-            addToDesktop( 0 );
+            if( auto* host = mt::utils::getOverlayHost() )
+                host->addChildComponent( this );
+            else
+                addToDesktop( 0 );
             setAllowedPlacement( BubbleMessageComponent::above );
         }
 
@@ -47,6 +50,8 @@ namespace mt
         {
             showAt( Bounds, Str, TimeInMS );
             setPosition( Bounds.getCentre(), -1 );
+            if( getParentComponent() != nullptr )
+                toFront( false );
         }
 
         void getContentSize( int& w, int& h ) override

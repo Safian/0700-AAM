@@ -32,7 +32,13 @@ namespace kick_ui
     {
         juce::String startupDataDir()
         {
+#if JUCE_IOS
+            const auto envRoot = juce::SystemStats::getEnvironmentVariable( "KICK_DATA_ROOT", {} );
+            if( envRoot.isNotEmpty() ) return envRoot;
+            return getAppDirs( MTProjects ).getParentDirectory().getFullPathName();
+#else
             return juce::SystemStats::getEnvironmentVariable( "KICK_DATA_ROOT", "/data" );
+#endif
         }
     }
 
