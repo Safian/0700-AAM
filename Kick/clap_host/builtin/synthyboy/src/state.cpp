@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+#include "synthyboy/modulation.h"
 #include "synthyboy/state.h"
 
 #include <array>
@@ -113,6 +114,37 @@ void migrate (Parsed& parsed) noexcept
         for (const auto& m : kMigrations)
             if (m.from == v)
                 m.apply (parsed);
+}
+
+/** REMAINDER item 1 (13-new-keys.md 4.41): the RISE / FALL of a modulation slot used to be stored in the slot's record of content.mod_curves ("rise" / "fall", ms,
+    GROUPB WP-08). They are the keys modNN.rise / modNN.fall now. A document that still holds them gets the values written into the keys (unless the document states the
+    key itself), the record loses them and is dropped when it holds no points: the sound is the one of the old document, a save writes the keys only. */
+void migrateSlewRecords (Parsed& p) noexcept
+{
+    char key[24];
+    auto& records = p.content.modCurves;
+    for (auto it = records.begin(); it != records.end();)
+    {
+        if (it->slot >= 1 && it->slot <= kNumModSlots)
+        {
+            const float legacy[2] = { it->riseMs, it->fallMs };
+            const char* const names[2] = { "rise", "fall" };
+            for (int q = 0; q < 2; ++q)
+            {
+                std::snprintf (key, sizeof key, "mod%02d.%s", it->slot, names[q]);
+                const int i = findParamIndex (hashKey (key));
+                if (i >= 0 && legacy[q] > 0.0f && ! p.has[i])
+                {
+                    p.value[i] = static_cast<double> (legacy[q]);
+                    p.has[i] = true;
+                    p.derived[i] = true;
+                }
+            }
+        }
+        it->riseMs = 0.0f;
+        it->fallMs = 0.0f;
+        it = it->points.empty() ? records.erase (it) : it + 1;
+    }
 }
 
 class Parser
@@ -625,6 +657,8 @@ private:
                 return readMod (pt.modX, d);
             if (withMod && std::strcmp (key, "mod_y") == 0)
                 return readMod (pt.modY, d);
+            if (withMod && std::strcmp (key, "mod_curve") == 0)
+                return readMod (pt.modCurve, d);
             handled = false;
             return true;
         });
@@ -786,6 +820,50 @@ private:
                         if (std::strcmp (k, "slot") == 0) return readInt (r.slot, vd);
                         if (std::strcmp (k, "name") == 0) return readText (r.name, kMaxContentStringBytes, vd);
                         if (std::strcmp (k, "points") == 0) return readPoints (r.points, static_cast<size_t> (kMaxRemapPoints), vd, false);
+                        h = false;
+                        return true;
+                    });
+                });
+            if (std::strcmp (key, "spectral_filters") == 0)
+                return readArray (d, static_cast<size_t> (kMaxContentSpectralFilters), [&] (size_t, int ed)
+                {
+                    c.spectralFilters.emplace_back();
+                    auto& r = c.spectralFilters.back();
+                    r.slot = 1;
+                    return readObject (ed, [&] (const char* k, int vd, bool& h)
+                    {
+                        h = true;
+                        if (std::strcmp (k, "osc") == 0) return readInt (r.osc, vd);
+                        if (std::strcmp (k, "name") == 0) return readText (r.name, kMaxContentStringBytes, vd);
+                        if (std::strcmp (k, "points") == 0) return readPoints (r.points, static_cast<size_t> (kMaxRemapPoints), vd, false);
+                        h = false;
+                        return true;
+                    });
+                });
+            if (std::strcmp (key, "instruments") == 0)
+                return readArray (d, static_cast<size_t> (kMaxContentInstruments), [&] (size_t, int ed)
+                {
+                    c.instruments.emplace_back();
+                    auto& in = c.instruments.back();
+                    return readObject (ed, [&] (const char* k, int vd, bool& h)
+                    {
+                        if (std::strcmp (k, "osc") == 0) { h = true; return readInt (in.osc, vd); }
+                        if (std::strcmp (k, "zones") == 0) { h = true; return readInt (in.zones, vd); }
+                        return readFileRefMember (in.ref, k, vd, h);
+                    });
+                });
+            if (std::strcmp (key, "mod_curves") == 0)
+                return readArray (d, static_cast<size_t> (kMaxContentModCurves), [&] (size_t, int ed)
+                {
+                    c.modCurves.emplace_back();
+                    auto& mc = c.modCurves.back();
+                    return readObject (ed, [&] (const char* k, int vd, bool& h)
+                    {
+                        h = true;
+                        if (std::strcmp (k, "slot") == 0) return readInt (mc.slot, vd);
+                        if (std::strcmp (k, "points") == 0) return readPoints (mc.points, static_cast<size_t> (kMaxModCurvePoints), vd, false);
+                        if (std::strcmp (k, "rise") == 0) return readFloat (mc.riseMs, vd);   // GROUPB WP-08
+                        if (std::strcmp (k, "fall") == 0) return readFloat (mc.fallMs, vd);
                         h = false;
                         return true;
                     });
@@ -988,6 +1066,7 @@ void putPoints (std::string& s, const std::vector<ContentPoint>& points)
         putJsonFloat (s, p.power);
         putMod (s, "mod_x", p.modX);
         putMod (s, "mod_y", p.modY);
+        putMod (s, "mod_curve", p.modCurve);
         s += '}';
     }
     s += ']';
@@ -1192,6 +1271,62 @@ void putContent (std::string& s, const StateContent& c)
         }
         s += ']';
     }
+    if (! c.spectralFilters.empty())
+    {
+        section ("spectral_filters");
+        s += '[';
+        for (size_t i = 0; i < c.spectralFilters.size(); ++i)
+        {
+            const auto& r = c.spectralFilters[i];
+            s += i > 0 ? ",{" : "{";
+            putKey (s, "osc");
+            putJsonInt (s, r.osc);
+            s += ',';
+            putKey (s, "name");
+            putJsonString (s, r.name);
+            s += ',';
+            putKey (s, "points");
+            putPoints (s, r.points);
+            s += '}';
+        }
+        s += ']';
+    }
+    if (! c.instruments.empty())
+    {
+        section ("instruments");
+        s += '[';
+        for (size_t i = 0; i < c.instruments.size(); ++i)
+        {
+            const auto& in = c.instruments[i];
+            s += i > 0 ? ",{" : "{";
+            putKey (s, "osc");
+            putJsonInt (s, in.osc);
+            s += ',';
+            putFileRefFields (s, in.ref);
+            s += ',';
+            putKey (s, "zones");
+            putJsonInt (s, in.zones);
+            s += '}';
+        }
+        s += ']';
+    }
+    if (! c.modCurves.empty())
+    {
+        section ("mod_curves");
+        s += '[';
+        for (size_t i = 0; i < c.modCurves.size(); ++i)
+        {
+            const auto& mc = c.modCurves[i];
+            s += i > 0 ? ",{" : "{";
+            putKey (s, "slot");
+            putJsonInt (s, mc.slot);
+            s += ',';
+            putKey (s, "points");
+            putPoints (s, mc.points);
+            s += '}';
+        }
+        s += ']';
+    }
     s += '}';
 }
 } // namespace
@@ -1277,6 +1412,8 @@ LoadResult loadImpl (const void* data, size_t size, ParamValues& inOut, StateCon
 
         result.version = parsed.version;
         migrate (parsed);
+        if (contentOut != nullptr && parsed.version >= 3 && parsed.contentStatus == ContentStatus::ok)
+            migrateSlewRecords (parsed);
         result.applied = applyParsed (parsed, inOut);
         result.status = parsed.version > kStateVersion ? LoadStatus::newer_version : LoadStatus::ok;
 

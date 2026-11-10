@@ -7,6 +7,163 @@ option(KICK_CLAP_BUILD_JUCE "Build the reusable JUCE session and touchscreen pan
 option(KICK_CLAP_BUILD_DEVICE_BENCH "Build the audio-device measurement tool without the panel/player" OFF)
 option(KICK_CLAP_BUILD_PLAYER "Build a standalone CLAP instrument host" OFF)
 set(KICK_CLAP_JUCE_PATH "" CACHE PATH "Local JUCE source for standalone adapter builds")
+add_library(synthyboy_shapes STATIC
+    builtin/synthyboy/shapes/src/shape.cpp
+    builtin/synthyboy/shapes/src/lfo.cpp
+    builtin/synthyboy/shapes/src/envelope.cpp
+    builtin/synthyboy/shapes/src/remap.cpp
+)
+target_include_directories(synthyboy_shapes
+    PUBLIC builtin/synthyboy/shapes/include
+    PRIVATE builtin/synthyboy/shapes/src
+)
+
+add_library(synthyboy_sampleosc STATIC
+    builtin/synthyboy/sample-osc/src/sample_data.cpp
+    builtin/synthyboy/sample-osc/src/sample_voice.cpp
+    builtin/synthyboy/sample-osc/src/wav_reader.cpp
+)
+target_include_directories(synthyboy_sampleosc
+    PUBLIC builtin/synthyboy/sample-osc/include
+    PRIVATE builtin/synthyboy/sample-osc/src
+)
+
+add_library(synthyboy_granular STATIC builtin/synthyboy/granular/src/granular.cpp)
+target_include_directories(synthyboy_granular PUBLIC builtin/synthyboy/granular/include)
+target_link_libraries(synthyboy_granular PUBLIC synthyboy_sampleosc)
+
+add_library(synthyboy_spectral STATIC builtin/synthyboy/spectral/src/spectral.cpp)
+target_include_directories(synthyboy_spectral PUBLIC builtin/synthyboy/spectral/include)
+target_link_libraries(synthyboy_spectral PUBLIC synthyboy_sampleosc)
+
+add_library(synthyboy_multisample STATIC builtin/synthyboy/multisample/src/multisample.cpp)
+target_include_directories(synthyboy_multisample PUBLIC builtin/synthyboy/multisample/include)
+target_link_libraries(synthyboy_multisample PUBLIC synthyboy_sampleosc)
+
+add_library(synthyboy_filters_serum STATIC
+    builtin/synthyboy/filters-serum/src/filter.cpp
+    builtin/synthyboy/filters-serum/src/filter_types.cpp
+)
+target_include_directories(synthyboy_filters_serum
+    PUBLIC builtin/synthyboy/filters-serum/include
+    PRIVATE builtin/synthyboy/filters-serum/src
+)
+
+add_library(synthyboy_wtedit STATIC
+    builtin/synthyboy/wavetable-edit/src/fft.cpp
+    builtin/synthyboy/wavetable-edit/src/wavetable.cpp
+    builtin/synthyboy/wavetable-edit/src/drawing_tools.cpp
+    builtin/synthyboy/wavetable-edit/src/frame_ops.cpp
+    builtin/synthyboy/wavetable-edit/src/vital_model.cpp
+    builtin/synthyboy/wavetable-edit/src/undo.cpp
+    builtin/synthyboy/wavetable-edit/src/audio_import.cpp
+    builtin/synthyboy/wavetable-edit/src/image_import.cpp
+    builtin/synthyboy/wavetable-edit/src/wav_export.cpp
+    builtin/synthyboy/wavetable-edit/src/player.cpp
+)
+target_include_directories(synthyboy_wtedit
+    PUBLIC builtin/synthyboy/include
+    PRIVATE builtin/synthyboy/wavetable-edit/src
+)
+
+add_library(kick_clap_sanitizers INTERFACE)
+if(KICK_CLAP_SANITIZE AND NOT MSVC)
+    target_compile_options(kick_clap_sanitizers INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(kick_clap_sanitizers INTERFACE -fsanitize=address,undefined)
+endif()
+
+add_library(synthyboy_core STATIC
+    builtin/synthyboy/src/content_pack.cpp
+    builtin/synthyboy/src/content_state.cpp
+    builtin/synthyboy/src/content_store.cpp
+    builtin/synthyboy/src/engine_caps.cpp
+    builtin/synthyboy/src/engine_factory.cpp
+    builtin/synthyboy/src/fx_rack.cpp
+    builtin/synthyboy/src/fx_types.cpp
+    builtin/synthyboy/src/kick_pages.cpp
+    builtin/synthyboy/src/library_items.cpp
+    builtin/synthyboy/src/modulation.cpp
+    builtin/synthyboy/src/number.cpp
+    builtin/synthyboy/src/offline_render.cpp
+    builtin/synthyboy/src/param_table.cpp
+    builtin/synthyboy/src/params.cpp
+    builtin/synthyboy/src/preferences.cpp
+    builtin/synthyboy/src/preset.cpp
+    builtin/synthyboy/src/sha256.cpp
+    builtin/synthyboy/src/shell_features.cpp
+    builtin/synthyboy/src/state.cpp
+    builtin/synthyboy/src/user_content.cpp
+    builtin/synthyboy/src/user_library.cpp
+    builtin/synthyboy/src/wave_convert.cpp
+    builtin/synthyboy/engine-own/own_engine.cpp
+    builtin/synthyboy/formula/src/formula.cpp
+    builtin/synthyboy/tuning/tuning.cpp
+    builtin/synthyboy/tuning/scl_parser.cpp
+    builtin/synthyboy/tuning/kbm_parser.cpp
+    builtin/synthyboy/tuning/tun_parser.cpp
+    builtin/synthyboy/wavetable-render/wavetable_render.cpp
+    builtin/synthyboy/vital-import/zip_reader.cpp
+    builtin/synthyboy/vital-import/json_reader.cpp
+    builtin/synthyboy/vital-import/vital_map.cpp
+    builtin/synthyboy/vital-import/vital_content.cpp
+    builtin/synthyboy/vital-import/builtin_ref.cpp
+    builtin/synthyboy/vital-import/vital_batch.cpp
+    builtin/synthyboy/vital-import/plugin_import.cpp
+    builtin/synthyboy/vital-import/vital_import.cpp
+    builtin/synthyboy/serum-import/zstd_decode.cpp
+    builtin/synthyboy/serum-import/cbor_reader.cpp
+    builtin/synthyboy/serum-import/audio_decode.cpp
+    builtin/synthyboy/serum-import/serum_container.cpp
+    builtin/synthyboy/serum-import/serum_map.cpp
+    builtin/synthyboy/serum-import/serum_import.cpp
+    builtin/synthyboy/serum-import/serum_voice.cpp
+    builtin/synthyboy/serum-import/serum_content.cpp
+    builtin/synthyboy/serum-import/serum_fx.cpp
+    builtin/synthyboy/serum-import/serum_api.cpp
+    builtin/synthyboy/serum-import/serum_plugin_import.cpp
+    builtin/synthyboy/synthyboy_clap.cpp
+    builtin/synthyboy/synthyboy_content_service.cpp
+)
+target_include_directories(synthyboy_core
+    PUBLIC
+        builtin/synthyboy/include
+        third_party/clap/include
+    PRIVATE
+        builtin/synthyboy
+        builtin/synthyboy/src
+        builtin/synthyboy/engine-own
+        builtin/synthyboy/formula/src
+        builtin/synthyboy/tuning
+        builtin/synthyboy/vital-import
+        builtin/synthyboy/serum-import
+)
+target_compile_definitions(synthyboy_core PRIVATE
+    SYNTHYBOY_HAS_VITAL=0
+    SYNTHYBOY_STATIC_ONLY=1
+)
+target_link_libraries(synthyboy_core PRIVATE
+    synthyboy_shapes
+    synthyboy_sampleosc
+    synthyboy_granular
+    synthyboy_spectral
+    synthyboy_multisample
+    synthyboy_filters_serum
+    synthyboy_wtedit
+)
+
+foreach(sb_lib IN ITEMS
+    synthyboy_shapes synthyboy_sampleosc synthyboy_granular
+    synthyboy_spectral synthyboy_multisample synthyboy_filters_serum synthyboy_wtedit synthyboy_core)
+    target_compile_features(${sb_lib} PUBLIC cxx_std_17)
+    set_target_properties(${sb_lib} PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_EXTENSIONS OFF)
+    target_link_libraries(${sb_lib} PRIVATE kick_clap_sanitizers)
+    if(MSVC)
+        target_compile_options(${sb_lib} PRIVATE /W4 /fp:precise)
+    else()
+        target_compile_options(${sb_lib} PRIVATE -Wall -Wextra -Wpedantic -fno-fast-math)
+    endif()
+endforeach()
+
 add_library(kick_clap_host STATIC
     src/Host.cpp
     src/Discovery.cpp
@@ -18,21 +175,6 @@ add_library(kick_clap_host STATIC
     ../modules/3rdParty/tweetnacl/tweetnacl.c
     ../modules/3rdParty/tweetnacl/sha256.c
     ../modules/3rdParty/tweetnacl/crypto_utils.cpp
-    builtin/synthyboy/src/content_pack.cpp
-    builtin/synthyboy/src/content_state.cpp
-    builtin/synthyboy/src/content_store.cpp
-    builtin/synthyboy/src/engine_caps.cpp
-    builtin/synthyboy/src/engine_factory.cpp
-    builtin/synthyboy/src/kick_pages.cpp
-    builtin/synthyboy/src/modulation.cpp
-    builtin/synthyboy/src/number.cpp
-    builtin/synthyboy/src/param_table.cpp
-    builtin/synthyboy/src/params.cpp
-    builtin/synthyboy/src/preset.cpp
-    builtin/synthyboy/src/sha256.cpp
-    builtin/synthyboy/src/state.cpp
-    builtin/synthyboy/engine-own/own_engine.cpp
-    builtin/synthyboy/synthyboy_clap.cpp
 )
 target_compile_features(kick_clap_host PUBLIC cxx_std_17)
 set_target_properties(kick_clap_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -42,27 +184,14 @@ target_include_directories(kick_clap_host PUBLIC
     ../modules/3rdParty/tweetnacl
     builtin/synthyboy/include
 )
-target_include_directories(kick_clap_host PRIVATE
-    builtin/synthyboy/src
-    builtin/synthyboy/engine-own
-)
-target_compile_definitions(kick_clap_host PRIVATE
-    SYNTHYBOY_HAS_VITAL=0
-    SYNTHYBOY_STATIC_ONLY=1
-)
+target_link_libraries(kick_clap_host PRIVATE synthyboy_core)
 target_link_libraries(kick_clap_host PUBLIC ${CMAKE_DL_LIBS})
 find_package(Threads REQUIRED)
-target_link_libraries(kick_clap_host PUBLIC Threads::Threads)
+target_link_libraries(kick_clap_host PUBLIC Threads::Threads kick_clap_sanitizers)
 if(MSVC)
     target_compile_options(kick_clap_host PRIVATE /W4 /fp:precise)
 else()
     target_compile_options(kick_clap_host PRIVATE -Wall -Wextra -Wpedantic -fno-fast-math)
-endif()
-add_library(kick_clap_sanitizers INTERFACE)
-target_link_libraries(kick_clap_host PUBLIC kick_clap_sanitizers)
-if(KICK_CLAP_SANITIZE AND NOT MSVC)
-    target_compile_options(kick_clap_sanitizers INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer)
-    target_link_options(kick_clap_sanitizers INTERFACE -fsanitize=address,undefined)
 endif()
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     add_executable(kick-clap-scan tools/scan.cpp)

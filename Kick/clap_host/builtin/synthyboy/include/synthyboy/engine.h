@@ -8,8 +8,10 @@
 
 #include "engine_caps.h"
 #include "events.h"
+#include "offline_render.h"
 #include "params.h"
 #include "quality.h"
+#include "readout.h"
 
 namespace synthyboy
 {
@@ -49,6 +51,20 @@ public:
     /** Silences all voices and snaps smoothers to the current parameter values. */
     virtual void reset() = 0;
 
+    /** Silences the sounding notes and flushes the tails of the effects at once (the host transport stopped, preferences.h silenceOnStop). Audio thread,
+        between two process () calls: no allocation, the parameters, the controllers and the content stay as they are. The default does nothing (engine-own). */
+    virtual void silence() noexcept {}
+
+    /** Ultra quality for an offline render (preferences.h ultraRender): the oversampling of the quality option 4x, read by prepare () like
+        quality.oversample_4x (needsPrepare () reports a change). Set it before prepare (); engines without the option ignore it. Any thread. */
+    virtual void setUltraRender (bool) noexcept {}
+
+    /** Renders `request` offline (offline_render.h, GROUPD WP-15) on a private instance of the engine that starts from this engine's parameters
+        and content: this engine is only read (no reset, no voice touched, the audio thread is not waited for), the result is deterministic and
+        at the quality of the high tier without the caps of the tier it runs in; request.ultra = 4x oversampling. Message thread, may take long.
+        False when the engine has no offline render (the default; renderOfflineAny () then builds the twin from outside). */
+    virtual bool renderOffline (const OfflineRequest& /*request*/, OfflineAudio& /*out*/) { return false; }
+
     /** Sets a parameter (plain value, constrained to the parameter's range); unknown ids and NaN are ignored. */
     virtual void setParam (uint32_t id, float plain) noexcept = 0;
     virtual float getParam (uint32_t id) const noexcept = 0;
@@ -57,6 +73,8 @@ public:
         keys of version 3 are stored and read back but not live, and supportsParam () is false for them until the bits they need
         (requiredCaps ()) are all set. Constant for the lifetime of the engine; any thread. */
     virtual EngineCapsMask capabilities() const noexcept { return kCapNone; }
+    /** The second capability word (GROUPC): the granular, spectral and multisample oscillators. A key needs the bits of both words (requiredCaps (), requiredCaps2 ()). */
+    virtual EngineCaps2Mask capabilities2() const noexcept { return kCap2None; }
 
     /** The host transport at the start of the next process() call (audio thread, before process(); no allocation). Tempo sync,
         the beat units of the envelopes and the HOST mode of the LFOs read it. Without a call the engine runs at 120 BPM with a stopped
@@ -90,6 +108,12 @@ public:
      */
     virtual void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept = 0;
 
+    /** The knobs whose modulated value the display wants (GROUPA2 WP-17): table indices, at most LiveValues::kMaxTargets (the rest is ignored). Any thread, lock free;
+        the audio thread takes the list over at the end of its next block. */
+    virtual void setReadoutTargets (const int* /*paramIndices*/, int /*count*/) noexcept {}
+    /** Copies the live values of the last blocks (readout.h). Any thread, lock free; false (nothing written) for an engine that has none. */
+    virtual bool copyReadout (LiveValues& /*out*/) const noexcept { return false; }
+
     /** Number of sounding voices (including released ones that are still fading out) after the last process(). */
     virtual int activeVoices() const noexcept = 0;
 
@@ -98,6 +122,11 @@ public:
         a splitter, the voices that bypass the rack), so the whole output is late by this value and a host can compensate it. 0 without
         such an effect. It changes when Bode is switched on or off or moved to another rack. */
     virtual int latencySamples() const noexcept { return 0; }
+
+    /** True when a parameter changed that the engine can only apply in prepare() (engine-vital: quality.oversample_4x resizes the buffers
+        of the effects and the voices, which must not happen on the audio thread). Any thread, lock free. The shell then prepares the engine
+        again on a thread that may allocate (JUCE: the message thread with the processing suspended; CLAP: request_restart). */
+    virtual bool needsPrepare() const noexcept { return false; }
 };
 
 /** The engine written for this project (always built; the only engine on iOS). */

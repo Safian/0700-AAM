@@ -73,8 +73,11 @@ struct ParamInfo
     uint16_t order;             // display order (position in the table; set when the table is built)
 };
 
-/** Upper bound of the table size; fixed-size containers (ParamValues, engine) are sized with it. */
-constexpr size_t kMaxParams = 2048;
+/** Upper bound of the table size; fixed-size containers (ParamValues, engine) are sized with it. Raised from 2048 to 4096 for the FX
+    instance pool (block B22, docs/ui-design/18-FX-INSTANCES.md): it is a compile-time constant and part of no file format (ids are
+    hashKey (key), the state stores keys), so the raise changes no saved state. Table indices are stored as uint16_t (IdIndex, order). */
+constexpr size_t kMaxParams = 4096;
+static_assert (kMaxParams <= 65535, "table indices are stored as uint16_t");
 
 /** The table of state version 2 had 880 keys; the keys of version 3 (docs/ui-design/13-new-keys.md) are appended after them, so the
     first kNumKeysV2 table positions are the ones every older state, preset and engine knows. */
@@ -92,11 +95,14 @@ constexpr uint32_t kParamFilter1Cutoff   = hashKey ("filter1.cutoff");
 
 /** The built-in wavetables of oscillator 1..3 (the first choice names of oscN.wavetable); index 0 = Sine, 1 = Saw. */
 constexpr int kNumBuiltinWavetables = 13;
-/** Choices of oscN.wavetable: the built-in tables plus index kNumBuiltinWavetables = "Preset table" (content.wavetables[]). */
-constexpr int kNumWavetableChoices = kNumBuiltinWavetables + 1;
+/** Choices of oscN.wavetable: the built-in tables plus index kNumBuiltinWavetables = "Preset table" (content.wavetables[]) and index 14 = "Saw Down" (GROUPB WP-18). */
+constexpr int kNumWavetableChoices = kNumBuiltinWavetables + 2;
 constexpr int kWavetableSine = 0;
 constexpr int kWavetableSaw  = 1;
 constexpr int kWavetablePresetTable = 13;
+/** GROUPB WP-18 (13-new-keys.md 4.36): the choice appended after "Preset table": "Saw Down", the falling saw whose jump is at mid cycle (-saw (phase + 180 degrees)), the waveform of
+    Vital's Init table, a built-in single cycle table (needs kCapWavetableSawDown). */
+constexpr int kWavetableSawDown = 14;
 /** The built-in LFO shapes (the first choice names of lfoN.shape). */
 constexpr int kNumLfoShapes = 12;
 /** The choice of lfoN.shape after the built-in ones: "Custom" (point list in content.lfo_shapes[]). */
@@ -107,6 +113,20 @@ constexpr int kNumFxSlots = 16;
 constexpr int kNumLegacyFxSlots = 9;
 /** distortion.type entries 0 .. 5 are the ones of state version 2; 6 .. 13 were appended in block B17. */
 constexpr int kNumLegacyDistortionTypes = 6;
+/** oscN.warp.type / oscN.warp2.type entries 0 .. 10 are the Vital modes of state version 2; 11 .. 51 were appended in block B21
+    (Serum 2 warp modes: 11 Sync Var .. 51 AM from the second other oscillator, 13-new-keys.md 4.22). */
+constexpr int kNumLegacyWarpTypes = 11;
+/** Number of entries of the warp lists after GROUPB WP-06 (52 .. 75: FM Thru-Zero / Exp / Linear, PD, AM and RM from the Noise, Sub, Filter 1 and Filter 2; 52 after block B21). */
+constexpr int kNumWarpTypes = 99; // GROUPC WP-12: 76 .. 98 are the 23 spectral warps
+
+/** The values of oscN.type (13-new-keys.md 4.9 and, from GROUPC, 4.37 .. 4.39): 0 and 1 are the wavetable and sample oscillators of state version 3, 2 .. 4 were appended in the blocks B28 .. B30. */
+constexpr int kOscTypeWavetable = 0;
+constexpr int kOscTypeSample = 1;
+constexpr int kOscTypeGranular = 2;
+constexpr int kOscTypeSpectral = 3;
+constexpr int kOscTypeMultisample = 4;
+/** The first entry of the warp lists that only the spectral oscillator acts on (GROUPC WP-12, 13-new-keys.md 4.38; needs kCap2SpectralWarps). */
+constexpr int kFirstSpectralWarp = 76;
 
 /** The table, in stable order (state files and UIs list parameters in this order). */
 const ParamInfo* paramTable() noexcept;
