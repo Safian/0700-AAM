@@ -2077,6 +2077,8 @@ namespace ui
             mus.getFullPathName().toStdString(),
 #if JUCE_LINUX || __linux__
             "/data",
+            "/media/az01-internal-sd",
+            "/sdcard",
 #endif
         };
 

@@ -161,6 +161,8 @@ namespace ui
             home.getFullPathName().toStdString(),
 #if JUCE_LINUX || __linux__
             "/data",
+            "/media/az01-internal-sd",
+            "/sdcard",
 #endif
         };
         juce::String curPath = mt::getSettings().cloudSources.splicePath.get();
