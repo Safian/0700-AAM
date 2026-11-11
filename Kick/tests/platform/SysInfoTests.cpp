@@ -92,6 +92,7 @@ int main()
         CHECK( resourceWarnings( false, 99, 1.0, false, 99 ).disk.empty() && resourceWarnings( false, 99, 1.0, false, 99 ).ram.empty() );
         CHECK( resourceWarnings( false, 0, 0.0, true, 92 ).ram == "Low memory: 92 % used" );
         CHECK( resourceWarnings( true, 96, 10.0, true, 97 ).disk != "" && resourceWarnings( true, 96, 10.0, true, 97 ).ram != "" );
+        CHECK( resourceWarnings( true, 96, 38000.0, false, 0 ).disk.empty() );
     }
 
     // CPU badge on the Resources icon (HDR-23).

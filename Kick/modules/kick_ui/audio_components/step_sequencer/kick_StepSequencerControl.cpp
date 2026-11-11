@@ -91,20 +91,20 @@ namespace kick_ui
 
     void StepSequencerTopControl::resized()
     {
-        pad.setBoundsRelative( .01889, .2727f, .0329f, .4545f );
-        padValueListBox.setBoundsRelative( .052f, .1363f, .0725f, .7272f );
+        pad.setBoundsRelative( .012f, .2727f, .044f, .4545f );
+        padValueListBox.setBoundsRelative( .058f, .1363f, .076f, .7272f );
 
-        parameter.setBoundsRelative( .1393f, .2727f, .0888f, .4545f );
-        paramValueListBox.setBoundsRelative( .2294f, .1363f, .1196f, .7272f );
+        parameter.setBoundsRelative( .142f, .2727f, .110f, .4545f );
+        paramValueListBox.setBoundsRelative( .255f, .1363f, .145f, .7272f );
 
-        pageLabel.setBoundsRelative( .6101f, .2727f, .0388f, .4545f );
-        page.setBoundsRelative( .6500f, .1363f, .0538f, .7272f );
+        pageLabel.setBoundsRelative( .565f, .2727f, .054f, .4545f );
+        page.setBoundsRelative( .622f, .1363f, .054f, .7272f );
 
-        bar.setBoundsRelative( .7247f, .2727f, .0339f, .4545f );
-        barValueListBox.setBoundsRelative( .7586f, .1363f, .065f, .7272f );
+        bar.setBoundsRelative( .686f, .2727f, .046f, .4545f );
+        barValueListBox.setBoundsRelative( .735f, .1363f, .065f, .7272f );
 
-        timediv.setBoundsRelative( .8443f, .2727f, .0628f, .4545f );
-        timeDivValueListBox.setBoundsRelative( .9110f, .1363f, .075f, .7272f );
+        timediv.setBoundsRelative( .810f, .2727f, .090f, .4545f );
+        timeDivValueListBox.setBoundsRelative( .904f, .1363f, .084f, .7272f );
     }
 
     void StepSequencerTopControl::setTotalBars( int bars )

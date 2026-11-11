@@ -319,7 +319,7 @@ namespace kick_ui
         assignButton.setBoundsRelative( .751f, .92f, .117f, .0636f );
         processButton.setBoundsRelative( .872f, .92f, .117f, .0636f );
 
-        sampleListBox.setBoundsRelative( 0.225f, 0.029f, 0.1957f, .082f );
+        sampleListBox.setBoundsRelative( 0.265f, 0.029f, 0.21f, .082f );
 
         scale.setSize( editor.getWidth(), scale.getHeight() );
     }

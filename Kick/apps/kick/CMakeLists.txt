@@ -78,11 +78,20 @@ set_target_properties(${TargetName} PROPERTIES
         CXX_STANDARD                    17 
         VS_DEBUGGER_WORKING_DIRECTORY   "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND KICK_DEVELOPMENT_TEAM)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(_kick_ios_deploy "${CMAKE_XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET}")
+    if(NOT _kick_ios_deploy)
+        set(_kick_ios_deploy "16.0")
+    endif()
     set_target_properties(${TargetName} PROPERTIES
-        XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${KICK_DEVELOPMENT_TEAM}"
-        XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${_kick_ios_deploy}"
     )
+    if(KICK_DEVELOPMENT_TEAM)
+        set_target_properties(${TargetName} PROPERTIES
+            XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${KICK_DEVELOPMENT_TEAM}"
+            XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+        )
+    endif()
 endif()
 if(MSVC OR APPLE)
 # Get Targets in ${CMAKE_CURRENT_SOURCE_DIR}

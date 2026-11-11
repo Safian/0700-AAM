@@ -11,16 +11,27 @@ struct PluginPanel::ParameterRow : juce::Component {
     juce::Slider slider;
     ParameterRow(std::shared_ptr<PluginSession> owner, Parameter p) : session(std::move(owner)), parameter(std::move(p)) {
         addAndMakeVisible(label); addAndMakeVisible(value); addAndMakeVisible(slider);
-        label.setText(parameter.module.empty() ? parameter.name : parameter.module + " / " + parameter.name, juce::dontSendNotification);
+        label.setInterceptsMouseClicks(false, false);
+        value.setInterceptsMouseClicks(false, false);
         label.setColour(juce::Label::textColourId, juce::Colours::white);
         value.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
         slider.setSliderStyle(juce::Slider::LinearHorizontal); slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-        slider.setRange(parameter.minimum, parameter.maximum > parameter.minimum ? parameter.maximum : parameter.minimum + 1,
-                        (parameter.flags & CLAP_PARAM_IS_STEPPED) ? 1. : 0.);
-        slider.setEnabled(!(parameter.flags & CLAP_PARAM_IS_READONLY) && parameter.maximum > parameter.minimum);
         slider.onValueChange = [this] { session->host().setParameter(parameter.id, slider.getValue()); updateText(); };
         slider.onDragStart = [this] { session->host().parameterGesture(parameter.id, true); };
         slider.onDragEnd = [this] { session->host().parameterGesture(parameter.id, false); };
+        bind(parameter);
+    }
+    void bind(Parameter p) {
+        const juce::String nextText = p.module.empty() ? p.name : p.module + " / " + p.name;
+        const auto nextMax = p.maximum > p.minimum ? p.maximum : p.minimum + 1;
+        const auto nextStep = (p.flags & CLAP_PARAM_IS_STEPPED) ? 1. : 0.;
+        const bool sameRow = (parameter.id == p.id && label.getText() == nextText && slider.getMinimum() == p.minimum && slider.getMaximum() == nextMax);
+        parameter = std::move(p);
+        if (!sameRow) {
+            label.setText(nextText, juce::dontSendNotification);
+            slider.setRange(parameter.minimum, nextMax, nextStep);
+            slider.setEnabled(!(parameter.flags & CLAP_PARAM_IS_READONLY) && parameter.maximum > parameter.minimum);
+        }
         refresh();
     }
     void refresh() {
@@ -59,6 +70,10 @@ PluginPanel::PluginPanel(std::shared_ptr<PluginSession> owner, bool automaticall
     search.onTextChange = [this] { rebuildParameters(); };
     parameterList.setRowHeight(56);
     parameterList.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff15191e));
+    if (auto* vp = parameterList.getViewport()) {
+        vp->setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
+        vp->setScrollBarThickness(12);
+    }
     errorsButton.setEnabled(false);
     errorsButton.onClick = [this] { juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Plugin scan errors", scanErrors); };
     scanButton.onClick = [this] { scanPlugins(); };
@@ -164,9 +179,16 @@ void PluginPanel::rebuildParameters() {
     resized();
 }
 juce::Component* PluginPanel::refreshComponentForRow(int row, bool, juce::Component* existing) {
-    delete existing;
-    if (row < 0 || row >= static_cast<int>(visibleParameters.size())) return nullptr;
-    return new ParameterRow(session, visibleParameters[static_cast<size_t>(row)]);
+    if (row < 0 || row >= static_cast<int>(visibleParameters.size())) {
+        delete existing;
+        return nullptr;
+    }
+    const auto& p = visibleParameters[static_cast<size_t>(row)];
+    if (auto* rowComp = dynamic_cast<ParameterRow*>(existing)) {
+        rowComp->bind(p);
+        return rowComp;
+    }
+    return new ParameterRow(session, p);
 }
 void PluginPanel::timerCallback() {
     if (scanJob && scanJob->complete.load()) {
