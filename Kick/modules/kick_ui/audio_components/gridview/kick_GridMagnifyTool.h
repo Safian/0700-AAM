@@ -9,31 +9,17 @@ namespace kick_ui
 
         void paint( juce::Graphics& g ) override;
 
-        void mouseDrag( const juce::MouseEvent& event );
+        void mouseDrag( const juce::MouseEvent& event ) override;
         void mouseUp( const juce::MouseEvent& event ) override;
         void mouseDown( const juce::MouseEvent& event ) override;
+        void cancelGesture() override;
 
     private:
-        std::map<int, juce::Point<float>> activeTouches;
-        std::map<int, juce::Point<float>> previousTouchPositions;
-        std::map<int, juce::Point<float>> initialTouchPositions;
-        float                             zoomFactor{ 1.0f };
-        float                             initialDistance   = 0.0f;
-        float                             initialZoomFactor = 1.0f;
-        float                             initialTick{ 0 };
-        float                             initialNote{ 0 };
-
-        float calculateDistance()
-        {
-            if( activeTouches.size() == 2 )
-            {
-                auto it = activeTouches.begin();
-                auto p1 = it->second;
-                ++it;
-                auto p2 = it->second;
-                return p1.getDistanceFrom( p2 );
-            }
-            return 0.f;
-        }
+        grid_logic::TouchPoint previousVpPos;
+        bool                   hasActivePan{ false };
+        float                  smoothViewX{ 0.0f };
+        float                  smoothViewY{ 0.0f };
+        int                    lastSetViewX{ -1 };
+        int                    lastSetViewY{ -1 };
     };
 }

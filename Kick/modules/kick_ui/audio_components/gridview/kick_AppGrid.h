@@ -146,10 +146,12 @@ namespace kick_ui
             }
         }
 
-        void mouseUp( const juce::MouseEvent& event )
+        void mouseUp( const juce::MouseEvent& event ) override
         {
-            selectedNote = (int)( (float)event.position.getY() / getNoteHeight() ) + 1;
-            selectedNote = getMaxNotes() - selectedNote;
+            if( !event.mouseWasClicked() )
+                return;
+
+            selectedNote = grid_logic::yToNote( event.position.getY(), getNoteHeight(), getMaxNotes() );
 
             if( noteSelectionChanged )
                 noteSelectionChanged( selectedNote, true );

@@ -30,16 +30,19 @@ namespace kick_ui
 
         void paint( juce::Graphics& g ) override;
 
+        void mouseDown( const juce::MouseEvent& ) override;
         void mouseUp( const juce::MouseEvent& ) override;
         void mouseDrag( const juce::MouseEvent& ) override;
         void mouseMove( const juce::MouseEvent& event ) override;
+        void cancelGesture() override;
 
         bool keyPressed( const juce::KeyPress& key, juce::Component* /*originatingComponent*/ ) override;
 
     private:
         void drawInfoBar( int noteNum, int startTime, juce::MouseEvent event );
 
-        float startX, endX, startY, endY = 0;
+        float startX = 0, endX = 0, startY = 0, endY = 0;
+        bool  gestureCancelled{ false };
 
         void clearSelectRegion();
         bool isSelectRegionValid();

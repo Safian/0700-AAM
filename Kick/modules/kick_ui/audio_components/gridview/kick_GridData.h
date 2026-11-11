@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "kick_grid_logic.h"
+
 namespace kick_ui
 {
     // "Message + UNDO button" in the status bar for screens below the dialogs module (Step Sequencer). The status bar
@@ -145,10 +147,11 @@ namespace kick_ui
         inline int getTicksPerQuantization( const int Bar ) { return tempoMgr ? tempoMgr->getTicksPerQuantization( Bar ) : 0; }
 
         // Zoom...
-        void setZoomFactor( float horozontalFactor, float verticalFactor );
-        void setHorizantalZoomFactor( float horozontalFactor, bool Notify = true );
-        void setVerticalZoomFactor( float verticalFactor, bool Notify = true );
-        void setDefaultZoom();
+        void                       setZoomFactor( float horozontalFactor, float verticalFactor );
+        void                       setHorizantalZoomFactor( float horozontalFactor, bool Notify = true );
+        void                       setVerticalZoomFactor( float verticalFactor, bool Notify = true );
+        void                       setDefaultZoom();
+        grid_logic::GridZoomBounds getZoomBounds() const;
 
         // Positional
         float getYFromNote( int Note ) const;

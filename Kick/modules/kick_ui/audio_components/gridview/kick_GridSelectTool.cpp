@@ -40,9 +40,34 @@ namespace kick_ui
         }
     }
 
+    void GridSelectTool::mouseDown( const juce::MouseEvent& event )
+    {
+        gestureCancelled = false;
+        clearSelectRegion();
+        IGridTool::mouseDown( event );
+
+        const bool isSelectedNote = ( 0 < ae.getSelectedNoteID( mDownNoteNum, mDownTime, -1 ) );
+        gridComp.setMouseCursor( isSelectedNote ? juce::MouseCursor::DraggingHandCursor : juce::MouseCursor::NormalCursor );
+    }
+
+    void GridSelectTool::cancelGesture()
+    {
+        gestureCancelled = true;
+        clearSelectRegion();
+        gridComp.infoBar.hideTip();
+        gridNeedsRepaint();
+    }
+
     void GridSelectTool::mouseUp( const juce::MouseEvent& event )
     {
         gridComp.infoBar.hideTip();
+        if( gestureCancelled )
+        {
+            gestureCancelled = false;
+            clearSelectRegion();
+            gridNeedsRepaint();
+            return;
+        }
         if( event.mouseWasDraggedSinceMouseDown() )
         {
             if( 0 == ae.getNumSelectedNotes( aeSelected ) )
@@ -61,6 +86,9 @@ namespace kick_ui
 
     void GridSelectTool::mouseDrag( const juce::MouseEvent& event )
     {
+        if( gestureCancelled )
+            return;
+
         if( gridComp.getMouseCursor() == juce::MouseCursor::DraggingHandCursor )
         {
             auto noteNum  = gridData.getNoteFromY( event.position.getY() );

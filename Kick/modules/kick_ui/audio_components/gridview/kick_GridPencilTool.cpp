@@ -15,11 +15,58 @@ namespace kick_ui
         }
     }
 
+    void GridPencilTool::updateCursorForPosition( juce::Point<float> pos )
+    {
+        auto mouseNoteNum  = gridData.getNoteFromY( pos.getY() );
+        auto mouseNoteTime = gridData.getTimeFromX( static_cast<int>( std::lround( juce::jmax( 0.f, pos.getX() ) ) ), false );
+
+        auto nData = ae.getNoteData( mouseNoteNum, mouseNoteTime, 0 );
+        if( 0 <= nData.id )
+        {
+            auto nStartXPos = gridData.getXFromTime( nData.start );
+            auto nEndXPos   = gridData.getXFromTime( nData.length + nData.start );
+
+            if( ( nStartXPos <= pos.getX() ) && ( ( nStartXPos + 5 ) >= pos.getX() ) && gridComp.getEditNoteStart() )
+            {
+                gridComp.setMouseCursor( juce::MouseCursor::LeftRightResizeCursor );
+                isLeftEdge = true;
+            }
+            else if( ( ( nEndXPos - 6 ) <= pos.getX() ) && ( ( nEndXPos - 1 ) >= pos.getX() ) && gridComp.getEditNoteEnd() )
+            {
+                gridComp.setMouseCursor( juce::MouseCursor::LeftRightResizeCursor );
+            }
+            else
+            {
+                gridComp.setMouseCursor( juce::MouseCursor::DraggingHandCursor );
+            }
+        }
+        else
+        {
+            gridComp.setMouseCursor( juce::MouseCursor::NormalCursor );
+        }
+    }
+
     void GridPencilTool::mouseDown( const juce::MouseEvent& event )
     {
+        gestureCancelled = false;
+        shiftAtDown      = contracts::DclContractsHelper::isShiftPressed();
+        selectRect       = {};
+        isLeftEdge       = false;
+        prevDragValue    = -1;
+
         IGridTool::mouseDown( event );
-        shiftAtDown = contracts::DclContractsHelper::isShiftPressed();
-        selectRect  = {};
+        updateCursorForPosition( event.position );
+    }
+
+    void GridPencilTool::cancelGesture()
+    {
+        gestureCancelled = true;
+        shiftAtDown      = false;
+        selectRect       = {};
+        isLeftEdge       = false;
+        prevDragValue    = -1;
+        gridComp.infoBar.hideTip();
+        gridNeedsRepaint();
     }
 
     void GridPencilTool::selectInRectangle( const juce::MouseEvent& event )
@@ -50,6 +97,9 @@ namespace kick_ui
 
     void GridPencilTool::mouseDrag( const juce::MouseEvent& event )
     {
+        if( gestureCancelled )
+            return;
+
         if( shiftAtDown && 0 >= mDownNoteID )
         {
             if( event.mouseWasDraggedSinceMouseDown() )
@@ -124,15 +174,22 @@ namespace kick_ui
     {
         gridComp.infoBar.hideTip();
 
+        if( gestureCancelled )
+        {
+            gestureCancelled = false;
+            shiftAtDown      = false;
+            selectRect       = {};
+            isLeftEdge       = false;
+            return;
+        }
+
         if( shiftAtDown && ( event.mouseWasClicked() || 0 >= mDownNoteID ) )
         {
             // Shift + tap deletes the note (or clears the selection on an empty spot);
             // the rectangle selection is already done. Dragging a note still moves it.
             if( event.mouseWasClicked() )
             {
-                if( 0 < mDownNoteID )
-                    ae.eraseNote( mDownNoteNum, mDownTime, -1 );
-                else
+                if( !eraseNoteAtPosition( event.mouseDownPosition, 6.0f, false ) )
                     ae.selectAllNotes( false );
             }
             shiftAtDown = false;
@@ -176,43 +233,19 @@ namespace kick_ui
 
     void GridPencilTool::mouseDoubleClick( const juce::MouseEvent& event )
     {
-        validateSeqTrack();
-        auto startTime = gridData.getTimeFromX( event.position.getX() );
-        auto noteNum   = gridData.getNoteFromY( event.position.getY() );
+        if( gestureCancelled )
+            return;
 
-        ae.eraseNote( noteNum, startTime, -1 );
+        validateSeqTrack();
+        if( !eraseNoteAtPosition( event.position, 6.0f, false ) )
+            eraseNoteAtPosition( event.mouseDownPosition, 6.0f, false );
         gridNeedsRepaint();
     }
 
     void GridPencilTool::mouseMove( const juce::MouseEvent& event )
     {
-        auto mouseNoteNum  = gridData.getNoteFromY( event.position.getY() );
-        auto mouseNoteTime = gridData.getTimeFromX( event.position.getX(), false );
-
-        auto nData = ae.getNoteData( mouseNoteNum, mouseNoteTime, 0 );
-        if( 0 <= nData.id )
-        {
-            auto nStartXPos = gridData.getXFromTime( nData.start );
-            auto nEndXPos   = gridData.getXFromTime( nData.length + nData.start );
-
-            if( ( nStartXPos <= event.x ) && ( ( nStartXPos + 5 ) >= event.x ) && gridComp.getEditNoteStart() )
-            {
-                gridComp.setMouseCursor( juce::MouseCursor::LeftRightResizeCursor );
-                isLeftEdge = true;
-            }
-            else if( ( ( nEndXPos - 6 ) <= event.x ) && ( ( nEndXPos - 1 ) >= event.x ) && gridComp.getEditNoteEnd() )
-            {
-                gridComp.setMouseCursor( juce::MouseCursor::LeftRightResizeCursor );
-            }
-            else
-            {
-                gridComp.setMouseCursor( juce::MouseCursor::DraggingHandCursor );
-            }
-        }
-        else
-        {
-            gridComp.setMouseCursor( juce::MouseCursor::NormalCursor );
-        }
+        isLeftEdge = false;
+        updateCursorForPosition( event.position );
         gridNeedsRepaint();
     }
 
