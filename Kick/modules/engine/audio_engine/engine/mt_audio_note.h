@@ -135,6 +135,7 @@ namespace mt
         int editNoteRatchet( const int NoteID, const int Ratchet );
         int editNoteRatchet( const std::vector<int>& NoteIDs, const std::vector<int>& Ratchets );
         int editNoteRatchet( const NotesInRange& Range, int Ratchet );
+        int editNoteMute( const int NoteID, const bool MuteStatus );
 
         int scaleSelectedNotes( float factor );
         int scaleAllNotes( float factor );
@@ -189,6 +190,7 @@ namespace mt
         int scaleNote( juce::ValueTree& VT, float factor, bool SortNoteList = true );
         int editNoteProbability( juce::ValueTree& VT, const int Probability );
         int editNoteRatchet( juce::ValueTree& VT, const int Ratchet );
+        int editNoteMute( juce::ValueTree& VT, const bool MuteStatus );
         int transposeNote( juce::ValueTree& VT, int DeltaNoteNumber, bool SortNoteList = true );
         int editNoteStart( juce::ValueTree& VT, int DeltaNoteStart );
         int editNoteEnd( juce::ValueTree& VT, int DeltaNoteEnd );

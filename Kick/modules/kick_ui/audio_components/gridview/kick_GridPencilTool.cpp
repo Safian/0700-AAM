@@ -26,12 +26,20 @@ namespace kick_ui
             auto nStartXPos = gridData.getXFromTime( nData.start );
             auto nEndXPos   = gridData.getXFromTime( nData.length + nData.start );
 
-            if( ( nStartXPos <= pos.getX() ) && ( ( nStartXPos + 5 ) >= pos.getX() ) && gridComp.getEditNoteStart() )
+            const auto edgeHit = grid_logic::hitTestNoteEdge(
+                pos.getX(),
+                static_cast<float>( nStartXPos ),
+                static_cast<float>( nEndXPos ),
+                gridComp.getEditNoteStart(),
+                gridComp.getEditNoteEnd(),
+                true );
+
+            if( edgeHit == grid_logic::NoteEdgeHit::Left )
             {
                 gridComp.setMouseCursor( juce::MouseCursor::LeftRightResizeCursor );
                 isLeftEdge = true;
             }
-            else if( ( ( nEndXPos - 6 ) <= pos.getX() ) && ( ( nEndXPos - 1 ) >= pos.getX() ) && gridComp.getEditNoteEnd() )
+            else if( edgeHit == grid_logic::NoteEdgeHit::Right )
             {
                 gridComp.setMouseCursor( juce::MouseCursor::LeftRightResizeCursor );
             }

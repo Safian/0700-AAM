@@ -31,6 +31,7 @@ namespace kick_ui
         std::function<void( void )> onCutClick;
         std::function<void( void )> onCopyClick;
         std::function<void( void )> onPasteClick;
+        std::function<void( void )> onEditOptionsClick;
 
     public:
         GridHeader();
@@ -52,6 +53,7 @@ namespace kick_ui
         ui::KickImageButton                  copy{ "Copy", "Copy Button", "Copy Button_Active" };
         ui::KickImageButton                  cut{ "Cut", "Cut_Normal", "Cut_Active" };
         ui::KickImageButton                  paste{ "Paste", "Copy_Normal", "Copy_Activ" };
+        ui::KickImageButton                  options{ "Options", "editOptions" };
         ui::KickImageButtonWithAttachedValue play{ TRANS( "Play" ), "Play_Grid", "Stop_Active" };
 
         bool isCutClicked{ false };

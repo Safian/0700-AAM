@@ -48,10 +48,6 @@ namespace kick_ui
 
         bool        isLeftEdge{ false };
         bool        gestureCancelled{ false };
-        bool        pendingAddedNoteValid{ false };
-        int         pendingAddedNote{ 0 };
-        int         pendingAddedStart{ 0 };
-        int         pendingAddedLength{ 0 };
         juce::Label resizeLabel;
         int         prevDragValue = -1;
     };
