@@ -21,6 +21,8 @@
 
 #include "kick_ui/kick_ui.h"
 #include "kick_ui/kick_ui_grid.h"
+#include "program_edit_ui/program_edit_ui.h"
+#include <kick_clap/PluginManager.h>
 #include "hardware/source/kick_PlatformServices.h"
 #include "audio_engine/audio_engine.h"
 #include "kick_device_adapter.h"
@@ -415,6 +417,18 @@ public:
         else if( name.equalsIgnoreCase( "UndoHistory" ) ) kick_ui::UndoHistory::show();
         else if( name.equalsIgnoreCase( "SystemResources" ) ) kick_ui::KickModeHeader::showSystemResources();
         else if( name.equalsIgnoreCase( "Power" ) ) ui::power::showPowerWindow();
+        else if( name.equalsIgnoreCase( "ClapInstrument" ) )
+        {
+            auto idx = ae.createProgram( mt::MTProgramType::Plugin, "SmokeSynthy" );
+            if( auto* clapProg = dynamic_cast<mt::MTClapProgram*>( idx >= 0 ? ae.getProgram( idx ) : nullptr ) )
+            {
+                const auto instruments = kick::clap::PluginManager::getInstance().getInstrumentDescriptors();
+                if( !instruments.empty() && clapProg->getPluginSession() )
+                    clapProg->getPluginSession()->select( instruments.front() );
+                if( kick_ui::ProgramEdit::pluginOpener() )
+                    kick_ui::ProgramEdit::pluginOpener()( clapProg );
+            }
+        }
         else
         {
             fail( "unknown dialog " + name );

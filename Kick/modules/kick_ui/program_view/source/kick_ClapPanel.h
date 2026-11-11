@@ -6,12 +6,46 @@
 #include <contracts/dcl/dcl_contracts_helper.h>
 
 namespace kick_ui {
-class ClapInstrumentPanel final : public kick::clap::PluginPanel {
+class ClapPanelLookAndFeel final : public juce::LookAndFeel_V4 {
+public:
+    ClapPanelLookAndFeel()
+        : juce::LookAndFeel_V4(juce::LookAndFeel_V4::getDarkColourScheme()) {
+        // Keep Kick's CLAP parameter browser dark rather than inheriting KickLooknFeel from dialogDisplayer.
+        setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff12161c));
+        setColour(juce::ListBox::outlineColourId, juce::Colour(0xff2a3340));
+    }
+
+    void setMenuParent(juce::Component* parent) noexcept { menuParent = parent; }
+
+    juce::Component* getParentComponentForMenuOptions(const juce::PopupMenu::Options& options) override {
+        if (auto* parent = options.getParentComponent())
+            return parent;
+        return menuParent.getComponent();
+    }
+
+private:
+    juce::Component::SafePointer<juce::Component> menuParent;
+};
+
+struct ClapPanelLookAndFeelHolder {
+    ClapPanelLookAndFeel pluginLookAndFeel;
+};
+
+class ClapInstrumentPanel final : private ClapPanelLookAndFeelHolder, public kick::clap::PluginPanel {
+    struct LookAndFeelReset {
+        juce::Component* target = nullptr;
+        ~LookAndFeelReset() {
+            if (target != nullptr)
+                target->setLookAndFeel(nullptr);
+        }
+    } lookAndFeelReset { this };
 public:
     explicit ClapInstrumentPanel(std::shared_ptr<kick::clap::PluginSession> session)
         : PluginPanel(std::move(session)) {
         setName("CLAP - SynthyBoy");
         setSize(ui::layout::screen.getWidth(), ui::layout::screen.getHeight());
+        pluginLookAndFeel.setMenuParent(this);
+        setLookAndFeel(&pluginLookAndFeel);
         juce::Component::SafePointer<ClapInstrumentPanel> safe(this);
         hardware = contracts::DclSignals::claimHardwareInput([safe](CPktMgr::HWMsg_t& message) {
             if (!safe || !safe->isVisible()) return false;
