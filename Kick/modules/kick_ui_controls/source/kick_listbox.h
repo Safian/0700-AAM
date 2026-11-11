@@ -71,7 +71,8 @@ namespace ui
     private:
         void paint( juce::Graphics& g ) override;
         void resized() override;
-        void mouseDrag( const juce::MouseEvent& ) override { wasMouseDragging = true; }
+        void mouseDown( const juce::MouseEvent& ) override { wasMouseDragging = false; }
+        void mouseDrag( const juce::MouseEvent& e ) override { if( e.getDistanceFromDragStart() > 8 ) wasMouseDragging = true; }
         void mouseUp( const juce::MouseEvent& ) override { wasMouseDragging = false; }
 
         void addOption( const juce::String& Opt, int Index );

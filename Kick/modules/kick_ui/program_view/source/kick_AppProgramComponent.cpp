@@ -21,6 +21,7 @@
 
 AppProgramDisplay::AppProgramDisplay( int Index )
 {
+    setInterceptsMouseClicks( true, true );
     mt::utils::addAndMakeVisible( this, name );
     mt::utils::addChildComponents( this, route, assign, edit, progCH, bankMsb, bankLsb, midiPort, note, cvPort, gatePort, modWheel, velocity, midiCh, sampler );
 
@@ -340,7 +341,7 @@ void AppProgramDisplay::resized()
 AppProgramComponent::AppProgramComponent( int Index )
 
 {
-    //addMouseListener( this, true );
+    setInterceptsMouseClicks( true, true );
     mt::utils::addChildComponents( this, srNo, prg, options );
     mt::utils::disableMouseInterceptsAndFocus( srNo );
 

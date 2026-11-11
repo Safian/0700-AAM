@@ -242,13 +242,32 @@ namespace ui
 
     void KickTableView::mouseDown( const juce::MouseEvent& event )
     {
-        auto viewPos  = canvas.getScreenPosition();
-        auto clickPos = event.getScreenPosition();
+        if( !enableRowSelectionFlag )
+            return;
 
-        auto Y   = clickPos.getY() - viewPos.getY();
-        auto row = canvas.getRowFromY( Y );
-        if( enableRowSelectionFlag )
-            selectRow( row < getNumRows() ? row : getSelectedRow() );
+        int row = -1;
+        for( int i = 0; i < rowComponents.size(); ++i )
+        {
+            if( auto* comp = rowComponents[i] )
+            {
+                if( comp == event.eventComponent || comp->isParentOf( event.eventComponent ) )
+                {
+                    row = i;
+                    break;
+                }
+            }
+        }
+
+        if( row < 0 )
+        {
+            const auto localPos = event.getEventRelativeTo( &canvas ).getPosition();
+            row = canvas.getRowFromY( localPos.getY() );
+        }
+
+        if( row >= 0 && row < getNumRows() )
+            selectRow( row );
+        else
+            selectRow( getSelectedRow() );
     }
 
     std::vector<int> KickTableView::getRowNumbers( int rowCount, int state, int startX, int width, int height )
@@ -287,11 +306,25 @@ namespace ui
 
     void KickTableView::mouseDoubleClick( const juce::MouseEvent& event )
     {
-        auto viewPos  = canvas.getScreenPosition();
-        auto clickPos = event.getScreenPosition();
+        int row = -1;
+        for( int i = 0; i < rowComponents.size(); ++i )
+        {
+            if( auto* comp = rowComponents[i] )
+            {
+                if( comp == event.eventComponent || comp->isParentOf( event.eventComponent ) )
+                {
+                    row = i;
+                    break;
+                }
+            }
+        }
 
-        auto Y   = clickPos.getY() - viewPos.getY();
-        auto row = canvas.getRowFromY( Y );
+        if( row < 0 )
+        {
+            const auto localPos = event.getEventRelativeTo( &canvas ).getPosition();
+            row = canvas.getRowFromY( localPos.getY() );
+        }
+
         if( rowComponents.size() > 0 )
             if( onRowDoubleClicked && juce::isPositiveAndBelow( row, rowComponents.size() ) )
                 onRowDoubleClicked( row );
