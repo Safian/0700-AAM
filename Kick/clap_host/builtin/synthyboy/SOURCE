@@ -1,5 +1,0 @@
-SynthyBoyVST commit: 7e20682bbc242d6eb69fe66ece728daaf7e0d0a4
-ref: 7e20682
-commit date: 2026-11-10T23:30:58+01:00
-subject: MSVC: no init-capture of this in nested lambdas (FxConvolve, LfoShapeEditor, RemapEditor)
-synced by: Kick/clap_host/tools/sync_synthyboy.sh
