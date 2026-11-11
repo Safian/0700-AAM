@@ -152,11 +152,20 @@ namespace kick_ui
         recalculate( true );
     }
 
+    grid_logic::GridZoomBounds GridData::getZoomBounds() const
+    {
+        grid_logic::GridZoomBounds b;
+        b.minBarWidth   = ( getNumBars() > 0 && gridWidth > 0.f ) ? ( gridWidth / getNumBars() ) : 1.f;
+        b.maxBarWidth   = juce::jmax( b.minBarWidth, juce::jmax( gridWidth * 16.f, 16000.f ) );
+        b.minNoteHeight = ( gridHeight > 0.f ) ? ( gridHeight / 64.f ) : 1.f;
+        b.maxNoteHeight = ( gridHeight > 0.f ) ? ( gridHeight / 8.f ) : 128.f;
+        return b;
+    }
+
     void GridData::setHorizantalZoomFactor( float horozontalFactor, bool Notify )
     {
-        float horTemp = zoom.width + horozontalFactor;
-        if( gridWidth > ( getNumBars() * horTemp ) )
-            horTemp = gridWidth / getNumBars();
+        const auto bounds  = getZoomBounds();
+        const float horTemp = juce::jlimit( bounds.minBarWidth, bounds.maxBarWidth, zoom.width + horozontalFactor );
 
         zoom.width = horTemp;
         recalculate( Notify );
@@ -164,12 +173,12 @@ namespace kick_ui
 
     void GridData::setVerticalZoomFactor( float verticalFactor, bool Notify )
     {
-        float verTemp = zoom.height + verticalFactor;
+        const auto bounds = getZoomBounds();
+        float      verTemp = zoom.height + verticalFactor;
+        if( gridHeight > 0.f )
+            verTemp = juce::jlimit( bounds.minNoteHeight, bounds.maxNoteHeight, verTemp );
 
-        auto maxNoteHeight = gridHeight / 8.f;
-        auto minNoteHeight = gridHeight / 64.f;
-
-        zoom.height = juce::jlimit( minNoteHeight, maxNoteHeight, verTemp );
+        zoom.height = juce::jmax( 1.f, verTemp );
         recalculate( Notify );
     }
 
@@ -188,7 +197,7 @@ namespace kick_ui
 
     int GridData::getNoteFromY( float Y ) const
     {
-        return ( mt::ScaleAndNotes::maxNotes - ( Y / getNoteHeight() ) );
+        return grid_logic::yToNote( Y, getNoteHeight(), getNotesMax() );
     }
 
     int GridData::getXFromTime( int Time )
@@ -203,9 +212,9 @@ namespace kick_ui
 
     int GridData::getTimeFromX( int X, bool Quantize )
     {
-        auto timeX = X;
+        auto timeX = juce::jmax( 0, X );
         if( Quantize )
-            timeX = getQuantizedXFromX( X );
+            timeX = getQuantizedXFromX( timeX );
 
         auto bar  = (int)( timeX / getBarWidth() );
         auto remX = timeX - ( bar * getBarWidth() );

@@ -98,7 +98,13 @@ namespace kick_ui
         int currentBeat  = 0;
         int currentTick  = 0;
 
-        std::map<GridToolType, IGridTool*> tools;
+        std::map<GridToolType, IGridTool*>    tools;
+        std::map<int, grid_logic::TouchPoint> activeTouches;
+        bool                                  multiTouchGestureActive{ false };
+        float                                 smoothViewX{ 0.0f };
+        float                                 smoothViewY{ 0.0f };
+        int                                   lastSetViewX{ -1 };
+        int                                   lastSetViewY{ -1 };
 
         GridViewType viewType;
 

@@ -441,9 +441,6 @@ namespace mt
             {
                 MTNote n( it );
 
-                if( Start < n.start )
-                    break;
-
                 if( Note == n.number.get() )
                 {
                     if( 0 < Length )
@@ -453,7 +450,7 @@ namespace mt
                     }
                     else
                     {
-                        if( ( n.start <= Start ) && ( ( n.start + n.length ) > Start ) )
+                        if( ( n.start <= Start ) && ( ( n.start + juce::jmax( 1, n.length.get() ) ) > Start ) )
                             return it;
                     }
                 }

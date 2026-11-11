@@ -192,8 +192,66 @@ namespace kick_ui
         ai.deleteTimSig( aiSel, bar );
     }
 
+    static int resolveGridTouchId( const juce::MouseEvent& event ) noexcept
+    {
+        return grid_logic::resolveTouchId( ui::TouchSlot::inBridge() ? ui::TouchSlot::state().slot : -1,
+                                           event.source.getIndex() );
+    }
+
+    bool IGridTool::findNoteAtPosition( juce::Point<float> pos, float slopPx, grid_logic::NoteSpan& outNote ) const
+    {
+        const int noteNum  = gridData.getNoteFromY( pos.getY() );
+        const int clampedX = static_cast<int>( std::lround( juce::jmax( 0.f, pos.getX() ) ) );
+        const int tick     = gridData.getTimeFromX( clampedX, false );
+        const int bar      = gridData.getBarFromX( clampedX );
+        const int tpb      = static_cast<int>( gridData.getTicksPerBarAt( static_cast<unsigned int>( juce::jmax( 0, bar ) ) ) );
+        const int slop     = grid_logic::ticksFromPixelSlop( slopPx, gridData.getBarWidth(), tpb > 0 ? tpb : 1920 );
+
+        auto                              noteList = ae.getNoteList();
+        std::vector<grid_logic::NoteSpan> spans;
+        spans.reserve( static_cast<size_t>( noteList.getNumChildren() ) );
+
+        for( auto it : noteList )
+        {
+            mt::MTNote n( it );
+            if( n.isValid() )
+                spans.push_back( { n.number.get(), n.start.get(), n.length.get() } );
+        }
+
+        const int hitIdx = grid_logic::findBestNoteMatch( spans.data(), static_cast<int>( spans.size() ), noteNum, tick, slop );
+        if( hitIdx >= 0 )
+        {
+            outNote = spans[static_cast<size_t>( hitIdx )];
+            return true;
+        }
+        return false;
+    }
+
+    bool IGridTool::eraseNoteAtPosition( juce::Point<float> pos, float slopPx, bool allowDeleteSelected )
+    {
+        grid_logic::NoteSpan hit;
+        if( !findNoteAtPosition( pos, slopPx, hit ) )
+            return false;
+
+        const int queryLen = ( hit.length > 0 ) ? hit.length : -1;
+
+        if( allowDeleteSelected && ae.isValidSelectedNote( hit.note, hit.start, queryLen ) )
+        {
+            ae.deleteSelectedNotes( aeSelected );
+            return true;
+        }
+        return ae.eraseNote( hit.note, hit.start, queryLen ) == 0;
+    }
+
     void GridComponent::mouseUp( const juce::MouseEvent& event )
     {
+        activeTouches.erase( resolveGridTouchId( event ) );
+        if( multiTouchGestureActive )
+        {
+            if( activeTouches.empty() )
+                multiTouchGestureActive = false;
+            return;
+        }
         if( activeTool ) activeTool->mouseUp( event );
     }
 
@@ -204,27 +262,116 @@ namespace kick_ui
 
     void GridComponent::mouseDrag( const juce::MouseEvent& event )
     {
+        const int                      tid   = resolveGridTouchId( event );
+        const auto                     vpEv  = event.getEventRelativeTo( &viewPort );
+        const grid_logic::TouchPoint curVp = { vpEv.position.getX(), vpEv.position.getY() };
+
+        if( activeTouches.find( tid ) == activeTouches.end() )
+            activeTouches[tid] = curVp;
+
+        if( activeTouches.size() >= 2 )
+        {
+            multiTouchGestureActive = true;
+
+            auto it1  = activeTouches.begin();
+            auto it2  = std::next( it1 );
+            const grid_logic::TouchPoint prevP1 = it1->second;
+            const grid_logic::TouchPoint prevP2 = it2->second;
+
+            activeTouches[tid] = curVp;
+            const grid_logic::TouchPoint curP1 = it1->second;
+            const grid_logic::TouchPoint curP2 = it2->second;
+
+            if( lastSetViewX != viewPort.getViewPositionX() || lastSetViewY != viewPort.getViewPositionY() )
+            {
+                smoothViewX = static_cast<float>( viewPort.getViewPositionX() );
+                smoothViewY = static_cast<float>( viewPort.getViewPositionY() );
+            }
+
+            grid_logic::GridViewportState st;
+            st.viewX      = smoothViewX;
+            st.viewY      = smoothViewY;
+            st.viewWidth  = static_cast<float>( viewPort.getViewWidth() );
+            st.viewHeight = static_cast<float>( viewPort.getViewHeight() );
+            st.barWidth   = gridData.getBarWidth();
+            st.noteHeight = gridData.getNoteHeight();
+            st.numBars    = gridData.getNumBars();
+            st.maxNotes   = gridData.getNotesMax();
+
+            const auto res = grid_logic::computePinchPan( st, gridData.getZoomBounds(), prevP1, prevP2, curP1, curP2 );
+            const float dW = res.barWidth - gridData.getBarWidth();
+            const float dH = res.noteHeight - gridData.getNoteHeight();
+            if( std::abs( dW ) > 1e-4f || std::abs( dH ) > 1e-4f )
+                gridData.setZoomFactor( dW, dH );
+
+            smoothViewX = res.viewX;
+            smoothViewY = res.viewY;
+            viewPort.setViewPosition( static_cast<int>( std::lround( smoothViewX ) ),
+                                      static_cast<int>( std::lround( smoothViewY ) ) );
+            lastSetViewX = viewPort.getViewPositionX();
+            lastSetViewY = viewPort.getViewPositionY();
+            return;
+        }
+
+        activeTouches[tid] = curVp;
+        if( multiTouchGestureActive )
+            return;
+
         if( activeTool ) activeTool->mouseDrag( event );
     }
 
     void GridComponent::mouseDown( const juce::MouseEvent& event )
     {
+        const int                      tid   = resolveGridTouchId( event );
+        const auto                     vpEv  = event.getEventRelativeTo( &viewPort );
+        const grid_logic::TouchPoint curVp = { vpEv.position.getX(), vpEv.position.getY() };
+
+        activeTouches[tid] = curVp;
+        if( activeTouches.size() == 1 || lastSetViewX != viewPort.getViewPositionX() || lastSetViewY != viewPort.getViewPositionY() )
+        {
+            smoothViewX  = static_cast<float>( viewPort.getViewPositionX() );
+            smoothViewY  = static_cast<float>( viewPort.getViewPositionY() );
+            lastSetViewX = viewPort.getViewPositionX();
+            lastSetViewY = viewPort.getViewPositionY();
+        }
+
+        if( activeTouches.size() >= 2 )
+        {
+            if( !multiTouchGestureActive )
+            {
+                multiTouchGestureActive = true;
+                if( activeTool ) activeTool->cancelGesture();
+            }
+            return;
+        }
+
+        if( multiTouchGestureActive )
+            return;
+
         if( activeTool ) activeTool->mouseDown( event );
     }
 
     void GridComponent::mouseDoubleClick( const juce::MouseEvent& event )
     {
+        if( multiTouchGestureActive || activeTouches.size() > 1 )
+            return;
         if( activeTool ) activeTool->mouseDoubleClick( event );
     }
 
     void GridComponent::toolTypeChanged( GridToolType toolType )
     {
-        auto it    = tools.find( toolType );
-        activeTool = ( it != tools.end() ) ? it->second : nullptr;
+        if( activeTool ) activeTool->cancelGesture();
+        activeTouches.clear();
+        multiTouchGestureActive = false;
+        auto it                 = tools.find( toolType );
+        activeTool              = ( it != tools.end() ) ? it->second : nullptr;
     }
 
     void GridComponent::visibilityChanged()
     {
+        if( activeTool ) activeTool->cancelGesture();
+        activeTouches.clear();
+        multiTouchGestureActive = false;
         for( auto it : getChildren() )
             it->setVisible( isVisible() );
     }
