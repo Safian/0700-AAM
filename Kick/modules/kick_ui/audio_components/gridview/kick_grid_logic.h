@@ -301,6 +301,7 @@ namespace kick_ui::grid_logic
         int note   = 0;
         int start  = 0;
         int length = 0;
+        int id     = 0;
     };
 
     inline int ticksFromPixelSlop( float slopPx, float barWidth, int ticksPerBar ) noexcept
@@ -350,6 +351,67 @@ namespace kick_ui::grid_logic
             }
         }
         return bestIndex;
+    }
+
+    // =========================================================================
+    // Long-press note inspector, clamping, and touch edge-resize hit testing
+    // =========================================================================
+    constexpr int   kLongPressDelayMs    = 450;
+    constexpr float kLongPressMaxMovePx  = 10.0f;
+
+    inline bool shouldTriggerLongPress( bool isDown, float moveDistPx, int elapsedMs ) noexcept
+    {
+        return isDown && moveDistPx <= kLongPressMaxMovePx && elapsedMs >= kLongPressDelayMs;
+    }
+
+    struct NotePropertiesState
+    {
+        int  note        = 60;
+        int  start       = 0;
+        int  length      = 96;
+        int  velocity    = 100;
+        int  probability = 100;
+        int  ratchet     = 1;
+        bool mute        = false;
+    };
+
+    inline NotePropertiesState clampNoteProperties( NotePropertiesState s, int maxStartTicks ) noexcept
+    {
+        const int maxStart = std::max( 0, maxStartTicks );
+        s.note             = std::clamp( s.note, 0, 127 );
+        s.start            = std::clamp( s.start, 0, maxStart );
+        s.length           = std::max( 1, s.length );
+        s.velocity         = std::clamp( s.velocity, 1, 127 );
+        s.probability      = std::clamp( s.probability, 0, 100 );
+        s.ratchet          = std::clamp( s.ratchet, 1, 8 );
+        return s;
+    }
+
+    inline int stepNoteProperty( int cur, int delta, int minVal, int maxVal ) noexcept
+    {
+        return std::clamp( cur + delta, minVal, std::max( minVal, maxVal ) );
+    }
+
+    enum class NoteEdgeHit
+    {
+        None = 0,
+        Left,
+        Right
+    };
+
+    inline NoteEdgeHit hitTestNoteEdge( float x, float startX, float endX, bool editStart, bool editEnd, bool widenForTouch ) noexcept
+    {
+        if( !editStart && !editEnd )
+            return NoteEdgeHit::None;
+
+        const float width  = std::max( 0.0f, endX - startX );
+        const float handle = widenForTouch ? std::min( 16.0f, std::max( 5.0f, width * 0.35f ) ) : 5.0f;
+
+        if( editStart && x >= ( startX - 2.0f ) && x <= ( startX + handle ) )
+            return NoteEdgeHit::Left;
+        if( editEnd && x <= ( endX + 2.0f ) && x >= ( endX - handle ) )
+            return NoteEdgeHit::Right;
+        return NoteEdgeHit::None;
     }
 
 } // namespace kick_ui::grid_logic

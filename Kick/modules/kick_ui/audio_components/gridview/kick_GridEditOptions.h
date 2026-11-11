@@ -164,4 +164,55 @@ namespace kick_ui
         }
     };
 
+    class GridNotePropertiesDialog : public juce::Component
+    {
+    public:
+        GridNotePropertiesDialog( const grid_logic::NotePropertiesState& initialState,
+                                  bool                                   isDrumTrack,
+                                  int                                    gridStepTicks,
+                                  int                                    maxStartTicks,
+                                  std::function<juce::String( int )>     formatStartBbt );
+
+        const grid_logic::NotePropertiesState& getState() const noexcept { return state; }
+        bool                                   wasDeleteRequested() const noexcept { return deleteRequested; }
+
+    private:
+        struct StepRow
+        {
+            ui::KickLabel  title;
+            ui::KickLabel  value;
+            ui::KickButton coarseMinus{ "-Step", "-" };
+            ui::KickButton fineMinus{ "-", "-" };
+            ui::KickButton finePlus{ "+", "+" };
+            ui::KickButton coarsePlus{ "+Step", "+" };
+            bool           hasCoarse{ true };
+
+            void attachTo( juce::Component& parent,
+                           const juce::String& labelText,
+                           const juce::String& coarseMinusText,
+                           const juce::String& fineMinusText,
+                           const juce::String& finePlusText,
+                           const juce::String& coarsePlusText,
+                           bool                useCoarse );
+            void layout( juce::Rectangle<int> bounds );
+        };
+
+        void refreshLabels();
+        void paint( juce::Graphics& g ) override;
+        void resized() override;
+
+        grid_logic::NotePropertiesState    state;
+        bool                               drumTrack{ false };
+        int                                stepTicks{ 96 };
+        int                                maxStart{ 0 };
+        bool                               deleteRequested{ false };
+        std::function<juce::String( int )> bbtFormatter;
+
+        StepRow              pitchRow, startRow, lengthRow, velocityRow, probRow, ratchetRow;
+        ui::KickToggleButton muteBtn{ "MUTED", "MUTED", "ACTIVE" };
+        ui::KickButton       deleteBtn{ "DELETE NOTE", "DELETE NOTE" };
+
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( GridNotePropertiesDialog )
+    };
+
 }

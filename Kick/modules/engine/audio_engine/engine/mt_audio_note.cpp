@@ -1487,6 +1487,24 @@ namespace mt
         return editNoteRatchet( note, Ratchet );
     }
 
+    int MTNoteList::editNoteMute( juce::ValueTree& VT, const bool MuteStatus )
+    {
+        if( VT.isValid() && VT.hasType( IDs::NOTE ) )
+        {
+            MTNote n( VT, um );
+            n.mute = MuteStatus;
+            triggerAsyncUpdate();
+            return 0;
+        }
+        return -1;
+    }
+
+    int MTNoteList::editNoteMute( const int NoteID, const bool MuteStatus )
+    {
+        auto note = find( NoteID );
+        return editNoteMute( note, MuteStatus );
+    }
+
     int MTNoteList::editNoteRatchet( const std::vector<int>& NoteIDs, const std::vector<int>& Ratchets )
     {
         int i = 0;

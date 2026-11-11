@@ -30,7 +30,10 @@ namespace kick_ui
 
                 rect.setBounds( xs, ys, w, h );
                 // Fill...
-                mt::utils::fillRoundedRect( g, rect, ui::Theme::noteColour( note.velocity.get() ) );
+                auto noteCol = ui::Theme::noteColour( note.velocity.get() );
+                if( note.mute.get() )
+                    noteCol = noteCol.withAlpha( 0.35f );
+                mt::utils::fillRoundedRect( g, rect, noteCol );
                 // Outline...
                 auto isSel = selectedNoteList.contains( it );
                 if( rect.getWidth() <= 1 ) rect.setWidth( 1 );
@@ -73,6 +76,7 @@ namespace kick_ui
 
     GridComponent::~GridComponent()
     {
+        stopTimer();
         for( auto tool : tools )
         {
             delete tool.second;
@@ -198,7 +202,11 @@ namespace kick_ui
                                            event.source.getIndex() );
     }
 
-    bool IGridTool::findNoteAtPosition( juce::Point<float> pos, float slopPx, grid_logic::NoteSpan& outNote ) const
+    static bool findGridNoteAtPosition( mt::MTAudioInterface& ae,
+                                        GridData&             gridData,
+                                        juce::Point<float>    pos,
+                                        float                 slopPx,
+                                        grid_logic::NoteSpan& outNote )
     {
         const int noteNum  = gridData.getNoteFromY( pos.getY() );
         const int clampedX = static_cast<int>( std::lround( juce::jmax( 0.f, pos.getX() ) ) );
@@ -215,7 +223,7 @@ namespace kick_ui
         {
             mt::MTNote n( it );
             if( n.isValid() )
-                spans.push_back( { n.number.get(), n.start.get(), n.length.get() } );
+                spans.push_back( { n.number.get(), n.start.get(), n.length.get(), n.id.get() } );
         }
 
         const int hitIdx = grid_logic::findBestNoteMatch( spans.data(), static_cast<int>( spans.size() ), noteNum, tick, slop );
@@ -225,6 +233,11 @@ namespace kick_ui
             return true;
         }
         return false;
+    }
+
+    bool IGridTool::findNoteAtPosition( juce::Point<float> pos, float slopPx, grid_logic::NoteSpan& outNote ) const
+    {
+        return findGridNoteAtPosition( ae, gridData, pos, slopPx, outNote );
     }
 
     bool IGridTool::eraseNoteAtPosition( juce::Point<float> pos, float slopPx, bool allowDeleteSelected )
@@ -243,9 +256,42 @@ namespace kick_ui
         return ae.eraseNote( hit.note, hit.start, queryLen ) == 0;
     }
 
+    void GridComponent::cancelLongPress()
+    {
+        stopTimer();
+        longPressArmed  = false;
+        longPressNoteId = -1;
+    }
+
+    void GridComponent::timerCallback()
+    {
+        if( !grid_logic::shouldTriggerLongPress( longPressArmed && activeTouches.size() == 1 && !multiTouchGestureActive, 0.0f, grid_logic::kLongPressDelayMs )
+            || longPressNoteId <= 0 )
+        {
+            cancelLongPress();
+            return;
+        }
+
+        const int targetNoteId = longPressNoteId;
+        cancelLongPress();
+        activeTouches.clear();
+        multiTouchGestureActive = false;
+        longPressTriggered      = true;
+
+        if( activeTool ) activeTool->cancelGesture();
+        if( onNoteLongPress ) onNoteLongPress( targetNoteId );
+    }
+
     void GridComponent::mouseUp( const juce::MouseEvent& event )
     {
+        cancelLongPress();
         activeTouches.erase( resolveGridTouchId( event ) );
+        if( longPressTriggered )
+        {
+            if( activeTouches.empty() )
+                longPressTriggered = false;
+            return;
+        }
         if( multiTouchGestureActive )
         {
             if( activeTouches.empty() )
@@ -266,11 +312,22 @@ namespace kick_ui
         const auto                     vpEv  = event.getEventRelativeTo( &viewPort );
         const grid_logic::TouchPoint curVp = { vpEv.position.getX(), vpEv.position.getY() };
 
+        if( longPressTriggered )
+            return;
+
+        if( longPressArmed )
+        {
+            const float dist = std::hypot( curVp.x - longPressDownVp.x, curVp.y - longPressDownVp.y );
+            if( dist > grid_logic::kLongPressMaxMovePx || activeTouches.size() >= 2 )
+                cancelLongPress();
+        }
+
         if( activeTouches.find( tid ) == activeTouches.end() )
             activeTouches[tid] = curVp;
 
         if( activeTouches.size() >= 2 )
         {
+            cancelLongPress();
             multiTouchGestureActive = true;
 
             auto it1  = activeTouches.begin();
@@ -322,6 +379,9 @@ namespace kick_ui
 
     void GridComponent::mouseDown( const juce::MouseEvent& event )
     {
+        if( activeTouches.empty() )
+            longPressTriggered = false;
+
         const int                      tid   = resolveGridTouchId( event );
         const auto                     vpEv  = event.getEventRelativeTo( &viewPort );
         const grid_logic::TouchPoint curVp = { vpEv.position.getX(), vpEv.position.getY() };
@@ -337,6 +397,7 @@ namespace kick_ui
 
         if( activeTouches.size() >= 2 )
         {
+            cancelLongPress();
             if( !multiTouchGestureActive )
             {
                 multiTouchGestureActive = true;
@@ -345,33 +406,54 @@ namespace kick_ui
             return;
         }
 
-        if( multiTouchGestureActive )
+        if( multiTouchGestureActive || longPressTriggered )
             return;
 
-        if( activeTool ) activeTool->mouseDown( event );
+        if( activeTool )
+        {
+            activeTool->mouseDown( event );
+
+            const auto type = activeTool->getType();
+            if( type == GridToolType::GridPencilTool || type == GridToolType::GridSelectTool )
+            {
+                grid_logic::NoteSpan hit;
+                if( findGridNoteAtPosition( ai, gridData, event.position, 6.0f, hit ) && hit.id > 0 )
+                {
+                    longPressNoteId = hit.id;
+                    longPressDownVp = curVp;
+                    longPressArmed  = true;
+                    startTimer( grid_logic::kLongPressDelayMs );
+                }
+            }
+        }
     }
 
     void GridComponent::mouseDoubleClick( const juce::MouseEvent& event )
     {
-        if( multiTouchGestureActive || activeTouches.size() > 1 )
+        cancelLongPress();
+        if( multiTouchGestureActive || longPressTriggered || activeTouches.size() > 1 )
             return;
         if( activeTool ) activeTool->mouseDoubleClick( event );
     }
 
     void GridComponent::toolTypeChanged( GridToolType toolType )
     {
+        cancelLongPress();
         if( activeTool ) activeTool->cancelGesture();
         activeTouches.clear();
         multiTouchGestureActive = false;
+        longPressTriggered      = false;
         auto it                 = tools.find( toolType );
         activeTool              = ( it != tools.end() ) ? it->second : nullptr;
     }
 
     void GridComponent::visibilityChanged()
     {
+        cancelLongPress();
         if( activeTool ) activeTool->cancelGesture();
         activeTouches.clear();
         multiTouchGestureActive = false;
+        longPressTriggered      = false;
         for( auto it : getChildren() )
             it->setVisible( isVisible() );
     }

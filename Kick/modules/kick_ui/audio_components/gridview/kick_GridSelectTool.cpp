@@ -46,6 +46,18 @@ namespace kick_ui
         clearSelectRegion();
         IGridTool::mouseDown( event );
 
+        if( mDownNoteID <= 0 )
+        {
+            grid_logic::NoteSpan hit;
+            if( findNoteAtPosition( event.position, 4.0f, hit ) && hit.id > 0 )
+            {
+                mDownNoteID       = hit.id;
+                mDownNoteNum      = hit.note;
+                mDownTime         = hit.start;
+                mDownSelectedNote = ( 0 < ae.getSelectedNoteID( hit.note, hit.start, hit.length > 0 ? hit.length : -1 ) );
+            }
+        }
+
         const bool isSelectedNote = ( 0 < ae.getSelectedNoteID( mDownNoteNum, mDownTime, -1 ) );
         gridComp.setMouseCursor( isSelectedNote ? juce::MouseCursor::DraggingHandCursor : juce::MouseCursor::NormalCursor );
     }

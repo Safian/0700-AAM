@@ -291,6 +291,36 @@ static void testNoteEraseHitTesting()
     std::puts( "testNoteEraseHitTesting passed" );
 }
 
+static void testLongPressNotePropertiesAndTouchResize()
+{
+    using namespace kick_ui::grid_logic;
+
+    check( !shouldTriggerLongPress( true, 4.0f, 300 ), "Short hold (<450ms) does not fire long press" );
+    check( !shouldTriggerLongPress( true, 14.0f, 500 ), "Dragging (>10px) cancels long press" );
+    check( !shouldTriggerLongPress( false, 0.0f, 600 ), "Released finger does not fire long press" );
+    check( shouldTriggerLongPress( true, 5.0f, 450 ), "Stationary hold >=450ms triggers long press" );
+
+    NotePropertiesState bad{ -5, -20, 0, 200, 150, 99, true };
+    auto clamped = clampNoteProperties( bad, 7679 );
+    check( clamped.note == 0 && clamped.start == 0 && clamped.length == 1
+        && clamped.velocity == 127 && clamped.probability == 100 && clamped.ratchet == 8 && clamped.mute,
+           "NoteProperties clamping bounds all fields" );
+    check( stepNoteProperty( 100, 30, 1, 127 ) == 127, "Property stepper clamps to max" );
+    check( stepNoteProperty( 1, -5, 1, 8 ) == 1, "Property stepper clamps to min" );
+
+    // Touch resize widening when Edit Start / Edit End is toggled ON
+    check( hitTestNoteEdge( 112.0f, 100.0f, 160.0f, true, false, false ) == NoteEdgeHit::None,
+           "Mouse handle width is 5px when widenForTouch=false" );
+    check( hitTestNoteEdge( 112.0f, 100.0f, 160.0f, true, false, true ) == NoteEdgeHit::Left,
+           "Touch Edit Start handle widens up to 16px on wide notes" );
+    check( hitTestNoteEdge( 150.0f, 100.0f, 160.0f, false, true, true ) == NoteEdgeHit::Right,
+           "Touch Edit End handle hits cleanly" );
+    check( hitTestNoteEdge( 112.0f, 100.0f, 160.0f, false, false, true ) == NoteEdgeHit::None,
+           "Neither Edit Start nor End active returns None (body drag moves note)" );
+
+    std::puts( "testLongPressNotePropertiesAndTouchResize passed" );
+}
+
 int main()
 {
     testPadToNote();
@@ -301,6 +331,7 @@ int main()
     testTouchIdentity();
     testSingleFingerPanAndPinchZoom();
     testNoteEraseHitTesting();
+    testLongPressNotePropertiesAndTouchResize();
     std::puts( "All Grid logic tests PASSED!" );
     return 0;
 }

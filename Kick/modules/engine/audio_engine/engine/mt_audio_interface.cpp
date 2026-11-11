@@ -1761,6 +1761,13 @@ namespace mt
         return -1;
     }
 
+    int MTAudioInterface::editNoteMute( const MTSelected& Selection, int NoteID, const bool MuteStatus )
+    {
+        if( auto t = manager->getTrack( Selection ) )
+            return t->editNoteMute( NoteID, MuteStatus );
+        return -1;
+    }
+
     int MTAudioInterface::editSelectedNotes( const MTSelected& Selection, double DeltaTimeInTicks, int DeltaNoteNumber, double DeltaLength )
     {
         if( auto t = manager->getTrack( Selection ) )

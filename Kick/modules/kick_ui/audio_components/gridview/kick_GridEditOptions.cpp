@@ -212,4 +212,189 @@ namespace kick_ui
         rhythm.setBoundsRelative( .05f, .83f, .90f, .12f );
     }
 
+    void GridNotePropertiesDialog::StepRow::attachTo( juce::Component& parent,
+                                                    const juce::String& labelText,
+                                                    const juce::String& coarseMinusText,
+                                                    const juce::String& fineMinusText,
+                                                    const juce::String& finePlusText,
+                                                    const juce::String& coarsePlusText,
+                                                    bool                useCoarse )
+    {
+        hasCoarse = useCoarse;
+        parent.addAndMakeVisible( title );
+        parent.addAndMakeVisible( value );
+        parent.addAndMakeVisible( fineMinus );
+        parent.addAndMakeVisible( finePlus );
+
+        title.setText( labelText, juce::dontSendNotification );
+        title.setJustificationType( juce::Justification::centredLeft );
+        title.setColour( juce::Label::textColourId, ui::Theme::textColour( 1 ) );
+        mt::utils::setValueJustification( juce::Justification::centred, value );
+        mt::utils::setValueBackgroundColour( ui::Theme::backgroundColour( 3 ), value );
+        mt::utils::setValueColour( ui::Theme::textColour( 2 ), value );
+        mt::utils::setValueFontHeight( 17, value );
+
+        auto configureBtn = []( ui::KickButton& btn, const juce::String& txt ) {
+            btn.setClickingTogglesState( false );
+            btn.setButtonText( txt );
+            btn.setValueColour( ui::Theme::textColour( 1 ) );
+            btn.setValueFontHeight( 16 );
+        };
+
+        configureBtn( fineMinus, fineMinusText );
+        configureBtn( finePlus, finePlusText );
+
+        if( hasCoarse )
+        {
+            parent.addAndMakeVisible( coarseMinus );
+            parent.addAndMakeVisible( coarsePlus );
+            configureBtn( coarseMinus, coarseMinusText );
+            configureBtn( coarsePlus, coarsePlusText );
+        }
+    }
+
+    void GridNotePropertiesDialog::StepRow::layout( juce::Rectangle<int> bounds )
+    {
+        auto b = bounds.reduced( 0, 3 );
+        title.setBounds( b.removeFromLeft( 125 ) );
+        b.removeFromLeft( 6 );
+
+        constexpr int kBtnW = 62;
+        constexpr int kGap  = 6;
+        if( hasCoarse )
+        {
+            coarseMinus.setBounds( b.removeFromLeft( kBtnW ) );
+            b.removeFromLeft( kGap );
+        }
+        fineMinus.setBounds( b.removeFromLeft( kBtnW ) );
+        b.removeFromLeft( kGap );
+
+        if( hasCoarse )
+        {
+            coarsePlus.setBounds( b.removeFromRight( kBtnW ) );
+            b.removeFromRight( kGap );
+        }
+        finePlus.setBounds( b.removeFromRight( kBtnW ) );
+        b.removeFromRight( kGap );
+
+        value.setBounds( b );
+    }
+
+    GridNotePropertiesDialog::GridNotePropertiesDialog( const grid_logic::NotePropertiesState& initialState,
+                                                        bool                                   isDrumTrack,
+                                                        int                                    gridStepTicks,
+                                                        int                                    maxStartTicks,
+                                                        std::function<juce::String( int )>     formatStartBbt )
+        : state( grid_logic::clampNoteProperties( initialState, maxStartTicks ) )
+        , drumTrack( isDrumTrack )
+        , stepTicks( juce::jmax( 1, gridStepTicks ) )
+        , maxStart( juce::jmax( 0, maxStartTicks ) )
+        , bbtFormatter( std::move( formatStartBbt ) )
+    {
+        setName( "NOTE PROPERTIES" );
+
+        const int          octaveOrBank = drumTrack ? 16 : 12;
+        const juce::String pitchCoarseM = drumTrack ? "-Bnk" : "-Oct";
+        const juce::String pitchCoarseP = drumTrack ? "+Bnk" : "+Oct";
+
+        pitchRow.attachTo( *this, drumTrack ? "Pad / Pitch" : "Pitch", pitchCoarseM, "-1", "+1", pitchCoarseP, true );
+        startRow.attachTo( *this, "Start", "-Step", "-1t", "+1t", "+Step", true );
+        lengthRow.attachTo( *this, "Length", "-Step", "-1t", "+1t", "+Step", true );
+        velocityRow.attachTo( *this, "Velocity", "-10", "-1", "+1", "+10", true );
+        probRow.attachTo( *this, "Probability", "-10%", "-1%", "+1%", "+10%", true );
+        ratchetRow.attachTo( *this, "Ratchet", "", "-1", "+1", "", false );
+
+        auto applyStep = [this]( int& field, int delta, int minVal, int maxVal ) {
+            field = grid_logic::stepNoteProperty( field, delta, minVal, maxVal );
+            refreshLabels();
+        };
+
+        pitchRow.coarseMinus.onClick = [&, octaveOrBank]() { applyStep( state.note, -octaveOrBank, 0, 127 ); };
+        pitchRow.fineMinus.onClick   = [&]() { applyStep( state.note, -1, 0, 127 ); };
+        pitchRow.finePlus.onClick    = [&]() { applyStep( state.note, +1, 0, 127 ); };
+        pitchRow.coarsePlus.onClick  = [&, octaveOrBank]() { applyStep( state.note, +octaveOrBank, 0, 127 ); };
+
+        startRow.coarseMinus.onClick = [&]() { applyStep( state.start, -stepTicks, 0, maxStart ); };
+        startRow.fineMinus.onClick   = [&]() { applyStep( state.start, -1, 0, maxStart ); };
+        startRow.finePlus.onClick    = [&]() { applyStep( state.start, +1, 0, maxStart ); };
+        startRow.coarsePlus.onClick  = [&]() { applyStep( state.start, +stepTicks, 0, maxStart ); };
+
+        constexpr int kMaxLen = 1920 * 64;
+        lengthRow.coarseMinus.onClick = [&]() { applyStep( state.length, -stepTicks, 1, kMaxLen ); };
+        lengthRow.fineMinus.onClick   = [&]() { applyStep( state.length, -1, 1, kMaxLen ); };
+        lengthRow.finePlus.onClick    = [&]() { applyStep( state.length, +1, 1, kMaxLen ); };
+        lengthRow.coarsePlus.onClick  = [&]() { applyStep( state.length, +stepTicks, 1, kMaxLen ); };
+
+        velocityRow.coarseMinus.onClick = [&]() { applyStep( state.velocity, -10, 1, 127 ); };
+        velocityRow.fineMinus.onClick   = [&]() { applyStep( state.velocity, -1, 1, 127 ); };
+        velocityRow.finePlus.onClick    = [&]() { applyStep( state.velocity, +1, 1, 127 ); };
+        velocityRow.coarsePlus.onClick  = [&]() { applyStep( state.velocity, +10, 1, 127 ); };
+
+        probRow.coarseMinus.onClick = [&]() { applyStep( state.probability, -10, 0, 100 ); };
+        probRow.fineMinus.onClick   = [&]() { applyStep( state.probability, -1, 0, 100 ); };
+        probRow.finePlus.onClick    = [&]() { applyStep( state.probability, +1, 0, 100 ); };
+        probRow.coarsePlus.onClick  = [&]() { applyStep( state.probability, +10, 0, 100 ); };
+
+        ratchetRow.fineMinus.onClick = [&]() { applyStep( state.ratchet, -1, 1, 8 ); };
+        ratchetRow.finePlus.onClick  = [&]() { applyStep( state.ratchet, +1, 1, 8 ); };
+
+        addAndMakeVisible( muteBtn );
+        muteBtn.setValueColour( ui::Theme::textColour( 1 ) );
+        muteBtn.setValueFontHeight( 17 );
+        muteBtn.setToggleButtonText( "Mute: ON", "Mute: OFF" );
+        muteBtn.setToggleState( state.mute, juce::dontSendNotification );
+        muteBtn.onClick = [&]() {
+            state.mute = muteBtn.getToggleState();
+            refreshLabels();
+        };
+
+        addAndMakeVisible( deleteBtn );
+        deleteBtn.setClickingTogglesState( false );
+        deleteBtn.setValueColour( juce::Colours::white );
+        deleteBtn.setValueBackgroundColour( juce::Colour( 0xff9e2a2b ) );
+        deleteBtn.setValueFontHeight( 17 );
+        deleteBtn.onClick = [&]() {
+            deleteRequested = true;
+            mt::utils::exitDialog( this, UI::APPLY );
+        };
+
+        refreshLabels();
+    }
+
+    void GridNotePropertiesDialog::refreshLabels()
+    {
+        const juce::String noteLabel = drumTrack
+                                           ? ( mt::Kick::getPadName( state.note ) + " (" + juce::String( state.note ) + ")" )
+                                           : ( mt::ScaleAndNotes::getNoteName( state.note ) + " (" + juce::String( state.note ) + ")" );
+        pitchRow.value.setText( noteLabel, juce::dontSendNotification );
+
+        const juce::String bbtText = bbtFormatter ? bbtFormatter( state.start ) : juce::String( state.start );
+        startRow.value.setText( bbtText + "  [" + juce::String( state.start ) + " t]", juce::dontSendNotification );
+        lengthRow.value.setText( juce::String( state.length ) + " ticks", juce::dontSendNotification );
+        velocityRow.value.setText( juce::String( state.velocity ), juce::dontSendNotification );
+        probRow.value.setText( juce::String( state.probability ) + " %", juce::dontSendNotification );
+        ratchetRow.value.setText( juce::String( state.ratchet ) + "x", juce::dontSendNotification );
+    }
+
+    void GridNotePropertiesDialog::paint( juce::Graphics& g )
+    {
+        g.fillAll( ui::Theme::backgroundColour( 1 ) );
+    }
+
+    void GridNotePropertiesDialog::resized()
+    {
+        auto b    = getLocalBounds().reduced( 14, 8 );
+        auto rows = b.getHeight() / 7;
+        pitchRow.layout( b.removeFromTop( rows ) );
+        startRow.layout( b.removeFromTop( rows ) );
+        lengthRow.layout( b.removeFromTop( rows ) );
+        velocityRow.layout( b.removeFromTop( rows ) );
+        probRow.layout( b.removeFromTop( rows ) );
+        ratchetRow.layout( b.removeFromTop( rows ) );
+
+        auto actionRow = b.reduced( 0, 4 );
+        muteBtn.setBounds( actionRow.removeFromLeft( actionRow.getWidth() / 2 ).reduced( 0, 0 ).withTrimmedRight( 6 ) );
+        deleteBtn.setBounds( actionRow.withTrimmedLeft( 6 ) );
+    }
+
 }

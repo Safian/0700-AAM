@@ -299,6 +299,7 @@ namespace kick_ui
         void nudgeSelectedNotes( juce::Array<juce::ValueTree>&, int, double, bool );
         void editStartForSelectedNotes( juce::Array<juce::ValueTree>&, int, double, bool );
         void editEndForSelectedNotes( juce::Array<juce::ValueTree>&, int, double, bool );
+        void applyBottomBarEditStep( int value );
         void setZoomInZoomOut( int, int, bool );
         void timerCallback() override;
         void updatePlayhead();
@@ -349,6 +350,7 @@ namespace kick_ui
         void openHumanizePopUp();
         void openRandomEventsPopUp();
         void openSplitEventsPopUp();
+        void openNotePropertiesPopUp( int noteId );
         void openWarningPopUp( const juce::String& Text );
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( AppGrid )

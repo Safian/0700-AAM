@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 #include <PluginPanel.h>
+#include <kick_ui_controls/kick_ui_controls.h>
 #include <contracts/dcl/dcl_signals.h>
 #include <contracts/dcl/dcl_contracts_helper.h>
 
@@ -9,9 +10,13 @@ class ClapInstrumentPanel final : public kick::clap::PluginPanel {
 public:
     explicit ClapInstrumentPanel(std::shared_ptr<kick::clap::PluginSession> session)
         : PluginPanel(std::move(session)) {
+        setName("CLAP - SynthyBoy");
+        setSize(ui::layout::screen.getWidth(), ui::layout::screen.getHeight());
         juce::Component::SafePointer<ClapInstrumentPanel> safe(this);
         hardware = contracts::DclSignals::claimHardwareInput([safe](CPktMgr::HWMsg_t& message) {
-            if (!safe || !safe->isShowing() || safe->getTopLevelComponent() != juce::Component::getCurrentlyModalComponent()) return false;
+            if (!safe || !safe->isVisible()) return false;
+            auto* modal = juce::Component::getCurrentlyModalComponent();
+            if (modal != nullptr && modal != safe->getTopLevelComponent() && !modal->isParentOf(safe.getComponent())) return false;
             if (message.data.size() < 3 || !contracts::DclContractsHelper::isKnobMessage(message)) return false;
             const auto code = contracts::DclContractsHelper::getKnobCode(message);
             const auto value = contracts::DclContractsHelper::getKnobValue(message);
@@ -32,14 +37,12 @@ private:
 };
 inline void openClapInstrument(mt::MTIProgram* program) {
     if (auto* plugin = dynamic_cast<mt::MTClapProgram*>(program)) {
-        juce::DialogWindow::LaunchOptions dialog;
-        dialog.content.setOwned(new ClapInstrumentPanel(plugin->getPluginSession()));
-        dialog.dialogTitle = "CLAP - " + plugin->getName();
-        dialog.dialogBackgroundColour = juce::Colour(0xff15191e);
-        dialog.escapeKeyTriggersCloseButton = true;
-        dialog.useNativeTitleBar = false;
-        dialog.resizable = true;
-        dialog.launchAsync();
+        mt::utils::showDialogOwned<ClapInstrumentPanel>(
+            "CLAP - " + plugin->getName(),
+            std::make_unique<ClapInstrumentPanel>(plugin->getPluginSession()),
+            {},
+            ui::layout::screen,
+            false);
     }
 }
 
