@@ -575,5 +575,15 @@ add_executable(kick-screen-dimmer-tests ScreenDimmerTests.cpp)
 add_test(NAME kick-screen-dimmer COMMAND kick-screen-dimmer-tests)
 set_tests_properties(kick-screen-dimmer PROPERTIES TIMEOUT 10)
 
+# Incoming shared files (Open In / Share Sheet -> Samples / Projects) and Splice directory discovery; JUCE-free header only.
+add_executable(kick-incoming-files-tests IncomingFilesTests.cpp)
+add_test(NAME kick-incoming-files COMMAND kick-incoming-files-tests)
+set_tests_properties(kick-incoming-files PROPERTIES TIMEOUT 10)
+
+# Google Drive API v3 & OAuth PKCE helpers (RFC 7636 vector, links, dates, creds); JUCE-free header only.
+add_executable(kick-google-drive-helper-tests GoogleDriveHelperTests.cpp)
+add_test(NAME kick-google-drive-helper COMMAND kick-google-drive-helper-tests)
+set_tests_properties(kick-google-drive-helper PROPERTIES TIMEOUT 10)
+
 
 

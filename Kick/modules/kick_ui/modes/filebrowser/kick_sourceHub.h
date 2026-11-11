@@ -5,6 +5,7 @@
 #pragma once
 
 #include "kick_downloadQueue.h"
+#include "kick_googleDriveSource.h"
 #include "kick_localSource.h"
 #include "kick_sourceConfig.h"
 #include "kick_webdavSource.h"
@@ -93,6 +94,22 @@ namespace ui
                 return true;
             }
 
+            // Adds or replaces a Google Drive REST API v3 source (`secret` = key=value credentials). Empty `secret` keeps existing.
+            bool upsertGoogleDrive( SourceConfig c, const std::string& secret )
+            {
+                c.type = "gdrive";
+                if( !isValidSourceId( c.id ) || c.location.empty() || webdav::hasLineBreak( c.location ) || webdav::hasLineBreak( c.user ) || webdav::hasLineBreak( c.name ) ) return false;
+                if( !secret.empty() && !writeSecretFile( secretPathFor( c.id ), secret ) ) return false;
+                std::vector<SourceConfig> next  = allConfigs();
+                bool                      found = false;
+                for( auto& x : next )
+                    if( x.id == c.id ) { x = c; found = true; }
+                if( !found ) next.push_back( c );
+                if( !saveSources( configFile, next ) ) return false;
+                reload();
+                return true;
+            }
+
             void removeSource( const std::string& id )
             {
                 if( auto s = find( id ) ) s->signOut();
@@ -128,6 +145,8 @@ namespace ui
         private:
             std::shared_ptr<FileBrowserSource> make( const SourceConfig& c ) const
             {
+                if( c.type == "gdrive" && ( c.auth == "oauth" || c.auth == "apikey" || c.auth == "bearer" || c.location.rfind( "gdrive://", 0 ) == 0 ) )
+                    return std::make_shared<GoogleDriveSource>( c, secretPathFor( c.id ) );
                 if( c.type == "local" || c.type == "splice" || c.type == "gdrive" ) return std::make_shared<LocalFolderSource>( c.id, c.name, c.location );
                 return std::make_shared<WebDavSource>( c, secretPathFor( c.id ) );
             }

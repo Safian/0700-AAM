@@ -8,7 +8,14 @@ namespace ui
     {
         // The one list of sample extensions of the browser (the engine decides in the end: addAsset says Invalid for a file it cannot
         // decode, and that is shown to the user).
-        inline const char* sampleExtensions() { return ".wav;bwf;aif;aiff;flac;ogg;mp3;wmv;asf;wm;wma"; }
+        inline const char* sampleExtensions()
+        {
+#if defined( __APPLE__ )
+            return ".wav;bwf;aif;aiff;flac;ogg;mp3;wmv;asf;wm;wma;m4a;aac;caf";
+#else
+            return ".wav;bwf;aif;aiff;flac;ogg;mp3;wmv;asf;wm;wma";
+#endif
+        }
 
         // Folder size by one scan; the sizes of the sub-folders found on the way are cached too, so a cancelled scan (the user
         // navigated away) leaves its partial work behind. -1 = cancelled.

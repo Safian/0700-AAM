@@ -4923,7 +4923,7 @@ diff --git a/modules/juce_gui_basics/native/juce_UIViewComponentPeer_ios.mm b/mo
 diff --git a/modules/juce_gui_basics/native/juce_Windowing_ios.mm b/modules/juce_gui_basics/native/juce_Windowing_ios.mm
 --- a/modules/juce_gui_basics/native/juce_Windowing_ios.mm
 +++ b/modules/juce_gui_basics/native/juce_Windowing_ios.mm
-@@ -1,741 +1,844 @@
+@@ -1,741 +1,928 @@
 -/*
 -  ==============================================================================
 -
@@ -5732,6 +5732,81 @@ diff --git a/modules/juce_gui_basics/native/juce_Windowing_ios.mm b/modules/juce
 +@implementation JuceAppSceneDelegate
 +SharedResourcePointer<WindowSceneTracker> windowSceneTracker;
 +
++static void forwardSceneURLContexts (NSSet<UIOpenURLContext*>* contexts)
++{
++    if (contexts == nil || contexts.count == 0)
++        return;
++
++    StringArray args;
++    NSFileManager* fm = [NSFileManager defaultManager];
++    NSString* stageDir = [NSTemporaryDirectory() stringByAppendingPathComponent:
++        [NSString stringWithFormat: @"kick_incoming_%lld", (long long) ([[NSDate date] timeIntervalSince1970] * 1000.0)]];
++
++    for (UIOpenURLContext* ctx in contexts)
++    {
++        NSURL* url = ctx.URL;
++        if (url == nil)
++            continue;
++
++        if ([url isFileURL])
++        {
++            const BOOL scoped = [url startAccessingSecurityScopedResource];
++            __block NSString* copiedPath = nil;
++
++            NSFileCoordinator* coordinator = [[NSFileCoordinator alloc] initWithFilePresenter: nil];
++            NSError* coordErr = nil;
++            [coordinator coordinateReadingItemAtURL: url
++                                            options: 0
++                                              error: &coordErr
++                                         byAccessor: ^(NSURL* readURL)
++            {
++                [fm createDirectoryAtPath: stageDir withIntermediateDirectories: YES attributes: nil error: nil];
++                NSString* fileName = readURL.lastPathComponent ?: @"imported.wav";
++                NSString* dstPath = [stageDir stringByAppendingPathComponent: fileName];
++                NSURL* dstURL = [NSURL fileURLWithPath: dstPath];
++                [fm removeItemAtURL: dstURL error: nil];
++                NSError* copyErr = nil;
++                if ([fm copyItemAtURL: readURL toURL: dstURL error: &copyErr])
++                    copiedPath = [dstPath copy];
++            }];
++            [coordinator release];
++
++            if (scoped)
++                [url stopAccessingSecurityScopedResource];
++
++            if (copiedPath != nil)
++            {
++                if ([url.path containsString: @"/Documents/Inbox/"])
++                    [fm removeItemAtURL: url error: nil];
++                args.add (String::fromUTF8 (copiedPath.UTF8String));
++                [copiedPath release];
++            }
++            else if (url.path != nil)
++            {
++                args.add (String::fromUTF8 (url.path.UTF8String));
++            }
++        }
++        else if (url.absoluteString != nil)
++        {
++            args.add (String::fromUTF8 (url.absoluteString.UTF8String));
++        }
++    }
++
++    if (args.isEmpty())
++        return;
++
++    StringArray quoted;
++    for (const auto& a : args)
++        quoted.add ("\"" + a.replace ("\"", "\\\"") + "\"");
++    const String commandLine = quoted.joinIntoString (" ");
++
++    MessageManager::callAsync ([commandLine]
++    {
++        if (auto* app = JUCEApplicationBase::getInstance())
++            app->anotherInstanceStarted (commandLine);
++    });
++}
++
 +- (void)           scene: (UIScene*) scene
 +    willConnectToSession: (UISceneSession*) session
 +                 options: (UISceneConnectionOptions*) connectionOptions
@@ -5750,11 +5825,20 @@ diff --git a/modules/juce_gui_basics/native/juce_Windowing_ios.mm b/modules/juce
 +                w.windowScene = ws;
 +            [w makeKeyAndVisible];
 +        }
++
++        if (connectionOptions != nil && connectionOptions.URLContexts.count > 0)
++            forwardSceneURLContexts (connectionOptions.URLContexts);
 +    }
 +    else
 +    {
 +        jassertfalse;
 +    }
++}
++
++- (void) scene: (UIScene*) scene openURLContexts: (NSSet<UIOpenURLContext*>*) URLContexts
++{
++    ignoreUnused (scene);
++    forwardSceneURLContexts (URLContexts);
 +}
 +
 +- (void) sceneDidDisconnect: (UIScene*) scene
