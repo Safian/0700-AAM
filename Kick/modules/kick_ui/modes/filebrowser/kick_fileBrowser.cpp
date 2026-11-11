@@ -94,6 +94,63 @@ namespace ui
                 infoB.setBoundsRelative( 0.10f, 0.70f, 0.80f, 0.10f );
             }
         };
+
+        // Touch-friendly selector popup for + Cloud actions.
+        class CloudSourcePopup : public juce::Component
+        {
+        public:
+            enum class Choice { None = 0, GoogleDrive, FilesImport, Splice, WebDav };
+            Choice selected{ Choice::None };
+
+            CloudSourcePopup()
+            {
+                auto setup = [this]( KickButton& b, Choice c ) {
+                    addAndMakeVisible( b );
+                    b.setValueColour( ui::Theme::textColour( 1 ) );
+                    b.setValueBackgroundColour( ui::Theme::backgroundColour( 2 ) );
+                    b.setValueFontHeight( 16.0f );
+                    b.onClick = [this, c]() {
+                        selected = c;
+                        mt::utils::exitDialog( this, UI::APPLY );
+                    };
+                };
+                setup( googleBtn, Choice::GoogleDrive );
+#if JUCE_IOS
+                setup( filesBtn, Choice::FilesImport );
+#endif
+                setup( spliceBtn, Choice::Splice );
+                setup( webdavBtn, Choice::WebDav );
+            }
+
+            void resized() override
+            {
+                auto area = getLocalBounds().reduced( 28, 18 );
+                std::vector<KickButton*> rows;
+                rows.push_back( &googleBtn );
+#if JUCE_IOS
+                rows.push_back( &filesBtn );
+#endif
+                rows.push_back( &spliceBtn );
+                rows.push_back( &webdavBtn );
+                const int gap   = 10;
+                const int total = static_cast<int>( rows.size() );
+                const int rowH  = juce::jmax( 34, ( area.getHeight() - gap * ( total - 1 ) ) / total );
+                for( int i = 0; i < total; ++i )
+                {
+                    rows[static_cast<size_t>( i )]->setBounds( area.removeFromTop( rowH ) );
+                    if( i + 1 < total )
+                        area.removeFromTop( gap );
+                }
+            }
+
+        private:
+            KickButton googleBtn{ "CloudGoogle", "Google Drive (Account / Link)" };
+#if JUCE_IOS
+            KickButton filesBtn{ "CloudFiles", "Import from Files / Drive App" };
+#endif
+            KickButton spliceBtn{ "CloudSplice", "Splice Folder Path" };
+            KickButton webdavBtn{ "CloudWebdav", "WebDAV / NAS Server" };
+        };
     }
 
     FileBrowser::FileBrowser()
@@ -200,7 +257,7 @@ namespace ui
         } );
 
         //TOP BUTTONS
-        top.searchLabel.setText( fileUtils::getFilePath( pwd, replacementPath ), juce::dontSendNotification );
+        top.searchLabel.setText( formatDisplayPath( pwd ), juce::dontSendNotification );
 
         top.searchLabel.onKeyBoardEnd = [&]() {
             if( remoteActive )
@@ -956,6 +1013,19 @@ namespace ui
         return pwd != placeRoot && kick_fsguard::isInside( pwd.toStdString(), placeRoot.toStdString() );
     }
 
+    juce::String FileBrowser::formatDisplayPath( const juce::String& path ) const
+    {
+        const auto spliceRoot = findBestSpliceDirectory().getFullPathName();
+        if( spliceRoot.isNotEmpty() )
+        {
+            if( path == spliceRoot )
+                return "[Splice]";
+            if( kick_fsguard::isInside( path.toStdString(), spliceRoot.toStdString() ) )
+                return "[Splice]" + path.substring( spliceRoot.length() );
+        }
+        return fileUtils::getFilePath( path, replacementPath );
+    }
+
     void FileBrowser::navigate( const juce::String& dir, const juce::String& selectName )
     {
         if( searchToken )
@@ -963,7 +1033,7 @@ namespace ui
         searchMode = false;
         cancelFolderSizeCalculations();
         pwd = dir;
-        top.searchLabel.setText( fileUtils::getFilePath( pwd, replacementPath ), juce::dontSendNotification );
+        top.searchLabel.setText( formatDisplayPath( pwd ), juce::dontSendNotification );
         right.backButton.setEnabled( canGoUp() );
         startListing( selectName );
     }
@@ -1020,7 +1090,7 @@ namespace ui
     void FileBrowser::startSearch( const juce::String& text )
     {
         const auto needle = text.trim();
-        if( needle.isEmpty() || needle == fileUtils::getFilePath( pwd, replacementPath ) )
+        if( needle.isEmpty() || needle == formatDisplayPath( pwd ) )
         {
             navigate( pwd ); // nothing to look for: the folder as it is
             return;
@@ -1539,7 +1609,7 @@ namespace ui
             }
             settings.browser.setPathToButton( button->getName(), pwd );
             button->setToggleState( true, juce::dontSendNotification );
-            statusBar.setBoxInfo( "Favourite set: " + fileUtils::getFilePath( pwd, replacementPath ) );
+            statusBar.setBoxInfo( "Favourite set: " + formatDisplayPath( pwd ) );
         };
 
         onSecondClick = [this]( ui::KickImageButton* button ) {
@@ -1570,7 +1640,7 @@ namespace ui
             return;
         if( !juce::File( path ).isDirectory() )
         {
-            statusBar.setBoxInfo( "Folder not found (is the drive in?): " + fileUtils::getFilePath( path, replacementPath ) );
+            statusBar.setBoxInfo( "Folder not found (is the drive in?): " + formatDisplayPath( path ) );
             return;
         }
         if( leftTab == LeftTab::Content && rowOfPlaceContaining( path ) < 0 )
@@ -2344,7 +2414,6 @@ namespace ui
         const auto* selPlace = currentPlaceRow();
         if( selPlace != nullptr )
         {
-            if( selPlace->label == "Splice" ) { editSpliceSource(); return; }
             if( selPlace->label == "Google Drive" || selPlace->label == "Google Drive (Local)" ) { editGoogleDriveSource(); return; }
             if( selPlace->kind == Place::Kind::Source && hub )
             {
@@ -2361,18 +2430,49 @@ namespace ui
         }
 
         juce::Component::SafePointer<FileBrowser> safeThis( this );
-        project_actions::askText( "CLOUD SOURCE (1:Splice, 2:Google Drive, 3:WebDAV)", "1", [safeThis]( juce::String choice ) {
-            if( safeThis == nullptr ) return;
-            choice = choice.trim().toLowerCase();
-            if( choice == "1" || choice.contains( "splice" ) )
-                safeThis->editSpliceSource();
-            else if( choice == "2" || choice.contains( "drive" ) || choice.contains( "google" ) )
-                safeThis->editGoogleDriveSource();
-            else if( choice == "3" || choice.contains( "webdav" ) || choice.contains( "nas" ) )
-                safeThis->editWebDavSource();
-            else
-                safeThis->editSpliceSource();
-        } );
+#if JUCE_IOS
+        const juce::Rectangle<int> bounds( 0, 0, 500, 300 );
+#else
+        const juce::Rectangle<int> bounds( 0, 0, 500, 250 );
+#endif
+        mt::utils::showDialogOwned<CloudSourcePopup>(
+            "CLOUD SOURCE",
+            std::make_unique<CloudSourcePopup>(),
+            [safeThis]( int R, CloudSourcePopup& p ) {
+                if( R != UI::APPLY || safeThis == nullptr )
+                    return;
+                const auto chosen = p.selected;
+                juce::MessageManager::callAsync( [safeThis, chosen]() {
+                    if( safeThis == nullptr )
+                        return;
+                    switch( chosen )
+                    {
+                        case CloudSourcePopup::Choice::GoogleDrive:
+                            safeThis->editGoogleDriveSource();
+                            break;
+                        case CloudSourcePopup::Choice::FilesImport:
+                            safeThis->statusBar.setBoxInfo( "Choose audio files from Files / Google Drive..." );
+                            kick_apple_cloud::pickFilesFromIosDocumentProvider( [safeThis]( juce::StringArray paths, juce::String err ) {
+                                if( safeThis == nullptr )
+                                    return;
+                                if( !paths.isEmpty() )
+                                    safeThis->importIncomingFiles( paths, true );
+                                else if( err.isNotEmpty() )
+                                    safeThis->statusBar.setBoxInfo( err );
+                            } );
+                            break;
+                        case CloudSourcePopup::Choice::Splice:
+                            safeThis->editSpliceSource();
+                            break;
+                        case CloudSourcePopup::Choice::WebDav:
+                            safeThis->editWebDavSource();
+                            break;
+                        case CloudSourcePopup::Choice::None:
+                            break;
+                    }
+                } );
+            },
+            bounds, false );
     }
 
     void FileBrowser::editSpliceSource()

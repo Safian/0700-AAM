@@ -271,6 +271,7 @@ namespace ui
         bool                              held{ false }; // the Play button is held down (MAN audition)
         kick_fblogic::HeldPads            heldPads;
         void navigate( const juce::String& dir, const juce::String& selectName = {} );
+        juce::String formatDisplayPath( const juce::String& path ) const;
         void startListing( const juce::String& selectName );
         void onListed( uint64_t gen, kick_filelist::Listing l, const juce::String& selectName, bool wasSearch, bool truncated );
         void startSearch( const juce::String& text );

@@ -10,8 +10,25 @@
  #import <AppKit/AppKit.h>
 #endif
 
+#include <unordered_map>
+
 #include <juce_events/juce_events.h>
 #include "kick_appleCloudBridge.h"
+
+#if TARGET_OS_IPHONE
+namespace ui
+{
+    using IosPasteOverlayFn = void (*)( const void* ownerKey,
+                                        void*       nativePeerView,
+                                        float       x,
+                                        float       y,
+                                        float       w,
+                                        float       h,
+                                        bool        visible,
+                                        std::function<void( const juce::String& )> onPaste );
+    void setKickIosPasteOverlayFn( IosPasteOverlayFn fn );
+}
+#endif
 
 #if JUCE_IOS || JUCE_MAC
 
@@ -220,6 +237,193 @@ namespace kick_apple_cloud
 #endif
     }
 }
+
+#if JUCE_IOS
+API_AVAILABLE( ios( 16.0 ) )
+@interface KickPasteTargetView : UIView
+@property( nonatomic, retain ) UIPasteControl* pasteControl;
+- (void) setPasteCallback: (std::function<void( const juce::String& )>) cb;
+@end
+
+@implementation KickPasteTargetView
+{
+    std::function<void( const juce::String& )> _onPaste;
+}
+
+- (void) setPasteCallback: (std::function<void( const juce::String& )>) cb
+{
+    _onPaste = std::move( cb );
+}
+
+- (instancetype) initWithFrame: (CGRect) frame
+{
+    self = [super initWithFrame: frame];
+    if( self != nil )
+    {
+        self.backgroundColor = [UIColor clearColor];
+
+        UIPasteConfiguration* pc = [[UIPasteConfiguration alloc] initWithTypeIdentifiersForAcceptingClass: [NSString class]];
+        [pc addTypeIdentifiersForAcceptingClass: [NSURL class]];
+        self.pasteConfiguration = pc;
+        KICK_RELEASE( pc );
+
+        UIPasteControlConfiguration* cfg = [[UIPasteControlConfiguration alloc] init];
+        cfg.displayMode                  = UIPasteControlDisplayModeLabelOnly;
+        cfg.cornerStyle                  = UIButtonConfigurationCornerStyleFixed;
+        cfg.cornerRadius                 = 4.0f;
+        cfg.baseForegroundColor          = [UIColor whiteColor];
+        cfg.baseBackgroundColor          = [UIColor colorWithRed: 0.17f green: 0.18f blue: 0.21f alpha: 1.0f];
+
+        UIPasteControl* ctrl = [[UIPasteControl alloc] initWithConfiguration: cfg];
+        KICK_RELEASE( cfg );
+        ctrl.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        ctrl.frame            = self.bounds;
+        ctrl.target           = self;
+        [self addSubview: ctrl];
+        self.pasteControl = ctrl;
+        KICK_RELEASE( ctrl );
+    }
+    return self;
+}
+
+#if !__has_feature( objc_arc )
+- (void) dealloc
+{
+    [_pasteControl release];
+    _pasteControl = nil;
+    [super dealloc];
+}
+#endif
+
+- (BOOL) canPasteItemProviders: (NSArray<NSItemProvider*>*) itemProviders
+{
+    for( NSItemProvider* provider in itemProviders )
+    {
+        if( [provider canLoadObjectOfClass: [NSString class]] || [provider canLoadObjectOfClass: [NSURL class]] )
+            return YES;
+    }
+    return NO;
+}
+
+- (void) pasteItemProviders: (NSArray<NSItemProvider*>*) itemProviders
+{
+    auto cb = _onPaste;
+    if( !cb )
+        return;
+
+    for( NSItemProvider* provider in itemProviders )
+    {
+        if( [provider canLoadObjectOfClass: [NSString class]] )
+        {
+            [provider loadObjectOfClass: [NSString class]
+                      completionHandler: ^( id<NSItemProviderReading> object, NSError* error ) {
+                (void)error;
+                if( [object isKindOfClass: [NSString class]] )
+                {
+                    NSString*    ns   = (NSString*)object;
+                    juce::String text = ( ns != nil && ns.UTF8String != nullptr )
+                                            ? juce::String::fromUTF8( ns.UTF8String )
+                                            : juce::String();
+                    if( text.isNotEmpty() )
+                        juce::MessageManager::callAsync( [cb, text]() { cb( text ); } );
+                }
+            }];
+            return;
+        }
+        if( [provider canLoadObjectOfClass: [NSURL class]] )
+        {
+            [provider loadObjectOfClass: [NSURL class]
+                      completionHandler: ^( id<NSItemProviderReading> object, NSError* error ) {
+                (void)error;
+                if( [object isKindOfClass: [NSURL class]] )
+                {
+                    NSString*    ns   = [(NSURL*)object absoluteString];
+                    juce::String text = ( ns != nil && ns.UTF8String != nullptr )
+                                            ? juce::String::fromUTF8( ns.UTF8String )
+                                            : juce::String();
+                    if( text.isNotEmpty() )
+                        juce::MessageManager::callAsync( [cb, text]() { cb( text ); } );
+                }
+            }];
+            return;
+        }
+    }
+}
+@end
+
+namespace
+{
+    std::unordered_map<const void*, KickPasteTargetView*>& kickPasteOverlayMap()
+    {
+        static std::unordered_map<const void*, KickPasteTargetView*> m;
+        return m;
+    }
+
+    void updateKickIosPasteOverlay( const void* ownerKey,
+                                    void*       nativePeerView,
+                                    float       x,
+                                    float       y,
+                                    float       w,
+                                    float       h,
+                                    bool        visible,
+                                    std::function<void( const juce::String& )> onPaste )
+    {
+        if( @available( iOS 16.0, * ) )
+        {
+            if( ownerKey == nullptr )
+                return;
+
+            auto& map = kickPasteOverlayMap();
+            if( !visible || nativePeerView == nullptr || w < 4.0f || h < 4.0f )
+            {
+                if( auto it = map.find( ownerKey ); it != map.end() )
+                {
+                    KickPasteTargetView* existing = it->second;
+                    [existing setHidden: YES];
+                    [existing removeFromSuperview];
+                    if( nativePeerView == nullptr && !onPaste )
+                    {
+                        KICK_RELEASE( existing );
+                        map.erase( it );
+                    }
+                }
+                return;
+            }
+
+            KickPasteTargetView* view = nil;
+            if( auto it = map.find( ownerKey ); it != map.end() )
+            {
+                view = it->second;
+            }
+            else
+            {
+                view = [[KickPasteTargetView alloc] initWithFrame: CGRectMake( x, y, w, h )];
+                map.emplace( ownerKey, view );
+            }
+
+            [view setPasteCallback: std::move( onPaste )];
+            [view setFrame: CGRectMake( x, y, w, h )];
+            [view setHidden: NO];
+
+            UIView* peerView = (UIView*)nativePeerView;
+            if( view.superview != peerView )
+            {
+                [view removeFromSuperview];
+                [peerView addSubview: view];
+            }
+            [peerView bringSubviewToFront: view];
+        }
+    }
+
+    struct KickPasteOverlayRegistrar
+    {
+        KickPasteOverlayRegistrar()
+        {
+            ui::setKickIosPasteOverlayFn( &updateKickIosPasteOverlay );
+        }
+    } s_kickPasteOverlayRegistrar;
+} // namespace
+#endif
 
 #endif
 #endif
