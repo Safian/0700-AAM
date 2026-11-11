@@ -518,6 +518,8 @@ namespace mt
         enableWebDav.attachTo( vTree, IDs::enableWebDav, Undo, true );
         splicePath.attachTo( vTree, IDs::splicePath, Undo, "" );
         googleDrivePath.attachTo( vTree, IDs::googleDrivePath, Undo, "" );
+        googleUserEmail.attachTo( vTree, IDs::googleUserEmail, Undo, "" );
+        googleClientId.attachTo( vTree, IDs::googleClientId, Undo, "" );
     }
 
     void KickCloudSources::makeDefaults()
@@ -527,6 +529,8 @@ namespace mt
         enableWebDav = true;
         splicePath = "";
         googleDrivePath = "";
+        googleUserEmail = "";
+        googleClientId = "";
     }
 
     bool KickCloudSources::isValid() { return vTree.hasType( IDs::CloudSources ); }

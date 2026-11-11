@@ -122,7 +122,11 @@ namespace ui
             fixedPlaces.push_back( p );
         };
         fixed( Place::Kind::Internal, "Internal", "Icon_Internal", "Icon_InternalActive", 16.0f, ae.getInternalDir() );
+#if JUCE_IOS
+        fixed( Place::Kind::Library, "Samples", "Icon_Library", "Icon_LibraryActive", 18.0f, ae.getSoundsDir() );
+#else
         fixed( Place::Kind::Library, "Factory Sample Library", "Icon_Library", "Icon_LibraryActive", 18.0f, ae.getSoundsDir() );
+#endif
         fixed( Place::Kind::Demos, "Demos", "Icon_Demo", "Icon_DemoActive", 16.0f, ae.getDemosDir() );
         {
             const auto prefs = getAppDirs( MTPrefs );
@@ -499,6 +503,8 @@ namespace ui
                 add( libraryDirs[i].getFileName(), libraryDirs[i], "Icon_Library", "Icon_LibraryActive" );
         add( "My Projects", ae.getInternalDir(), "Icon_Internal", "Icon_InternalActive" );
         add( "Demos", ae.getDemosDir(), "Icon_Demo", "Icon_DemoActive" );
+        if( mt::getSettings().cloudSources.enableSplice.get() )
+            add( "Splice", findBestSpliceDirectory(), "Icon_Library", "Icon_LibraryActive" );
     }
 
     void FileBrowser::rebuildShown()
@@ -566,9 +572,15 @@ namespace ui
     void FileBrowser::updateEditButtons()
     {
         const auto* p        = currentPlaceRow();
+#if JUCE_IOS
+        const bool  readOnly = p != nullptr && ( p->kind == Place::Kind::Demos || p->kind == Place::Kind::Source );
+        // On iOS there is no read-only factory library partition: MTSamples (Documents/Kick/sounds) holds user/shared samples.
+        const bool inReadOnlyTree = kick_fsguard::isInside( pwd.toStdString(), ae.getDemosDir().getFullPathName().toStdString() );
+#else
         const bool  readOnly = p != nullptr && ( p->kind == Place::Kind::Library || p->kind == Place::Kind::Demos || p->kind == Place::Kind::Source );
         // A shortcut into the library or the demos is read-only as well.
         const bool inReadOnlyTree = kick_fsguard::isInside( pwd.toStdString(), ae.getSoundsDir().getFullPathName().toStdString() ) || kick_fsguard::isInside( pwd.toStdString(), ae.getDemosDir().getFullPathName().toStdString() );
+#endif
         const bool allow          = !( readOnly || inReadOnlyTree );
         top.pasteBtn.setEnabled( allow );
         top.renameBtn.setEnabled( allow );
@@ -993,8 +1005,16 @@ namespace ui
         if( sel >= 0 && !top.selectBtn.getToggleState() )
             right.table->selectRow( sel );
         right.backButton.setEnabled( canGoUp() || searchMode );
-        const auto msg = kick_fblogic::listingStatus( l.ok, entries.size(), wasSearch, truncated );
-        statusBar.setBoxInfo( msg.empty() ? juce::String( "Box Info" ) : juce::String( msg ) );
+        if( pendingImportBanner.isNotEmpty() )
+        {
+            statusBar.setBoxInfo( pendingImportBanner );
+            pendingImportBanner.clear();
+        }
+        else
+        {
+            const auto msg = kick_fblogic::listingStatus( l.ok, entries.size(), wasSearch, truncated );
+            statusBar.setBoxInfo( msg.empty() ? juce::String( "Box Info" ) : juce::String( msg ) );
+        }
     }
 
     void FileBrowser::startSearch( const juce::String& text )
@@ -1783,11 +1803,15 @@ namespace ui
         {
             pollDrives();
             rebuildShortcuts();
+            refreshSourceRows();
             rebuildShown();
             left.table->refresh();
             right.table->setAutoScrollToSelection( false );
             applyColumnOptions();
-            const auto keep = selectedFile.isEmpty() ? juce::String() : selectedFile.getLast().getFileName();
+            const auto keep = pendingImportSelectName.isNotEmpty()
+                                  ? pendingImportSelectName
+                                  : ( selectedFile.isEmpty() ? juce::String() : selectedFile.getLast().getFileName() );
+            pendingImportSelectName.clear();
             const int  row  = rowOfPlaceContaining( pwd );
             if( !remoteActive )
             {
@@ -1965,6 +1989,36 @@ namespace ui
     // Extra locations: WebDAV / local-folder sources (FileBrowserSource). All network work runs on the hub's worker threads;
     // the callbacks below only marshal back to the message thread.
     ///////////////////////////////////////
+    juce::File FileBrowser::findBestSpliceDirectory() const
+    {
+        auto&      cs   = mt::getSettings().cloudSources;
+        const auto docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
+        const auto home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
+        const auto mus  = juce::File::getSpecialLocation( juce::File::userMusicDirectory );
+
+        std::vector<std::string> candidateRoots = {
+            docs.getFullPathName().toStdString(),
+            docs.getChildFile( "Kick" ).getFullPathName().toStdString(),
+            ae.getSoundsDir().getFullPathName().toStdString(),
+            docs.getChildFile( "samples" ).getFullPathName().toStdString(),
+            docs.getChildFile( "Kick/samples" ).getFullPathName().toStdString(),
+            ae.getInternalDir().getFullPathName().toStdString(),
+            home.getFullPathName().toStdString(),
+            mus.getFullPathName().toStdString(),
+#if JUCE_LINUX || __linux__
+            "/data",
+#endif
+        };
+
+#if JUCE_IOS
+        const std::string fallback = docs.getChildFile( "Splice" ).getFullPathName().toStdString();
+#else
+        const std::string fallback = home.getChildFile( "Splice" ).getFullPathName().toStdString();
+#endif
+        const std::string resolved = kick_incoming::resolveSpliceDir( cs.splicePath.get().toStdString(), candidateRoots, fallback );
+        return juce::File( juce::String::fromUTF8( resolved.c_str() ) );
+    }
+
     void FileBrowser::refreshSourceRows()
     {
         sourcePlaces.clear();
@@ -1973,26 +2027,14 @@ namespace ui
         const bool gdriveEnabled = cs.enableGoogleDrive.get();
         const bool webdavEnabled = cs.enableWebDav.get();
 
-        // 1. Splice Place
+        // 1. Splice Place (auto-discovers Splice folder under Documents / Samples / Home / configured path)
         if( spliceEnabled )
         {
-            juce::File spliceDir;
-            if( cs.splicePath.get().isNotEmpty() )
-                spliceDir = juce::File( cs.splicePath.get() );
-            else
-            {
-                juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
-                juce::File music = juce::File::getSpecialLocation( juce::File::userMusicDirectory );
-                juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
-                if( home.getChildFile( "Splice" ).isDirectory() ) spliceDir = home.getChildFile( "Splice" );
-                else if( music.getChildFile( "Splice" ).isDirectory() ) spliceDir = music.getChildFile( "Splice" );
-                else if( docs.getChildFile( "Splice" ).isDirectory() ) spliceDir = docs.getChildFile( "Splice" );
-                else spliceDir = home.getChildFile( "Splice" );
-            }
-            if( spliceDir.exists() )
+            const juce::File spliceDir = findBestSpliceDirectory();
+            if( spliceDir.isDirectory() )
             {
                 Place p;
-                p.kind       = Place::Kind::Library;
+                p.kind       = Place::Kind::Shortcut;
                 p.label      = "Splice";
                 p.icon       = "Icon_Library";
                 p.iconActive = "Icon_LibraryActive";
@@ -2003,7 +2045,7 @@ namespace ui
             }
         }
 
-        // 2. Google Drive Place
+        // 2. Local Google Drive Place (macOS/Desktop Drive for Desktop synced folder when present)
         if( gdriveEnabled )
         {
             juce::File gdriveDir;
@@ -2028,13 +2070,17 @@ namespace ui
                 if( !gdriveDir.isDirectory() && home.getChildFile( "Google Drive" ).isDirectory() )
                     gdriveDir = home.getChildFile( "Google Drive" );
                 else if( !gdriveDir.isDirectory() )
-                    gdriveDir = home.getChildFile( "Google Drive" );
+                {
+                    auto docsDrive = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Google Drive" );
+                    if( docsDrive.isDirectory() )
+                        gdriveDir = docsDrive;
+                }
             }
-            if( gdriveDir.exists() )
+            if( gdriveDir.isDirectory() )
             {
                 Place p;
-                p.kind       = Place::Kind::Internal;
-                p.label      = "Google Drive";
+                p.kind       = Place::Kind::Shortcut;
+                p.label      = "Google Drive (Local)";
                 p.icon       = "Icon_Internal";
                 p.iconActive = "Icon_InternalActive";
                 p.width      = 18.0f;
@@ -2044,7 +2090,7 @@ namespace ui
             }
         }
 
-        // 3. WebDAV & configured hub sources
+        // 3. Configured Cloud & Folder hub sources (Google Drive OAuth/API, WebDAV, custom local folders)
         if( hub )
         {
             for( auto& cfg : hub->allConfigs() )
@@ -2056,8 +2102,8 @@ namespace ui
                 Place p;
                 p.kind       = Place::Kind::Source;
                 p.label      = juce::String::fromUTF8( cfg.name.c_str() );
-                p.icon       = "Icon_Library";
-                p.iconActive = "Icon_LibraryActive";
+                p.icon       = cfg.type == "gdrive" ? "Icon_Internal" : "Icon_Library";
+                p.iconActive = cfg.type == "gdrive" ? "Icon_InternalActive" : "Icon_LibraryActive";
                 p.width      = 18.0f;
                 p.height     = 16.0f;
                 p.path       = juce::String::fromUTF8( cfg.id.c_str() ); // the source id
@@ -2128,10 +2174,14 @@ namespace ui
         if( !lr.result.ok() )
         {
             juce::String msg;
+            const bool   isGdrive = activeSource && dynamic_cast<fileSource::GoogleDriveSource*>( activeSource.get() ) != nullptr;
             switch( lr.result.status )
             {
-                case fileSource::Status::AuthFailed: msg = "Login failed: check user/password (+ WebDAV)"; break;
-                case fileSource::Status::NetworkError: msg = "Cannot reach the server"; break;
+                case fileSource::Status::AuthFailed:
+                    msg = isGdrive ? juce::String( "Google Drive sign-in needed - tap + Cloud to connect" )
+                                   : juce::String( "Login failed: check user/password (+ WebDAV)" );
+                    break;
+                case fileSource::Status::NetworkError: msg = isGdrive ? "Cannot reach Google Drive" : "Cannot reach the server"; break;
                 case fileSource::Status::Unsupported: msg = "https is not available here: use an http:// address"; break;
                 case fileSource::Status::NotFound: msg = "Folder not found"; break;
                 case fileSource::Status::Cancelled: return;
@@ -2295,7 +2345,7 @@ namespace ui
         if( selPlace != nullptr )
         {
             if( selPlace->label == "Splice" ) { editSpliceSource(); return; }
-            if( selPlace->label == "Google Drive" ) { editGoogleDriveSource(); return; }
+            if( selPlace->label == "Google Drive" || selPlace->label == "Google Drive (Local)" ) { editGoogleDriveSource(); return; }
             if( selPlace->kind == Place::Kind::Source && hub )
             {
                 for( auto& c : hub->allConfigs() )
@@ -2330,63 +2380,310 @@ namespace ui
         juce::Component::SafePointer<FileBrowser> safeThis( this );
         juce::String currentPath = mt::getSettings().cloudSources.splicePath.get();
         if( currentPath.isEmpty() )
-        {
-            juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
-            juce::File music = juce::File::getSpecialLocation( juce::File::userMusicDirectory );
-            juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
-            if( home.getChildFile( "Splice" ).isDirectory() ) currentPath = home.getChildFile( "Splice" ).getFullPathName();
-            else if( music.getChildFile( "Splice" ).isDirectory() ) currentPath = music.getChildFile( "Splice" ).getFullPathName();
-            else if( docs.getChildFile( "Splice" ).isDirectory() ) currentPath = docs.getChildFile( "Splice" ).getFullPathName();
-            else currentPath = home.getChildFile( "Splice" ).getFullPathName();
-        }
+            currentPath = findBestSpliceDirectory().getFullPathName();
 
-        project_actions::askText( "SPLICE FOLDER PATH (EMPTY = RESET)", currentPath, [safeThis]( juce::String path ) {
+        project_actions::askText( "SPLICE FOLDER PATH (EMPTY = AUTO)", currentPath, [safeThis]( juce::String path ) {
             if( safeThis == nullptr ) return;
             path = path.trim();
             mt::getSettings().cloudSources.splicePath = path;
             mt::getSettings().cloudSources.enableSplice = true;
             if( path.isNotEmpty() )
                 juce::File( path ).createDirectory();
-            safeThis->refreshSourceRows();
+            safeThis->refreshPlacesAndListing();
             safeThis->statusBar.setBoxInfo( "Splice source updated" );
         } );
     }
 
-    void FileBrowser::editGoogleDriveSource()
+    void FileBrowser::finishGoogleDriveSourceSetup( const fileSource::SourceConfig& cfg, const std::string& secretText, const juce::String& statusMsg )
     {
-        juce::Component::SafePointer<FileBrowser> safeThis( this );
-        juce::String currentPath = mt::getSettings().cloudSources.googleDrivePath.get();
-        if( currentPath.isEmpty() )
+        if( !hub || !hub->upsertGoogleDrive( cfg, secretText ) )
         {
-            juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
-            juce::File cloudStorage = home.getChildFile( "Library/CloudStorage" );
-            if( cloudStorage.isDirectory() )
-            {
-                for( auto iter : juce::RangedDirectoryIterator( cloudStorage, false, "*GoogleDrive*" ) )
-                {
-                    if( iter.getFile().isDirectory() )
-                    {
-                        auto myDrive = iter.getFile().getChildFile( "My Drive" );
-                        currentPath = ( myDrive.isDirectory() ? myDrive : iter.getFile() ).getFullPathName();
-                        break;
-                    }
-                }
-            }
-            if( currentPath.isEmpty() && home.getChildFile( "Google Drive" ).isDirectory() )
-                currentPath = home.getChildFile( "Google Drive" ).getFullPathName();
-            else if( currentPath.isEmpty() )
-                currentPath = home.getChildFile( "Google Drive" ).getFullPathName();
+            statusBar.setBoxInfo( "Could not save Google Drive connection" );
+            return;
+        }
+        mt::getSettings().cloudSources.enableGoogleDrive = true;
+        leaveSource();
+        refreshSourceRows();
+        int idx = -1;
+        for( int i = 0; i < static_cast<int>( shownPlaces.size() ); ++i )
+            if( shownPlaces[static_cast<size_t>( i )].kind == Place::Kind::Source && shownPlaces[static_cast<size_t>( i )].path == juce::String::fromUTF8( cfg.id.c_str() ) )
+                idx = i;
+        if( idx >= 0 )
+            showPlace( idx, true );
+        statusBar.setBoxInfo( statusMsg );
+    }
+
+    void FileBrowser::startGoogleOAuthSignIn( const std::string& clientId, const std::string& clientSecret, const juce::String& emailHint, const std::string& existingId )
+    {
+        const auto scheme = fileSource::gdrive::buildReversedClientScheme( clientId );
+        if( scheme.empty() )
+        {
+            statusBar.setBoxInfo( "Client ID must end with .apps.googleusercontent.com" );
+            return;
         }
 
-        project_actions::askText( "GOOGLE DRIVE FOLDER PATH (EMPTY = RESET)", currentPath, [safeThis]( juce::String path ) {
-            if( safeThis == nullptr ) return;
-            path = path.trim();
-            mt::getSettings().cloudSources.googleDrivePath = path;
-            mt::getSettings().cloudSources.enableGoogleDrive = true;
-            if( path.isNotEmpty() )
-                juce::File( path ).createDirectory();
-            safeThis->refreshSourceRows();
-            safeThis->statusBar.setBoxInfo( "Google Drive source updated" );
+        // Generate PKCE code_verifier & random state using system PRNG.
+        auto makeRandomToken = []( int len ) -> std::string {
+            static const char kAlpha[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+            auto&             rng      = juce::Random::getSystemRandom();
+            std::string       out;
+            out.reserve( static_cast<size_t>( len ) );
+            for( int i = 0; i < len; ++i )
+                out += kAlpha[rng.nextInt( static_cast<int>( sizeof( kAlpha ) - 1 ) )];
+            return out;
+        };
+
+        const std::string verifier    = makeRandomToken( 64 );
+        const std::string state       = makeRandomToken( 32 );
+        const std::string challenge   = fileSource::gdrive::pkceS256Challenge( verifier );
+        const std::string redirectUri = scheme + ":/oauth2redirect";
+        const std::string authUrl     = fileSource::gdrive::buildAuthUrl( clientId, redirectUri, challenge, state, emailHint.trim().toStdString() );
+
+        statusBar.setBoxInfo( "Sign in to Google Drive in browser..." );
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+        kick_apple_cloud::startWebAuthSession(
+            juce::String::fromUTF8( authUrl.c_str() ),
+            juce::String::fromUTF8( scheme.c_str() ),
+            [safeThis, clientId, clientSecret, redirectUri, verifier, state, emailHint, existingId]( bool ok, juce::String urlOrError ) {
+                if( safeThis == nullptr )
+                    return;
+                if( !ok )
+                {
+                    safeThis->statusBar.setBoxInfo( "Google sign-in cancelled: " + urlOrError );
+                    return;
+                }
+                const auto cb = fileSource::gdrive::parseOAuthCallbackUrl( urlOrError.toStdString() );
+                if( !cb.ok() || cb.state != state )
+                {
+                    const auto errMsg = cb.errorDescription.empty() ? ( cb.error.empty() ? std::string( "state mismatch" ) : cb.error ) : cb.errorDescription;
+                    safeThis->statusBar.setBoxInfo( "Google sign-in failed: " + juce::String::fromUTF8( errMsg.c_str() ) );
+                    return;
+                }
+
+                safeThis->statusBar.setBoxInfo( "Completing Google Drive sign-in..." );
+                safeThis->listPool.addJob( [safeThis, clientId, clientSecret, redirectUri, cb, verifier, emailHint, existingId]() {
+                    fileSource::gdrive::Credentials creds;
+                    const auto res = fileSource::GoogleDriveSource::exchangeAuthCode( clientId, clientSecret, redirectUri, cb.code, verifier, creds );
+                    juce::MessageManager::callAsync( [safeThis, res, creds, emailHint, existingId]() mutable {
+                        if( safeThis == nullptr )
+                            return;
+                        if( !res.ok() )
+                        {
+                            safeThis->statusBar.setBoxInfo( "Google token exchange failed: " + juce::String::fromUTF8( res.message.c_str() ) );
+                            return;
+                        }
+                        if( creds.email.empty() && emailHint.trim().isNotEmpty() )
+                            creds.email = emailHint.trim().toStdString();
+                        fileSource::SourceConfig cfg;
+                        const auto               userKey = !creds.email.empty() ? creds.email : std::string( "default" );
+                        cfg.type                         = "gdrive";
+                        cfg.id                           = !existingId.empty() ? existingId : ( "gdrive-" + fileSource::SourceCache::makeKey( "gd", userKey ).substr( 0, 8 ) );
+                        cfg.name                         = !creds.email.empty() ? ( "Google Drive (" + creds.email.substr( 0, 22 ) + ")" ) : std::string( "Google Drive" );
+                        cfg.location                     = "gdrive://root";
+                        cfg.user                         = creds.email;
+                        cfg.auth                         = "oauth";
+                        if( !creds.email.empty() )
+                            mt::getSettings().cloudSources.googleUserEmail = juce::String::fromUTF8( creds.email.c_str() );
+                        safeThis->finishGoogleDriveSourceSetup( cfg, fileSource::gdrive::serializeCredentials( creds ), "Connected: " + juce::String::fromUTF8( cfg.name.c_str() ) );
+                    } );
+                } );
+            } );
+    }
+
+    void FileBrowser::editGoogleDriveSource()
+    {
+        fileSource::SourceConfig existingCfg;
+        bool                     editing  = false;
+        const auto*              selPlace = currentPlaceRow();
+        if( selPlace != nullptr && selPlace->kind == Place::Kind::Source && hub )
+        {
+            const auto id = selPlace->path.toStdString();
+            for( auto& c : hub->allConfigs() )
+            {
+                if( c.id == id && c.type == "gdrive" )
+                {
+                    existingCfg = c;
+                    editing     = true;
+                    break;
+                }
+            }
+        }
+
+        auto&        cs = mt::getSettings().cloudSources;
+        juce::String initial;
+        if( editing )
+            initial = existingCfg.user.empty() ? juce::String::fromUTF8( existingCfg.location.c_str() ) : juce::String::fromUTF8( existingCfg.user.c_str() );
+        else if( cs.googleUserEmail.get().isNotEmpty() )
+            initial = cs.googleUserEmail.get();
+        else if( cs.googleDrivePath.get().isNotEmpty() )
+            initial = cs.googleDrivePath.get();
+
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+#if JUCE_IOS
+        const juce::String promptTitle = editing
+                                             ? "GOOGLE EMAIL / LINK (EMPTY = REMOVE)"
+                                             : "GOOGLE EMAIL, DRIVE LINK, OR 'FILES'";
+#else
+        const juce::String promptTitle = editing
+                                             ? "GOOGLE EMAIL / LINK (EMPTY = REMOVE)"
+                                             : "GOOGLE EMAIL, DRIVE FOLDER LINK, OR LOCAL PATH";
+#endif
+        project_actions::askText( promptTitle, initial, [safeThis, existingCfg, editing]( juce::String input ) {
+            if( safeThis == nullptr )
+                return;
+            input = input.trim();
+
+            if( editing && input.isEmpty() )
+            {
+                if( safeThis->hub )
+                    safeThis->hub->removeSource( existingCfg.id );
+                safeThis->leaveSource();
+                safeThis->refreshSourceRows();
+                safeThis->showPlace( 0, true );
+                safeThis->statusBar.setBoxInfo( "Google Drive removed" );
+                return;
+            }
+
+            if( input.equalsIgnoreCase( "FILES" ) )
+            {
+                safeThis->statusBar.setBoxInfo( "Choose audio files from Files / Google Drive..." );
+                kick_apple_cloud::pickFilesFromIosDocumentProvider( [safeThis]( juce::StringArray paths, juce::String err ) {
+                    if( safeThis == nullptr )
+                        return;
+                    if( !paths.isEmpty() )
+                        safeThis->importIncomingFiles( paths, true );
+                    else if( err.isNotEmpty() )
+                        safeThis->statusBar.setBoxInfo( err );
+                } );
+                return;
+            }
+
+            // Local synced folder path (desktop Google Drive for Desktop or explicit folder)
+            if( input.startsWithChar( '/' ) || juce::File( input ).isDirectory() )
+            {
+                mt::getSettings().cloudSources.googleDrivePath   = input;
+                mt::getSettings().cloudSources.enableGoogleDrive = true;
+                safeThis->refreshPlacesAndListing();
+                safeThis->statusBar.setBoxInfo( "Google Drive local folder updated" );
+                return;
+            }
+
+            // Shared folder link / folder ID + API key (or bearer access token)
+            const auto stdIn      = input.toStdString();
+            const bool looksLink  = stdIn.find( "drive.google.com" ) != std::string::npos || stdIn.rfind( "gdrive://folder/", 0 ) == 0 || ( !stdIn.empty() && stdIn.find( '@' ) == std::string::npos && fileSource::gdrive::parseFolderTarget( stdIn ).ok && stdIn != "root" );
+            if( looksLink )
+            {
+                const auto target = fileSource::gdrive::parseFolderTarget( stdIn );
+                if( !target.ok )
+                {
+                    safeThis->statusBar.setBoxInfo( "Invalid Google Drive folder link or ID" );
+                    return;
+                }
+                project_actions::askText( "GOOGLE API KEY OR ACCESS TOKEN", "", [safeThis, target, existingCfg, editing]( juce::String keyOrTok ) {
+                    if( safeThis == nullptr )
+                        return;
+                    keyOrTok = keyOrTok.trim();
+                    if( keyOrTok.isEmpty() )
+                        return;
+                    fileSource::gdrive::Credentials creds;
+                    const bool                      isBearer = keyOrTok.startsWith( "ya29." ) || keyOrTok.length() > 80;
+                    creds.mode                               = isBearer ? "bearer" : "apikey";
+                    if( isBearer )
+                        creds.accessToken = keyOrTok.toStdString();
+                    else
+                        creds.apiKey = keyOrTok.toStdString();
+                    creds.resourceKey = target.resourceKey;
+
+                    fileSource::SourceConfig cfg;
+                    cfg.type     = "gdrive";
+                    cfg.id       = editing ? existingCfg.id : ( "gdrive-" + fileSource::SourceCache::makeKey( "gd", target.folderId ).substr( 0, 8 ) );
+                    cfg.name     = editing ? existingCfg.name : ( "Drive: " + target.folderId.substr( 0, 14 ) );
+                    cfg.location = "gdrive://folder/" + target.folderId;
+                    cfg.auth     = creds.mode;
+                    safeThis->finishGoogleDriveSourceSetup( cfg, fileSource::gdrive::serializeCredentials( creds ), "Google Drive folder connected" );
+                } );
+                return;
+            }
+
+            // Google Account OAuth flow (specified email hint or account chooser in Safari)
+            const auto emailHint = input;
+            if( emailHint.containsChar( '@' ) )
+                mt::getSettings().cloudSources.googleUserEmail = emailHint;
+
+            juce::String defaultClientId = mt::getSettings().cloudSources.googleClientId.get();
+            if( defaultClientId.isEmpty() )
+            {
+#if defined( KICK_GOOGLE_CLIENT_ID )
+                defaultClientId = KICK_GOOGLE_CLIENT_ID;
+#endif
+                if( defaultClientId.isEmpty() )
+                    defaultClientId = juce::SystemStats::getEnvironmentVariable( "KICK_GOOGLE_CLIENT_ID", {} );
+            }
+
+            project_actions::askText( "GOOGLE OAUTH CLIENT ID (.apps.googleusercontent.com) OR TOKEN", defaultClientId, [safeThis, emailHint, existingCfg, editing]( juce::String credInput ) {
+                if( safeThis == nullptr )
+                    return;
+                credInput = credInput.trim();
+                if( credInput.isEmpty() )
+                    return;
+
+                // Direct access token ("ya29....") or OAuth refresh token ("1//...")
+                if( credInput.startsWith( "ya29." ) || credInput.startsWith( "1//" ) )
+                {
+                    auto setupToken = [safeThis, emailHint, existingCfg, editing]( fileSource::gdrive::Credentials creds ) {
+                        safeThis->statusBar.setBoxInfo( "Verifying Google Drive token..." );
+                        safeThis->listPool.addJob( [safeThis, creds, emailHint, existingCfg, editing]() mutable {
+                            if( !creds.accessToken.empty() )
+                            {
+                                std::string em, nm;
+                                if( fileSource::GoogleDriveSource::fetchUserAbout( creds.accessToken, em, nm ).ok() && !em.empty() )
+                                    creds.email = em;
+                            }
+                            if( creds.email.empty() && emailHint.isNotEmpty() )
+                                creds.email = emailHint.toStdString();
+                            juce::MessageManager::callAsync( [safeThis, creds, existingCfg, editing]() {
+                                if( safeThis == nullptr )
+                                    return;
+                                fileSource::SourceConfig cfg;
+                                const auto               userKey = !creds.email.empty() ? creds.email : std::string( "token" );
+                                cfg.type                         = "gdrive";
+                                cfg.id                           = editing ? existingCfg.id : ( "gdrive-" + fileSource::SourceCache::makeKey( "gd", userKey ).substr( 0, 8 ) );
+                                cfg.name                         = !creds.email.empty() ? ( "Google Drive (" + creds.email.substr( 0, 22 ) + ")" ) : std::string( "Google Drive" );
+                                cfg.location                     = "gdrive://root";
+                                cfg.user                         = creds.email;
+                                cfg.auth                         = creds.mode;
+                                safeThis->finishGoogleDriveSourceSetup( cfg, fileSource::gdrive::serializeCredentials( creds ), "Connected: " + juce::String::fromUTF8( cfg.name.c_str() ) );
+                            } );
+                        } );
+                    };
+
+                    if( credInput.startsWith( "ya29." ) )
+                    {
+                        fileSource::gdrive::Credentials creds;
+                        creds.mode        = "bearer";
+                        creds.accessToken = credInput.toStdString();
+                        setupToken( creds );
+                    }
+                    else
+                    {
+                        const juce::String savedId = mt::getSettings().cloudSources.googleClientId.get();
+                        project_actions::askText( "CLIENT ID FOR REFRESH TOKEN", savedId, [safeThis, credInput, setupToken]( juce::String cid ) {
+                            if( safeThis == nullptr || cid.trim().isEmpty() )
+                                return;
+                            mt::getSettings().cloudSources.googleClientId = cid.trim();
+                            fileSource::gdrive::Credentials creds;
+                            creds.mode         = "oauth";
+                            creds.clientId     = cid.trim().toStdString();
+                            creds.refreshToken = credInput.toStdString();
+                            setupToken( creds );
+                        } );
+                    }
+                    return;
+                }
+
+                mt::getSettings().cloudSources.googleClientId = credInput;
+                safeThis->startGoogleOAuthSignIn( credInput.toStdString(), {}, emailHint, editing ? existingCfg.id : std::string() );
+            } );
         } );
     }
 
@@ -2480,7 +2777,11 @@ namespace ui
                     editing = true;
                 }
         juce::Component::SafePointer<FileBrowser> safeThis( this );
+#if JUCE_IOS
+        const auto                                initial = editing ? juce::String::fromUTF8( cfg.location.c_str() ) : findBestSpliceDirectory().getFullPathName();
+#else
         const auto                                initial = editing ? juce::String::fromUTF8( cfg.location.c_str() ) : juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getChildFile( "Splice" ).getFullPathName();
+#endif
         project_actions::askText( editing ? "FOLDER PATH (EMPTY = REMOVE)" : "FOLDER PATH", initial, [safeThis, cfg, editing]( juce::String path ) mutable {
             if( safeThis == nullptr )
                 return;
@@ -2519,6 +2820,93 @@ namespace ui
                 if( safeThis->shownPlaces[static_cast<size_t>( i )].kind == Place::Kind::Source && safeThis->shownPlaces[static_cast<size_t>( i )].path == juce::String::fromUTF8( cfg.id.c_str() ) )
                     safeThis->showPlace( i, true );
         } );
+    }
+
+    void FileBrowser::refreshPlacesAndListing()
+    {
+        rebuildShortcuts();
+        refreshSourceRows();
+        rebuildShown();
+        if( left.table )
+            left.table->refresh();
+        if( !remoteActive && ( isShowing() || isVisible() ) )
+        {
+            const auto keep = pendingImportSelectName.isNotEmpty()
+                                  ? pendingImportSelectName
+                                  : ( selectedFile.isEmpty() ? juce::String() : selectedFile.getLast().getFileName() );
+            pendingImportSelectName.clear();
+            navigate( pwd, keep );
+        }
+    }
+
+    void FileBrowser::importIncomingFiles( const juce::StringArray& paths, bool removeSourceOnSuccess )
+    {
+        if( paths.isEmpty() )
+            return;
+
+        const std::string samplesDir  = ae.getSoundsDir().getFullPathName().toStdString();
+        const std::string projectsDir = ae.getInternalDir().getFullPathName().toStdString();
+        juce::StringArray importedSamples;
+        juce::String      importedProject;
+        int               unsupported = 0;
+
+        for( const auto& rawPath : paths )
+        {
+            if( rawPath.trim().isEmpty() )
+                continue;
+            std::string                   destPath, err;
+            kick_incoming::IncomingKind   kind = kick_incoming::IncomingKind::Unsupported;
+            if( kick_incoming::importIncomingFile( rawPath.toStdString(), samplesDir, projectsDir, removeSourceOnSuccess, destPath, kind, err ) )
+            {
+                kick_log( "INCOMING", "imported %s -> %s", rawPath.toRawUTF8(), destPath.c_str() );
+                if( kind == kick_incoming::IncomingKind::Project )
+                    importedProject = juce::String::fromUTF8( destPath.c_str() );
+                else
+                    importedSamples.add( juce::String::fromUTF8( destPath.c_str() ) );
+            }
+            else if( kind == kick_incoming::IncomingKind::Unsupported )
+            {
+                ++unsupported;
+            }
+        }
+
+        if( importedSamples.isEmpty() && importedProject.isEmpty() )
+        {
+            if( unsupported > 0 )
+                statusBar.setBoxInfo( "Unsupported file type (expected WAV/AIFF/FLAC/MP3/OGG/M4A/MID/kickPrj)" );
+            return;
+        }
+
+        fileUtils::invalidateFolderSizes( ae.getSoundsDir() );
+        fileUtils::invalidateFolderSizes( ae.getInternalDir() );
+        rebuildShortcuts();
+        refreshSourceRows();
+        rebuildShown();
+
+        if( !importedSamples.isEmpty() )
+        {
+            const juce::File lastSample( importedSamples[importedSamples.size() - 1] );
+            const int        samplesRow = rowOfPlaceContaining( ae.getSoundsDir().getFullPathName() );
+            leaveSource();
+            if( leftTab != LeftTab::Places )
+                setLeftTab( LeftTab::Places );
+            if( samplesRow >= 0 )
+                showPlace( samplesRow, false );
+            placeRoot = ae.getSoundsDir().getFullPathName();
+            updateEditButtons();
+            pendingImportSelectName = lastSample.getFileName();
+            pendingImportBanner     = importedSamples.size() == 1
+                                          ? ( "Saved to Samples: " + lastSample.getFileName() )
+                                          : ( "Saved " + juce::String( importedSamples.size() ) + " file(s) to Samples" );
+            navigate( ae.getSoundsDir().getFullPathName(), lastSample.getFileName() );
+            statusBar.setBoxInfo( pendingImportBanner );
+        }
+        else if( importedProject.isNotEmpty() )
+        {
+            const juce::File projFile( importedProject );
+            statusBar.setBoxInfo( "Imported project: " + projFile.getParentDirectory().getFileName() );
+            loadProjectFolder( projFile.getParentDirectory() );
+        }
     }
 
     ///////////////////////////////////////
@@ -3034,3 +3422,20 @@ namespace ui
     }
 
 }
+
+#if ! JUCE_IOS && ! JUCE_MAC
+namespace kick_apple_cloud
+{
+    void startWebAuthSession( const juce::String&, const juce::String&, std::function<void( bool, juce::String )> onDone )
+    {
+        if( onDone )
+            onDone( false, "Browser OAuth session requires iOS or macOS" );
+    }
+
+    void pickFilesFromIosDocumentProvider( std::function<void( juce::StringArray, juce::String )> onDone )
+    {
+        if( onDone )
+            onDone( {}, "Files picker is only available on iOS" );
+    }
+}
+#endif

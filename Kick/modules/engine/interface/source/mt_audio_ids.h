@@ -346,6 +346,8 @@ namespace mt
         DECLARE_ID( enableWebDav )
         DECLARE_ID( splicePath )
         DECLARE_ID( googleDrivePath )
+        DECLARE_ID( googleUserEmail )
+        DECLARE_ID( googleClientId )
 
         DECLARE_ID( IsPreviewOn )
         DECLARE_ID( IsPreviewAuto )

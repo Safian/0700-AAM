@@ -36,6 +36,8 @@
    license:            AGPLv3
 
    dependencies:        kick_ui_header, kick_ui_settings, kick_ui_channel_mixer, kick_leds
+   OSXFrameworks:      AuthenticationServices
+   iOSFrameworks:      AuthenticationServices UniformTypeIdentifiers
 
   END_JUCE_MODULE_DECLARATION
 
@@ -133,6 +135,8 @@
     #include "modes/midicontrol/kick_MidiControl.h"
     #include "modes/padperform/kick_PadPerform.h"
     #include "modes/pianoview/kick_PianoView.h"
+    #include "modes/filebrowser/kick_incomingFiles.h"
+    #include "modes/filebrowser/kick_appleCloudBridge.h"
     #include "modes/filebrowser/kick_fileUtils.h"
     #include "modes/filebrowser/kick_sourceHub.h"
     #include "modes/filebrowser/kick_fileBrowser.h"

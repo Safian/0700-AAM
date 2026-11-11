@@ -218,6 +218,9 @@ namespace ui
 
         // Selects the place that holds `path` and lists it (a favourite, the smoke test).
         void showFolder( const juce::String& path );
+        void refreshPlacesAndListing();
+        void importIncomingFiles( const juce::StringArray& paths, bool removeSourceOnSuccess = false );
+        void configureGoogleDriveFromSettings() { editGoogleDriveSource(); }
         // The names of the rows in the right list, in order (the smoke test checks sorting and hidden files).
         juce::StringArray getShownNames() const;
 
@@ -291,6 +294,8 @@ namespace ui
         void recallFavourite( const juce::String& path );
         bool favouritesRequested{ false };
         int  favouriteCursor{ -1 };
+        juce::String pendingImportSelectName;
+        juce::String pendingImportBanner;
         void selectBtnOnClick();
         bool checkIsCurrProj();
         bool isProtectedPath( const juce::File& f ) const;
@@ -349,8 +354,11 @@ namespace ui
         void addOrEditCloudSource();
         void editSpliceSource();
         void editGoogleDriveSource();
+        void startGoogleOAuthSignIn( const std::string& clientId, const std::string& clientSecret, const juce::String& emailHint, const std::string& existingId );
+        void finishGoogleDriveSourceSetup( const fileSource::SourceConfig& cfg, const std::string& secretText, const juce::String& statusMsg );
         void editWebDavSource();
         void editLocalSource();
+        juce::File findBestSpliceDirectory() const;
         juce::Component* remoteCell( int row, juce::Component* existing );
 
         ui::fileUtils::GenerationTracker              generationTracker;

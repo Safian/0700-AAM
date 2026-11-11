@@ -61,7 +61,8 @@ namespace ui
                 }
                 if( f.size() != 6 || ( f[0] != "webdav" && f[0] != "local" && f[0] != "splice" && f[0] != "gdrive" ) || !isValidSourceId( f[1] ) || f[3].empty() ) continue; // corrupt line: skipped
                 if( f[0] == "webdav" && !webdav::parseUrl( f[3] ).ok ) continue;
-                out.push_back( SourceConfig{ f[0], f[1], f[2].empty() ? f[1] : f[2], f[3], f[4], f[5] == "bearer" ? "bearer" : "basic" } );
+                const auto auth = ( f[5] == "bearer" || f[5] == "oauth" || f[5] == "apikey" ) ? f[5] : std::string( "basic" );
+                out.push_back( SourceConfig{ f[0], f[1], f[2].empty() ? f[1] : f[2], f[3], f[4], auth } );
             }
             return out;
         }

@@ -227,6 +227,8 @@ namespace mt
         Atomic<bool> enableWebDav;
         AtomicString splicePath;
         AtomicString googleDrivePath;
+        AtomicString googleUserEmail;
+        AtomicString googleClientId;
     };
 
     /// ///////////////////////////////////

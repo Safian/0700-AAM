@@ -199,14 +199,18 @@ int main()
         deleteSecretFile( f );
         CHECK( !readSecretFile( f, out ) );
 
-        std::vector<SourceConfig> v = { { "webdav", "nas", "My NAS\ttab", "https://nas.local/dav", "me@x", "basic" }, { "local", "splice", "Splice", "/Users/x/Splice", "", "basic" } };
+        std::vector<SourceConfig> v = {
+            { "webdav", "nas", "My NAS\ttab", "https://nas.local/dav", "me@x", "basic" },
+            { "local", "splice", "Splice", "/Users/x/Splice", "", "basic" },
+            { "gdrive", "gdrive-1", "Google Drive (me@x)", "gdrive://root", "me@x", "oauth" }
+        };
         auto cf = d + "/file_sources.txt";
         CHECK( saveSources( cf, v ) );
         ::stat( cf.c_str(), &st );
         CHECK( ( st.st_mode & 0777 ) == 0600 );
         auto r = loadSources( cf );
-        CHECK_EQ( r.size(), 2 );
-        if( r.size() == 2 ) CHECK( r[0].name == "My NAS\ttab" && r[0].location == "https://nas.local/dav" && r[1].type == "local" );
+        CHECK_EQ( r.size(), 3 );
+        if( r.size() == 3 ) CHECK( r[0].name == "My NAS\ttab" && r[0].location == "https://nas.local/dav" && r[1].type == "local" && r[2].type == "gdrive" && r[2].auth == "oauth" );
         CHECK( parseSources( "kicksources1\nwebdav\tBAD ID\tn\thttp://h/\t\tbasic\nwebdav\tok\tn\tnot-a-url\t\tbasic\nx\n" ).empty() );
         CHECK( parseSources( "nope" ).empty() );
         CHECK( isValidSourceId( "nas-1_a" ) && !isValidSourceId( "../x" ) && !isValidSourceId( "" ) && !isValidSourceId( "A" ) );
