@@ -73,6 +73,19 @@ bool ClapInstrumentProcessor::loadPluginFromSdCard(const char* clapBinaryPath,
 
     bindMacroParameters();
 
+    // Cache plugin parameter descriptor table for thread-safe Layer 2 UI queries
+    cachedParamInfos_.clear();
+    if (paramsExt_) {
+        const uint32_t count = paramsExt_->count(plugin_);
+        cachedParamInfos_.reserve(count);
+        for (uint32_t i = 0; i < count; ++i) {
+            clap_param_info_t info{};
+            if (paramsExt_->get_info(plugin_, i, &info)) {
+                cachedParamInfos_.push_back(info);
+            }
+        }
+    }
+
     if (!plugin_->activate(plugin_, sampleRate, 1, std::min<uint32_t>(maxBlockSize, kMaxBlockSize))) {
         unloadPlugin();
         return false;
@@ -98,6 +111,22 @@ void ClapInstrumentProcessor::unloadPlugin() noexcept {
         dsoHandle_ = nullptr;
     }
     paramsExt_ = nullptr;
+    cachedParamInfos_.clear();
+    m_paramEventQueue.clear();
+}
+
+uint32_t ClapInstrumentProcessor::getPluginParamCount() const noexcept {
+    return static_cast<uint32_t>(cachedParamInfos_.size());
+}
+
+bool ClapInstrumentProcessor::queryPluginParamInfo(uint32_t paramIndex, clap_param_info_t* outInfo) const noexcept {
+    if (!outInfo || paramIndex >= cachedParamInfos_.size()) return false;
+    *outInfo = cachedParamInfos_[paramIndex];
+    return true;
+}
+
+bool ClapInstrumentProcessor::pushNormalizedParamEvent(const AudiomParamEvent& ev) noexcept {
+    return m_paramEventQueue.push(ev);
 }
 
 void ClapInstrumentProcessor::bindMacroParameters() noexcept {
@@ -185,11 +214,59 @@ void ClapInstrumentProcessor::processAudioBlock(const float* inLeft, const float
         return;
     }
 
-    // 1. Drain lock-free ComProtocol / External MIDI queue into pre-allocated CLAP event list
+    // 1. Drain lock-free SPSC parameter event ring buffer (m_paramEventQueue)
+    // populated by ComProtocol / Layer 2 UI on the message thread
     rtBlockEventCount_ = 0;
-    KickHardwareSynthEvent hwEvt{};
     float latestCvCutoff = 0.0f;
     float latestCvResonance = 0.0f;
+
+    AudiomParamEvent pEvt{};
+    while (rtBlockEventCount_ < kEventQueueCapacity && m_paramEventQueue.pop(pEvt)) {
+        // Value change: Encoders, UI adjustments, or general parameters
+        if ((pEvt.sourceFlags & (SourceFlag_Encoder | SourceFlag_UI_Layer2)) ||
+            (pEvt.modAmount == 0.0 && !(pEvt.sourceFlags & (SourceFlag_PadPolyAT | SourceFlag_TouchStrip)))) {
+            auto& slot = rtBlockEvents_[rtBlockEventCount_];
+            slot.paramValue.header.size = sizeof(clap_event_param_value_t);
+            slot.paramValue.header.time = 0;
+            slot.paramValue.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+            slot.paramValue.header.type = CLAP_EVENT_PARAM_VALUE;
+            slot.paramValue.header.flags = 0;
+            slot.paramValue.param_id = pEvt.paramId;
+            slot.paramValue.cookie = nullptr;
+            slot.paramValue.note_id = -1;
+            slot.paramValue.port_index = 0;
+            slot.paramValue.channel = -1;
+            slot.paramValue.key = -1;
+            slot.paramValue.value = pEvt.normalizedVal;
+            ++rtBlockEventCount_;
+
+            if (macroParamIds_[0] == pEvt.paramId) latestCvCutoff = static_cast<float>(pEvt.normalizedVal);
+            if (macroParamIds_[1] == pEvt.paramId) latestCvResonance = static_cast<float>(pEvt.normalizedVal);
+        }
+
+        // Modulation offset: Poly-aftertouch, TouchStrip, or non-zero modAmount
+        if ((pEvt.sourceFlags & (SourceFlag_PadPolyAT | SourceFlag_TouchStrip)) || pEvt.modAmount != 0.0) {
+            if (rtBlockEventCount_ < kEventQueueCapacity) {
+                auto& slot = rtBlockEvents_[rtBlockEventCount_];
+                slot.paramMod.header.size = sizeof(clap_event_param_mod_t);
+                slot.paramMod.header.time = 0;
+                slot.paramMod.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+                slot.paramMod.header.type = CLAP_EVENT_PARAM_MOD;
+                slot.paramMod.header.flags = 0;
+                slot.paramMod.param_id = pEvt.paramId;
+                slot.paramMod.cookie = nullptr;
+                slot.paramMod.note_id = -1;
+                slot.paramMod.port_index = 0;
+                slot.paramMod.channel = -1;
+                slot.paramMod.key = -1;
+                slot.paramMod.amount = (pEvt.modAmount != 0.0) ? pEvt.modAmount : pEvt.normalizedVal;
+                ++rtBlockEventCount_;
+            }
+        }
+    }
+
+    // 2. Drain lock-free ComProtocol / External MIDI queue into pre-allocated CLAP event list
+    KickHardwareSynthEvent hwEvt{};
 
     while (rtBlockEventCount_ < kEventQueueCapacity && incomingEvents_.pop(hwEvt)) {
         auto& slot = rtBlockEvents_[rtBlockEventCount_];
