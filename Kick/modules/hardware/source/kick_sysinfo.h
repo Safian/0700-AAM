@@ -223,8 +223,9 @@ namespace kick_sysinfo
     }
 
     // ---- Warnings for the status bar -------------------------------------------------------------------------------
-    constexpr int kDiskWarnPercent = 95; // used share of the internal storage at which saving gets risky (< 5 % free)
-    constexpr int kRamWarnPercent  = 92; // used share of the memory at which a big project load may fail
+    constexpr int    kDiskWarnPercent   = 95;     // used share of the internal storage at which saving gets risky (< 5 % free)
+    constexpr double kDiskWarnMinFreeMb = 2048.0; // do not cry low-storage on multi-hundred-GB drives that still have >= 2 GB free
+    constexpr int    kRamWarnPercent    = 92;     // used share of the memory at which a big project load may fail
 
     struct ResourceWarnings
     {
@@ -235,7 +236,7 @@ namespace kick_sysinfo
     inline ResourceWarnings resourceWarnings( bool haveDisk, int diskPercent, double diskFreeMb, bool haveRam, int ramPercent )
     {
         ResourceWarnings w;
-        if( haveDisk && diskPercent >= kDiskWarnPercent )
+        if( haveDisk && diskPercent >= kDiskWarnPercent && diskFreeMb < kDiskWarnMinFreeMb )
             w.disk = "Low storage: " + std::to_string( (long long)( diskFreeMb < 0.0 ? 0.0 : diskFreeMb ) ) + " MB free";
         if( haveRam && ramPercent >= kRamWarnPercent )
             w.ram = "Low memory: " + std::to_string( ramPercent ) + " % used";

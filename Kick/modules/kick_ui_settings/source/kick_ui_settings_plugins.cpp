@@ -161,11 +161,11 @@ namespace kick_ui
         }
 
         g.setFont( 14.0f );
-        g.setColour( juce::Colours::white );
+        g.setColour( rowIsSelected ? juce::Colours::black : juce::Colours::white );
         g.drawText( item.name, 10, 2, width - 180, 20, juce::Justification::centredLeft, true );
 
         g.setFont( 11.0f );
-        g.setColour( juce::Colours::grey );
+        g.setColour( rowIsSelected ? juce::Colour( 0xff16202a ) : juce::Colours::grey );
         g.drawText( item.id + " (v" + item.version + ")", 10, 22, width - 180, 18, juce::Justification::centredLeft, true );
 
         // Badge on right: Trust level & Static/Installed

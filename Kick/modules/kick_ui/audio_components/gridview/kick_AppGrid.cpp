@@ -40,7 +40,7 @@ namespace kick_ui
         {
             addAndMakeVisible( options[index] );
             options[index].setValueColour( ui::Theme::textColour( 1 ) );
-            options[index].setValueFontHeight( 18 );
+            options[index].setValueFontHeight( 14 );
             options[index].setClickingTogglesState( false );
             options[index].setButtonText( gridEditOptionList[index] );
             options[index].onClick = [&, index]() {
@@ -58,17 +58,16 @@ namespace kick_ui
 
     void GridEditOptions::resized()
     {
-        auto b         = getLocalBounds().reduced( 10 );
-        auto h         = b.getHeight() / 2 - 20;
-        auto compWidth = 146;
+        auto b         = getLocalBounds().reduced( 12 );
         auto compGap   = 10;
+        auto h         = ( b.getHeight() - compGap * 3 ) / 2;
+        auto compWidth = ( b.getWidth() - compGap * 3 ) / 4;
 
-        b.removeFromTop( compGap * 2 );
+        b.removeFromTop( compGap );
         auto firstRowBounds = b.removeFromTop( h );
-        b.removeFromTop( compGap * 2 );
+        b.removeFromTop( compGap );
         auto secondRowBounds = b.removeFromTop( h );
 
-        firstRowBounds.removeFromLeft( compWidth / 2 + compGap / 2 );
         options[0].setBounds( firstRowBounds.removeFromLeft( compWidth ) );
         firstRowBounds.removeFromLeft( compGap );
         options[1].setBounds( firstRowBounds.removeFromLeft( compWidth ) );
@@ -77,7 +76,6 @@ namespace kick_ui
         firstRowBounds.removeFromLeft( compGap );
         options[3].setBounds( firstRowBounds.removeFromLeft( compWidth ) );
 
-        secondRowBounds.removeFromLeft( compWidth / 2 + compGap / 2 );
         options[4].setBounds( secondRowBounds.removeFromLeft( compWidth ) );
         secondRowBounds.removeFromLeft( compGap );
         options[5].setBounds( secondRowBounds.removeFromLeft( compWidth ) );
@@ -245,7 +243,7 @@ namespace kick_ui
         } );
 
         hdrComp.onEditOptionsClick = [this]() {
-            mt::utils::showDialog( editOptions.getName(), &editOptions, []( int ) {}, { 0, 0, 680, 300 } );
+            mt::utils::showDialog( editOptions.getName(), &editOptions, []( int ) {}, { 0, 0, 780, 300 } );
         };
 
         gridComponent.onNoteLongPress = [this]( int noteId ) {

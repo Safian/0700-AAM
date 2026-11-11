@@ -142,8 +142,8 @@ namespace kick_ui
             panSlider.setBoundsRelative( .7954f, .0892f, .0782f, .8214f );
             mute.setBoundsRelative( .9001f, .3035f, .0587f, .3928f );
             levelMeter.setBoundsRelative( .0733f, .3035f, .1584f, .3928f );
-            rmsValue.setBoundsRelative( .0733f, .7857f, .0841f, .1428f );
-            peakValue.setBoundsRelative( .1575f, .7857f, .0724f, .1428f );
+            rmsValue.setBoundsRelative( .065f, .7857f, .095f, .1428f );
+            peakValue.setBoundsRelative( .162f, .7857f, .095f, .1428f );
         }
 
         void updateData()

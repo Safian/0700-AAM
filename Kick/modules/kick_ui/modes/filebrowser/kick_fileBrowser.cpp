@@ -2757,7 +2757,7 @@ namespace ui
         auditionButton.incrementSelection();
 
         sampleAssignButton.setValueColour( ui::Theme::textColour( 1 ) );
-        sampleAssignButton.setValueFontHeight( 16 );
+        sampleAssignButton.setValueFontHeight( 14 );
 
         loadButton.setValueColour( ui::Theme::textColour( 1 ) );
         loadButton.setValueFontHeight( 16 );
