@@ -68,6 +68,23 @@ private:
     std::atomic<size_t> tail_{0};
 };
 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (c) 2026 JJ Simmons V / Dream Maker 5 (@FYD5IVE). All Rights Reserved.
+struct AudiomParamEvent {
+    uint32_t paramId; // Native CLAP clap_id from clap_plugin_params_t->get_info()
+    double normalizedVal; // Normalized [0.0 .. 1.0] controller/UI value
+    double modAmount; // Poly-aftertouch / X-Y modulation offset [-1.0 .. 1.0]
+    uint16_t bankIndex; // 0 = Bank A (Macros 1-4 / X1,Y1,X2,Y2), 1 = Bank B (Macros 5-8 / X3,Y3,X4,Y4)
+    uint16_t sourceFlags; // Bitmask: 0x01=Encoder, 0x02=Pad/PolyAT, 0x04=TouchStrip, 0x08=UI_Layer2
+};
+
+enum AudiomParamSourceFlags : uint16_t {
+    SourceFlag_Encoder    = 0x01,
+    SourceFlag_PadPolyAT  = 0x02,
+    SourceFlag_TouchStrip = 0x04,
+    SourceFlag_UI_Layer2  = 0x08
+};
+
 // Unified Hardware / MIDI Control Event passed from ComProtocol & External MIDI threads
 struct KickHardwareSynthEvent {
     enum class Type : uint8_t {
@@ -89,6 +106,7 @@ class ClapInstrumentProcessor {
 public:
     static constexpr size_t kMaxBlockSize = 1024;
     static constexpr size_t kEventQueueCapacity = 512;
+    static constexpr size_t kParamEventQueueCapacity = 256;
     static constexpr size_t kNumMacros = 8; // Maps 1:1 to u-he X1/Y1 .. X4/Y4
 
     ClapInstrumentProcessor() noexcept;
@@ -98,6 +116,11 @@ public:
     bool loadPluginFromSdCard(const char* clapBinaryPath, const char* pluginId,
                               double sampleRate, uint32_t maxBlockSize) noexcept;
     void unloadPlugin() noexcept;
+
+    // Layer 1 Message-Thread Hooks (Non-RT Safe for Layer 2 UI Queries):
+    uint32_t getPluginParamCount() const noexcept;
+    bool queryPluginParamInfo(uint32_t paramIndex, clap_param_info_t* outInfo) const noexcept;
+    bool pushNormalizedParamEvent(const AudiomParamEvent& ev) noexcept; // Lock-free SPSC push -> clap_event_param_value_t / clap_event_param_mod_t
 
     // Thread-Safe Hardware & MIDI Ingestion (Called by ComProtocol / MIDI I/O threads)
     bool enqueueHardwareEvent(const KickHardwareSynthEvent& evt) noexcept {
@@ -148,6 +171,13 @@ private:
 
     // Lock-free SPSC queue from ComProtocol / MIDI threads -> AudIO RT thread
     LockFreeEventRingBuffer<KickHardwareSynthEvent, kEventQueueCapacity> incomingEvents_;
+
+    // Pre-allocated 256-slot Single-Producer Single-Consumer (SPSC) ring buffer (m_paramEventQueue)
+    // Populated by ComProtocol / Layer 2 UI on the message thread, consumed RT lock-free
+    LockFreeEventRingBuffer<AudiomParamEvent, kParamEventQueueCapacity> m_paramEventQueue;
+
+    // Cached descriptor table initialized during activate() for thread-safe non-RT UI queries
+    std::vector<clap_param_info_t> cachedParamInfos_;
 
     // Pre-allocated RT CLAP event union list for the current audio block
     union ClapEventSlot {
