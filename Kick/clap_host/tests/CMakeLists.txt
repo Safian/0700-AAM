@@ -14,6 +14,12 @@ add_test(NAME kick-clap-host COMMAND kick-clap-tests
     $<TARGET_FILE:kick-clap-fixture-normal> $<TARGET_FILE:kick-clap-scan>
     $<TARGET_FILE:kick-clap-fixture-crash> $<TARGET_FILE:kick-clap-fixture-hang>)
 set_tests_properties(kick-clap-host PROPERTIES TIMEOUT 30)
+add_executable(kick-clap-bitmap-gui-tests BitmapGuiTests.cpp)
+target_link_libraries(kick-clap-bitmap-gui-tests PRIVATE kick_clap_host)
+# The real SynthyBoy module (built by the SynthyBoy repo) is optional: -DKICK_SYNTHYBOY_CLAP=/path/to/synthyboy.clap or the environment variable of the same name
+set(KICK_SYNTHYBOY_CLAP "$ENV{KICK_SYNTHYBOY_CLAP}" CACHE FILEPATH "Path of the real SynthyBoy .clap for the bitmap GUI client test (optional)")
+add_test(NAME kick-clap-bitmap-gui COMMAND kick-clap-bitmap-gui-tests ${KICK_SYNTHYBOY_CLAP})
+set_tests_properties(kick-clap-bitmap-gui PROPERTIES TIMEOUT 60)
 if(NOT WIN32)
     add_test(NAME kick-clap-scanner-cli COMMAND ${CMAKE_COMMAND} -E env
         "PATH=$<TARGET_FILE_DIR:kick-clap-scan>:$ENV{PATH}"

@@ -81,6 +81,42 @@ void PluginManager::registerStaticPlugin(std::shared_ptr<StaticPluginLoader> loa
     staticLoaders_[loader->getManifest().id] = std::move(loader);
 }
 
+void PluginManager::registerDynamicPlugin(std::shared_ptr<DynamicPluginLoader> loader) {
+    if (!loader) return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    dynamicLoaders_[loader->getManifest().id] = std::move(loader);
+}
+
+void PluginManager::setDiscovered(const std::vector<Descriptor>& scanned) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    discovered_.clear();
+    for (const auto& d : scanned) {
+        if (d.path.empty() || d.path.rfind("internal:", 0) == 0) continue; // a binary, never a built-in
+        discovered_.push_back(d);
+    }
+}
+
+std::vector<Descriptor> PluginManager::discovered() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return discovered_;
+}
+
+static bool trustedEnough(TrustLevel level) { return level != TrustLevel::Revoked && level != TrustLevel::Expired; }
+
+Descriptor PluginManager::resolve(const Descriptor& requested) const {
+    if (requested.path.rfind("internal:", 0) != 0) return requested;
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto installed = dynamicLoaders_.find(requested.id);
+    if (installed != dynamicLoaders_.end() && trustedEnough(installed->second->getTrustLevel()) &&
+        fs::exists(installed->second->getBinaryPath()))
+        return installed->second->getDescriptor();
+    for (const auto& d : discovered_) {
+        std::error_code ec;
+        if (d.id == requested.id && fs::exists(d.path, ec)) return d;
+    }
+    return requested;
+}
+
 void PluginManager::scanInstalledPlugins() {
     std::lock_guard<std::mutex> lock(mutex_);
     dynamicLoaders_.clear();
@@ -104,18 +140,14 @@ void PluginManager::scanInstalledPlugins() {
 std::vector<std::shared_ptr<PluginLoader>> PluginManager::getAllLoaders() const {
     std::lock_guard<std::mutex> lock(mutex_);
     std::vector<std::shared_ptr<PluginLoader>> loaders;
+    // An id that is both built in and installed is listed once, as the installed package (see resolve() for the rule),
+    // unless its signature is revoked or expired: then the built-in stays and the package is listed beside it for the diagnostics.
     for (const auto& pair : staticLoaders_) {
-        loaders.push_back(pair.second);
-    }
-    for (const auto& pair : dynamicLoaders_) {
-        // If an ID exists in both, static or dynamic?
-        // If installed dynamically as update to static, dynamic overrides
-        if (staticLoaders_.find(pair.first) == staticLoaders_.end()) {
+        const auto installed = dynamicLoaders_.find(pair.first);
+        if (installed == dynamicLoaders_.end() || !trustedEnough(installed->second->getTrustLevel()))
             loaders.push_back(pair.second);
-        } else {
-            loaders.push_back(pair.second);
-        }
     }
+    for (const auto& pair : dynamicLoaders_) loaders.push_back(pair.second);
     return loaders;
 }
 
@@ -144,11 +176,10 @@ std::vector<std::shared_ptr<PluginLoader>> PluginManager::getEffectLoaders() con
 std::shared_ptr<PluginLoader> PluginManager::findLoaderById(const std::string& pluginId) const {
     std::lock_guard<std::mutex> lock(mutex_);
     auto itDyn = dynamicLoaders_.find(pluginId);
-    if (itDyn != dynamicLoaders_.end()) return itDyn->second;
-
     auto itStat = staticLoaders_.find(pluginId);
+    if (itDyn != dynamicLoaders_.end() && (itStat == staticLoaders_.end() || trustedEnough(itDyn->second->getTrustLevel())))
+        return itDyn->second;
     if (itStat != staticLoaders_.end()) return itStat->second;
-
     return nullptr;
 }
 

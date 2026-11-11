@@ -172,6 +172,7 @@ add_library(kick_clap_host STATIC
     src/PluginInstaller.cpp
     src/PluginLoader.cpp
     src/PluginManager.cpp
+    src/BitmapGuiClient.cpp
     ../modules/3rdParty/tweetnacl/tweetnacl.c
     ../modules/3rdParty/tweetnacl/sha256.c
     ../modules/3rdParty/tweetnacl/crypto_utils.cpp
@@ -181,6 +182,7 @@ set_target_properties(kick_clap_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(kick_clap_host PUBLIC
     include
     third_party/clap/include
+    third_party/safian
     ../modules/3rdParty/tweetnacl
     builtin/synthyboy/include
 )

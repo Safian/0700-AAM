@@ -13,6 +13,7 @@
 #include <clap/ext/timer-support.h>
 #include <clap/ext/posix-fd-support.h>
 #include <clap/ext/log.h>
+#include <clap/ext/remote-controls.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -124,6 +125,13 @@ struct Host::Impl {
     std::string message;
     std::vector<Parameter> paramInfo;
     uint64_t metadataVersion = 0;
+    const clap_plugin_remote_controls_t* remoteControls = nullptr;
+    BitmapGuiHostHandler* bitmapHandler = nullptr;
+    safian_host_bitmap_gui_t bitmapTable{};
+    std::vector<RemotePage> remote;
+    uint64_t remoteVersion = 0;
+    std::atomic<bool> remoteChanged{false};
+    std::atomic<clap_id> suggestedPage{CLAP_INVALID_ID};
     std::vector<void*> cookies;
     std::unique_ptr<std::atomic<double>[]> paramValues;
     std::vector<Port> inputs, outputs;
@@ -194,6 +202,30 @@ struct Host::Impl {
     static void CLAP_ABI audioRescan(const clap_host_t* h, uint32_t) { self(h).restart.store(true); }
     static uint32_t CLAP_ABI dialects(const clap_host_t*) { return CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI | CLAP_NOTE_DIALECT_MIDI_MPE; }
     static void CLAP_ABI noteRescan(const clap_host_t* h, uint32_t) { self(h).restart.store(true); }
+    // ---- com.safian.bitmap-gui.host/1: the plug-in's calls go to the installed handler (main thread only; a call from elsewhere is ignored) ----
+    static BitmapGuiHostHandler* bitmap(const clap_host_t* h) { auto& s = self(h); return s.mainThread == std::this_thread::get_id() ? s.bitmapHandler : nullptr; }
+    static void CLAP_ABI bgRequestRender(const clap_host_t* h, const safian_bitmap_gui_rect_t* r) { if (auto* b = bitmap(h)) b->requestRender(r); }
+    static void CLAP_ABI bgRequestTick(const clap_host_t* h, uint32_t ms) { if (auto* b = bitmap(h)) b->requestTick(ms); }
+    static bool CLAP_ABI bgRequestResize(const clap_host_t* h, uint32_t w, uint32_t hh) { auto* b = bitmap(h); return b && b->requestResize(w, hh); }
+    static void CLAP_ABI bgSetCursor(const clap_host_t* h, uint32_t c) { if (auto* b = bitmap(h)) b->setCursor(c); }
+    static void CLAP_ABI bgRequestText(const clap_host_t* h, bool show, const safian_bitmap_gui_rect_t* f, uint32_t kind, const char* t) { if (auto* b = bitmap(h)) b->requestTextInput(show, f, kind, t); }
+    static bool CLAP_ABI bgRequestFile(const clap_host_t* h, uint32_t id, const safian_bitmap_gui_file_request_t* r) { auto* b = bitmap(h); return b && r && b->requestFile(id, *r); }
+    static bool CLAP_ABI bgShareFile(const clap_host_t* h, uint32_t id, const char* path, const char* title) { auto* b = bitmap(h); return b && path && b->shareFile(id, path, title ? title : ""); }
+    static bool CLAP_ABI bgOpenUrl(const clap_host_t* h, const char* url) { auto* b = bitmap(h); return b && url && b->openUrl(url); }
+    static void CLAP_ABI bgSetRemotePage(const clap_host_t* h, clap_id page) { if (auto* b = bitmap(h)) b->setActiveRemotePage(page); }
+    void buildBitmapTable(const BitmapGuiHostHandler::Capabilities& c) {
+        bitmapTable = {};
+        bitmapTable.request_render = bgRequestRender; bitmapTable.request_tick = bgRequestTick;
+        if (c.resize) bitmapTable.request_resize = bgRequestResize;
+        if (c.cursor) bitmapTable.set_cursor = bgSetCursor;
+        if (c.textInput) bitmapTable.request_text_input = bgRequestText;
+        if (c.file) bitmapTable.request_file = bgRequestFile;
+        if (c.share) bitmapTable.share_file = bgShareFile;
+        if (c.url) bitmapTable.open_url = bgOpenUrl;
+        if (c.remotePage) bitmapTable.set_active_remote_page = bgSetRemotePage;
+    }
+    static void CLAP_ABI remoteControlsChanged(const clap_host_t* h) { self(h).remoteChanged.store(true); }
+    static void CLAP_ABI remoteControlsSuggest(const clap_host_t* h, clap_id page) { self(h).suggestedPage.store(page); }
     static void CLAP_ABI log(const clap_host_t* h, clap_log_severity severity, const char*) {
         // Logging from audio callbacks must not format strings, write files, or lock.
         if (severity == CLAP_LOG_FATAL || severity == CLAP_LOG_PLUGIN_MISBEHAVING) self(h).errors.fetch_add(1);
@@ -233,7 +265,7 @@ struct Host::Impl {
         s.fds.erase(std::remove_if(s.fds.begin(), s.fds.end(), [=](const Fd& item) { return item.fd == fd; }), s.fds.end());
         return old != s.fds.size();
     }
-    static const void* CLAP_ABI extension(const clap_host_t*, const char* id) {
+    static const void* CLAP_ABI extension(const clap_host_t* hostPointer, const char* id) {
         static const clap_host_thread_check_t threads{isMain, isAudio};
         static const clap_host_params_t parameters{rescanParams, clearParams, requestFlush};
         static const clap_host_state_t state{markDirty};
@@ -243,9 +275,11 @@ struct Host::Impl {
         static const clap_host_audio_ports_t audio{supportedAudioRescan, audioRescan};
         static const clap_host_note_ports_t notes{dialects, noteRescan};
         static const clap_host_log_t logging{log};
+        static const clap_host_remote_controls_t remotes{remoteControlsChanged, remoteControlsSuggest};
         static const clap_host_timer_support_t timer{registerTimer, unregisterTimer};
         static const clap_host_posix_fd_support_t descriptors{registerFd, modifyFd, unregisterFd};
         if (!id) return nullptr;
+        if (!std::strcmp(id, SAFIAN_EXT_BITMAP_GUI_HOST)) return self(hostPointer).bitmapHandler ? &self(hostPointer).bitmapTable : nullptr;
         if (!std::strcmp(id, CLAP_EXT_THREAD_CHECK)) return &threads;
         if (!std::strcmp(id, CLAP_EXT_PARAMS)) return &parameters;
         if (!std::strcmp(id, CLAP_EXT_STATE)) return &state;
@@ -255,6 +289,7 @@ struct Host::Impl {
         if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS)) return &audio;
         if (!std::strcmp(id, CLAP_EXT_NOTE_PORTS)) return &notes;
         if (!std::strcmp(id, CLAP_EXT_LOG)) return &logging;
+        if (!std::strcmp(id, CLAP_EXT_REMOTE_CONTROLS) || !std::strcmp(id, CLAP_EXT_REMOTE_CONTROLS_COMPAT)) return &remotes;
         if (!std::strcmp(id, CLAP_EXT_TIMER_SUPPORT)) return &timer;
 #ifndef _WIN32
         if (!std::strcmp(id, CLAP_EXT_POSIX_FD_SUPPORT)) return &descriptors;
@@ -286,6 +321,7 @@ struct Host::Impl {
     }
     void close() {
         loaded.store(false);
+        if (plugin && bitmapHandler) bitmapHandler->pluginUnloading(); // the GUI must die before the plug-in does
         if (plugin) {
             if (guiCreated && pluginGui && pluginGui->destroy) {
                 if (guiVisible && pluginGui->hide) pluginGui->hide(plugin);
@@ -294,7 +330,8 @@ struct Host::Impl {
             guiCreated = false; guiVisible = false;
             deactivate(); if (plugin->destroy) plugin->destroy(plugin);
         }
-        plugin = nullptr; params = nullptr; state = nullptr; pluginLatency = nullptr;
+        plugin = nullptr; params = nullptr; state = nullptr; pluginLatency = nullptr; remoteControls = nullptr;
+        remote.clear(); remoteChanged.store(false); suggestedPage.store(CLAP_INVALID_ID); ++remoteVersion;
         pluginTail = nullptr; pluginGui = nullptr;
         guiCreated = false; guiVisible = false;
         timerSupport = nullptr; fdSupport = nullptr;
@@ -340,6 +377,26 @@ struct Host::Impl {
             paramValues[i].store(items[i].value);
         }
         ++metadataVersion;
+    }
+    // Bounded copy of the plug-in's remote-control pages: a hostile plug-in cannot make the host allocate without limit.
+    void readRemotePages() {
+        remote.clear();
+        if (remoteControls && remoteControls->count && remoteControls->get) {
+            const auto count = std::min<uint32_t>(remoteControls->count(plugin), 1024);
+            for (uint32_t i = 0; i < count; ++i) {
+                clap_remote_controls_page_t page{};
+                if (!remoteControls->get(plugin, i, &page)) continue;
+                RemotePage item;
+                item.index = static_cast<uint32_t>(remote.size());
+                item.id = page.page_id;
+                item.section.assign(page.section_name, strnlen(page.section_name, CLAP_NAME_SIZE));
+                item.name.assign(page.page_name, strnlen(page.page_name, CLAP_NAME_SIZE));
+                item.forPreset = page.is_for_preset;
+                for (size_t k = 0; k < RemotePage::knobs; ++k) item.parameters[k] = page.param_ids[k];
+                remote.push_back(std::move(item));
+            }
+        }
+        ++remoteVersion;
     }
     void readPorts() {
         inputs.clear(); outputs.clear(); noteInputs.clear();
@@ -546,6 +603,8 @@ bool Host::load(const Descriptor& descriptor, double sampleRate, uint32_t frames
         if (s.params && (!s.params->count || !s.params->get_info || !s.params->get_value || !s.params->flush))
             throw std::runtime_error("Incomplete CLAP parameter interface");
         s.state = static_cast<const clap_plugin_state_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_STATE));
+        s.remoteControls = static_cast<const clap_plugin_remote_controls_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_REMOTE_CONTROLS));
+        if (!s.remoteControls) s.remoteControls = static_cast<const clap_plugin_remote_controls_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_REMOTE_CONTROLS_COMPAT));
         s.pluginLatency = static_cast<const clap_plugin_latency_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_LATENCY));
         s.pluginTail = static_cast<const clap_plugin_tail_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_TAIL));
         s.pluginGui = static_cast<const clap_plugin_gui_t*>(s.plugin->get_extension(s.plugin, CLAP_EXT_GUI));
@@ -559,7 +618,7 @@ bool Host::load(const Descriptor& descriptor, double sampleRate, uint32_t frames
             if (!s.state->load(s.plugin, &input)) throw std::runtime_error("Plugin rejected saved state");
         }
         s.sampleRate = sampleRate; s.maxFrames = frames;
-        s.activate(); s.loaded.store(true); s.dirty.store(false);
+        s.activate(); s.readRemotePages(); s.loaded.store(true); s.dirty.store(false);
         return true;
     } catch (const std::exception& e) { s.message = e.what(); }
       catch (...) { s.message = "Plugin threw during initialization"; }
@@ -607,6 +666,7 @@ void Host::service() {
             for (size_t i = 0; i < s.paramInfo.size(); ++i) { double value; if (s.params->get_value(s.plugin, s.paramInfo[i].id, &value) && std::isfinite(value)) s.paramValues[i].store(value); }
         }
         if (s.flush.exchange(false)) s.flushParameters();
+        if (s.remoteChanged.exchange(false)) s.readRemotePages();
         if (s.failed.load()) s.stop();
     } catch (const std::exception& e) { s.fail(e.what()); }
       catch (...) { s.fail("Plugin threw during main-thread service"); }
@@ -662,6 +722,17 @@ const std::string& Host::error() const noexcept { return impl->message; }
 const Descriptor& Host::descriptor() const noexcept { return impl->info; }
 const std::vector<Parameter>& Host::parameters() const noexcept { return impl->paramInfo; }
 uint64_t Host::metadataRevision() const noexcept { return impl->metadataVersion; }
+const std::vector<RemotePage>& Host::remotePages() const noexcept { return impl->remote; }
+uint64_t Host::remotePagesRevision() const noexcept { return impl->remoteVersion; }
+clap_id Host::takeSuggestedRemotePage() noexcept { return impl->suggestedPage.exchange(CLAP_INVALID_ID); }
+const safian_plugin_bitmap_gui_t* Host::bitmapGui() const noexcept {
+    const auto* instance = plugin();
+    return instance && instance->get_extension ? static_cast<const safian_plugin_bitmap_gui_t*>(instance->get_extension(instance, SAFIAN_EXT_BITMAP_GUI)) : nullptr;
+}
+void Host::setBitmapGuiHandler(BitmapGuiHostHandler* handler, const BitmapGuiHostHandler::Capabilities& capabilities) noexcept {
+    impl->bitmapHandler = handler; impl->buildBitmapTable(capabilities);
+}
+const clap_plugin_t* Host::plugin() const noexcept { return impl->mainThread == std::this_thread::get_id() ? impl->plugin : nullptr; }
 const std::vector<Port>& Host::inputPorts() const noexcept { return impl->inputs; }
 const std::vector<Port>& Host::outputPorts() const noexcept { return impl->outputs; }
 double Host::parameterValue(clap_id id) const noexcept {
