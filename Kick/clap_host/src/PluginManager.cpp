@@ -96,6 +96,16 @@ void PluginManager::setDiscovered(const std::vector<Descriptor>& scanned) {
     }
 }
 
+void PluginManager::publishDiscovered(const std::vector<Descriptor>& scanned) {
+    setDiscovered(scanned);
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++discoveryRevision_; // also when the list is equal: a first, empty result still means "discovery finished"
+}
+uint64_t PluginManager::discoveryRevision() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return discoveryRevision_;
+}
+
 std::vector<Descriptor> PluginManager::discovered() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return discovered_;

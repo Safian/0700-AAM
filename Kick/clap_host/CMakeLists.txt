@@ -251,7 +251,7 @@ if(KICK_CLAP_BUILD_JUCE OR KICK_CLAP_BUILD_PLAYER OR KICK_CLAP_BUILD_DEVICE_BENC
         install(TARGETS kick-clap-device-bench RUNTIME DESTINATION bin BUNDLE DESTINATION bin)
     endif()
     if(KICK_CLAP_BUILD_JUCE OR KICK_CLAP_BUILD_PLAYER)
-        add_library(kick_clap_juce STATIC juce/PluginSession.cpp juce/PluginPanel.cpp)
+        add_library(kick_clap_juce STATIC juce/PluginSession.cpp juce/PluginPanel.cpp juce/BitmapGuiComponent.cpp)
         target_include_directories(kick_clap_juce PUBLIC juce)
         target_link_libraries(kick_clap_juce PUBLIC kick_clap_host juce::juce_audio_utils juce::juce_gui_extra)
         target_compile_definitions(kick_clap_juce PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PluginSession.h"
 #include <clap/ext/params.h>
+#include <kick_clap/Discovery.h>
+#include <kick_clap/PluginManager.h>
+#include <PluginPanel.h>
 #include <cmath>
+#include <thread>
+#include <kick_clap/RemotePages.h>
 
 namespace kick::clap {
 std::shared_ptr<PluginSession> PluginSession::create(juce::ValueTree program) {
@@ -20,8 +25,9 @@ PluginSession::~PluginSession() { stopTimer(); state.removeListener(this); proce
 void PluginSession::valueTreePropertyChanged(juce::ValueTree& tree, const juce::Identifier& key) {
     if (tree == state && (key == juce::Identifier("path") || key == juce::Identifier("pluginId"))) reload.store(true);
 }
-void PluginSession::select(const Descriptor& descriptor) {
+void PluginSession::select(const Descriptor& requested) {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    const auto descriptor = PluginManager::getInstance().resolve(requested); // a valid binary wins over the built-in of the same id
     if (processor.loaded() && !save()) return;
     // A failed replacement retains the old saved identity and opaque state.
     auto rate = requestedRate.load(); auto frames = requestedFrames.load();
@@ -73,6 +79,7 @@ void PluginSession::service() {
                 statusMessage = "Saved plugin state is invalid"; processor.unload(); return;
             }
             Descriptor descriptor; descriptor.path = path.toStdString(); descriptor.id = id.toStdString();
+            descriptor = PluginManager::getInstance().resolve(descriptor); // a saved built-in becomes the installed binary when there is one
             std::vector<uint8_t> snapshot(bytes.getSize());
             if (!snapshot.empty()) std::memcpy(snapshot.data(), bytes.getData(), snapshot.size());
             if (!processor.load(descriptor, rate, frames, snapshot)) {
@@ -89,6 +96,15 @@ void PluginSession::service() {
         else statusMessage = processor.error();
     }
     processor.service();
+    // The background discovery finished (or a panel scan): a loaded built-in is swapped for the binary of the same id, state kept.
+    if (const auto revision = PluginManager::getInstance().discoveryRevision(); revision != seenDiscovery) {
+        seenDiscovery = revision;
+        if (processor.loaded() && loadedPath.startsWith("internal:")) {
+            Descriptor current; current.path = loadedPath.toStdString(); current.id = loadedId.toStdString();
+            const auto preferred = PluginManager::getInstance().resolve(current);
+            if (preferred.path != current.path) select(preferred);
+        }
+    }
     // Output is bounded in the core. Drain it even when the editor is closed,
     // while retaining parameter telemetry and dirty state already applied there.
     Event event; while (processor.popOutput(event)) {}
@@ -167,14 +183,38 @@ clap_id PluginSession::macro(int index) const {
 void PluginSession::assignMacro(int index, clap_id id) {
     if (index >= 0 && index < 4) state.setProperty("macro" + juce::String(index), static_cast<juce::int64>(id), nullptr);
 }
-void PluginSession::adjustMacro(int index, double delta) {
-    if (!std::isfinite(delta) || delta == 0) return;
-    const auto id = macro(index);
+void PluginSession::adjustMacro(int index, double delta) { adjustParameter(macro(index), delta); }
+void PluginSession::adjustParameter(clap_id id, double delta) {
+    if (!std::isfinite(delta) || delta == 0 || id == CLAP_INVALID_ID) return;
     for (const auto& parameter : processor.parameters()) if (parameter.id == id) {
-        const auto amount = (parameter.flags & CLAP_PARAM_IS_STEPPED)
-            ? std::copysign(std::max(1., std::round(std::abs(delta) * 127.)), delta)
-            : delta * (parameter.maximum - parameter.minimum);
-        processor.setParameter(id, processor.parameterValue(id) + amount); break;
+        if (parameter.flags & CLAP_PARAM_IS_READONLY) return;
+        processor.setParameter(id, remote::adjusted(processor.parameterValue(id), parameter.minimum, parameter.maximum,
+                                                    (parameter.flags & CLAP_PARAM_IS_STEPPED) != 0, delta));
+        break;
     }
+}
+std::vector<std::filesystem::path> PluginSession::discoveryRoots() {
+    auto roots = defaultSearchPaths();
+    auto extraPaths = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("KICK/clap-paths.txt");
+    juce::StringArray lines; lines.addLines(extraPaths.loadFileAsString());
+    for (const auto& line : lines)
+        if (line.isNotEmpty()) {
+            std::filesystem::path p(line.toStdString());
+            if (std::find(roots.begin(), roots.end(), p) == roots.end()) roots.push_back(p);
+        }
+    return roots;
+}
+void PluginSession::discoverInBackground() {
+    static std::atomic<bool> started{false};
+    if (started.exchange(true)) return;
+    auto roots = discoveryRoots();
+    auto scanner = PluginPanel::scannerPath();
+    std::thread([roots, scanner] {
+        ScanResult result;
+        try { result = scan(roots, scanner, 5000); } catch (...) { return; }
+        std::vector<Descriptor> instruments;
+        for (auto& plugin : result.plugins) instruments.push_back(std::move(plugin));
+        PluginManager::getInstance().publishDiscovered(instruments);
+    }).detach();
 }
 } // namespace kick::clap

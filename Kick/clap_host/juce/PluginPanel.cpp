@@ -2,8 +2,54 @@
 #include "PluginPanel.h"
 #include <clap/ext/params.h>
 #include <kick_clap/PluginManager.h>
+#include <kick_clap/RemotePages.h>
 
 namespace kick::clap {
+namespace {
+// A touch-sized file chooser that lives inside the panel (no native window): the MPC has no windowing system for juce::FileChooser.
+class FilePicker final : public juce::Component {
+public:
+    FilePicker(const BitmapGuiFileRequest& request, juce::File start, std::function<void(uint32_t, const juce::String&)> answer)
+        : save(request.mode == SAFIAN_BITMAP_GUI_FILE_SAVE), done(std::move(answer)),
+          filter(request.wildcards.empty() ? "*" : juce::String(request.wildcards), "*", "files"),
+          browser((save ? juce::FileBrowserComponent::saveMode : juce::FileBrowserComponent::openMode) | juce::FileBrowserComponent::canSelectFiles,
+                  save && !request.suggestedName.empty() ? start.getChildFile(juce::String(request.suggestedName)) : start, &filter, nullptr) {
+        title.setText(juce::String(request.title.empty() ? (save ? "Save file" : "Open file") : request.title), juce::dontSendNotification);
+        title.setColour(juce::Label::textColourId, juce::Colours::white);
+        ok.setButtonText(save ? "Save" : "Open");
+        for (auto* c : std::initializer_list<juce::Component*>{&title, &browser, &ok, &cancel}) addAndMakeVisible(c);
+        if (auto* list = dynamic_cast<juce::ListBox*>(browser.getDisplayComponent())) list->setRowHeight(44);
+        ok.onClick = [this] {
+            const auto file = browser.getSelectedFile(0);
+            if (file == juce::File() || (!save && !file.existsAsFile())) return;
+            finish(SAFIAN_BITMAP_GUI_RESULT_OK, file.getFullPathName());
+        };
+        cancel.onClick = [this] { finish(SAFIAN_BITMAP_GUI_RESULT_CANCELLED, {}); };
+    }
+    ~FilePicker() override { if (done) { auto d = std::move(done); done = nullptr; d(SAFIAN_BITMAP_GUI_RESULT_CANCELLED, {}); } }
+    void paint(juce::Graphics& g) override { g.fillAll(juce::Colour(0xf015191e)); }
+    void resized() override {
+        auto b = getLocalBounds().reduced(8);
+        title.setBounds(b.removeFromTop(34));
+        auto bar = b.removeFromBottom(48);
+        cancel.setBounds(bar.removeFromRight(120).reduced(4)); ok.setBounds(bar.removeFromRight(120).reduced(4));
+        browser.setBounds(b);
+    }
+    std::function<void()> onFinished;
+private:
+    void finish(uint32_t result, const juce::String& path) {
+        auto d = std::move(done); done = nullptr;
+        if (d) d(result, path);
+        if (onFinished) { auto f = onFinished; juce::MessageManager::callAsync(f); }
+    }
+    bool save;
+    std::function<void(uint32_t, const juce::String&)> done;
+    juce::WildcardFileFilter filter;
+    juce::FileBrowserComponent browser;
+    juce::Label title;
+    juce::TextButton ok, cancel{"Cancel"};
+};
+} // namespace
 struct PluginPanel::ParameterRow : juce::Component {
     std::shared_ptr<PluginSession> session;
     Parameter parameter;
@@ -89,10 +135,17 @@ PluginPanel::PluginPanel(std::shared_ptr<PluginSession> owner, bool automaticall
                 roots.push_back(p);
         }
     }
+    for (auto* component : std::initializer_list<juce::Component*>{&viewToggle, &pagePrev, &pageNext, &pageTitle}) addChildComponent(component);
+    pageTitle.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    pageTitle.setJustificationType(juce::Justification::centred);
+    viewToggle.setClickingTogglesState(false);
+    viewToggle.onClick = [this] { showGeneric = !showGeneric; updatePluginGui(); resized(); };
+    pagePrev.onClick = [this] { setRemoteFocus(remote::stepPage(remoteFocusIndex, -1, static_cast<int>(session->host().remotePages().size())), true); };
+    pageNext.onClick = [this] { setRemoteFocus(remote::stepPage(remoteFocusIndex, +1, static_cast<int>(session->host().remotePages().size())), true); };
     setSize(960, 540); rebuildParameters(); startTimerHz(10);
     if (automaticallyScan) scanPlugins();
 }
-PluginPanel::~PluginPanel() { stopTimer(); parameterList.setModel(nullptr); if (scanJob) scanJob->cancelled.store(true); }
+PluginPanel::~PluginPanel() { stopTimer(); gui.reset(); filePicker.reset(); parameterList.setModel(nullptr); if (scanJob) scanJob->cancelled.store(true); }
 void PluginPanel::scanPlugins() {
     if (scanJob && !scanJob->complete.load()) return;
     scanJob = std::make_shared<ScanJob>();
@@ -171,6 +224,7 @@ juce::Component* PluginPanel::refreshComponentForRow(int row, bool, juce::Compon
 void PluginPanel::timerCallback() {
     if (scanJob && scanJob->complete.load()) {
         catalog.clear();
+        PluginManager::getInstance().publishDiscovered(scanJob->result.plugins); // a binary of the same id wins over the built-in
         for (auto& p : scanJob->result.plugins)
             if (std::find(p.features.begin(), p.features.end(), CLAP_PLUGIN_FEATURE_INSTRUMENT) != p.features.end()) catalog.push_back(std::move(p));
         for (const auto& p : PluginManager::getInstance().getInstrumentDescriptors()) {
@@ -196,6 +250,16 @@ void PluginPanel::timerCallback() {
     }
     auto& host = session->host();
     if (host.metadataRevision() != parameterRevision) rebuildParameters();
+    updatePluginGui();
+    if (host.remotePagesRevision() != remoteRevision) {
+        remoteRevision = host.remotePagesRevision();
+        const int count = static_cast<int>(host.remotePages().size());
+        setRemoteFocus(count == 0 ? -1 : std::max(0, std::min(remoteFocusIndex, count - 1)), false);
+        resized();
+    }
+    if (const auto suggested = host.takeSuggestedRemotePage(); suggested != CLAP_INVALID_ID)
+        for (const auto& page : host.remotePages()) if (page.id == suggested) { setRemoteFocus(static_cast<int>(page.index), true); break; }
+    if (gui && !showGeneric) return; // the plug-in's GUI is shown: the generic list and its status line cost nothing
     const auto* viewport = parameterList.getViewport();
     const auto first = viewport ? viewport->getViewPositionY() / 56 : 0;
     const auto last = std::min(getNumRows(), first + parameterList.getHeight() / 56 + 2);
@@ -230,8 +294,28 @@ void PluginPanel::mouseDown(const juce::MouseEvent& e) {
         }
     }
 }
+bool PluginPanel::hasStrip() const { return gui != nullptr || !session->host().remotePages().empty(); }
+juce::Rectangle<int> PluginPanel::guiBounds() const {
+    auto b = getLocalBounds();
+    if (hasStrip()) b.removeFromTop(28);
+    return b;
+}
+void PluginPanel::layoutStrip(juce::Rectangle<int>& all) {
+    const bool strip = hasStrip();
+    for (auto* c : std::initializer_list<juce::Component*>{&pagePrev, &pageNext, &pageTitle}) c->setVisible(strip && !session->host().remotePages().empty());
+    viewToggle.setVisible(strip && gui != nullptr);
+    if (!strip) return;
+    auto bar = all.removeFromTop(28);
+    viewToggle.setBounds(bar.removeFromLeft(110).reduced(1));
+    pageNext.setBounds(bar.removeFromRight(40).reduced(1)); pagePrev.setBounds(bar.removeFromRight(40).reduced(1));
+    pageTitle.setBounds(bar);
+}
 void PluginPanel::resized() {
-    auto bounds = getLocalBounds().reduced(12);
+    auto all = getLocalBounds();
+    layoutStrip(all);
+    if (gui && !showGeneric) gui->setBounds(all);
+    if (filePicker) filePicker->setBounds(getLocalBounds().reduced(24));
+    auto bounds = all.reduced(12);
     title.setBounds(bounds.removeFromTop(30));
     auto toolbar = bounds.removeFromTop(52);
     scanButton.setBounds(toolbar.removeFromLeft(76).reduced(2)); folderButton.setBounds(toolbar.removeFromLeft(108).reduced(2));
@@ -243,5 +327,104 @@ void PluginPanel::resized() {
     for (auto& macro : macros) macro.setBounds(macroRow.removeFromLeft(width).reduced(2));
     search.setBounds(bounds.removeFromTop(40).reduced(2));
     statusLabel.setBounds(bounds.removeFromBottom(36)); parameterList.setBounds(bounds);
+}
+
+juce::String PluginPanel::remoteTitle() const {
+    const auto& pages = session->host().remotePages();
+    if (remoteFocusIndex < 0 || remoteFocusIndex >= static_cast<int>(pages.size())) return {};
+    const auto& page = pages[static_cast<size_t>(remoteFocusIndex)];
+    return "Q-Link " + juce::String(remoteFocusIndex + 1) + "/" + juce::String(static_cast<int>(pages.size())) + "  " + juce::String(page.name) +
+           (page.section.empty() ? juce::String() : "  (" + juce::String(page.section) + ")");
+}
+
+void PluginPanel::setRemoteFocus(int index, bool tellPlugin) {
+    const auto& pages = session->host().remotePages();
+    remoteFocusIndex = index < 0 || pages.empty() ? -1 : std::min(index, static_cast<int>(pages.size()) - 1);
+    pageTitle.setText(remoteTitle(), juce::dontSendNotification);
+    if (tellPlugin && gui && remoteFocusIndex >= 0) gui->showRemotePage(pages[static_cast<size_t>(remoteFocusIndex)].id);
+}
+
+bool PluginPanel::adjustKnob(int knobOffset, double delta) {
+    const auto& pages = session->host().remotePages();
+    if (!pages.empty()) {
+        const auto target = remote::resolveKnob(remoteFocusIndex, knobOffset, static_cast<int>(pages.size()));
+        if (!target.valid()) return false;
+        session->adjustParameter(pages[static_cast<size_t>(target.page)].parameters[static_cast<size_t>(target.slot)], delta);
+        return true;
+    }
+    if (knobOffset >= 0 && knobOffset < 4) { adjustMacro(knobOffset, delta); return true; }
+    return false;
+}
+
+void PluginPanel::chooseGuiFile(const BitmapGuiFileRequest& request, std::function<void(uint32_t, const juce::String&)> done) {
+    static std::map<std::string, juce::File> lastFolder;
+    const auto purpose = request.purpose;
+    auto start = lastFolder.count(purpose) ? lastFolder[purpose] : juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
+    auto remember = [purpose, done](uint32_t result, const juce::String& path) {
+        if (result == SAFIAN_BITMAP_GUI_RESULT_OK) lastFolder[purpose] = juce::File(path).getParentDirectory();
+        done(result, path);
+    };
+#if JUCE_MAC || JUCE_WINDOWS || JUCE_IOS || JUCE_ANDROID
+    const bool save = request.mode == SAFIAN_BITMAP_GUI_FILE_SAVE;
+    if (save && !request.suggestedName.empty()) start = start.getChildFile(juce::String(request.suggestedName));
+    chooser = std::make_unique<juce::FileChooser>(juce::String(request.title), start, juce::String(request.wildcards));
+    chooser->launchAsync((save ? juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting
+                               : juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles),
+                         [remember, save](const juce::FileChooser& c) {
+        const auto file = c.getResult();
+        if (file == juce::File() || (!save && !file.existsAsFile())) remember(SAFIAN_BITMAP_GUI_RESULT_CANCELLED, {});
+        else remember(SAFIAN_BITMAP_GUI_RESULT_OK, file.getFullPathName());
+    });
+#else
+    auto picker = std::make_unique<FilePicker>(request, start, remember);
+    juce::Component::SafePointer<PluginPanel> safe(this);
+    picker->onFinished = [safe] { if (safe) { safe->filePicker.reset(); safe->resized(); } };
+    filePicker = std::move(picker);
+    addAndMakeVisible(filePicker.get());
+    filePicker->setBounds(getLocalBounds().reduced(24));
+    filePicker->toFront(true);
+#endif
+}
+
+void PluginPanel::updatePluginGui() {
+    auto& host = session->host();
+    const juce::String id = host.loaded() ? juce::String(host.descriptor().id) : juce::String();
+    if (id != guiPluginId) { guiPluginId = id; guiRefused = false; showGeneric = false; remoteRevision = ~uint64_t{0}; }
+    if (gui && !gui->isOpen()) gui.reset(); // the plug-in was unloaded or replaced
+    const bool want = host.loaded() && !guiRefused && BitmapGuiClient::supported(host);
+    if (!want && gui) { gui.reset(); filePicker.reset(); resized(); }
+    if (want && !gui) {
+        auto created = std::make_unique<BitmapGuiComponent>(host);
+        created->hooks = guiHooks;
+        juce::Component::SafePointer<PluginPanel> safe(this);
+        if (!created->hooks.chooseFile)
+            created->hooks.chooseFile = [safe](const BitmapGuiFileRequest& r, std::function<void(uint32_t, const juce::String&)> done) {
+                if (!safe) return false;
+                safe->chooseGuiFile(r, std::move(done));
+                return true;
+            };
+        created->hooks.remotePage = [safe](clap_id page) {
+            if (!safe) return;
+            for (const auto& p : safe->session->host().remotePages()) if (p.id == page) { safe->setRemoteFocus(static_cast<int>(p.index), false); break; }
+        };
+        created->hooks.detached = [safe] { juce::MessageManager::callAsync([safe] { if (safe) safe->updatePluginGui(); }); };
+        addAndMakeVisible(created.get());
+        gui = std::move(created);
+        auto b = guiBounds();
+        gui->setBounds(b);
+        if (!gui->open(b.getWidth(), b.getHeight())) { gui.reset(); guiRefused = true; }
+        else {
+            if (gui && session->host().remotePages().size() > 0 && remoteFocusIndex < 0) setRemoteFocus(0, false);
+            gui->toBack();
+        }
+        resized();
+    }
+    const bool genericVisible = !gui || showGeneric;
+    for (auto* c : std::initializer_list<juce::Component*>{&scanButton, &folderButton, &loadButton, &removeButton, &panicButton, &errorsButton, &pluginList, &search,
+                                                           &statusLabel, &title, &parameterList})
+        c->setVisible(genericVisible);
+    for (auto& macro : macros) macro.setVisible(genericVisible);
+    if (gui) gui->setVisible(!showGeneric);
+    viewToggle.setButtonText(showGeneric ? "Plug-in GUI" : "Parameters");
 }
 } // namespace kick::clap

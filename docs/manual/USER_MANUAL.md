@@ -114,6 +114,7 @@ A hangszerek parametrizálása a **Program Edit** felületen történik:
 - **Többmódusú szűrő:** Low-pass, Band-pass, High-pass 12/24 dB meredekséggel, rezonanciával és meghajtással (Drive).
 - **ADSR Envelope:** Tiszta exponenciális lecsengési görbék és precíz nulla-attack átmenet (lásd upstream PR #44).
 - **CLAP / VST3 integráció:** Natív `.clap` szintetizátor modulok betöltése közvetlenül a programba.
+- **A plugin saját felülete:** ha a plugin tudja a `com.safian.bitmap-gui/1` CLAP-bővítményt (a SynthyBoy tudja), a plugin panelje a plugin saját, általa kirajzolt felületét mutatja (1024x600, érintéssel). A fejlécsor `Parameters` gombja az általános paraméterlistára vált át (minden más plugin ezt kapja). A Q-Link potik (1-8) a látható panel `clap.remote-controls` oldalát vezérlik, az oldal címe a fejlécben látszik, a `<` `>` gombokkal lapozható; a 9-16. potik a következő oldalt. Remote-oldalak nélküli plugineknél az 1-4. poti a négy makró. Ha a SynthyBoy modul telepítve van (`/usr/lib/clap` az MPC-n), az nyer a beépített, Vital nélküli változattal szemben ([részletek](../../Kick/clap_host/README.md#plug-in-ui-bitmap-gui)).
 
 > [!TIP]
 > ### 👨‍💻 Fejlesztői Megjegyzés (CLAP Architecture)

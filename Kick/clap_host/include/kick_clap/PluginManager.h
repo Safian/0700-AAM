@@ -50,6 +50,9 @@ public:
     // setDiscovered() takes the instruments of a finished scan (replaces the previous list); it is thread safe.
     void setDiscovered(const std::vector<Descriptor>& scanned);
     std::vector<Descriptor> discovered() const;
+    // setDiscovered() plus a revision bump when the list changed, so sessions notice (a panel scan and the background discovery use it).
+    void publishDiscovered(const std::vector<Descriptor>& scanned);
+    uint64_t discoveryRevision() const;
     Descriptor resolve(const Descriptor& requested) const;
 
     // Rescans installed plugins from disk and updates dynamic loaders
@@ -88,6 +91,7 @@ private:
     std::map<std::string, std::shared_ptr<DynamicPluginLoader>> dynamicLoaders_;
     std::vector<RemotePluginDescriptor> remoteCatalog_;
     std::vector<Descriptor> discovered_;
+    uint64_t discoveryRevision_{0};
 };
 
 } // namespace kick::clap
