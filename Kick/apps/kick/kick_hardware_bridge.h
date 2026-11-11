@@ -24,6 +24,7 @@
 #include "kick_ui/kick_ui.h"
 #include "kick_ui_controls/source/kick_Theme.h"
 #include "kick_ui_controls/source/kick_ControlBase.h"
+#include "kick_ui_controls/source/kick_table.h"
 #include "audio_engine/audio_engine.h"
 #include <cerrno>
 #include <cstring>
@@ -743,6 +744,10 @@ private:
                 // No window focus without an X display: remember the touched control as the one the data dial / +/- act on.
                 ui::selectControlFromTouch(target);
                 target->mouseDown(e);
+                auto* tv = dynamic_cast<ui::KickTableView*>(target);
+                if (!tv) tv = target->findParentComponentOfClass<ui::KickTableView>();
+                if (tv != nullptr && target != tv)
+                    tv->mouseDown(e.getEventRelativeTo(tv));
                 kick_log("touch", "[TOUCH] manual mouseDown delivered to '%s'\n", target->getName().toRawUTF8());
             }
             else if (is_up)
@@ -778,7 +783,15 @@ private:
                                            clicks, wasDragged);
                     juce::Component::SafePointer<juce::Component> alive(effectiveTarget);
                     effectiveTarget->mouseUp(downE);
-                    if (clicks >= 2 && !wasDragged && alive != nullptr)
+                    auto* tv = dynamic_cast<ui::KickTableView*>(effectiveTarget);
+                    if (!tv) tv = effectiveTarget->findParentComponentOfClass<ui::KickTableView>();
+                    if (tv != nullptr && effectiveTarget != tv && alive != nullptr)
+                    {
+                        tv->mouseUp(downE.getEventRelativeTo(tv));
+                        if (clicks >= 2 && !wasDragged)
+                            tv->mouseDoubleClick(downE.getEventRelativeTo(tv));
+                    }
+                    else if (clicks >= 2 && !wasDragged && alive != nullptr)
                         effectiveTarget->mouseDoubleClick(downE);   // JUCE order: mouseUp, then mouseDoubleClick
                     if (slot >= 0 && slot < 10)
                     {

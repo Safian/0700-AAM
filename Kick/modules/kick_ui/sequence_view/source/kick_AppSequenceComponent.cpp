@@ -109,6 +109,16 @@ void AppSequenceDisplay::updateData()
 void AppSequenceDisplay::mouseDown( const juce::MouseEvent& e )
 {
     ui::clearFocusComponent();
+    if( seqNo >= 0 )
+        ae.setSelectedSequence( seqNo );
+}
+
+void AppSequenceDisplay::mouseUp( const juce::MouseEvent& e )
+{
+    if( seqNo >= 0 && ( e.mouseWasClicked() || e.getDistanceFromDragStart() < 16 ) )
+    {
+        ae.setSelectedSequence( seqNo );
+    }
 }
 
 void AppSequenceDisplay::resized()
@@ -202,8 +212,16 @@ void AppSequenceComponent::visibilityChanged()
         updateData();
 }
 
+void AppSequenceComponent::mouseDown( const juce::MouseEvent& e )
+{
+    const int s = seq.getSeqNo();
+    if( s >= 0 )
+        mt::getAudioInterface().setSelectedSequence( s );
+}
+
 void AppSequenceComponent::mouseUp( const juce::MouseEvent& e )
 {
-    if( e.mouseWasClicked() )
-        mt::getAudioInterface().setSelectedSequence( seq.getSeqNo() );
+    const int s = seq.getSeqNo();
+    if( s >= 0 && ( e.mouseWasClicked() || e.getDistanceFromDragStart() < 16 ) )
+        mt::getAudioInterface().setSelectedSequence( s );
 }

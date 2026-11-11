@@ -271,6 +271,16 @@ void AppProgramDisplay::updateMidiPorts()
 void AppProgramDisplay::mouseDown( const juce::MouseEvent& e )
 {
     ui::clearFocusComponent();
+    if( progNumber >= 0 )
+        ae.setSelectedProgram( progNumber );
+}
+
+void AppProgramDisplay::mouseUp( const juce::MouseEvent& e )
+{
+    if( progNumber >= 0 && ( e.mouseWasClicked() || e.getDistanceFromDragStart() < 16 ) )
+    {
+        ae.setSelectedProgram( progNumber );
+    }
 }
 
 void AppProgramDisplay::refreshDisplay()
@@ -341,6 +351,7 @@ void AppProgramDisplay::resized()
 AppProgramComponent::AppProgramComponent( int Index )
 
 {
+    addMouseListener( this, true );
     setInterceptsMouseClicks( true, true );
     mt::utils::addChildComponents( this, srNo, prg, options );
     mt::utils::disableMouseInterceptsAndFocus( srNo );
@@ -400,4 +411,20 @@ void AppProgramComponent::visibilityChanged()
 {
     if( isVisible() )
         updateData();
+}
+
+void AppProgramComponent::mouseDown( const juce::MouseEvent& e )
+{
+    const int p = prg.getProgNumber();
+    if( p >= 0 )
+        mt::getAudioInterface().setSelectedProgram( p );
+}
+
+void AppProgramComponent::mouseUp( const juce::MouseEvent& e )
+{
+    const int p = prg.getProgNumber();
+    if( p >= 0 && ( e.mouseWasClicked() || e.getDistanceFromDragStart() < 16 ) )
+    {
+        mt::getAudioInterface().setSelectedProgram( p );
+    }
 }

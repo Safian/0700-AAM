@@ -865,7 +865,7 @@ namespace ui
             if( comp == nullptr )
             {
                 comp = new FileLeftEntry( Row );
-                comp->setInterceptsMouseClicks( false, true );
+                comp->setInterceptsMouseClicks( true, true );
             }
             comp->ejectCallback  = [this]( int rowId ) {
                 if( juce::isPositiveAndBelow( rowId, static_cast<int>( shownPlaces.size() ) ) )
@@ -896,7 +896,7 @@ namespace ui
             if( comp == nullptr )
             {
                 comp = new FileRightEntry();
-                comp->setInterceptsMouseClicks( false, true );
+                comp->setInterceptsMouseClicks( true, true );
             }
             comp->setColumns( opts.showDate, opts.showTime, opts.showSize );
 
@@ -2337,7 +2337,7 @@ namespace ui
         if( comp == nullptr )
         {
             comp = new FileRightEntry();
-            comp->setInterceptsMouseClicks( false, true );
+            comp->setInterceptsMouseClicks( true, true );
         }
         if( !juce::isPositiveAndBelow( rowIndex, static_cast<int>( remoteShown.size() ) ) )
             return comp;
@@ -3494,6 +3494,12 @@ namespace ui
         size.setTextColour( ui::Theme::textColour( 1 ) );
         size.setFontHeight( 14.0f );
         size.setValueBackgroundColour( ui::Theme::backgroundColour( 9 ) );
+
+        file.setInterceptsMouseClicks( false, false );
+        date.setInterceptsMouseClicks( false, false );
+        time.setInterceptsMouseClicks( false, false );
+        size.setInterceptsMouseClicks( false, false );
+        imageBtn.setInterceptsMouseClicks( false, false );
 
         mt::utils::addAndMakeVisible( this, file, date, time, size );
     }

@@ -43,6 +43,7 @@ private:
     void timerCallback() override;
     void handleAsyncUpdate() override;
     void mouseDown( const juce::MouseEvent& e ) override;
+    void mouseUp( const juce::MouseEvent& e ) override;
 
 private:
     mt::MTAudioInterface&            ae{ mt::getAudioInterface() };
@@ -90,6 +91,8 @@ public:
 private:
     void resized() override;
     void visibilityChanged() override;
+    void mouseDown( const juce::MouseEvent& e ) override;
+    void mouseUp( const juce::MouseEvent& e ) override;
 
 private:
     ui::KickSerialNumber srNo{ "", "ID_Program" };
