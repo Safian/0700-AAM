@@ -77,14 +77,15 @@ namespace kick_ui
         void handleCommand( CPktMgr::HWMsg_t& ) override;
         void paint( juce::Graphics& g ) override;
 
-        std::function<void()> onConfigCloudPaths;
+        std::function<void()>      onConfigCloudPaths;
+        std::function<void( int )> onOpenCloudAuth;
 
     private:
         kick_ui::KickModeHeader header{ "Preferences", "Icon_SettingsScreen" };
         juce::Rectangle<int>    bCont;
 
-        std::array<juce::String, 8>                     selectorStrings{ "Info", "Project Defaults", "Hardware", "MIDI", "CV", "Ethernet", "WiFi", "Plugins" };
-        std::array<ui::KickToggleButton, 8>             selectors;
+        std::array<juce::String, 9>                     selectorStrings{ "Info", "Project Defaults", "Hardware", "MIDI", "CV", "Ethernet", "WiFi", "Plugins", "Cloud" };
+        std::array<ui::KickToggleButton, 9>             selectors;
         std::vector<std::unique_ptr<SettingsInterface>> pViews;
         SettingsInterface*                              pView{ nullptr };
 

@@ -40,6 +40,7 @@
 #include "source/kick_ui_settings_midi_sync.cpp"
 #include "source/kick_ui_settings_wifi.cpp"
 #include "source/kick_ui_settings_plugins.cpp"
+#include "source/kick_ui_settings_cloud.cpp"
 
 namespace kick_ui
 {
@@ -102,6 +103,16 @@ namespace kick_ui
         pViews.emplace_back( std::make_unique<SettingsEthernet>() );
         pViews.emplace_back( std::make_unique<SettingsWifi>() );
         pViews.emplace_back( std::make_unique<SettingsPlugins>() );
+        auto pCloud = std::make_unique<SettingsCloud>();
+        pCloud->onOpenCloudAuth = [this]( int service ) {
+            if( onOpenCloudAuth )
+                onOpenCloudAuth( service );
+        };
+        pCloud->onConfigCloudPaths = [this]() {
+            if( onConfigCloudPaths )
+                onConfigCloudPaths();
+        };
+        pViews.emplace_back( std::move( pCloud ) );
 
         // Add selector buttons...
         auto idx = 0;

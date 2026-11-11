@@ -2097,26 +2097,38 @@ namespace ui
         const bool gdriveEnabled = cs.enableGoogleDrive.get();
         const bool webdavEnabled = cs.enableWebDav.get();
 
-        // 1. Splice Place (auto-discovers Splice folder under Documents / Samples / Home / configured path)
+        // 1. Splice Place (auto-discovers or auto-creates Splice folder; always visible when enabled)
         if( spliceEnabled )
         {
-            const juce::File spliceDir = findBestSpliceDirectory();
-            if( spliceDir.isDirectory() )
-            {
-                Place p;
-                p.kind       = Place::Kind::Shortcut;
-                p.label      = "Splice";
-                p.icon       = "Icon_Library";
-                p.iconActive = "Icon_LibraryActive";
-                p.width      = 18.0f;
-                p.height     = 16.0f;
-                p.path       = spliceDir.getFullPathName();
-                sourcePlaces.push_back( p );
-            }
+            juce::File spliceDir = findBestSpliceDirectory();
+            if( !spliceDir.exists() )
+                spliceDir.createDirectory();
+            Place p;
+            p.kind       = Place::Kind::Shortcut;
+            p.label      = "Splice";
+            p.icon       = "Icon_Library";
+            p.iconActive = "Icon_LibraryActive";
+            p.width      = 18.0f;
+            p.height     = 16.0f;
+            p.path       = spliceDir.getFullPathName();
+            sourcePlaces.push_back( p );
         }
 
-        // 2. Local Google Drive Place (macOS/Desktop Drive for Desktop synced folder when present)
-        if( gdriveEnabled )
+        // 2. Google Drive Place: check hub source, local folder, or unconnected placeholder
+        bool hasGoogleDriveConfig = false;
+        if( hub )
+        {
+            for( auto& cfg : hub->allConfigs() )
+            {
+                if( cfg.type == "gdrive" )
+                {
+                    hasGoogleDriveConfig = true;
+                    break;
+                }
+            }
+        }
+        bool hasLocalGoogleDrive = false;
+        if( gdriveEnabled && !hasGoogleDriveConfig )
         {
             juce::File gdriveDir;
             if( cs.googleDrivePath.get().isNotEmpty() )
@@ -2148,6 +2160,7 @@ namespace ui
             }
             if( gdriveDir.isDirectory() )
             {
+                hasLocalGoogleDrive = true;
                 Place p;
                 p.kind       = Place::Kind::Shortcut;
                 p.label      = "Google Drive (Local)";
@@ -2158,6 +2171,18 @@ namespace ui
                 p.path       = gdriveDir.getFullPathName();
                 sourcePlaces.push_back( p );
             }
+        }
+        if( gdriveEnabled && !hasGoogleDriveConfig && !hasLocalGoogleDrive )
+        {
+            Place p;
+            p.kind       = Place::Kind::Source;
+            p.label      = "Google Drive";
+            p.icon       = "Icon_Internal";
+            p.iconActive = "Icon_InternalActive";
+            p.width      = 18.0f;
+            p.height     = 16.0f;
+            p.path       = "gdrive-unconnected";
+            sourcePlaces.push_back( p );
         }
 
         // 3. Configured Cloud & Folder hub sources (Google Drive OAuth/API, WebDAV, custom local folders)
@@ -2203,6 +2228,11 @@ namespace ui
 
     void FileBrowser::openSource( const Place& place )
     {
+        if( place.path == "gdrive-unconnected" )
+        {
+            showGoogleAuthQr();
+            return;
+        }
         if( !hub )
             return;
         const auto id  = place.path.toStdString();
@@ -2448,7 +2478,7 @@ namespace ui
                     switch( chosen )
                     {
                         case CloudSourcePopup::Choice::GoogleDrive:
-                            safeThis->editGoogleDriveSource();
+                            safeThis->showGoogleAuthQr();
                             break;
                         case CloudSourcePopup::Choice::FilesImport:
                             safeThis->statusBar.setBoxInfo( "Choose audio files from Files / Google Drive..." );
@@ -2462,7 +2492,7 @@ namespace ui
                             } );
                             break;
                         case CloudSourcePopup::Choice::Splice:
-                            safeThis->editSpliceSource();
+                            safeThis->showSpliceAuthQr();
                             break;
                         case CloudSourcePopup::Choice::WebDav:
                             safeThis->editWebDavSource();
@@ -2473,6 +2503,30 @@ namespace ui
                 } );
             },
             bounds, false );
+    }
+
+    void FileBrowser::showGoogleAuthQr()
+    {
+        auto dlg = std::make_unique<CloudAuthQrPopup>( CloudAuthQrPopup::Service::GoogleDrive );
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+        dlg->onAuthSuccess = [safeThis]() {
+            if( safeThis == nullptr )
+                return;
+            safeThis->refreshPlacesAndListing();
+        };
+        mt::utils::showDialogOwned<CloudAuthQrPopup>( "GOOGLE DRIVE", std::move( dlg ), nullptr, { 0, 0, 580, 480 } );
+    }
+
+    void FileBrowser::showSpliceAuthQr()
+    {
+        auto dlg = std::make_unique<CloudAuthQrPopup>( CloudAuthQrPopup::Service::Splice );
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+        dlg->onAuthSuccess = [safeThis]() {
+            if( safeThis == nullptr )
+                return;
+            safeThis->refreshPlacesAndListing();
+        };
+        mt::utils::showDialogOwned<CloudAuthQrPopup>( "SPLICE", std::move( dlg ), nullptr, { 0, 0, 580, 480 } );
     }
 
     void FileBrowser::editSpliceSource()

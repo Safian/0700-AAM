@@ -231,6 +231,15 @@ namespace kick_ui
 
                 if( auto* s = dynamic_cast<Settings*>( findScreen( Screen::HomePreferencesView ) ) )
                 {
+                    s->onOpenCloudAuth = [this]( int service ) {
+                        if( auto* fb = dynamic_cast<ui::FileBrowser*>( findScreen( Screen::MenuFileBrowser ) ) )
+                        {
+                            if( service == 0 )
+                                fb->showGoogleAuthQr();
+                            else if( service == 1 )
+                                fb->showSpliceAuthQr();
+                        }
+                    };
                     s->onConfigCloudPaths = [this]() {
                         auto& cs = mt::getSettings().cloudSources;
                         juce::String initSplice = cs.splicePath.get();
