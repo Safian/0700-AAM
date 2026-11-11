@@ -194,6 +194,7 @@ namespace kick_ui
         progressBar.setColour( juce::ProgressBar::foregroundColourId, ui::Theme::foregroundColour( 2 ) );
 
         gridViewport.setScrollOnDragMode( juce::Viewport::ScrollOnDragMode::never );
+        parameterViewport.setScrollOnDragMode( juce::Viewport::ScrollOnDragMode::never );
         parameterView.setMinimizeHeight( 0 );
 
         // Add components to viewports...
@@ -242,6 +243,14 @@ namespace kick_ui
         hdrComp.toolSelectionChanged.connect( [&]( GridToolType Type ) {
             gridComponent.toolTypeChanged( Type );
         } );
+
+        hdrComp.onEditOptionsClick = [this]() {
+            mt::utils::showDialog( editOptions.getName(), &editOptions, []( int ) {}, { 0, 0, 680, 300 } );
+        };
+
+        gridComponent.onNoteLongPress = [this]( int noteId ) {
+            openNotePropertiesPopUp( noteId );
+        };
 
         hdrComp.onCutClick = [&]() {
             selectedNotes.clear();
@@ -325,8 +334,13 @@ namespace kick_ui
 
         parameterControl.defaultZoomBtn.onClick = [this]() {
             gridData.setDefaultZoom();
-            gridViewport.setViewPosition( 0, gridData.getYFromNote( 15 ) );
+            const int targetNote = ( viewType == GridViewType::MidiView ) ? 64 : 15;
+            gridViewport.setViewPosition( 0, gridData.getYFromNote( targetNote ) );
             parameterControl.defaultZoomBtn.setToggleState( false, juce::dontSendNotification );
+        };
+
+        parameterControl.onStepClicked = [this]( int delta ) {
+            applyBottomBarEditStep( delta );
         };
 
         parameterControl.paramList.onSelectionChanged = [&]( int Index, const juce::String& Value ) {
@@ -404,7 +418,7 @@ namespace kick_ui
         auto scaleBounds = b.removeFromTop( gScaleHeight );
         timeDivListBox.setBounds( scaleBounds.removeFromLeft( gNotesWidth ) );
         scaleViewport.setBounds( scaleBounds );
-        hdrComp.setBoundsRelative( .225f, 0, .587f, .127f );
+        hdrComp.setBoundsRelative( .205f, 0, .592f, .127f );
 
         // Bottom parameter view...
         if( parameterViewExpanded )
@@ -587,33 +601,13 @@ namespace kick_ui
         }
         else if( contracts::DclContractsHelper::isKnobMessage( f_HwMsg ) )
         {
-            auto  knob     = contracts::DclContractsHelper::getKnobCode( f_HwMsg );
-            auto  value    = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
-            auto  Snap     = parameterControl.snapBtn.getToggleState();
-            auto& selNotes = ae.getSelectedNoteList();
-            auto  qlWidth  = gridData.getTicksPerQuantization( 0 );
+            auto knob  = contracts::DclContractsHelper::getKnobCode( f_HwMsg );
+            auto value = contracts::DclContractsHelper::getKnobValue( f_HwMsg );
 
             if( knob != contracts::DeviceControlContracts::EN_KNOB_CENTER )
                 knobCommand( knob, value );
             else
-            {
-                if( parameterControl.eStartBtn.getToggleState() )
-                {
-                    editStartForSelectedNotes( selNotes, value, qlWidth, Snap );
-                }
-                else if( parameterControl.eEndBtn.getToggleState() )
-                {
-                    editEndForSelectedNotes( selNotes, value, qlWidth, Snap );
-                }
-                else if( parameterControl.transposeBtn.getToggleState() )
-                {
-                    transpseSelectedNotes( selNotes, value );
-                }
-                else if( parameterControl.nudgeBtn.getToggleState() )
-                {
-                    nudgeSelectedNotes( selNotes, value, qlWidth, Snap );
-                }
-            }
+                applyBottomBarEditStep( value );
             gridComponent.triggerAsyncUpdate();
         }
     }
@@ -1014,6 +1008,101 @@ namespace kick_ui
     {
         auto wP = new ui::FilePopup( Text, false, false );
         mt::utils::showDialog( "WARNING!", wP, [wP, this]( int R ) { delete wP; }, { 0, 0, 600, 360 } );
+    }
+
+    void AppGrid::applyBottomBarEditStep( int value )
+    {
+        if( value == 0 )
+            return;
+
+        auto  Snap     = parameterControl.snapBtn.getToggleState();
+        auto& selNotes = ae.getSelectedNoteList();
+        auto  qlWidth  = gridData.getTicksPerQuantization( 0 );
+
+        if( parameterControl.eStartBtn.getToggleState() )
+            editStartForSelectedNotes( selNotes, value, qlWidth, Snap );
+        else if( parameterControl.eEndBtn.getToggleState() )
+            editEndForSelectedNotes( selNotes, value, qlWidth, Snap );
+        else if( parameterControl.transposeBtn.getToggleState() )
+            transpseSelectedNotes( selNotes, value );
+        else if( parameterControl.nudgeBtn.getToggleState() )
+            nudgeSelectedNotes( selNotes, value, qlWidth, Snap );
+
+        gridComponent.triggerAsyncUpdate();
+        parameterView.repaint();
+    }
+
+    void AppGrid::openNotePropertiesPopUp( int noteId )
+    {
+        grid_logic::NotePropertiesState initial;
+        bool                            found = false;
+        for( auto it : ae.getNoteList() )
+        {
+            mt::MTNote n( it );
+            if( n.isValid() && n.id.get() == noteId )
+            {
+                initial.note        = n.number.get();
+                initial.start       = n.start.get();
+                initial.length      = n.length.get();
+                initial.velocity    = n.velocity.get();
+                initial.probability = n.probability.get();
+                initial.ratchet     = n.ratchet.get();
+                initial.mute        = n.mute.get();
+                found               = true;
+                break;
+            }
+        }
+        if( !found )
+            return;
+
+        const int seqLenBars  = juce::jmax( 1, ae.getSequenceLength( aeSel.sequence ) );
+        const int totalTicks  = static_cast<int>( gridData.getTicksUptoBar( static_cast<unsigned int>( seqLenBars ) ) );
+        const int maxStart    = juce::jmax( 0, totalTicks - 1 );
+        const int barAtNote   = gridData.getBarFromX( gridData.getXFromTime( initial.start ) );
+        const int qlTicks     = juce::jmax( 1, gridData.getTicksPerQuantization( juce::jmax( 0, barAtNote ) ) );
+        const int stepTicks   = parameterControl.snapBtn.getToggleState() ? 4 : qlTicks;
+        const bool isDrum     = ( viewType == GridViewType::DrumView );
+
+        auto bbtFmt = [this]( int ticks ) {
+            const auto bnb = ae.toBnB( aeSel, static_cast<unsigned int>( juce::jmax( 0, ticks ) ) );
+            return juce::String::formatted( "%d:%02d:%03d", bnb.bar + 1, bnb.beat + 1, bnb.tick );
+        };
+
+        auto content = std::make_unique<GridNotePropertiesDialog>( initial, isDrum, stepTicks, maxStart, bbtFmt );
+        mt::utils::showDialogOwned<GridNotePropertiesDialog>(
+            "NOTE PROPERTIES",
+            std::move( content ),
+            [this, noteId, orig = initial]( int result, GridNotePropertiesDialog& dlg ) {
+                if( result != UI::APPLY )
+                    return;
+
+                mt::ScopedUndoTransaction undoScope( ae.getUndoManager(), "Note Properties" );
+                if( dlg.wasDeleteRequested() )
+                {
+                    ae.eraseNote( orig.note, orig.start, orig.length > 0 ? orig.length : -1 );
+                }
+                else
+                {
+                    const auto next  = dlg.getState();
+                    const int  dNote = next.note - orig.note;
+                    const int  dTime = next.start - orig.start;
+                    const int  dLen  = next.length - orig.length;
+                    if( dNote != 0 || dTime != 0 || dLen != 0 )
+                        ae.editNote( noteId, static_cast<double>( dTime ), dNote, static_cast<double>( dLen ) );
+                    if( next.velocity != orig.velocity )
+                        ae.editNoteVelocity( aeSel, noteId, next.velocity );
+                    if( next.probability != orig.probability )
+                        ae.editNoteProbability( aeSel, noteId, next.probability );
+                    if( next.ratchet != orig.ratchet )
+                        ae.editNoteRatchet( aeSel, noteId, next.ratchet );
+                    if( next.mute != orig.mute )
+                        ae.editNoteMute( aeSel, noteId, next.mute );
+                }
+                gridComponent.repaintNotes();
+                parameterView.repaint();
+            },
+            { 0, 0, 720, 490 },
+            true );
     }
 
     void AppGrid::openTimingCorrectPopUp()

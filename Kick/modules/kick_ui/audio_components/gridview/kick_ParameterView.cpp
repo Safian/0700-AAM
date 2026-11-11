@@ -4,13 +4,18 @@ namespace kick_ui
 {
     ParameterViewControl::ParameterViewControl()
     {
-        mt::utils::addAndMakeVisible( this, transposeBtn, snapBtn, eStartBtn, eEndBtn, plusBtn, minusBtn, ecBtn, Zoom, paramList, nudgeBtn, defaultZoomBtn );
+        mt::utils::addAndMakeVisible( this, transposeBtn, snapBtn, eStartBtn, eEndBtn, plusBtn, minusBtn, ecBtn, Zoom, paramList, nudgeBtn, defaultZoomBtn, stepMinusBtn, stepPlusBtn );
         mt::utils::setRadioGroupID( (int)RadioGroupId::ParamViewControl, transposeBtn, eStartBtn, eEndBtn, nudgeBtn );
         mt::utils::setValueBackgroundColour( ui::Theme::backgroundColour( 3 ), Zoom );
-        mt::utils::setValueColour( ui::Theme::textColour( 1 ), Zoom, transposeBtn, snapBtn, eStartBtn, eEndBtn, nudgeBtn, defaultZoomBtn );
-        mt::utils::setValueFontHeight( 18, Zoom, transposeBtn, snapBtn, eStartBtn, eEndBtn, nudgeBtn, defaultZoomBtn );
+        mt::utils::setValueColour( ui::Theme::textColour( 1 ), Zoom, transposeBtn, snapBtn, eStartBtn, eEndBtn, nudgeBtn, defaultZoomBtn, stepMinusBtn, stepPlusBtn );
+        mt::utils::setValueFontHeight( 18, Zoom, transposeBtn, snapBtn, eStartBtn, eEndBtn, nudgeBtn, defaultZoomBtn, stepMinusBtn, stepPlusBtn );
         mt::utils::setValueJustification( juce::Justification::centred, Zoom );
         mt::utils::setPlacementFlag( juce::Justification::centred, plusBtn, minusBtn );
+
+        stepMinusBtn.setClickingTogglesState( false );
+        stepPlusBtn.setClickingTogglesState( false );
+        stepMinusBtn.onClick = [this]() { if( onStepClicked ) onStepClicked( -1 ); };
+        stepPlusBtn.onClick  = [this]() { if( onStepClicked ) onStepClicked( 1 ); };
 
         minusBtn.toFront( true );
         plusBtn.toFront( true );
@@ -31,18 +36,20 @@ namespace kick_ui
 
     void ParameterViewControl::resized()
     {
-        defaultZoomBtn.setBoundsRelative( .0097f, .18f, .0313f, .629f );
-        snapBtn.setBoundsRelative( .045f, .18f, .1174f, .629f );
-        eStartBtn.setBoundsRelative( .1663f, .18f, .1174f, .629f );
-        eEndBtn.setBoundsRelative( .2876f, .18f, .1174f, .629f );
-        transposeBtn.setBoundsRelative( .408f, .18f, .1174f, .629f );
-        nudgeBtn.setBoundsRelative( .529f, .18f, .1174f, .629f );
+        defaultZoomBtn.setBoundsRelative( .008f, .18f, .031f, .629f );
+        snapBtn.setBoundsRelative( .042f, .18f, .100f, .629f );
+        eStartBtn.setBoundsRelative( .145f, .18f, .098f, .629f );
+        eEndBtn.setBoundsRelative( .246f, .18f, .098f, .629f );
+        transposeBtn.setBoundsRelative( .347f, .18f, .098f, .629f );
+        nudgeBtn.setBoundsRelative( .448f, .18f, .098f, .629f );
+        stepMinusBtn.setBoundsRelative( .550f, .18f, .042f, .629f );
+        stepPlusBtn.setBoundsRelative( .595f, .18f, .042f, .629f );
 
-        Zoom.setBoundsRelative( .655f, .16f, .156f, .666f );
-        minusBtn.setBoundsRelative( .65f, .18f, .043f, .629f );
-        plusBtn.setBoundsRelative( .77f, .18f, .043f, .629f );
+        Zoom.setBoundsRelative( .644f, .16f, .160f, .666f );
+        minusBtn.setBoundsRelative( .640f, .18f, .043f, .629f );
+        plusBtn.setBoundsRelative( .762f, .18f, .043f, .629f );
 
-        paramList.setBoundsRelative( .814f, .18f, .127f, .629f );
+        paramList.setBoundsRelative( .810f, .18f, .130f, .629f );
         ecBtn.setBoundsRelative( .947f, .18f, .043f, .629f );
     }
 

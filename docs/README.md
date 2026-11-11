@@ -16,6 +16,7 @@ All documentation lives under `docs/`. Paths below are relative to `docs/`. Dele
 
 ## planning/ – open work
 - `todo-master.md` – the TODO: only open items (defects, remaining units, human checks, owner decisions, later units).
+- `grid-manual-audit.md` – point-by-point Grid View audit against Akai MPC v3.10, Serum 2, and Kick manuals (mobile & hardware parity).
 - `screen-backlog.md` – open rows and round-end states of the screen reviews (S-C, S-D, S-E, S-F).
 - `plans/02-piano-clap.md`, `03-plugin-ecosystem.md`, `05-fx.md` – piano CLAP, plugin ecosystem, FX plans (engine/plugin work runs in the SynthyBoyVST and KickEQ repos).
 - `plans/research/` – `sample-sources.md`, `architecture-and-publishing.md` (piano plugin), `cloud-sources.md` (Splice / Google Drive terms).

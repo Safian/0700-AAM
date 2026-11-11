@@ -33,10 +33,12 @@ namespace kick_ui
         void mouseUp( const juce::MouseEvent& event ) override;
         void mouseDoubleClick( const juce::MouseEvent& event ) override;
         void mouseMove( const juce::MouseEvent& event ) override;
+        void cancelGesture() override;
         bool keyPressed( const juce::KeyPress& key, juce::Component* originatingComponent ) override;
 
     private:
         void drawInfoBar( int noteNum, int startTime, juce::MouseEvent event );
+        void updateCursorForPosition( juce::Point<float> pos );
         void validateSeqTrack();
         void selectInRectangle( const juce::MouseEvent& event );
 
@@ -45,6 +47,7 @@ namespace kick_ui
         juce::Rectangle<float> selectRect;
 
         bool        isLeftEdge{ false };
+        bool        gestureCancelled{ false };
         juce::Label resizeLabel;
         int         prevDragValue = -1;
     };

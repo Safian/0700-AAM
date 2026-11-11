@@ -38,10 +38,16 @@ namespace kick_ui
         magnify.setRadioGroupId( (int)RadioGroupId::AppGridHeader, juce::dontSendNotification );
         copyTool.setRadioGroupId( (int)RadioGroupId::AppGridHeader, juce::dontSendNotification );
 
-        mt::utils::addChildComponents( this, tracks, pencil, erase, select, copyTool, copy, play, paste, cut, bars, magnify );
+        mt::utils::addChildComponents( this, tracks, pencil, erase, select, copyTool, copy, play, paste, cut, bars, magnify, options );
+        options.setClickingTogglesState( false );
         mt::utils::setTitleColour( ui::Theme::textColour( 1 ), tracks, bars );
         mt::utils::setTitleFontHeight( 16, tracks, bars );
         bars.setTitleProportion( .4f );
+
+        options.onClick = [&]() {
+            if( onEditOptionsClick )
+                onEditOptionsClick();
+        };
 
         pencil.onClick   = [&]() { if( pencil.getToggleState() ) toolSelectionChanged( GridToolType::GridPencilTool ); };
         erase.onClick    = [&]() { if( erase.getToggleState() ) toolSelectionChanged( GridToolType::GridEraseTool ); };
@@ -108,6 +114,7 @@ namespace kick_ui
         };
 
         ui::themeChanged.connect( [&]() {
+            magnify.setImages( "Search_Browser", "Search_BrowserActive" );
             pencil.setImages( "Pencil_Normal", "Pencil_Active" );
             erase.setImages( "Erase_Normal", "Erase_Active" );
             select.setImages( "Select", "Select_Normal", "Select_Active" );
@@ -116,6 +123,7 @@ namespace kick_ui
             cut.setImages( "Cut_Normal", "Cut_Active" );
             paste.setImages( "Copy_Normal", "Copy_Activ" );
             play.setImages( "Play_Grid", "Stop_Active" );
+            options.setImages( "editOptions" );
         } );
     }
 
@@ -144,6 +152,7 @@ namespace kick_ui
             cut.setBoundsRelative( .800f, 0.21f, .065f, 0.5789f );
             copy.setBoundsRelative( .870f, 0.21f, .065f, 0.5789f );
         }
+        options.setBoundsRelative( .940f, 0.21f, .058f, 0.5789f );
     }
 
     void GridHeader::visibilityChanged()

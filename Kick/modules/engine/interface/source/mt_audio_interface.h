@@ -457,6 +457,7 @@ namespace mt
 
         int deleteSelectedNotes( const MTSelected& Selection );
         int editMuteSelectedNotes( const MTSelected& Selection, const bool MuteStatus );
+        int editNoteMute( const MTSelected& Selection, int NoteID, const bool MuteStatus );
         int editSelectedNotes( const MTSelected& Selection, double DeltaTimeInTicks, int DeltaNoteNumber, double DeltaLength );
 
         int pasteNote( const int NoteID, double DeltaTimeInTicks, int DeltaNoteNumber, double DeltaLength );

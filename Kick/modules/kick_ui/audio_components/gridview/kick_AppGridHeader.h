@@ -31,6 +31,7 @@ namespace kick_ui
         std::function<void( void )> onCutClick;
         std::function<void( void )> onCopyClick;
         std::function<void( void )> onPasteClick;
+        std::function<void( void )> onEditOptionsClick;
 
     public:
         GridHeader();
@@ -44,7 +45,7 @@ namespace kick_ui
         void visibilityChanged() override;
 
     private:
-        ui::KickImageButton                  magnify{ "Magnify", "Magnify", "Magnify" };
+        ui::KickImageButton                  magnify{ "Magnify", "Search_Browser", "Search_BrowserActive" };
         ui::KickImageButton                  pencil{ "Pencil", "Pencil_Normal", "Pencil_Active" };
         ui::KickImageButton                  erase{ "Erase", "Erase_Normal", "Erase_Active" };
         ui::KickImageButton                  select{ "Select", "Select_Normal", "Select_Active" };
@@ -52,6 +53,7 @@ namespace kick_ui
         ui::KickImageButton                  copy{ "Copy", "Copy Button", "Copy Button_Active" };
         ui::KickImageButton                  cut{ "Cut", "Cut_Normal", "Cut_Active" };
         ui::KickImageButton                  paste{ "Paste", "Copy_Normal", "Copy_Activ" };
+        ui::KickImageButton                  options{ "Options", "editOptions" };
         ui::KickImageButtonWithAttachedValue play{ TRANS( "Play" ), "Play_Grid", "Stop_Active" };
 
         bool isCutClicked{ false };

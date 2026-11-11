@@ -441,9 +441,6 @@ namespace mt
             {
                 MTNote n( it );
 
-                if( Start < n.start )
-                    break;
-
                 if( Note == n.number.get() )
                 {
                     if( 0 < Length )
@@ -453,7 +450,7 @@ namespace mt
                     }
                     else
                     {
-                        if( ( n.start <= Start ) && ( ( n.start + n.length ) > Start ) )
+                        if( ( n.start <= Start ) && ( ( n.start + juce::jmax( 1, n.length.get() ) ) > Start ) )
                             return it;
                     }
                 }
@@ -1488,6 +1485,24 @@ namespace mt
     {
         auto note = find( NoteID );
         return editNoteRatchet( note, Ratchet );
+    }
+
+    int MTNoteList::editNoteMute( juce::ValueTree& VT, const bool MuteStatus )
+    {
+        if( VT.isValid() && VT.hasType( IDs::NOTE ) )
+        {
+            MTNote n( VT, um );
+            n.mute = MuteStatus;
+            triggerAsyncUpdate();
+            return 0;
+        }
+        return -1;
+    }
+
+    int MTNoteList::editNoteMute( const int NoteID, const bool MuteStatus )
+    {
+        auto note = find( NoteID );
+        return editNoteMute( note, MuteStatus );
     }
 
     int MTNoteList::editNoteRatchet( const std::vector<int>& NoteIDs, const std::vector<int>& Ratchets )

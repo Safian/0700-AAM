@@ -46,10 +46,13 @@ namespace kick_ui
     ///////////////////////////////////////////////////////////////////////
     class GridComponent : public juce::Component
         , public juce::AsyncUpdater
+        , private juce::Timer
     {
     public:
         GridComponent( juce::Viewport& ViewPort );
-        ~GridComponent();
+        ~GridComponent() override;
+
+        std::function<void( int noteId )> onNoteLongPress;
 
         void noteSelectionChanged( int note );
         void setPosition( int bar, int beat, int tick );
@@ -82,6 +85,8 @@ namespace kick_ui
         void resized() override;
         void visibilityChanged() override;
         void handleAsyncUpdate() override;
+        void timerCallback() override;
+        void cancelLongPress();
 
     private:
         //to convert to multi dimensional array for faster lookup
@@ -98,7 +103,17 @@ namespace kick_ui
         int currentBeat  = 0;
         int currentTick  = 0;
 
-        std::map<GridToolType, IGridTool*> tools;
+        std::map<GridToolType, IGridTool*>    tools;
+        std::map<int, grid_logic::TouchPoint> activeTouches;
+        bool                                  multiTouchGestureActive{ false };
+        bool                                  longPressTriggered{ false };
+        bool                                  longPressArmed{ false };
+        int                                   longPressNoteId{ -1 };
+        grid_logic::TouchPoint                longPressDownVp{};
+        float                                 smoothViewX{ 0.0f };
+        float                                 smoothViewY{ 0.0f };
+        int                                   lastSetViewX{ -1 };
+        int                                   lastSetViewY{ -1 };
 
         GridViewType viewType;
 

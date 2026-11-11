@@ -28,9 +28,15 @@ namespace kick_ui
         GridEraseTool( GridComponent& gridComponent, GridData& gridData, juce::Viewport& ViewPort );
 
         void paint( juce::Graphics& g ) override;
-        void mouseUp( const juce::MouseEvent& ) override;
+        void mouseDown( const juce::MouseEvent& event ) override;
         void mouseDrag( const juce::MouseEvent& event ) override;
+        void mouseUp( const juce::MouseEvent& event ) override;
+        void cancelGesture() override;
 
     private:
+        bool               eraseAlongSegment( juce::Point<float> from, juce::Point<float> to );
+        juce::Point<float> lastDragPos;
+        bool               hasLastDragPos{ false };
+        bool               gestureCancelled{ false };
     };
 } //namespace mt

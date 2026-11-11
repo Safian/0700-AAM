@@ -33,7 +33,11 @@ namespace kick_ui
         ui::KickToggleButton eStartBtn{ "Edit Start", "Edit Start", "Edit Start" };
         ui::KickToggleButton eEndBtn{ "Edit End", "Edit End", "Edit End" };
         ui::KickToggleButton nudgeBtn{ "Nudge", "Nudge", "Nudge" };
+        ui::KickButton       stepMinusBtn{ "<", "<" };
+        ui::KickButton       stepPlusBtn{ ">", ">" };
         ui::KickLabel        Zoom{ "Zoom" };
+
+        std::function<void( int )> onStepClicked;
 
         ui::KickListBox paramList{ ui::KickListBox::withoutTitleBar, "", { "Velocity", "Probability", "Ratchet" } };
 

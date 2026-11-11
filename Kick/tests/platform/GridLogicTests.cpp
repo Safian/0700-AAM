@@ -2,6 +2,7 @@
 // Host test for Grid pure logic helpers (pad-to-note mapping, button state machine, Q-Link zoom/BBT scaling).
 
 #include "../../modules/kick_ui/audio_components/gridview/kick_grid_logic.h"
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
@@ -143,12 +144,194 @@ static void testQLinkIndexMapping()
     std::puts( "testQLinkIndexMapping passed" );
 }
 
+static bool approx( float a, float b, float eps = 0.01f )
+{
+    return std::fabs( a - b ) <= eps;
+}
+
+static void testYToNoteMapping()
+{
+    using namespace kick_ui::grid_logic;
+
+    const float noteH = 26.0f;
+    for( int n = 0; n < 128; ++n )
+    {
+        const float top = noteToY( n, noteH );
+        check( yToNote( top, noteH ) == n, "Exact top edge of row maps to same note (not off-by-1)" );
+        check( yToNote( top + 0.5f * noteH, noteH ) == n, "Row center maps to same note" );
+        check( yToNote( top + noteH - 0.01f, noteH ) == n, "Bottom edge of row maps to same note" );
+    }
+
+    check( yToNote( -10.0f, noteH ) == 127, "Above top clamps to note 127 (never 128)" );
+    check( yToNote( 128.0f * noteH + 20.0f, noteH ) == 0, "Below bottom clamps to note 0 (never negative)" );
+
+    std::puts( "testYToNoteMapping passed" );
+}
+
+static void testTouchIdentity()
+{
+    using namespace kick_ui::grid_logic;
+    check( resolveTouchId( 3, 0 ) == 3, "Hardware TouchSlot overrides JUCE shared source index 0" );
+    check( resolveTouchId( 0, 0 ) == 0, "Hardware slot 0 works cleanly" );
+    check( resolveTouchId( -1, 1 ) == 1, "iOS/desktop uses JUCE source index when not in bridge scope" );
+    std::puts( "testTouchIdentity passed" );
+}
+
+static void testSingleFingerPanAndPinchZoom()
+{
+    using namespace kick_ui::grid_logic;
+
+    GridZoomBounds bounds{ 216.0f, 4096.0f, 6.0f, 52.0f };
+    GridViewportState st;
+    st.viewX      = 100.0f;
+    st.viewY      = 500.0f;
+    st.viewWidth  = 864.0f;
+    st.viewHeight = 400.0f;
+    st.barWidth   = 432.0f;
+    st.noteHeight = 26.0f;
+    st.numBars    = 4;
+    st.maxNotes   = 128;
+
+    // 1-finger pan: drag down-right (+40, +30) -> viewport scrolls up-left (-40, -30)
+    auto pan = computeSingleFingerPan( st, { 200.0f, 200.0f }, { 240.0f, 230.0f } );
+    check( approx( pan.viewX, 60.0f ) && approx( pan.viewY, 470.0f ), "1-finger drag scrolls smoothly in viewport space" );
+
+    // Slow sub-pixel pan preserves float increment without integer stall
+    auto slowPan = computeSingleFingerPan( st, { 200.0f, 200.0f }, { 200.4f, 200.3f } );
+    check( approx( slowPan.viewX, 99.6f ) && approx( slowPan.viewY, 499.7f ), "Sub-pixel pan preserves fractional offset" );
+
+    // Vertical pinch only ("zoom - pitch"): X span tiny (6px < 24px), Y span 100 -> 150px
+    TouchPoint vp1Prev{ 300.0f, 150.0f }, vp2Prev{ 306.0f, 250.0f };
+    TouchPoint vp1Cur{ 300.0f, 125.0f }, vp2Cur{ 306.0f, 275.0f };
+    const float anchorContentY = st.viewY + 200.0f; // midpoint y = 200
+    const float anchorRowFrac  = anchorContentY / st.noteHeight;
+    auto vPinch = computePinchPan( st, bounds, vp1Prev, vp2Prev, vp1Cur, vp2Cur );
+    check( approx( vPinch.barWidth, st.barWidth ), "Pure vertical pinch leaves horizontal barWidth unchanged" );
+    check( vPinch.noteHeight > st.noteHeight, "Spreading fingers vertically increases noteHeight (pitch zoom in)" );
+    const float newAnchorRowFrac = ( vPinch.viewY + 200.0f ) / vPinch.noteHeight;
+    check( approx( newAnchorRowFrac, anchorRowFrac, 0.05f ), "Pitch row under pinch midpoint stays anchored" );
+
+    // Reverse pinch vertically in next step (150px -> 100px) zooms OUT immediately
+    st.noteHeight = vPinch.noteHeight;
+    st.viewY      = vPinch.viewY;
+    auto vPinchOut = computePinchPan( st, bounds, vp1Cur, vp2Cur, vp1Prev, vp2Prev );
+    check( vPinchOut.noteHeight < vPinch.noteHeight, "Closing fingers immediately reverses into zoom out" );
+
+    // Horizontal pinch only: Y span tiny (4px), X span 160 -> 240px
+    st.barWidth   = 432.0f;
+    st.noteHeight = 26.0f;
+    st.viewX      = 200.0f;
+    st.viewY      = 500.0f;
+    const float anchorTickPx   = st.viewX + 300.0f;
+    const float anchorBarFrac  = anchorTickPx / st.barWidth;
+    auto hPinch = computePinchPan( st, bounds,
+                                   { 220.0f, 180.0f }, { 380.0f, 184.0f },
+                                   { 180.0f, 180.0f }, { 420.0f, 184.0f } );
+    check( approx( hPinch.noteHeight, st.noteHeight ), "Pure horizontal pinch keeps vertical noteHeight steady" );
+    check( hPinch.barWidth > 432.0f, "Spreading fingers horizontally zooms in horizontally" );
+    check( approx( ( hPinch.viewX + 300.0f ) / hPinch.barWidth, anchorBarFrac, 0.02f ),
+           "Musical time under horizontal pinch midpoint stays anchored" );
+
+    // Diagonal pinch zooms BOTH axes simultaneously
+    auto dPinch = computePinchPan( st, bounds,
+                                   { 200.0f, 150.0f }, { 320.0f, 250.0f },
+                                   { 170.0f, 125.0f }, { 350.0f, 275.0f } );
+    check( dPinch.barWidth > st.barWidth && dPinch.noteHeight > st.noteHeight,
+           "Diagonal pinch zooms both horizontal time and vertical pitch" );
+
+    // Two-finger parallel pan (same span, midpoint moves by +30, -20 -> viewport shifts -30, +20)
+    auto twoPan = computePinchPan( st, bounds,
+                                   { 200.0f, 150.0f }, { 320.0f, 250.0f },
+                                   { 230.0f, 130.0f }, { 350.0f, 230.0f } );
+    check( approx( twoPan.barWidth, st.barWidth ) && approx( twoPan.noteHeight, st.noteHeight ),
+           "Two-finger parallel drag preserves zoom levels" );
+    check( approx( twoPan.viewX, st.viewX - 30.0f ) && approx( twoPan.viewY, st.viewY + 20.0f ),
+           "Two-finger parallel drag pans viewport 1:1" );
+
+    // Bounds clamp test
+    auto clampedOut = computePinchPan( st, bounds,
+                                       { 100.0f, 100.0f }, { 500.0f, 500.0f },
+                                       { 100.0f, 100.0f }, { 130.0f, 130.0f } );
+    check( clampedOut.barWidth >= bounds.minBarWidth && clampedOut.noteHeight >= bounds.minNoteHeight,
+           "Pinch out respects min zoom bounds" );
+
+    std::puts( "testSingleFingerPanAndPinchZoom passed" );
+}
+
+static void testNoteEraseHitTesting()
+{
+    using namespace kick_ui::grid_logic;
+
+    // Unsorted notes (regression case where old MTNoteList::find early break missed notes after an earlier start>target)
+    const NoteSpan notes[] = {
+        { 36, 960, 120 },
+        { 36, 480, 60 },
+        { 37, 480, 120 },
+        { 36, 0, 120 },
+    };
+
+    const int slop = ticksFromPixelSlop( 6.0f, 432.0f, 1920 ); // ~27 ticks
+    check( slop >= 20 && slop <= 35, "6px slop at 432px/bar maps cleanly to ~27 ticks" );
+
+    // Exact hit on unsorted earlier note
+    check( findBestNoteMatch( notes, 4, 36, 500, slop ) == 1, "Finds exact note even when ValueTree is unsorted" );
+
+    // Touch slop hit slightly before note start (e.g. 1/32 note edge on finger tap)
+    check( findBestNoteMatch( notes, 4, 36, 465, slop ) == 1, "Tap just before thin note start hits within slop" );
+
+    // Touch slop hit just after note end [480..540)
+    check( findBestNoteMatch( notes, 4, 36, 548, slop ) == 1, "Tap just after thin note end hits within slop" );
+
+    // Far from any note on row 36
+    check( findBestNoteMatch( notes, 4, 36, 700, slop ) == -1, "Tap in empty space far from notes does not match" );
+
+    // Different pitch row never cross-matches
+    check( findBestNoteMatch( notes, 4, 38, 480, slop ) == -1, "Pitch row isolation prevents accidental adjacent erase" );
+
+    std::puts( "testNoteEraseHitTesting passed" );
+}
+
+static void testLongPressNotePropertiesAndTouchResize()
+{
+    using namespace kick_ui::grid_logic;
+
+    check( !shouldTriggerLongPress( true, 4.0f, 300 ), "Short hold (<450ms) does not fire long press" );
+    check( !shouldTriggerLongPress( true, 14.0f, 500 ), "Dragging (>10px) cancels long press" );
+    check( !shouldTriggerLongPress( false, 0.0f, 600 ), "Released finger does not fire long press" );
+    check( shouldTriggerLongPress( true, 5.0f, 450 ), "Stationary hold >=450ms triggers long press" );
+
+    NotePropertiesState bad{ -5, -20, 0, 200, 150, 99, true };
+    auto clamped = clampNoteProperties( bad, 7679 );
+    check( clamped.note == 0 && clamped.start == 0 && clamped.length == 1
+        && clamped.velocity == 127 && clamped.probability == 100 && clamped.ratchet == 8 && clamped.mute,
+           "NoteProperties clamping bounds all fields" );
+    check( stepNoteProperty( 100, 30, 1, 127 ) == 127, "Property stepper clamps to max" );
+    check( stepNoteProperty( 1, -5, 1, 8 ) == 1, "Property stepper clamps to min" );
+
+    // Touch resize widening when Edit Start / Edit End is toggled ON
+    check( hitTestNoteEdge( 112.0f, 100.0f, 160.0f, true, false, false ) == NoteEdgeHit::None,
+           "Mouse handle width is 5px when widenForTouch=false" );
+    check( hitTestNoteEdge( 112.0f, 100.0f, 160.0f, true, false, true ) == NoteEdgeHit::Left,
+           "Touch Edit Start handle widens up to 16px on wide notes" );
+    check( hitTestNoteEdge( 150.0f, 100.0f, 160.0f, false, true, true ) == NoteEdgeHit::Right,
+           "Touch Edit End handle hits cleanly" );
+    check( hitTestNoteEdge( 112.0f, 100.0f, 160.0f, false, false, true ) == NoteEdgeHit::None,
+           "Neither Edit Start nor End active returns None (body drag moves note)" );
+
+    std::puts( "testLongPressNotePropertiesAndTouchResize passed" );
+}
+
 int main()
 {
     testPadToNote();
     testButtonStateMachine();
     testZoomScaling();
     testQLinkIndexMapping();
+    testYToNoteMapping();
+    testTouchIdentity();
+    testSingleFingerPanAndPinchZoom();
+    testNoteEraseHitTesting();
+    testLongPressNotePropertiesAndTouchResize();
     std::puts( "All Grid logic tests PASSED!" );
     return 0;
 }

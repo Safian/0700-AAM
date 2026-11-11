@@ -55,8 +55,12 @@ namespace kick_ui
             mDownSelectedNote = ( 0 < ae.getSelectedNoteID( mDownNoteNum, mDownTime, -1 ) );
         }
         inline int getMouseDownNoteNumber() { return mDownNoteNum; }
+        virtual void cancelGesture() {}
 
     protected:
+        bool findNoteAtPosition( juce::Point<float> pos, float slopPx, grid_logic::NoteSpan& outNote ) const;
+        bool eraseNoteAtPosition( juce::Point<float> pos, float slopPx, bool allowDeleteSelected );
+
         mt::MTAudioInterface& ae{ mt::getAudioInterface() };
         const mt::MTSelected& aeSelected{ mt::getAudioInterface().getSelected() };
         GridComponent&        gridComp;

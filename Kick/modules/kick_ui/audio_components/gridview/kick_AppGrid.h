@@ -146,10 +146,12 @@ namespace kick_ui
             }
         }
 
-        void mouseUp( const juce::MouseEvent& event )
+        void mouseUp( const juce::MouseEvent& event ) override
         {
-            selectedNote = (int)( (float)event.position.getY() / getNoteHeight() ) + 1;
-            selectedNote = getMaxNotes() - selectedNote;
+            if( !event.mouseWasClicked() )
+                return;
+
+            selectedNote = grid_logic::yToNote( event.position.getY(), getNoteHeight(), getMaxNotes() );
 
             if( noteSelectionChanged )
                 noteSelectionChanged( selectedNote, true );
@@ -297,6 +299,7 @@ namespace kick_ui
         void nudgeSelectedNotes( juce::Array<juce::ValueTree>&, int, double, bool );
         void editStartForSelectedNotes( juce::Array<juce::ValueTree>&, int, double, bool );
         void editEndForSelectedNotes( juce::Array<juce::ValueTree>&, int, double, bool );
+        void applyBottomBarEditStep( int value );
         void setZoomInZoomOut( int, int, bool );
         void timerCallback() override;
         void updatePlayhead();
@@ -347,6 +350,7 @@ namespace kick_ui
         void openHumanizePopUp();
         void openRandomEventsPopUp();
         void openSplitEventsPopUp();
+        void openNotePropertiesPopUp( int noteId );
         void openWarningPopUp( const juce::String& Text );
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR( AppGrid )
