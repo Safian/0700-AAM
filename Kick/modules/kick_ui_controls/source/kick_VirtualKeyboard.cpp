@@ -1,6 +1,22 @@
 
 namespace ui
 {
+#if JUCE_IOS
+    namespace
+    {
+        IosPasteOverlayFn& iosPasteOverlayFnRef()
+        {
+            static IosPasteOverlayFn fn = nullptr;
+            return fn;
+        }
+    } // namespace
+
+    void setKickIosPasteOverlayFn( IosPasteOverlayFn fn )
+    {
+        iosPasteOverlayFnRef() = fn;
+    }
+#endif
+
     inline static constexpr int spaceButtonWidth    = 480;
     inline static constexpr int controlButtonsWidth = 120;
     inline static constexpr int buttonSpacing       = 10;
@@ -438,9 +454,9 @@ namespace ui
         : inputTextLabel( initialKeyvalue )
     {
 #if !((JUCE_IOS && defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD) || JUCE_ANDROID)
-        mt::utils::addChildComponents( this, inputTextLabel, letterComp, numComp, speSym, upperCaseComp );
+        mt::utils::addChildComponents( this, inputTextLabel, pasteButton, letterComp, numComp, speSym, upperCaseComp );
 #else
-        mt::utils::addChildComponents( this, inputTextLabel, createButton );
+        mt::utils::addChildComponents( this, inputTextLabel, pasteButton, createButton );
         createButton.setColours(
             juce::Colour( 0xffffffff ),
             juce::Colour( 0xff00d4ff ),
@@ -451,6 +467,75 @@ namespace ui
         createButton.onClick = [this]() {
             close();
         };
+#endif
+
+        pasteButton.setWantsKeyboardFocus( false );
+        pasteButton.setValueFontHeight( 16.0f );
+        pasteButton.setValueColour( ui::Theme::textColour( 1 ) );
+        pasteButton.setValueBackgroundColour( ui::Theme::backgroundColour( 2 ) );
+        pasteButton.onClick = [this]() {
+            const auto clip = juce::SystemClipboard::getTextFromClipboard().replace( "\r", "" ).replace( "\n", " " ).trim();
+            if( clip.isNotEmpty() )
+                inputTextLabel.insertTextAtCaret( clip );
+#if !JUCE_IOS
+            inputTextLabel.grabKeyboardFocus();
+#endif
+        };
+        themeChanged.connect( [this]() {
+            pasteButton.setValueColour( ui::Theme::textColour( 1 ) );
+            pasteButton.setValueBackgroundColour( ui::Theme::backgroundColour( 2 ) );
+        } );
+
+#if JUCE_IOS
+        struct IosPasteWatcher final : public juce::ComponentMovementWatcher
+        {
+            IosPasteWatcher( KickVirtualKeyBoard& ownerIn, juce::Component& watchedIn )
+                : juce::ComponentMovementWatcher( &watchedIn )
+                , owner( ownerIn )
+                , watched( watchedIn )
+            {}
+
+            void sync()
+            {
+                auto fn = iosPasteOverlayFnRef();
+                if( fn == nullptr )
+                    return;
+
+                auto* topComp = watched.getTopLevelComponent();
+                auto* peer    = topComp ? topComp->getPeer() : nullptr;
+                const bool show = watched.isShowing() && peer != nullptr;
+                const auto r    = show
+                                    ? topComp->getLocalArea( &watched, watched.getLocalBounds().toFloat() )
+                                    : juce::Rectangle<float>{};
+
+                juce::Component::SafePointer<KickVirtualKeyBoard> safeOwner( &owner );
+                fn( &owner,
+                    peer ? peer->getNativeHandle() : nullptr,
+                    r.getX(),
+                    r.getY(),
+                    r.getWidth(),
+                    r.getHeight(),
+                    show,
+                    [safeOwner]( const juce::String& pasted ) {
+                        if( safeOwner == nullptr )
+                            return;
+                        const auto clean = pasted.replace( "\r", "" ).replace( "\n", " " ).trim();
+                        if( clean.isNotEmpty() )
+                            safeOwner->inputTextLabel.insertTextAtCaret( clean );
+                    } );
+            }
+
+            void componentMovedOrResized( bool, bool ) override { sync(); }
+            void componentPeerChanged() override { sync(); }
+            void componentVisibilityChanged() override { sync(); }
+
+            KickVirtualKeyBoard& owner;
+            juce::Component&     watched;
+        };
+
+        if( iosPasteOverlayFnRef() != nullptr )
+            pasteButton.setButtonText( "" );
+        iosPasteWatcher = std::make_unique<IosPasteWatcher>( *this, pasteButton );
 #endif
 
         setInterceptsMouseClicks( false, true );
@@ -473,6 +558,11 @@ namespace ui
         inputTextLabel.selectAll();
         inputTextLabel.setFocusContainerType( juce::Component::FocusContainerType::focusContainer );
         inputTextLabel.setJustification( juce::Justification::centredLeft );
+#if JUCE_IOS && !(defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD)
+        // Keep JUCE's built-in virtual keyboard unobstructed by UIKit's half-screen keyboard.
+        inputTextLabel.setWantsKeyboardFocus( false );
+        inputTextLabel.setMouseClickGrabsKeyboardFocus( false );
+#endif
 #if (JUCE_IOS && defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD) || JUCE_ANDROID
         inputTextLabel.setMultiLine( false );
         inputTextLabel.setReturnKeyStartsNewLine( false );
@@ -537,6 +627,15 @@ namespace ui
         showKeyboard( currentType );
     }
 
+    KickVirtualKeyBoard::~KickVirtualKeyBoard()
+    {
+#if JUCE_IOS
+        iosPasteWatcher.reset();
+        if( auto fn = iosPasteOverlayFnRef() )
+            fn( this, nullptr, 0.0f, 0.0f, 0.0f, 0.0f, false, {} );
+#endif
+    }
+
     KickVirtualKeyBoard& KickVirtualKeyBoard::getWithText( const juce::String& InitalValue )
     {
         KickLooknFeel::getLnf();
@@ -550,6 +649,15 @@ namespace ui
         currentType = type;
 
         inputTextLabel.setVisible( true );
+        pasteButton.setVisible( true );
+#if JUCE_IOS
+        if( iosPasteOverlayFnRef() != nullptr )
+            pasteButton.setButtonText( "" );
+#endif
+        pasteButton.setValueColour( ui::Theme::textColour( 1 ) );
+        pasteButton.setValueBackgroundColour( ui::Theme::backgroundColour( 2 ) );
+        inputTextLabel.setColour( juce::TextEditor::backgroundColourId, ui::Theme::backgroundColour( 13 ) );
+        inputTextLabel.setColour( juce::TextEditor::textColourId, ui::Theme::textColour( 2 ) );
 #if !((JUCE_IOS && defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD) || JUCE_ANDROID)
         letterComp.setVisible( false );
         numComp.setVisible( false );
@@ -615,14 +723,19 @@ namespace ui
     void KickVirtualKeyBoard::resized()
     {
 #if (JUCE_IOS && defined(KICK_IOS_NATIVE_KEYBOARD) && KICK_IOS_NATIVE_KEYBOARD) || JUCE_ANDROID
-        auto b = getLocalBounds().reduced( 8, 8 );
+        auto b    = getLocalBounds().reduced( 8, 8 );
         auto btnW = 120;
         createButton.setBounds( b.removeFromRight( btnW ) );
         b.removeFromRight( 10 );
+        pasteButton.setBounds( b.removeFromRight( 96 ) );
+        b.removeFromRight( 10 );
         inputTextLabel.setBounds( b );
 #else
-        auto b = getLocalBounds().reduced( compSpaceAround );
-        inputTextLabel.setBounds( b.removeFromTop( inputLabelHeight ) );
+        auto b        = getLocalBounds().reduced( compSpaceAround );
+        auto inputRow = b.removeFromTop( inputLabelHeight );
+        pasteButton.setBounds( inputRow.removeFromRight( 110 ) );
+        inputRow.removeFromRight( 10 );
+        inputTextLabel.setBounds( inputRow );
         b.removeFromTop( compSpaceAround );
         auto kBounds = b;
         letterComp.setBounds( kBounds );

@@ -1,6 +1,17 @@
 #pragma once
 namespace ui
 {
+#if JUCE_IOS
+    using IosPasteOverlayFn = void (*)( const void* ownerKey,
+                                        void*       nativePeerView,
+                                        float       x,
+                                        float       y,
+                                        float       w,
+                                        float       h,
+                                        bool        visible,
+                                        std::function<void( const juce::String& )> onPaste );
+    void setKickIosPasteOverlayFn( IosPasteOverlayFn fn );
+#endif
 
     struct IKeyBoardBase : public juce::Component
     {
@@ -33,6 +44,7 @@ namespace ui
         };
 
         explicit KickVirtualKeyBoard( const juce::String& initialKeyvalue );
+        ~KickVirtualKeyBoard() override;
 
         inline void         setInputText( const juce::String& Text ) { inputTextLabel.setText( Text, juce::dontSendNotification ); inputTextLabel.selectAll(); }
         inline juce::String getInputText() { return inputTextLabel.getText(); }
@@ -72,7 +84,11 @@ namespace ui
         SpecialSymbols           speSym;
         UpperCaseLetterComponent upperCaseComp;
         KickTextEditor           inputTextLabel;
+        KickButton               pasteButton{ "PASTE", "Paste" };
         KickButton               createButton{ "CREATE" };
+#if JUCE_IOS
+        std::unique_ptr<juce::ComponentMovementWatcher> iosPasteWatcher;
+#endif
 
         void resized() override;
 
