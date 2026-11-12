@@ -14,15 +14,19 @@
 #include <netinet/in.h>
 #include <algorithm>
 
-namespace fileSource::discovery
+namespace ui
 {
-    struct DiscoveredServer
+    namespace fileSource
     {
-        std::string name; // e.g. "Mac Share (192.168.0.136)"
-        std::string url;  // e.g. "http://192.168.0.136:8080"
-    };
+        namespace discovery
+        {
+            struct DiscoveredServer
+            {
+                std::string name; // e.g. "Mac Share (192.168.0.136)"
+                std::string url;  // e.g. "http://192.168.0.136:8080"
+            };
 
-    inline std::string getLocalIp()
+            inline std::string getLocalIp()
     {
         int s = ::socket( AF_INET, SOCK_DGRAM, 0 );
         if( s < 0 ) return "";
@@ -187,4 +191,11 @@ namespace fileSource::discovery
 
         return found;
     }
+        } // namespace discovery
+    }     // namespace fileSource
+} // namespace ui
+
+namespace fileSource
+{
+    namespace discovery = ui::fileSource::discovery;
 }
