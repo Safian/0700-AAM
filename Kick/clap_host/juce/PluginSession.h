@@ -2,7 +2,6 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <kick_clap/Host.h>
-#include <filesystem>
 #include <atomic>
 #include <mutex>
 #include <chrono>
@@ -28,13 +27,6 @@ public:
     void assignMacro(int index, clap_id id);
     clap_id macro(int index) const;
     void adjustMacro(int index, double normalizedDelta);
-    // A relative encoder turn (fraction of the encoder range, signed) applied to any parameter; stepped parameters move by whole ticks.
-    void adjustParameter(clap_id id, double normalizedDelta);
-    // Looks (once per process, in the background) for plug-in binaries in the standard folders and the folders the user added, and lets
-    // PluginManager::resolve prefer a valid binary of an id over the built-in of the same id. The session swaps a loaded built-in for it
-    // (state kept) when the scan finishes. Idempotent; the panel's own scans feed the same list.
-    static void discoverInBackground();
-    static std::vector<std::filesystem::path> discoveryRoots();
     void panic() noexcept { processor.panic(); }
     juce::ValueTree stateTree() const { return state; }
 private:
@@ -56,7 +48,6 @@ private:
     double audioTempo = 120;
     bool audioPlaying = false;
     juce::String loadedPath, loadedId;
-    uint64_t seenDiscovery = 0;
     std::chrono::steady_clock::time_point snapshotDue{};
 };
 } // namespace kick::clap

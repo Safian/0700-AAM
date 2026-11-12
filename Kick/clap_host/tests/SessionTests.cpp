@@ -23,8 +23,6 @@ int main(int argc, char** argv) {
     check(session->host().loaded(), session->status().toRawUTF8());
     if (const auto* imagePath = std::getenv("KICK_CLAP_PANEL_SNAPSHOT")) {
         PluginPanel panel(session, false);
-        panel.showPluginGuiNow();
-        check(panel.pluginGui() == nullptr && panel.showsGenericList(), "a plug-in without the bitmap GUI extension keeps the generic parameter list");
         auto image = panel.createComponentSnapshot(panel.getLocalBounds());
         juce::FileOutputStream stream{juce::File(imagePath)};
         check(stream.openedOk(), "open panel snapshot");

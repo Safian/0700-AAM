@@ -1,8 +1,0 @@
-{
-  "name": "com.safian.bitmap-gui/1",
-  "file": "bitmap_gui_ext.h",
-  "source": "SynthyBoyVST shell-clap/bitmap_gui_ext.h",
-  "commit": "c9f0950dc2d6f2ccd9fec48a1f9101c9de650598",
-  "license": "AGPL-3.0-or-later",
-  "note": "The whole contract of the extension, meant to be copied into hosts. Copy it verbatim; do not edit. Spec: SynthyBoyVST docs/BITMAP-GUI-EXTENSION.md"
-}

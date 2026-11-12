@@ -21,7 +21,6 @@ private:
 };
 MTClapProgram::MTClapProgram(AudIO::DawEngine& audioEngine, juce::ValueTree& tree, juce::UndoManager* undo)
     : MTIProgram(tree, undo), engine(audioEngine), session(kick::clap::PluginSession::create(tree)) {
-    kick::clap::PluginSession::discoverInBackground(); // an installed plug-in binary wins over the built-in of the same id
     auto object = std::make_unique<ClapProgram>(engine, this, session);
     synth = object.get(); engine.createObject(std::move(object)); synth->initAudioRouting();
     synth->connectOutputTo(engine.getBusManager()->getBusId(getOutput().toStdString()));

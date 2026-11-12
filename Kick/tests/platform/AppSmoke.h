@@ -9,7 +9,6 @@
 #include "ProgramEditSmoke.h"
 #include "ProjectsSmoke.h"
 #include "FxLanesSmoke.h"
-#include "ClapPanelSmoke.h"
 
 // Runs on the application's message thread against its real manager and graph.
 // The Python supervisor supplies an isolated data root and trusted test fixture.

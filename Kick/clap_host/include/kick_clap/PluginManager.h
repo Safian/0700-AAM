@@ -37,24 +37,6 @@ public:
     void registerStaticPlugin(std::shared_ptr<StaticPluginLoader> loader);
     void registerBuiltinPlugins();
 
-    // Registers a dynamically loaded (installed package) plug-in; scanInstalledPlugins() does the same for what is on disk.
-    void registerDynamicPlugin(std::shared_ptr<DynamicPluginLoader> loader);
-
-    // ---- Precedence of a built-in plug-in against a binary of the same id (desktop and MPC) ----
-    // The statically linked SynthyBoy has no UI toolkit and is the fallback of static-only targets (iOS / Android style). Wherever the real
-    // module is installed, the module wins, because it is the full build (engine, bitmap GUI). The rule, in order:
-    //   1. an installed package of that id whose signature is not Revoked or Expired (PluginInstaller + TrustStore, unchanged checks),
-    //   2. a .clap binary found by discovery (the isolated scanner enumerated this exact id, the file still exists),
-    //   3. the built-in.
-    // Only a request for a built-in ("internal:...") is redirected; a request with an explicit binary path is never rewritten.
-    // setDiscovered() takes the instruments of a finished scan (replaces the previous list); it is thread safe.
-    void setDiscovered(const std::vector<Descriptor>& scanned);
-    std::vector<Descriptor> discovered() const;
-    // setDiscovered() plus a revision bump when the list changed, so sessions notice (a panel scan and the background discovery use it).
-    void publishDiscovered(const std::vector<Descriptor>& scanned);
-    uint64_t discoveryRevision() const;
-    Descriptor resolve(const Descriptor& requested) const;
-
     // Rescans installed plugins from disk and updates dynamic loaders
     void scanInstalledPlugins();
 
@@ -90,8 +72,6 @@ private:
     std::map<std::string, std::shared_ptr<StaticPluginLoader>>  staticLoaders_;
     std::map<std::string, std::shared_ptr<DynamicPluginLoader>> dynamicLoaders_;
     std::vector<RemotePluginDescriptor> remoteCatalog_;
-    std::vector<Descriptor> discovered_;
-    uint64_t discoveryRevision_{0};
 };
 
 } // namespace kick::clap
