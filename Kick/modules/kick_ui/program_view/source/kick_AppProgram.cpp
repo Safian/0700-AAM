@@ -69,9 +69,12 @@ void AppProgram::onProgramListChanged()
         populate();
 }
 
-void AppProgram::onSelectionChange( const mt::MTSelected& Selected )
+void AppProgram::onProgramSelectionChange( const mt::MTSelected& Selected )
 {
-    selectRow( aeSel.program );
+    if( ae.isProjectLoaded() )
+        juce::MessageManager::callAsync( [this, sel = Selected.program]() {
+            selectRow( sel );
+        } );
 }
 
 void AppProgram::visibilityChanged()

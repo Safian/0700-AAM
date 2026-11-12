@@ -231,19 +231,34 @@ namespace kick_ui
 
                 if( auto* s = dynamic_cast<Settings*>( findScreen( Screen::HomePreferencesView ) ) )
                 {
+                    s->onOpenCloudAuth = [this]( int service ) {
+                        if( auto* fb = dynamic_cast<ui::FileBrowser*>( findScreen( Screen::MenuFileBrowser ) ) )
+                        {
+                            if( service == 0 )
+                                fb->showGoogleAuthQr();
+                            else if( service == 1 )
+                                fb->showSpliceAuthQr();
+                        }
+                    };
                     s->onConfigCloudPaths = [this]() {
                         auto& cs = mt::getSettings().cloudSources;
-                        juce::String initSplice = cs.splicePath.get();
-                        if( initSplice.isEmpty() )
-                        {
 #if JUCE_IOS
-                            const auto docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
-                            std::vector<std::string> roots = {
-                                docs.getFullPathName().toStdString(),
-                                docs.getChildFile( "Kick" ).getFullPathName().toStdString(),
-                                getAppDirs( MTSamples ).getFullPathName().toStdString()
-                            };
-                            initSplice = juce::String::fromUTF8( kick_incoming::resolveSpliceDir( {}, roots, docs.getChildFile( "Splice" ).getFullPathName().toStdString() ).c_str() );
+                        const auto docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
+                        auto spliceDir = docs.getChildFile( "Splice" );
+                        spliceDir.createDirectory();
+                        cs.splicePath   = spliceDir.getFullPathName();
+                        cs.enableSplice = true;
+                        if( auto* fb = dynamic_cast<ui::FileBrowser*>( findScreen( Screen::MenuFileBrowser ) ) )
+                        {
+                            fb->refreshPlacesAndListing();
+                            fb->configureGoogleDriveFromSettings();
+                        }
+#else
+                        juce::String initSplice = cs.splicePath.get();
+                        if( initSplice.isEmpty() || initSplice.contains( "/root" ) )
+                        {
+#if JUCE_LINUX || __linux__
+                            initSplice = juce::File( "/sdcard/Splice" ).isDirectory() ? "/sdcard/Splice" : juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Splice" ).getFullPathName();
 #else
                             initSplice = juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getChildFile( "Splice" ).getFullPathName();
 #endif
@@ -252,20 +267,26 @@ namespace kick_ui
                             mt::getSettings().cloudSources.splicePath = path.trim();
                             if( auto* fb = dynamic_cast<ui::FileBrowser*>( findScreen( Screen::MenuFileBrowser ) ) )
                                 fb->refreshPlacesAndListing();
-#if JUCE_IOS
-                            if( auto* fb = dynamic_cast<ui::FileBrowser*>( findScreen( Screen::MenuFileBrowser ) ) )
-                                fb->configureGoogleDriveFromSettings();
-#else
                             juce::String initGdrive = mt::getSettings().cloudSources.googleDrivePath.get();
-                            if( initGdrive.isEmpty() )
+                            if( initGdrive.isEmpty() || initGdrive.contains( "/root" ) )
+                            {
+#if JUCE_LINUX || __linux__
+                                initGdrive = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Google Drive" ).getFullPathName();
+#else
                                 initGdrive = juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getChildFile( "Google Drive" ).getFullPathName();
+#endif
+                            }
                             ui::project_actions::askText( "GOOGLE DRIVE FOLDER PATH", initGdrive, [this]( juce::String gpath ) {
                                 mt::getSettings().cloudSources.googleDrivePath = gpath.trim();
                                 if( auto* fb = dynamic_cast<ui::FileBrowser*>( findScreen( Screen::MenuFileBrowser ) ) )
                                     fb->refreshPlacesAndListing();
                             } );
-#endif
                         } );
+#endif
+                    };
+                    s->onConfigWebDav = [this]() {
+                        if( auto* fb = dynamic_cast<ui::FileBrowser*>( findScreen( Screen::MenuFileBrowser ) ) )
+                            fb->editWebDavSource();
                     };
                 }
 

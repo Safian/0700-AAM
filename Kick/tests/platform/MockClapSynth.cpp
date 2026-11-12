@@ -15,6 +15,7 @@ struct MockSynthInstance {
     std::atomic<bool> isNoteOn{false};
     std::atomic<float> macro0Value{0.0f};
     std::atomic<float> macro1Value{0.0f};
+    std::atomic<float> macro0Mod{0.0f};
 };
 
 static uint32_t mockParamsCount(const clap_plugin_t*) {
@@ -86,6 +87,11 @@ static clap_process_status pluginProcess(const clap_plugin_t* plugin, const clap
                         self->macro0Value.store(static_cast<float>(pv->value));
                     } else if (pv->param_id == 1001) {
                         self->macro1Value.store(static_cast<float>(pv->value));
+                    }
+                } else if (hdr->type == CLAP_EVENT_PARAM_MOD) {
+                    const auto* pm = reinterpret_cast<const clap_event_param_mod_t*>(hdr);
+                    if (pm->param_id == 1000) {
+                        self->macro0Mod.store(static_cast<float>(pm->amount));
                     }
                 }
             }

@@ -263,7 +263,8 @@ namespace ui
 
         void mouseDoubleClick( const juce::MouseEvent& /*e*/ ) override
         {
-            showOptionsDlg();
+            if( !isDragging_ )
+                showOptionsDlg();
         }
 
         void mouseDown( const juce::MouseEvent& event )
@@ -271,6 +272,9 @@ namespace ui
             Component::BailOutChecker checker( this );
             if( checker.shouldBailOut() )
                 return;
+
+            valueOnMouseDown_ = val_;
+            isDragging_       = false;
 
             auto currentTime = juce::Time::getCurrentTime();
 
@@ -280,7 +284,37 @@ namespace ui
                 lastClickTime = currentTime;
         }
 
+        void mouseDrag( const juce::MouseEvent& event ) override
+        {
+            if( !isEnabled() || isEditing )
+                return;
+
+            int deltaY = event.getDistanceFromDragStartY();
+            if( !isDragging_ && std::abs( deltaY ) >= 4 )
+                isDragging_ = true;
+
+            if( isDragging_ )
+            {
+                int dragDelta = -deltaY;
+                double steps = (double)dragDelta / 6.0;
+                Type newVal = static_cast<Type>( valueOnMouseDown_ + steps * (double)step_ );
+                newVal = juce::jlimit( min_, max_, newVal );
+                if( newVal != val_ )
+                {
+                    setValue( newVal );
+                    sendPercentValueToHardware( newVal );
+                }
+            }
+        }
+
+        void mouseUp( const juce::MouseEvent& ) override
+        {
+            isDragging_ = false;
+        }
+
     private:
+        bool                           isDragging_{ false };
+        Type                           valueOnMouseDown_{ 0 };
         bool                           isEditing{ false };
         Type                           min_{ 0 };
         Type                           max_{ 0 };

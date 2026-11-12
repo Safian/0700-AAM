@@ -7,6 +7,7 @@
 #include "kick_fileList.h"
 #include "kick_mounts.h"
 #include "kick_fbLogic.h"
+#include "kick_cloudAuthPopup.h"
 constexpr int   numButtonWidth = 44;
 constexpr float cornerSizeX    = 6.0f;
 constexpr float cornerSizeY    = 6.0f;
@@ -220,7 +221,10 @@ namespace ui
         void showFolder( const juce::String& path );
         void refreshPlacesAndListing();
         void importIncomingFiles( const juce::StringArray& paths, bool removeSourceOnSuccess = false );
-        void configureGoogleDriveFromSettings() { editGoogleDriveSource(); }
+        void configureGoogleDriveFromSettings() { showGoogleAuthQr(); }
+        void showGoogleAuthQr();
+        void showSpliceAuthQr();
+        void editWebDavSource();
         // The names of the rows in the right list, in order (the smoke test checks sorting and hidden files).
         juce::StringArray getShownNames() const;
 

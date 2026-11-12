@@ -31,6 +31,8 @@ namespace kick_ui
             ptr->setFocus( true );
             addAndMakeVisible( ptr.get() );
             ptr->onValueChanged = [this, i]( double value ) {
+                if( isApplyingValue )
+                    return;
                 auto data = juce::String( "QLINK - " ) + juce::String( i + 1 );
                 knobdata.setText( data, juce::dontSendNotification );
                 if( onknobSelection )
@@ -38,6 +40,10 @@ namespace kick_ui
 
                 if( !initialized )
                     return;
+
+                isApplyingValue = true;
+                applyValue( i, value );
+                isApplyingValue = false;
             };
         }
         label.setValueJustification( juce::Justification::centredLeft );
@@ -359,6 +365,84 @@ namespace kick_ui
         // Every knob shows the engine value again (same-titled knobs follow, the display never drifts from the engine).
         for( int i = 0; i < (int)qlinkKnobs.size(); ++i )
             refreshKnob( i );
+    }
+
+    void KnobGrid::applyValue( int knobnum, double value )
+    {
+        if( knobnum < 0 || knobnum >= (int)qlinkKnobs.size() )
+            return;
+
+        auto& ae    = mt::getAudioInterface();
+        auto* pProg = ae.getProgramDataForTrack( ae.getSelectedSequence(), indexNum );
+        auto* program = pProg ? ae.getProgram( pProg->name.get() ) : nullptr;
+        if( !program )
+            return;
+
+        const auto title = qlinkKnobs[knobnum]->getTitle();
+        if( title == "OFF" )
+            return;
+
+        const int  source = sources[knobnum];
+        const auto type   = program->type.get();
+
+        using knob_logic::Param;
+        if( source >= 0 )
+        {
+            auto info  = program->getInsertsInfo( source );
+            int  index = 0;
+            for( const auto& param : info.params )
+            {
+                if( title == param.name )
+                {
+                    program->setParameterValue( source, index, (float)value );
+                    break;
+                }
+                ++index;
+            }
+        }
+        else if( type == mt::MTProgramType::Drum || type == mt::MTProgramType::Clip || type == mt::MTProgramType::Keygroup )
+        {
+            if( isPadState )
+            {
+                const int  note = knob_logic::padNote( bankNum, padNum );
+                const auto p    = knob_logic::parsePadParam( title.toStdString() );
+                switch( p )
+                {
+                    case Param::PadLevel:
+                        program->setNoteGain( note, mt::mixlogic::midiToGain127( (int)value ) );
+                        break;
+                    case Param::PadPan: program->setNotePan( note, value ); break;
+                    case Param::PadSemi: program->setNoteSemi( note, (int)value ); break;
+                    case Param::PadFine: program->setNoteFine( note, (int)value ); break;
+                    case Param::PadMute: program->setNoteMute( note, value > 0.5 ); break;
+                    case Param::PadSolo: program->setNoteSolo( note, value > 0.5 ); break;
+                    default: break;
+                }
+            }
+            else
+            {
+                const auto p = knob_logic::parseProgramParam( title.toStdString() );
+                switch( p )
+                {
+                    case Param::Pan: program->setPan( value ); break;
+                    case Param::Level: program->setLevel( (int)value ); break;
+                    case Param::Fine: program->setFine( (int)value ); break;
+                    case Param::Semi: program->setSemi( (int)value ); break;
+                    case Param::Poly: program->setPolyphony( (int)value ); break;
+                    case Param::Mute: program->setMute( value > 0.5 ); break;
+                    case Param::Solo: program->setSolo( value > 0.5 ); break;
+                    default: break;
+                }
+            }
+        }
+
+        state = getState( knobnum + 1 );
+        repaint();
+
+        // Refresh same-titled knobs to keep displays synchronized
+        for( int i = 0; i < (int)qlinkKnobs.size(); ++i )
+            if( i != knobnum && qlinkKnobs[i]->getTitle() == title )
+                refreshKnob( i );
     }
 #undef qlinkGridHorSpacing
 #undef qlinkGridVerSpacing

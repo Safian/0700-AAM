@@ -231,6 +231,7 @@ namespace ui
     KickTableView::KickTableView( const juce::String& Name, KickTableViewProvider& Provider, juce::Colour BackgroundColor )
         : mt::MTProperties( this )
         , provider( Provider )
+        , canvas( this )
     {
         setName( Name );
         viewPort.setViewedComponent( &canvas );
@@ -240,15 +241,49 @@ namespace ui
         setHasFocusOutline( false );
     }
 
+    int KickTableView::findRowIndex( const juce::MouseEvent& event )
+    {
+        for( int i = 0; i < rowComponents.size(); ++i )
+        {
+            if( auto* comp = rowComponents[i] )
+            {
+                if( comp == event.eventComponent || comp->isParentOf( event.eventComponent )
+                    || ( event.originalComponent != nullptr && ( comp == event.originalComponent || comp->isParentOf( event.originalComponent ) ) ) )
+                    return i;
+            }
+        }
+
+        const auto localPos = event.getEventRelativeTo( &canvas ).getPosition();
+        return canvas.getRowFromY( localPos.getY() );
+    }
+
     void KickTableView::mouseDown( const juce::MouseEvent& event )
     {
-        auto viewPos  = canvas.getScreenPosition();
-        auto clickPos = event.getScreenPosition();
+        if( !enableRowSelectionFlag )
+            return;
 
-        auto Y   = clickPos.getY() - viewPos.getY();
-        auto row = canvas.getRowFromY( Y );
-        if( enableRowSelectionFlag )
-            selectRow( row < getNumRows() ? row : getSelectedRow() );
+        const int row = findRowIndex( event );
+        if( row >= 0 && row < getNumRows() )
+        {
+            selectRow( row );
+            if( onRowClicked )
+                onRowClicked( row );
+        }
+    }
+
+    void KickTableView::mouseUp( const juce::MouseEvent& event )
+    {
+        if( !enableRowSelectionFlag )
+            return;
+
+        const int dist = event.getDistanceFromDragStart();
+        const int row  = findRowIndex( event );
+
+        if( dist < 16 && row >= 0 && row < getNumRows() )
+        {
+            if( getSelectedRowOrNone() != row || !hasSelectedRow() )
+                selectRow( row );
+        }
     }
 
     std::vector<int> KickTableView::getRowNumbers( int rowCount, int state, int startX, int width, int height )
@@ -287,14 +322,9 @@ namespace ui
 
     void KickTableView::mouseDoubleClick( const juce::MouseEvent& event )
     {
-        auto viewPos  = canvas.getScreenPosition();
-        auto clickPos = event.getScreenPosition();
-
-        auto Y   = clickPos.getY() - viewPos.getY();
-        auto row = canvas.getRowFromY( Y );
-        if( rowComponents.size() > 0 )
-            if( onRowDoubleClicked && juce::isPositiveAndBelow( row, rowComponents.size() ) )
-                onRowDoubleClicked( row );
+        const int row = findRowIndex( event );
+        if( onRowDoubleClicked && juce::isPositiveAndBelow( row, getNumRows() ) )
+            onRowDoubleClicked( row );
     }
 
     void KickTableView::knobRotated( double value )
@@ -461,39 +491,46 @@ namespace ui
 
     void KickTableView::selectRow( int Row, juce::NotificationType notify )
     {
-        if( ( rowComponents.size() > 0 ) )
+        const int num = getNumRows();
+        if( num <= 0 )
+            return;
+
+        auto prevSel     = canvas.selectedRow.size() > 0 ? canvas.selectedRow.getLast() : -1;
+        auto selectedRow = juce::jlimit( 0, num - 1, Row );
+        if( selectedRow < rowComponents.size() && rowComponents[selectedRow] != nullptr && !rowComponents[selectedRow]->isEnabled() )
+            return;
+
+        if( !bEnableSelectMode )
         {
-            auto prevSel     = canvas.selectedRow.getLast();
-            auto selectedRow = juce::jlimit( 0, ( rowComponents.size() - 1 ), Row );
-            if( rowComponents[selectedRow] == nullptr || rowComponents[selectedRow]->isEnabled() )
-            {
-                if( !bEnableSelectMode )
-                {
-                    canvas.selectedRow.clear();
-                    canvas.selectedRow.addIfNotAlreadyThere( selectedRow );
-                }
-                else
-                {
-                    if( canvas.selectedRow.contains( Row ) )
-                        canvas.selectedRow.removeAllInstancesOf( Row );
-                    else
-                        canvas.selectedRow.addIfNotAlreadyThere( selectedRow );
-                }
-
-                if( isAutoScrollToSelection() )
-                    setViewPosition();
-                if( notify == juce::sendNotification )
-                {
-                    if( provider.onRowSelected && juce::isPositiveAndBelow( selectedRow, rowComponents.size() ) )
-                        provider.onRowSelected( selectedRow );
-                }
-
-                repaint();
-            }
-
-            if( prevSel != selectedRow && enableFocus )
-                setFocus();
+            canvas.selectedRow.clear();
+            canvas.selectedRow.add( selectedRow );
         }
+        else
+        {
+            if( canvas.selectedRow.contains( Row ) )
+                canvas.selectedRow.removeAllInstancesOf( Row );
+            else
+                canvas.selectedRow.add( selectedRow );
+        }
+
+        if( bSelectCursor )
+        {
+            cursorRow = canvas.cursorRow = selectedRow;
+        }
+
+        if( isAutoScrollToSelection() )
+            setViewPosition();
+        if( notify == juce::sendNotification )
+        {
+            if( provider.onRowSelected && juce::isPositiveAndBelow( selectedRow, num ) )
+                provider.onRowSelected( selectedRow );
+        }
+
+        canvas.repaint();
+        repaint();
+
+        if( prevSel != selectedRow && enableFocus )
+            setFocus();
     }
 
     void KickTableView::forEachRowComponent( std::function<void( juce::Component* )> Func )
@@ -706,8 +743,13 @@ namespace ui
 
     int KickTableView::KickComponent::getRowFromY( const int Y )
     {
-        auto row = juce::jmax( 0, ( Y - margin.getY() ) / ( rowHeight + rowSpacing ) );
-        return row;
+        const int stride = rowHeight + rowSpacing;
+        if( stride <= 0 )
+            return 0;
+        const int yOffset = Y - margin.getY();
+        if( yOffset < 0 )
+            return -1;
+        return yOffset / stride;
     }
 
     juce::Rectangle<int> KickTableView::KickComponent::getRowBounds( int Row )

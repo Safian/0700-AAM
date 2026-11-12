@@ -38,7 +38,7 @@ private:
 
     void onProgramListChanged() override;
     void visibilityChanged() override;
-    void onSelectionChange( const mt::MTSelected& Selected );
+    void onProgramSelectionChange( const mt::MTSelected& Selected ) override;
 
     //==============================================================================
     std::atomic_bool _initialized{ false };

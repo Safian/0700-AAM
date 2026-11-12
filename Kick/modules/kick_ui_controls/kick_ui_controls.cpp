@@ -63,3 +63,4 @@
 #include "source/kick_WaveRenderer.cpp"
 #include "source/kick_NoteSelector.cpp"
 #include "source/kick_IPv4Editor.cpp"
+#include "source/kick_qrcode.cpp"

@@ -320,6 +320,24 @@
       <PERFORMANCE/>
       <SEND/>
     </PROGRAM>
+    <PROGRAM name="Bass Keygroup" type="1" id="KgBass01">
+      <INSERTS/>
+      <CLIPS>
+        <CLIP keyNote="60" minNote="0" maxNote="127" samplePlay="0" layerPlay="0"
+              gain="1.00" pan="0.00">
+          <LAYERS>
+            <LAYER id="0" source="samples/MORE_GIRAFFES_bass_plait_pluck_C.wav" start="0" end="90448"
+                   semi="0" fine="0" velStart="0" velEnd="127" sliceId="SL_48"/>
+          </LAYERS>
+          <FILTER/>
+          <LFO/>
+          <AMPENV/>
+        </CLIP>
+      </CLIPS>
+      <COLOURS mode="4"/>
+      <PERFORMANCE/>
+      <SEND/>
+    </PROGRAM>
   </PROGRAMS>
   <SEQUENCES>
     <SEQUENCE id="SEQ_01" name="Sequence1" bpm="174" length="8" isMasterBPM="1">

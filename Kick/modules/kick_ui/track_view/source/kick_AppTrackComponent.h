@@ -57,6 +57,7 @@ protected:
 private:
     void updateThemeImages( bool loadOrUnload );
     void mouseDown( const juce::MouseEvent& e ) override;
+    void mouseUp( const juce::MouseEvent& e ) override;
 
     mt::MTAudioInterface&                   ae{ mt::getAudioInterface() };
     mt::MTITrackData*                       pTrack{ nullptr };
@@ -119,6 +120,7 @@ private:
     int                  trackNo;
     void                 resized() override;
 
+    void mouseDown( const juce::MouseEvent& e ) override;
     void mouseUp( const juce::MouseEvent& e ) override;
     void visibilityChanged() override;
     void updateThemeImages( bool loadOrUnload );

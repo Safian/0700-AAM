@@ -228,11 +228,14 @@ namespace ui
         void                    toggleRow( int Row, juce::NotificationType notify = juce::sendNotification );
         void                    selectAll();
 
+        void mouseDown( const juce::MouseEvent& event ) override;
+        void mouseUp( const juce::MouseEvent& event ) override;
+        void mouseDoubleClick( const juce::MouseEvent& event ) override;
+        int  findRowIndex( const juce::MouseEvent& event );
+
     private:
         void resized() override;
         void paint( juce::Graphics& g ) override;
-        void mouseDown( const juce::MouseEvent& event ) override;
-        void mouseDoubleClick( const juce::MouseEvent& event ) override;
 
         void setViewPosition();
         void updateOnViewPositionChange( KickViewport* ) override;
@@ -259,6 +262,22 @@ namespace ui
     private:
         struct KickComponent : public juce::Component
         {
+            KickTableView* owner{ nullptr };
+            explicit KickComponent( KickTableView* o = nullptr ) : owner( o ) {}
+
+            void mouseDown( const juce::MouseEvent& event ) override
+            {
+                if( owner ) owner->mouseDown( event );
+            }
+            void mouseUp( const juce::MouseEvent& event ) override
+            {
+                if( owner ) owner->mouseUp( event );
+            }
+            void mouseDoubleClick( const juce::MouseEvent& event ) override
+            {
+                if( owner ) owner->mouseDoubleClick( event );
+            }
+
             juce::Colour         outlineColor{ ui::Theme::outlineColour( 0 ) };
             juce::Colour         selOutlineColor{ ui::Theme::outlineColour( 1 ) };
             juce::Colour         backgroundColor{ ui::Theme::backgroundColour( 1 ) };

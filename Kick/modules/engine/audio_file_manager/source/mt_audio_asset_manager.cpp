@@ -133,8 +133,8 @@ namespace mt
         // Add to asset manager.
         addToAssetMgr( file, Type );
 
-        // Add to sample cache.
-        auto LengthInSeconds = ( AssetTypes::Samples == Type ) ? 5.0 : -1;
+        // Add to sample cache (unlimited length: samples/loops of any duration are preserved).
+        auto LengthInSeconds = -1.0;
         asc.add( file, LengthInSeconds );
 
         // Restore slices.
@@ -201,8 +201,8 @@ namespace mt
                     if( pathForTree != File )
                         addToAssetMgr( pathForTree, Type );
 
-                    // Add to sample cache.
-                    auto LengthInSeconds = ( AssetTypes::Samples == Type ) ? 5.0 : -1;
+                    // Add to sample cache (unlimited length).
+                    auto LengthInSeconds = -1.0;
                     asc.add( File, LengthInSeconds );
 
                     // Create slice object
@@ -330,7 +330,7 @@ namespace mt
 
     ASound::Ptr MTAudioAssetManager::getAssetSound( int Index, AssetTypes Type )
     {
-        auto LengthInSeconds = ( AssetTypes::Samples == Type ) ? 5.0 : -1;
+        auto LengthInSeconds = -1.0;
         auto asset           = getAssetName( Type, Index );
         return asset.isEmpty() ? nullptr : asc.getOrLoad( asset, LengthInSeconds );
     }

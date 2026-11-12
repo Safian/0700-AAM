@@ -129,28 +129,28 @@ namespace ui
         setSliderPos( getPixelFromDb( 60.0f ), juce::dontSendNotification );
     }
 
+    void KickGainSlider::mouseDown( const juce::MouseEvent& event )
+    {
+        isSliderDragged = true;
+        setSliderPos( event.position.getY(), juce::sendNotificationAsync );
+    }
+
     void KickGainSlider::mouseDrag( const juce::MouseEvent& event )
     {
-        if( !isSliderDragged )
-        {
-            if( bSliderKnob.contains( event.mouseDownPosition.toInt() ) )
-                isSliderDragged = true;
-        }
-        else if( event.position.getY() >= 0 )
+        if( isSliderDragged && event.position.getY() >= 0 )
         {
             setSliderPos( event.position.getY(), juce::sendNotificationAsync );
         }
     }
 
-    void KickGainSlider::mouseUp( const juce::MouseEvent& event )
+    void KickGainSlider::mouseUp( const juce::MouseEvent& /*event*/ )
     {
         isSliderDragged = false;
     }
 
-    void KickGainSlider::mouseDoubleClick( const juce::MouseEvent& event )
+    void KickGainSlider::mouseDoubleClick( const juce::MouseEvent& /*event*/ )
     {
-        if( !event.mouseWasDraggedSinceMouseDown() && event.position.getY() >= 0 )
-            setSliderPos( event.position.getY(), juce::sendNotificationAsync );
+        setSliderPos( getPixelFromDb( 0.0f ), juce::sendNotificationAsync );
     }
 
     void KickGainSlider::knobRotated( double delta )

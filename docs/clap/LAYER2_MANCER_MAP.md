@@ -22,17 +22,53 @@ To ensure clean upstream separation between real-time DSP audio engine internals
 +-----------------------------------------------------------------------+
 | LAYER 1: AudIO Real-Time Engine & ComProtocol Bridge (FYD5IVE / PR #27)|
 | - AudIO/processors/ClapInstrumentProcessor (Zero-allocation RT loop)  |
-| - Lock-free SPSC event ring buffer (incoming ComProtocol / MIDI)     |
+| - 256-slot SPSC parameter ring buffer (m_paramEventQueue: AudiomParamEvent) |
 | - Dynamic loading of native aarch64 .clap binaries from SD card       |
+| - Non-RT message-thread hooks: getPluginParamCount, queryPluginParamInfo |
 | - 4x CV/Gate modulation outputs + Hybrid analog VCF/VCA loop          |
 +-----------------------------------------------------------------------+
 ```
 
 ---
 
-## 2. Declarative `.mancer` / `.json` Profile Schema
+## 2. Open Interop `.mancer.json` v0.1 Stub Schema
 
-Instead of hardcoding parameter IDs inside the C++ audio thread, `MancerMap` allows users and sound designers to store declarative mapping files alongside `.clap` binaries in `/mnt/sdcard/Plugins/CLAP/` (or `/data/plugins/`):
+To ensure seamless Layer 1 / Layer 2 interoperability, Dream Maker 5 (@FYD5IVE) specified the Open Interop `.mancer.json` v0.1 stub schema located under `/mnt/sdcard/Plugins/CLAP/MancerMaps/`:
+
+```json
+{
+  "schema_version": "0.1-open-interop",
+  "architect": "Dream Maker 5 (@FYD5IVE)",
+  "license_notice": "Open Layer-2 UI Interop Stub. Full MancerMaps Compiler & Alch-Loop CV Matrices Copyright (c) 2026 Dream Maker 5 (@FYD5IVE).",
+  "plugin_id": "com.u-he.Zebra3",
+  "audiom_matrix_bindings": {
+    "bank_a_encoders": [
+      { "slot": "X1", "encoder_idx": 0, "clap_param_id": 1001, "range": [0.0, 1.0] },
+      { "slot": "Y1", "encoder_idx": 1, "clap_param_id": 1002, "range": [0.0, 1.0] },
+      { "slot": "X2", "encoder_idx": 2, "clap_param_id": 1003, "range": [0.0, 1.0] },
+      { "slot": "Y2", "encoder_idx": 3, "clap_param_id": 1004, "range": [0.0, 1.0] }
+    ],
+    "bank_b_encoders": [
+      { "slot": "X3", "encoder_idx": 0, "clap_param_id": 1005, "range": [0.0, 1.0] },
+      { "slot": "Y3", "encoder_idx": 1, "clap_param_id": 1006, "range": [0.0, 1.0] },
+      { "slot": "X4", "encoder_idx": 2, "clap_param_id": 1007, "range": [0.0, 1.0] },
+      { "slot": "Y4", "encoder_idx": 3, "clap_param_id": 1008, "range": [0.0, 1.0] }
+    ],
+    "expressive_bus": {
+      "touch_strip_param_id": 2001,
+      "poly_aftertouch_mod_id": 2002
+    }
+  }
+}
+```
+
+The parser in `AudIO/processors/MancerMap.hpp` binds `bank_a_encoders` (slots X1..Y2) to physical macros 0..3, `bank_b_encoders` (slots X3..Y4) to macros 4..7, and routes `expressive_bus` (`touch_strip_param_id` and `poly_aftertouch_mod_id`) to the hardware ribbon and polyphonic keybed pressure buses.
+
+---
+
+## 3. Declarative Legacy `.mancer` / `.json` Profile Schema
+
+Instead of hardcoding parameter IDs inside the C++ audio thread, `MancerMap` also supports backward-compatible user-space mapping files:
 
 ```json
 {

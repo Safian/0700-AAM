@@ -23,6 +23,8 @@
 
 AppTrackDisplay::AppTrackDisplay( int Seq, int Track )
 {
+    setInterceptsMouseClicks( true, true );
+    name.addMouseListener( this, false );
     mt::utils::addAndMakeVisible( this, name, selector, length, transpose, mute, solo, arm, monitor, level, inputmidi, levelMeter, midiPort );
 
     mt::utils::setValueFontHeight( 16, level, transpose, name );
@@ -319,6 +321,16 @@ void AppTrackDisplay::refreshSoloMute()
 void AppTrackDisplay::mouseDown( const juce::MouseEvent& e )
 {
     ui::clearFocusComponent();
+    if( track >= 0 )
+        ae.setSelectedTrack( track );
+}
+
+void AppTrackDisplay::mouseUp( const juce::MouseEvent& e )
+{
+    if( track >= 0 && ( e.mouseWasClicked() || e.getDistanceFromDragStart() < 16 ) )
+    {
+        ae.setSelectedTrack( track );
+    }
 }
 
 void AppTrackDisplay::visibilityChanged()
@@ -411,11 +423,19 @@ void AppTrackComponent::resized()
     options.setBoundsRelative( .957f, .0136f, .04f, .965f );
 }
 
+void AppTrackComponent::mouseDown( const juce::MouseEvent& e )
+{
+    const int t = track.getTrackNo();
+    if( t >= 0 )
+        mt::getAudioInterface().setSelectedTrack( t );
+}
+
 void AppTrackComponent::mouseUp( const juce::MouseEvent& e )
 {
-    if( e.mouseWasClicked() )
+    const int t = track.getTrackNo();
+    if( t >= 0 && ( e.mouseWasClicked() || e.getDistanceFromDragStart() < 16 ) )
     {
-        mt::getAudioInterface().setSelectedTrack( track.getTrackNo() );
+        mt::getAudioInterface().setSelectedTrack( t );
     }
 }
 
