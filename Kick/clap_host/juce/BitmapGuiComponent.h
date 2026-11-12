@@ -77,7 +77,8 @@ private:
     Host& host;
     BitmapGuiClient client;
     juce::Image image;
-    double scale = 1.0;
+    double scale = 1.0, baseScale = 1.0, pendingScale = 1.0; // pendingScale: a scale change already queued from paint()
+    void adoptScale(double target);
     int idleMs = 66;                   // an idle GUI is ticked at ~15 Hz (the extension asks for at least every 100 ms)
     Statistics stats;
     bool wanted = false;               // visible and open
