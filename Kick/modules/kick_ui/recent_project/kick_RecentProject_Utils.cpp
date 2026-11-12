@@ -72,6 +72,7 @@ namespace ui
     void LoadProjectAndAnimation::begin( const juce::File& project )
     {
         ++generation;
+        postLoadSwitchPending               = false;
         ui::RecentProject::isProjectLoading = true;
         proj                                = project;
         const auto key                      = project.getFullPathName().toStdString();
@@ -143,15 +144,20 @@ namespace ui
         const auto gen                      = generation;
         if( loaded )
         {
+            postLoadSwitchPending = true;
             // Let the engine's last UI updates land, then leave the animation and show the main screen.
             juce::Timer::callAfterDelay( 200, [this, gen]() {
                 if( gen != generation ) return; // a newer load started meanwhile; it owns the animation now
                 stopAnimation();
                 kick_ui::signals::sigScreenOpen( kick_ui::Screen::HomeListView );
+                postLoadSwitchPending = false;
             } );
         }
         else
+        {
+            postLoadSwitchPending = false;
             stopAnimation();
+        }
     }
 
     void LoadProjectAndAnimation::requestStartupProject()

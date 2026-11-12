@@ -31,6 +31,9 @@ namespace ui
         // auto-load off). Call once, when the Projects screen first shows.
         void requestStartupProject();
 
+        // True while startup project decision has not settled or an async project load / post-load screen switch is in flight.
+        bool isTransitionPending() const noexcept { return ui::RecentProject::isProjectLoading || !startupRequested || postLoadSwitchPending; }
+
     private:
         LoadProjectAndAnimation();
 
@@ -52,6 +55,7 @@ namespace ui
         kick_load::LoadQueue  queue; // message thread only
         unsigned              generation{ 0 };
         bool                  startupRequested{ false };
+        bool                  postLoadSwitchPending{ false };
 
         void enqueue( const juce::File& project, LoadSource source, bool createNew );
         void begin( const juce::File& project );

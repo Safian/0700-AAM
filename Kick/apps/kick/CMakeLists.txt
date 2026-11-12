@@ -58,7 +58,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 ## iOS: recent SDKs require the UIScene life cycle.
 set(KICK_IOS_PLIST_ARGS "")
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(KICK_IOS_PLIST_ARGS PLIST_TO_MERGE "<plist><dict><key>UIStatusBarHidden</key><true/><key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/><key>UISceneConfigurations</key><dict><key>UIWindowSceneSessionRoleApplication</key><array><dict><key>UISceneConfigurationName</key><string>Default Configuration</string><key>UISceneDelegateClassName</key><string>JuceAppSceneDelegate</string></dict></array></dict></dict><key>NSMicrophoneUsageDescription</key><string>Microphone access is required for audio recording and sampling.</string><key>UIFileSharingEnabled</key><true/><key>LSSupportsOpeningDocumentsInPlace</key><true/><key>UIBackgroundModes</key><array><string>audio</string></array></dict></plist>")
+    set(KICK_IOS_PLIST_ARGS PLIST_TO_MERGE "<plist><dict><key>UIStatusBarHidden</key><true/><key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/><key>UISceneConfigurations</key><dict><key>UIWindowSceneSessionRoleApplication</key><array><dict><key>UISceneConfigurationName</key><string>Default Configuration</string><key>UISceneDelegateClassName</key><string>JuceAppSceneDelegate</string></dict></array></dict></dict><key>NSMicrophoneUsageDescription</key><string>Microphone access is required for audio recording and sampling.</string><key>UIFileSharingEnabled</key><true/><key>LSSupportsOpeningDocumentsInPlace</key><true/><key>UIBackgroundModes</key><array><string>audio</string></array><key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>Kick Audio Sample</string><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>Alternate</string><key>LSItemContentTypes</key><array><string>com.microsoft.waveform-audio</string><string>public.aiff-audio</string><string>public.mp3</string><string>public.mpeg-4-audio</string><string>com.apple.coreaudio-format</string><string>org.xiph.flac</string><string>org.xiph.ogg-vorbis</string><string>hu.safian.kick.bwf</string><string>public.audio</string></array></dict><dict><key>CFBundleTypeName</key><string>MIDI File</string><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>Alternate</string><key>LSItemContentTypes</key><array><string>public.midi-audio</string></array></dict><dict><key>CFBundleTypeName</key><string>Kick Project</string><key>CFBundleTypeRole</key><string>Editor</string><key>LSHandlerRank</key><string>Owner</string><key>LSItemContentTypes</key><array><string>hu.safian.kick.project</string></array></dict></array><key>UTImportedTypeDeclarations</key><array><dict><key>UTTypeIdentifier</key><string>org.xiph.flac</string><key>UTTypeDescription</key><string>FLAC Audio</string><key>UTTypeConformsTo</key><array><string>public.audio</string></array><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>flac</string></array></dict></dict><dict><key>UTTypeIdentifier</key><string>org.xiph.ogg-vorbis</string><key>UTTypeDescription</key><string>Ogg Vorbis Audio</string><key>UTTypeConformsTo</key><array><string>public.audio</string></array><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>ogg</string></array></dict></dict><dict><key>UTTypeIdentifier</key><string>hu.safian.kick.bwf</string><key>UTTypeDescription</key><string>Broadcast Wave Audio</string><key>UTTypeConformsTo</key><array><string>com.microsoft.waveform-audio</string></array><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>bwf</string></array></dict></dict><dict><key>UTTypeIdentifier</key><string>hu.safian.kick.project</string><key>UTTypeDescription</key><string>Kick Project</string><key>UTTypeConformsTo</key><array><string>public.data</string></array><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>kickPrj</string><string>kickprj</string></array></dict></dict></array><key>CFBundleURLTypes</key><array><dict><key>CFBundleTypeRole</key><string>Editor</string><key>CFBundleURLName</key><string>hu.safian.kick</string><key>CFBundleURLSchemes</key><array><string>kick</string></array></dict></array></dict></plist>")
 endif()
 
 set(KICK_BUNDLE_ID "hu.safian.MusicTribe.Kick.dev" CACHE STRING "Application bundle identifier")
@@ -78,11 +78,20 @@ set_target_properties(${TargetName} PROPERTIES
         CXX_STANDARD                    17 
         VS_DEBUGGER_WORKING_DIRECTORY   "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND KICK_DEVELOPMENT_TEAM)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(_kick_ios_deploy "${CMAKE_XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET}")
+    if(NOT _kick_ios_deploy)
+        set(_kick_ios_deploy "16.0")
+    endif()
     set_target_properties(${TargetName} PROPERTIES
-        XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${KICK_DEVELOPMENT_TEAM}"
-        XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${_kick_ios_deploy}"
     )
+    if(KICK_DEVELOPMENT_TEAM)
+        set_target_properties(${TargetName} PROPERTIES
+            XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${KICK_DEVELOPMENT_TEAM}"
+            XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+        )
+    endif()
 endif()
 if(MSVC OR APPLE)
 # Get Targets in ${CMAKE_CURRENT_SOURCE_DIR}

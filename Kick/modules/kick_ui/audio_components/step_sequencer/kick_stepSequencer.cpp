@@ -933,8 +933,8 @@ namespace kick_ui
     void StepSequencer::resized()
     {
         header.setBoundsRelative( .0f, .0f, 1.0f, .1423f );
-        tracks.setBoundsRelative( .230, .0299f, .1956f, .0823f );
-        padName.setBoundsRelative( .4450f, .0299f, .1900f, .0823f );
+        tracks.setBoundsRelative( .275f, .0299f, .185f, .0823f );
+        padName.setBoundsRelative( .470f, .0299f, .180f, .0823f );
         bpmTempo.setBoundsRelative( .7612f, .0299f, .0724f, .0823f );
         totalBars.setBoundsRelative( .6692f, .0299f, .0724f, .0823f );
         stepControl.setBoundsRelative( .0f, .9213f, 1.0f, .1011f );

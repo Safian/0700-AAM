@@ -21,6 +21,8 @@
 
 #include "kick_ui/kick_ui.h"
 #include "kick_ui/kick_ui_grid.h"
+#include "program_edit_ui/program_edit_ui.h"
+#include <kick_clap/PluginManager.h>
 #include "hardware/source/kick_PlatformServices.h"
 #include "audio_engine/audio_engine.h"
 #include "kick_device_adapter.h"
@@ -415,6 +417,18 @@ public:
         else if( name.equalsIgnoreCase( "UndoHistory" ) ) kick_ui::UndoHistory::show();
         else if( name.equalsIgnoreCase( "SystemResources" ) ) kick_ui::KickModeHeader::showSystemResources();
         else if( name.equalsIgnoreCase( "Power" ) ) ui::power::showPowerWindow();
+        else if( name.equalsIgnoreCase( "ClapInstrument" ) )
+        {
+            auto idx = ae.createProgram( mt::MTProgramType::Plugin, "SmokeSynthy" );
+            if( auto* clapProg = dynamic_cast<mt::MTClapProgram*>( idx >= 0 ? ae.getProgram( idx ) : nullptr ) )
+            {
+                const auto instruments = kick::clap::PluginManager::getInstance().getInstrumentDescriptors();
+                if( !instruments.empty() && clapProg->getPluginSession() )
+                    clapProg->getPluginSession()->select( instruments.front() );
+                if( kick_ui::ProgramEdit::pluginOpener() )
+                    kick_ui::ProgramEdit::pluginOpener()( clapProg );
+            }
+        }
         else
         {
             fail( "unknown dialog " + name );
@@ -697,6 +711,10 @@ public:
             kick_startup::state().set( kick_startup::Step::Display, kick_startup::StepState::Skipped, "no hardware bridge" );
             kick_startup::state().set( kick_startup::Step::Midi, kick_startup::StepState::Skipped, "no hardware bridge" );
         }
+#if JUCE_IOS
+        if( !smoke )
+            sweepDocumentsInbox();
+#endif
         if( smoke ) kick_startup::state().set( kick_startup::Step::Project, kick_startup::StepState::Skipped, "smoke test" );
         if (smoke) juce::Timer::callAfterDelay(1500, [this] {
 #if KICK_APP_SMOKE_TEST
@@ -845,11 +863,117 @@ public:
             quit();
     }
 
-    void anotherInstanceStarted( const juce::String& /*commandLine*/ ) override
+    void anotherInstanceStarted( const juce::String& commandLine ) override
     {
-        // When another instance of the app is launched while this one is running, this method is invoked,
-        // and the commandLine parameter tells you what the other instance's command-line arguments were.
+        if( commandLine.trim().isEmpty() )
+            return;
+
+        juce::StringArray tokens;
+        tokens.addTokens( commandLine, true );
+        for( auto& t : tokens )
+        {
+            t = t.trim().unquoted();
+            if( t.startsWith( "file://" ) )
+                t = juce::URL( t ).getLocalFile().getFullPathName();
+            if( t.isEmpty() )
+                continue;
+            const juce::File f( t );
+            if( !f.exists() )
+                continue;
+            const bool fromTempStage = t.contains( "kick_incoming_" ) || t.contains( "/Documents/Inbox/" );
+            pendingIncoming_.push_back( { f.getFullPathName(), fromTempStage } );
+        }
+        processPendingIncoming();
     }
+
+    void resumed() override
+    {
+#if JUCE_IOS
+        sweepDocumentsInbox();
+        juce::MessageManager::callAsync( [] {
+            if( auto* fb = dynamic_cast<ui::FileBrowser*>( kick_ui::KickHome::Instance().findScreen( kick_ui::Screen::MenuFileBrowser ) ) )
+                fb->refreshPlacesAndListing();
+        } );
+#endif
+    }
+
+private:
+    struct PendingIncomingItem
+    {
+        juce::String path;
+        bool         removeSource{ false };
+    };
+    std::vector<PendingIncomingItem> pendingIncoming_;
+    bool                             incomingRetryScheduled_{ false };
+
+    void sweepDocumentsInbox()
+    {
+#if JUCE_IOS
+        const auto inbox = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Inbox" );
+        if( !inbox.isDirectory() )
+            return;
+        for( auto iter : juce::RangedDirectoryIterator( inbox, false, "*", juce::File::findFilesAndDirectories ) )
+        {
+            const auto f = iter.getFile();
+            if( !f.getFileName().startsWithChar( '.' ) )
+                pendingIncoming_.push_back( { f.getFullPathName(), true } );
+        }
+        if( !pendingIncoming_.empty() )
+            processPendingIncoming();
+#endif
+    }
+
+    void processPendingIncoming()
+    {
+        if( pendingIncoming_.empty() )
+            return;
+        if( !kick_ui::KickHome::Instance().areLazyScreensReady()
+            || ui::LoadProjectAndAnimation::getInstance().isTransitionPending()
+            || kick_ui::KickHome::Instance().getCurrentScreen() == kick_ui::Screen::Invalid )
+        {
+            if( !incomingRetryScheduled_ )
+            {
+                incomingRetryScheduled_ = true;
+                juce::Timer::callAfterDelay( 250, [this] {
+                    incomingRetryScheduled_ = false;
+                    processPendingIncoming();
+                } );
+            }
+            return;
+        }
+
+        auto* fb = dynamic_cast<ui::FileBrowser*>( kick_ui::KickHome::Instance().findScreen( kick_ui::Screen::MenuFileBrowser ) );
+        if( fb == nullptr )
+            return;
+
+        juce::StringArray tempPaths, keepPaths;
+        juce::Array<juce::File> cleanupTempDirs;
+        for( const auto& item : pendingIncoming_ )
+        {
+            if( item.removeSource )
+            {
+                tempPaths.add( item.path );
+                const juce::File pDir = juce::File( item.path ).getParentDirectory();
+                if( pDir.getFileName().startsWith( "kick_incoming_" ) )
+                    cleanupTempDirs.addIfNotAlreadyThere( pDir );
+            }
+            else
+                keepPaths.add( item.path );
+        }
+        pendingIncoming_.clear();
+
+        if( !tempPaths.isEmpty() )
+            fb->importIncomingFiles( tempPaths, true );
+        if( !keepPaths.isEmpty() )
+            fb->importIncomingFiles( keepPaths, false );
+        for( const auto& d : cleanupTempDirs )
+            d.deleteRecursively();
+
+        if( kick_ui::KickHome::Instance().getCurrentScreen() != kick_ui::Screen::MenuFileBrowser && ( !tempPaths.isEmpty() || !keepPaths.isEmpty() ) )
+            kick_ui::signals::sigScreenOpen( kick_ui::Screen::MenuFileBrowser );
+    }
+
+public:
 
     //==============================================================================
     // This class implements the desktop window that contains an instance of our MainComponent class.

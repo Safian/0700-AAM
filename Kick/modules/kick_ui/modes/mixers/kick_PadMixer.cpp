@@ -243,7 +243,7 @@ namespace kick_ui
         header.setBounds( b.removeFromTop( ui::layout::header.getHeight() ) );
         padHeaderComp.setBoundsRelative( 0.225f, 0.0503f, 0.3620f, 0.0636f );
         padEnabler.setBoundsRelative( 0.8063f, 0.0299f, 0.0430f, 0.0824f );
-        programLabel.setBoundsRelative( .225f, 0.0000f, .0648f, .0583f );
+        programLabel.setBoundsRelative( .225f, 0.0000f, .100f, .0583f );
         trackLabel.setBoundsRelative( .424f, 0.0000f, .0648f, .0583f );
         sampleAssign.setBoundsRelative( .685f, .0299f, .1174f, .0824f );
 
