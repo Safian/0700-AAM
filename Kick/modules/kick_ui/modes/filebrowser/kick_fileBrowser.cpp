@@ -114,7 +114,9 @@ namespace ui
                         mt::utils::exitDialog( this, UI::APPLY );
                     };
                 };
+#if JUCE_IOS || JUCE_MAC
                 setup( googleBtn, Choice::GoogleDrive );
+#endif
 #if JUCE_IOS
                 setup( filesBtn, Choice::FilesImport );
 #endif
@@ -126,7 +128,9 @@ namespace ui
             {
                 auto area = getLocalBounds().reduced( 28, 18 );
                 std::vector<KickButton*> rows;
+#if JUCE_IOS || JUCE_MAC
                 rows.push_back( &googleBtn );
+#endif
 #if JUCE_IOS
                 rows.push_back( &filesBtn );
 #endif
@@ -144,7 +148,9 @@ namespace ui
             }
 
         private:
+#if JUCE_IOS || JUCE_MAC
             KickButton googleBtn{ "CloudGoogle", "Google Drive (Account / Link)" };
+#endif
 #if JUCE_IOS
             KickButton filesBtn{ "CloudFiles", "Import from Files / Drive App" };
 #endif
@@ -2094,7 +2100,11 @@ namespace ui
         sourcePlaces.clear();
         auto& cs = mt::getSettings().cloudSources;
         const bool spliceEnabled = cs.enableSplice.get();
+#if JUCE_IOS || JUCE_MAC
         const bool gdriveEnabled = cs.enableGoogleDrive.get();
+#else
+        const bool gdriveEnabled = false;
+#endif
         const bool webdavEnabled = cs.enableWebDav.get();
 
         // 1. Splice Place (auto-discovers Splice folder under Documents / Samples / Home / configured path)
@@ -2448,7 +2458,9 @@ namespace ui
                     switch( chosen )
                     {
                         case CloudSourcePopup::Choice::GoogleDrive:
+#if JUCE_IOS || JUCE_MAC
                             safeThis->editGoogleDriveSource();
+#endif
                             break;
                         case CloudSourcePopup::Choice::FilesImport:
                             safeThis->statusBar.setBoxInfo( "Choose audio files from Files / Google Drive..." );
