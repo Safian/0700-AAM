@@ -224,6 +224,7 @@ namespace ui
         void configureGoogleDriveFromSettings() { showGoogleAuthQr(); }
         void showGoogleAuthQr();
         void showSpliceAuthQr();
+        void editWebDavSource();
         // The names of the rows in the right list, in order (the smoke test checks sorting and hidden files).
         juce::StringArray getShownNames() const;
 
@@ -360,7 +361,6 @@ namespace ui
         void editGoogleDriveSource();
         void startGoogleOAuthSignIn( const std::string& clientId, const std::string& clientSecret, const juce::String& emailHint, const std::string& existingId );
         void finishGoogleDriveSourceSetup( const fileSource::SourceConfig& cfg, const std::string& secretText, const juce::String& statusMsg );
-        void editWebDavSource();
         void editLocalSource();
         juce::File findBestSpliceDirectory() const;
         juce::Component* remoteCell( int row, juce::Component* existing );

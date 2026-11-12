@@ -82,19 +82,26 @@ namespace ui
                 st.spliceConnected = true;
             }
             juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
-            juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
             std::vector<std::string> roots = {
                 docs.getFullPathName().toStdString(),
                 docs.getChildFile( "Kick" ).getFullPathName().toStdString(),
-                home.getFullPathName().toStdString(),
-#if JUCE_LINUX || __linux__
-                "/data",
-                "/media/az01-internal-sd",
+#if !JUCE_LINUX && !__linux__
+                juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getFullPathName().toStdString(),
+#else
                 "/sdcard",
+                "/sdcard/Splice",
+                "/media/az01-internal-sd",
+                "/media/az01-internal-sd/Splice",
+                "/media/az01-internal-sd/MPC Documents/Splice",
+                "/data",
 #endif
             };
             juce::String curPath = mt::getSettings().cloudSources.splicePath.get();
+#if JUCE_LINUX || __linux__
+            std::string fallback = juce::File( "/sdcard/Splice" ).isDirectory() ? "/sdcard/Splice" : docs.getChildFile( "Splice" ).getFullPathName().toStdString();
+#else
             std::string fallback = docs.getChildFile( "Splice" ).getFullPathName().toStdString();
+#endif
             std::string resolved = kick_incoming::resolveSpliceDir( curPath.toStdString(), roots, fallback );
             st.spliceFolder = juce::String::fromUTF8( resolved.c_str() );
             juce::File sdir( st.spliceFolder );
@@ -159,19 +166,26 @@ namespace ui
         titleLabel.setText( "SPLICE SOUND SYNC", juce::dontSendNotification );
 
         juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
-        juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
         std::vector<std::string> roots = {
             docs.getFullPathName().toStdString(),
             docs.getChildFile( "Kick" ).getFullPathName().toStdString(),
-            home.getFullPathName().toStdString(),
-#if JUCE_LINUX || __linux__
-            "/data",
-            "/media/az01-internal-sd",
+#if !JUCE_LINUX && !__linux__
+            juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getFullPathName().toStdString(),
+#else
             "/sdcard",
+            "/sdcard/Splice",
+            "/media/az01-internal-sd",
+            "/media/az01-internal-sd/Splice",
+            "/media/az01-internal-sd/MPC Documents/Splice",
+            "/data",
 #endif
         };
         juce::String curPath = mt::getSettings().cloudSources.splicePath.get();
+#if JUCE_LINUX || __linux__
+        std::string fallback = juce::File( "/sdcard/Splice" ).isDirectory() ? "/sdcard/Splice" : docs.getChildFile( "Splice" ).getFullPathName().toStdString();
+#else
         std::string fallback = docs.getChildFile( "Splice" ).getFullPathName().toStdString();
+#endif
         std::string resolved = kick_incoming::resolveSpliceDir( curPath.toStdString(), roots, fallback );
         juce::File spliceDir( juce::String::fromUTF8( resolved.c_str() ) );
         if( !spliceDir.exists() )

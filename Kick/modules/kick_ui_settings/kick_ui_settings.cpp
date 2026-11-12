@@ -112,6 +112,10 @@ namespace kick_ui
             if( onConfigCloudPaths )
                 onConfigCloudPaths();
         };
+        pCloud->onConfigWebDav = [this]() {
+            if( onConfigWebDav )
+                onConfigWebDav();
+        };
         pViews.emplace_back( std::move( pCloud ) );
 
         // Add selector buttons...

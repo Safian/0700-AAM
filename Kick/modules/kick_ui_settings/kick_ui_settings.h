@@ -78,6 +78,7 @@ namespace kick_ui
         void paint( juce::Graphics& g ) override;
 
         std::function<void()>      onConfigCloudPaths;
+        std::function<void()>      onConfigWebDav;
         std::function<void( int )> onOpenCloudAuth;
 
     private:

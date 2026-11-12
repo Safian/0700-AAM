@@ -274,20 +274,21 @@ namespace kick_incoming
                                          const std::string&              fallback = {} )
     {
         std::error_code ec;
-        if( !explicitPath.empty() )
+        auto isMisleadingRoot = []( const std::string& path ) {
+            return path == "/root/Splice" || path == "/root" || path.rfind( "/root/", 0 ) == 0;
+        };
+
+        if( !explicitPath.empty() && !isMisleadingRoot( explicitPath ) )
         {
             const fs::path p( explicitPath );
             if( fs::exists( p, ec ) && fs::is_directory( p, ec ) )
-            {
-                if( !fs::is_empty( p, ec ) || explicitPath != "/root/Splice" )
-                    return p.string();
-            }
+                return p.string();
         }
 
         std::string firstExisting;
         for( const auto& root : candidateRoots )
         {
-            if( root.empty() )
+            if( root.empty() || isMisleadingRoot( root ) )
                 continue;
             fs::path p = fs::path( root );
             if( p.filename() != "Splice" )
@@ -304,10 +305,12 @@ namespace kick_incoming
         if( !firstExisting.empty() )
             return firstExisting;
 
-        if( !explicitPath.empty() && explicitPath != "/root/Splice" )
+        if( !explicitPath.empty() && !isMisleadingRoot( explicitPath ) )
             return explicitPath;
 
 #if JUCE_LINUX || __linux__
+        if( fs::exists( "/sdcard/Splice", ec ) && fs::is_directory( "/sdcard/Splice", ec ) )
+            return "/sdcard/Splice";
         if( fs::exists( "/sdcard", ec ) && fs::is_directory( "/sdcard", ec ) )
             return "/sdcard/Splice";
 #endif

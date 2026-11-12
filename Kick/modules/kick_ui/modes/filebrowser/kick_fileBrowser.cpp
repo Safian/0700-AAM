@@ -2073,8 +2073,10 @@ namespace ui
             docs.getChildFile( "samples" ).getFullPathName().toStdString(),
             docs.getChildFile( "Kick/samples" ).getFullPathName().toStdString(),
             ae.getInternalDir().getFullPathName().toStdString(),
+#if !JUCE_LINUX && !__linux__
             home.getFullPathName().toStdString(),
             mus.getFullPathName().toStdString(),
+#endif
 #if JUCE_LINUX || __linux__
             "/sdcard",
             "/sdcard/Splice",
@@ -2936,11 +2938,7 @@ namespace ui
                     editing = true;
                 }
         juce::Component::SafePointer<FileBrowser> safeThis( this );
-#if JUCE_IOS
         const auto                                initial = editing ? juce::String::fromUTF8( cfg.location.c_str() ) : findBestSpliceDirectory().getFullPathName();
-#else
-        const auto                                initial = editing ? juce::String::fromUTF8( cfg.location.c_str() ) : juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getChildFile( "Splice" ).getFullPathName();
-#endif
         project_actions::askText( editing ? "FOLDER PATH (EMPTY = REMOVE)" : "FOLDER PATH", initial, [safeThis, cfg, editing]( juce::String path ) mutable {
             if( safeThis == nullptr )
                 return;

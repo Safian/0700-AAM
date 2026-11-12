@@ -12,6 +12,7 @@ namespace kick_ui
 
         std::function<void( int service )> onOpenCloudAuth;
         std::function<void()>              onConfigCloudPaths;
+        std::function<void()>              onConfigWebDav;
 
         void refresh() override;
         void setupHeader( kick_ui::KickModeHeader& Hdr ) override;

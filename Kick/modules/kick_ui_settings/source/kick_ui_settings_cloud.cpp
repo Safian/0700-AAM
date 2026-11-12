@@ -67,8 +67,14 @@ namespace kick_ui
 
         btnGooglePath.onClick = [this]() {
             juce::String initGdrive = settings.cloudSources.googleDrivePath.get();
-            if( initGdrive.isEmpty() )
+            if( initGdrive.isEmpty() || initGdrive.contains( "/root" ) )
+            {
+#if JUCE_LINUX || __linux__
+                initGdrive = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Google Drive" ).getFullPathName();
+#else
                 initGdrive = juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getChildFile( "Google Drive" ).getFullPathName();
+#endif
+            }
             ui::project_actions::askText( "GOOGLE DRIVE FOLDER PATH", initGdrive, [this]( juce::String path ) {
                 settings.cloudSources.googleDrivePath   = path.trim();
                 settings.cloudSources.enableGoogleDrive = true;
@@ -88,8 +94,14 @@ namespace kick_ui
 
         btnSplicePath.onClick = [this]() {
             juce::String curPath = settings.cloudSources.splicePath.get();
-            if( curPath.isEmpty() )
+            if( curPath.isEmpty() || curPath.contains( "/root" ) )
+            {
+#if JUCE_LINUX || __linux__
+                curPath = juce::File( "/sdcard/Splice" ).isDirectory() ? "/sdcard/Splice" : juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Splice" ).getFullPathName();
+#else
                 curPath = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Splice" ).getFullPathName();
+#endif
+            }
             ui::project_actions::askText( "SPLICE FOLDER PATH", curPath, [this]( juce::String path ) {
                 path = path.trim();
                 settings.cloudSources.splicePath   = path;
@@ -105,8 +117,8 @@ namespace kick_ui
         };
 
         btnWebDavConfig.onClick = [this]() {
-            if( onConfigCloudPaths )
-                onConfigCloudPaths();
+            if( onConfigWebDav )
+                onConfigWebDav();
         };
 
         updateStatusDisplay();
@@ -145,12 +157,12 @@ namespace kick_ui
         toggleSplice.setToggleState( settings.cloudSources.enableSplice.get(), juce::dontSendNotification );
 
         juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
-        juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
         std::vector<std::string> roots = {
             docs.getFullPathName().toStdString(),
             docs.getChildFile( "Kick" ).getFullPathName().toStdString(),
-            home.getFullPathName().toStdString(),
-#if JUCE_LINUX || __linux__
+#if !JUCE_LINUX && !__linux__
+            juce::File::getSpecialLocation( juce::File::userHomeDirectory ).getFullPathName().toStdString(),
+#else
             "/sdcard",
             "/sdcard/Splice",
             "/media/az01-internal-sd",
@@ -159,7 +171,11 @@ namespace kick_ui
 #endif
         };
         juce::String curPath = settings.cloudSources.splicePath.get();
+#if JUCE_LINUX || __linux__
+        std::string fallback = juce::File( "/sdcard/Splice" ).isDirectory() ? "/sdcard/Splice" : docs.getChildFile( "Splice" ).getFullPathName().toStdString();
+#else
         std::string fallback = docs.getChildFile( "Splice" ).getFullPathName().toStdString();
+#endif
         std::string resolved = kick_incoming::resolveSpliceDir( curPath.toStdString(), roots, fallback );
         juce::File sdir( juce::String::fromUTF8( resolved.c_str() ) );
         if( curPath != sdir.getFullPathName() )
