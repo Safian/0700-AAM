@@ -143,7 +143,8 @@ namespace kick_ui
     {
         auto displayWidth = getWidth();
         auto isPadEnabled = displayWidth > widthDiff;
-        panSlider.setSliderStyle( isPadEnabled ? juce::Slider::LinearBar : juce::Slider::Rotary );
+        panSlider.setSliderStyle( isPadEnabled ? juce::Slider::LinearBar : juce::Slider::RotaryHorizontalVerticalDrag );
+        panSlider.setMouseDragSensitivity( 200 );
         padName.setBoundsRelative( isPadEnabled ? .0098f : .0172f, .0934f, isPadEnabled ? .1581f : .2758f, .1308f );
         nameLabel.setBoundsRelative( isPadEnabled ? .0098f : .0172f, .2803f, isPadEnabled ? .1581f : .2758f, .4112f );
         levelSlider.setBoundsRelative( isPadEnabled ? .1877f : .3275f, .0934f, isPadEnabled ? .3517f : .4138f, .8411f );

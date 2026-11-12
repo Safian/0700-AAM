@@ -43,6 +43,7 @@ namespace kick_ui
         void refreshAll();
         void setRow( int row ); // highlighted row of four Q-Links (0..3)
         void setValues( int knobnum, int value );
+        void applyValue( int knobnum, double value );
         void setPadState( bool State );
         void setPadIndex( int bankIndex, int padIndex );
         void setIndex( int index );
@@ -56,6 +57,7 @@ namespace kick_ui
         mt::KickKnobControl&                         knob{ mt::getSettings().knobControl };
 
         bool          initialized   = false;
+        bool          isApplyingValue = false;
         bool          screenClicked = true;
         int           selectedRow, selectedColumn{ -1 };
         int           state{ 0 };

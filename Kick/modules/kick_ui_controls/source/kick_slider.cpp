@@ -158,10 +158,11 @@ namespace ui
     /////////////////////////
 
     KickRotary::KickRotary( const juce::String& Title, juce::Slider::TextEntryBoxPosition TextBoxPos, bool ShowValue )
-        : KickSlider( Title, juce::Slider::Rotary, TextBoxPos )
+        : KickSlider( Title, juce::Slider::RotaryHorizontalVerticalDrag, TextBoxPos )
     {
         showTitle( true, juce::Justification::centred );
         showValue( ShowValue, juce::Justification::centred, TextBoxPos );
+        setMouseDragSensitivity( 200 );
     }
 
     /////////////////////////

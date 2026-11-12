@@ -369,6 +369,42 @@ namespace ui
         }
     }
 
+    void KickTempo::mouseDown( const juce::MouseEvent& /*event*/ )
+    {
+        valueOnMouseDown = value;
+        isDragging       = false;
+    }
+
+    void KickTempo::mouseDrag( const juce::MouseEvent& event )
+    {
+        if( !isEnabled() || isEditing )
+            return;
+
+        int deltaY = event.getDistanceFromDragStartY();
+        if( !isDragging && std::abs( deltaY ) >= 4 )
+            isDragging = true;
+
+        if( isDragging )
+        {
+            int dragDelta = -deltaY;
+            double steps = (double)dragDelta / 5.0; // 5 pixels per 1 BPM
+            int newVal = juce::jlimit( min, max, (int)( valueOnMouseDown + steps * step ) );
+            if( newVal != value )
+                setValue( newVal, juce::sendNotificationAsync );
+        }
+    }
+
+    void KickTempo::mouseUp( const juce::MouseEvent& )
+    {
+        isDragging = false;
+    }
+
+    void KickTempo::mouseDoubleClick( const juce::MouseEvent& )
+    {
+        if( !isDragging )
+            showEditor();
+    }
+
     void KickTempo::paint( juce::Graphics& g )
     {
         auto b = getLocalBounds();

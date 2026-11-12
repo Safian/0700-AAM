@@ -160,9 +160,14 @@ namespace ui
     private:
         void showEditor();
         void paint( juce::Graphics& g ) override;
-        void mouseDoubleClick( const juce::MouseEvent& /*e*/ ) override { showEditor(); }
+        void mouseDown( const juce::MouseEvent& event ) override;
+        void mouseDrag( const juce::MouseEvent& event ) override;
+        void mouseUp( const juce::MouseEvent& event ) override;
+        void mouseDoubleClick( const juce::MouseEvent& /*e*/ ) override;
 
     private:
+        bool isDragging{ false };
+        int  valueOnMouseDown{ 0 };
         bool isEditing{ false };
         int  min{ (int)BPM::MIN };
         int  max{ (int)BPM::MAX };
