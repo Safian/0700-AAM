@@ -585,5 +585,8 @@ add_executable(kick-google-drive-helper-tests GoogleDriveHelperTests.cpp)
 add_test(NAME kick-google-drive-helper COMMAND kick-google-drive-helper-tests)
 set_tests_properties(kick-google-drive-helper PROPERTIES TIMEOUT 10)
 
-
+# Local network scanner & WebDAV discovery; JUCE-free header only.
+add_executable(kick-network-scanner-tests NetworkScannerTests.cpp)
+add_test(NAME kick-network-scanner COMMAND kick-network-scanner-tests)
+set_tests_properties(kick-network-scanner PROPERTIES TIMEOUT 10)
 

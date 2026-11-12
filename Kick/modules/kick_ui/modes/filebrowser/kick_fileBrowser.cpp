@@ -99,7 +99,7 @@ namespace ui
         class CloudSourcePopup : public juce::Component
         {
         public:
-            enum class Choice { None = 0, GoogleDrive, FilesImport, Splice, WebDav };
+            enum class Choice { None = 0, ScanNetwork, GoogleDrive, FilesImport, Splice, WebDav };
             Choice selected{ Choice::None };
 
             CloudSourcePopup()
@@ -114,6 +114,7 @@ namespace ui
                         mt::utils::exitDialog( this, UI::APPLY );
                     };
                 };
+                setup( scanBtn, Choice::ScanNetwork );
 #if JUCE_IOS || JUCE_MAC
                 setup( googleBtn, Choice::GoogleDrive );
 #endif
@@ -128,6 +129,7 @@ namespace ui
             {
                 auto area = getLocalBounds().reduced( 28, 18 );
                 std::vector<KickButton*> rows;
+                rows.push_back( &scanBtn );
 #if JUCE_IOS || JUCE_MAC
                 rows.push_back( &googleBtn );
 #endif
@@ -148,6 +150,7 @@ namespace ui
             }
 
         private:
+            KickButton scanBtn{ "CloudScan", "Scan Network (Mac / NAS)" };
 #if JUCE_IOS || JUCE_MAC
             KickButton googleBtn{ "CloudGoogle", "Google Drive (Account / Link)" };
 #endif
@@ -2457,6 +2460,9 @@ namespace ui
                         return;
                     switch( chosen )
                     {
+                        case CloudSourcePopup::Choice::ScanNetwork:
+                            safeThis->scanNetworkSources();
+                            break;
                         case CloudSourcePopup::Choice::GoogleDrive:
 #if JUCE_IOS || JUCE_MAC
                             safeThis->editGoogleDriveSource();
@@ -2869,6 +2875,50 @@ namespace ui
                     if( idx >= 0 )
                         safeThis->showPlace( idx, true );
                 } );
+            } );
+        } );
+    }
+
+    void FileBrowser::scanNetworkSources()
+    {
+        if( !hub )
+            return;
+        statusBar.setBoxInfo( "Scanning local network for Mac / NAS shares..." );
+        juce::Component::SafePointer<FileBrowser> safeThis( this );
+        listPool.addJob( [safeThis]() {
+            auto found = fileSource::discovery::scanLocalWebDavServers( 300 );
+            juce::MessageManager::callAsync( [safeThis, found]() mutable {
+                if( safeThis == nullptr )
+                    return;
+                if( found.empty() )
+                {
+                    safeThis->statusBar.setBoxInfo( "No network shares found. Enter URL manually." );
+                    safeThis->editWebDavSource();
+                    return;
+                }
+
+                const auto ds = found.front();
+                fileSource::SourceConfig cfg;
+                cfg.type     = "webdav";
+                cfg.id       = "mac-share";
+                cfg.name     = ds.name.empty() ? "Mac Share" : ds.name;
+                cfg.location = ds.url;
+                cfg.auth     = "basic";
+
+                if( !safeThis->hub->upsertWebDav( cfg, "" ) )
+                {
+                    safeThis->statusBar.setBoxInfo( "Could not map network share" );
+                    return;
+                }
+                safeThis->statusBar.setBoxInfo( "Connected to " + juce::String::fromUTF8( cfg.name.c_str() ) );
+                safeThis->leaveSource();
+                safeThis->refreshSourceRows();
+                int idx = -1;
+                for( int i = 0; i < static_cast<int>( safeThis->shownPlaces.size() ); ++i )
+                    if( safeThis->shownPlaces[static_cast<size_t>( i )].kind == Place::Kind::Source && safeThis->shownPlaces[static_cast<size_t>( i )].path == juce::String::fromUTF8( cfg.id.c_str() ) )
+                        idx = i;
+                if( idx >= 0 )
+                    safeThis->showPlace( idx, true );
             } );
         } );
     }
