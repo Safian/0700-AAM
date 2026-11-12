@@ -2108,7 +2108,7 @@ namespace ui
 #else
         const bool gdriveEnabled = false;
 #endif
-        const bool webdavEnabled = cs.enableWebDav.get();
+        const bool webdavEnabled = cs.enableWebDav.get() || ( hub != nullptr && !hub->allConfigs().empty() );
 
         // 1. Splice Place (auto-discovers Splice folder under Documents / Samples / Home / configured path)
         if( spliceEnabled )
@@ -2861,6 +2861,7 @@ namespace ui
                     }
                     cfg.type = "webdav";
                     cfg.auth = "basic";
+                    mt::getSettings().cloudSources.enableWebDav = true;
                     if( !safeThis->hub->upsertWebDav( cfg, pass.toStdString() ) )
                     {
                         safeThis->statusBar.setBoxInfo( "Could not save the WebDAV location" );
@@ -2904,6 +2905,7 @@ namespace ui
                 cfg.name     = ds.name.empty() ? "Mac Share" : ds.name;
                 cfg.location = ds.url;
                 cfg.auth     = "basic";
+                mt::getSettings().cloudSources.enableWebDav = true;
 
                 if( !safeThis->hub->upsertWebDav( cfg, "" ) )
                 {
