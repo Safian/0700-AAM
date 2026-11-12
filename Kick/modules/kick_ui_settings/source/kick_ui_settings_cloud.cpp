@@ -27,13 +27,22 @@ namespace kick_ui
 
         addComponent( btnGoogleLogin, 1, 0 );
         addComponent( btnGoogleDisconnect, 1, 1 );
+#if !JUCE_IOS
         addComponent( btnGooglePath, 1, 2 );
+#endif
 
         addComponent( toggleSplice, 2, 0 );
         addComponent( lblSplicePath, 2, 1, 1, 3 );
 
         addComponent( btnSpliceQr, 3, 0 );
+#if !JUCE_IOS
         addComponent( btnSplicePath, 3, 1 );
+#endif
+
+#if JUCE_IOS
+        btnGoogleLogin.setButtonText( "Sign In..." );
+        btnSpliceQr.setButtonText( "Splice Info..." );
+#endif
 
         addComponent( toggleWebDav, 4, 0 );
         addComponent( btnWebDavConfig, 4, 1 );
@@ -66,6 +75,7 @@ namespace kick_ui
         };
 
         btnGooglePath.onClick = [this]() {
+#if !JUCE_IOS
             juce::String initGdrive = settings.cloudSources.googleDrivePath.get();
             if( initGdrive.isEmpty() || initGdrive.contains( "/root" ) )
             {
@@ -80,6 +90,7 @@ namespace kick_ui
                 settings.cloudSources.enableGoogleDrive = true;
                 updateStatusDisplay();
             } );
+#endif
         };
 
         toggleSplice.onClick = [this]() {
@@ -93,6 +104,13 @@ namespace kick_ui
         };
 
         btnSplicePath.onClick = [this]() {
+#if JUCE_IOS
+            auto spliceDir = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Splice" );
+            spliceDir.createDirectory();
+            settings.cloudSources.splicePath   = spliceDir.getFullPathName();
+            settings.cloudSources.enableSplice = true;
+            updateStatusDisplay();
+#else
             juce::String curPath = settings.cloudSources.splicePath.get();
             if( curPath.isEmpty() || curPath.contains( "/root" ) )
             {
@@ -110,6 +128,7 @@ namespace kick_ui
                     juce::File( path ).createDirectory();
                 updateStatusDisplay();
             } );
+#endif
         };
 
         toggleWebDav.onClick = [this]() {
@@ -151,7 +170,13 @@ namespace kick_ui
             if( localUser.isNotEmpty() )
                 lblGoogleUser.setText( "Status: Mounted Locally (" + localUser + ")", juce::dontSendNotification );
             else
+            {
+#if JUCE_IOS
+                lblGoogleUser.setText( "Status: Not Signed In (Tap 'Sign In...' to connect)", juce::dontSendNotification );
+#else
                 lblGoogleUser.setText( "Status: Not Signed In (Tap 'QR Sign In' to connect)", juce::dontSendNotification );
+#endif
+            }
         }
 
         toggleSplice.setToggleState( settings.cloudSources.enableSplice.get(), juce::dontSendNotification );
@@ -198,7 +223,14 @@ namespace kick_ui
         }
         else
         {
+#if JUCE_IOS
+            int numSamples = 0;
+            if( sdir.isDirectory() )
+                numSamples = sdir.getNumberOfChildFiles( juce::File::findFiles | juce::File::ignoreHiddenFiles );
+            lblSplicePath.setText( "Location: Files app > On My iPhone > Kick > Splice" + ( numSamples > 0 ? " (" + juce::String( numSamples ) + " samples)" : "" ), juce::dontSendNotification );
+#else
             lblSplicePath.setText( "Folder: " + sdir.getFullPathName(), juce::dontSendNotification );
+#endif
         }
 
         toggleWebDav.setToggleState( settings.cloudSources.enableWebDav.get(), juce::dontSendNotification );

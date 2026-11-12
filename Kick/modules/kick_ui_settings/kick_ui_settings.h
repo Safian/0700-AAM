@@ -85,10 +85,10 @@ namespace kick_ui
         kick_ui::KickModeHeader header{ "Preferences", "Icon_SettingsScreen" };
         juce::Rectangle<int>    bCont;
 
-        std::array<juce::String, 9>                     selectorStrings{ "Info", "Project Defaults", "Hardware", "MIDI", "CV", "Ethernet", "WiFi", "Plugins", "Cloud" };
-        std::array<ui::KickToggleButton, 9>             selectors;
-        std::vector<std::unique_ptr<SettingsInterface>> pViews;
-        SettingsInterface*                              pView{ nullptr };
+        std::vector<juce::String>                          selectorStrings;
+        std::vector<std::unique_ptr<ui::KickToggleButton>> selectors;
+        std::vector<std::unique_ptr<SettingsInterface>>    pViews;
+        SettingsInterface*                                 pView{ nullptr };
 
         void showView( int Index );
         void resized() override;

@@ -2538,6 +2538,14 @@ namespace ui
 
     void FileBrowser::editSpliceSource()
     {
+#if JUCE_IOS
+        auto spliceDir = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Splice" );
+        spliceDir.createDirectory();
+        mt::getSettings().cloudSources.splicePath   = spliceDir.getFullPathName();
+        mt::getSettings().cloudSources.enableSplice = true;
+        refreshPlacesAndListing();
+        statusBar.setBoxInfo( "Splice folder: Files app > Kick > Splice" );
+#else
         juce::Component::SafePointer<FileBrowser> safeThis( this );
         juce::String currentPath = mt::getSettings().cloudSources.splicePath.get();
         if( currentPath.isEmpty() )
@@ -2553,6 +2561,7 @@ namespace ui
             safeThis->refreshPlacesAndListing();
             safeThis->statusBar.setBoxInfo( "Splice source updated" );
         } );
+#endif
     }
 
     void FileBrowser::finishGoogleDriveSourceSetup( const fileSource::SourceConfig& cfg, const std::string& secretText, const juce::String& statusMsg )

@@ -138,6 +138,33 @@ namespace ui
         {
             titleLabel.setText( "GOOGLE DRIVE SIGN-IN", juce::dontSendNotification );
             manualBtn.setVisible( true );
+#if JUCE_IOS
+            manualBtn.setButtonText( "Open in Safari" );
+            manualBtn.onClick = [safeThis]() {
+                if( safeThis && safeThis->pairingServer )
+                {
+                    int port = safeThis->pairingServer->getPort();
+                    juce::URL( "http://127.0.0.1:" + juce::String( port ) + "/" ).launchInDefaultBrowser();
+                }
+            };
+
+            folderBtn.setVisible( true );
+            folderBtn.setButtonText( "Paste Token" );
+            folderBtn.onClick = [safeThis]() {
+                if( safeThis == nullptr )
+                    return;
+                auto cb = juce::SystemClipboard::getTextFromClipboard().trim();
+                if( cb.startsWith( "ya29." ) || cb.startsWith( "1//" ) )
+                {
+                    safeThis->statusLabel.setText( "Connecting token from clipboard...", juce::dontSendNotification );
+                    safeThis->processGoogleToken( cb );
+                }
+                else
+                {
+                    safeThis->statusLabel.setText( "Clipboard has no Google token (ya29... / 1//...)", juce::dontSendNotification );
+                }
+            };
+#else
             manualBtn.onClick = [safeThis]() {
                 const juce::String curId = mt::getSettings().cloudSources.googleClientId.get();
                 ui::project_actions::askText( "GOOGLE OAUTH CLIENT ID OR TOKEN (ya29... / 1//...)", curId, [safeThis]( juce::String credInput ) {
@@ -146,6 +173,7 @@ namespace ui
                     safeThis->processGoogleToken( credInput );
                 } );
             };
+#endif
 
             startGoogleDeviceFlow();
         }
@@ -225,6 +253,16 @@ namespace ui
         else
         {
             qrCode.setText( "https://splice.com/link" );
+#if JUCE_IOS
+            instructionsLabel.setText( "Splice samples are stored in:\nFiles app > On My iPhone > Kick > Splice\n\nDrop your Splice samples there or tap 'Open Splice' to sign in on the web.", juce::dontSendNotification );
+            codeLabel.setText( "Location: Files app > On My iPhone > Kick > Splice", juce::dontSendNotification );
+            statusLabel.setText( "Folder ready: " + spliceDir.getFullPathName(), juce::dontSendNotification );
+
+            reloginBtn.setVisible( true );
+            reloginBtn.setButtonText( "Open Splice" );
+            reloginBtn.onClick = []() { juce::URL( "https://splice.com/link" ).launchInDefaultBrowser(); };
+            folderBtn.setVisible( false );
+#else
             instructionsLabel.setText( "1. Scan the QR code with your phone camera, or visit:\n   https://splice.com/link\n2. Sign in to your Splice account.", juce::dontSendNotification );
             codeLabel.setText( "Splice Link: https://splice.com/link", juce::dontSendNotification );
             statusLabel.setText( "Splice folder: " + spliceDir.getFullPathName(), juce::dontSendNotification );
@@ -248,6 +286,7 @@ namespace ui
                     }
                 } );
             };
+#endif
         }
 
         actionBtn.setButtonText( "Done" );
@@ -404,9 +443,15 @@ namespace ui
             {
                 const auto phoneUrl = pairingServer->getUrl();
                 qrCode.setText( phoneUrl );
+#if JUCE_IOS
+                instructionsLabel.setText( "Tap 'Open in Safari' to sign in on this device, or visit:\n" + phoneUrl, juce::dontSendNotification );
+                codeLabel.setText( "Web Connect: " + phoneUrl, juce::dontSendNotification );
+                statusLabel.setText( "Tap 'Open in Safari' or 'Paste Token' to connect.", juce::dontSendNotification );
+#else
                 instructionsLabel.setText( "1. Scan the QR code with your phone camera, or visit:\n   " + phoneUrl + "\n2. Authorize Google Drive on the web page.", juce::dontSendNotification );
                 codeLabel.setText( "Phone Connect URL:  " + phoneUrl, juce::dontSendNotification );
                 statusLabel.setText( "Waiting for phone connection...", juce::dontSendNotification );
+#endif
                 startTimer( 1000 );
                 return;
             }

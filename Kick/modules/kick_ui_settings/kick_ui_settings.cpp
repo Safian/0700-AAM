@@ -88,21 +88,38 @@ namespace kick_ui
         // Add header...
         mt::utils::addChildComponents( this, header );
 
+        auto addTab = [this]( const juce::String& name, std::unique_ptr<SettingsInterface> view ) {
+            selectorStrings.push_back( name );
+            pViews.push_back( std::move( view ) );
+            auto btn = std::make_unique<ui::KickToggleButton>( name, name, name );
+            btn->setName( name );
+            btn->setTitle( name );
+            btn->setRadioGroupId( (int)RadioGroupId::SettingsScreen, juce::dontSendNotification );
+            mt::utils::addChildComponents( this, *btn );
+            selectors.push_back( std::move( btn ) );
+        };
+
         // Create views...
-        pViews.emplace_back( std::make_unique<SettingsInfo>() );
+        addTab( "Info", std::make_unique<SettingsInfo>() );
+
         auto pDefaults = std::make_unique<SettingsPDefault>();
         pDefaults->onConfigCloudPaths = [this]() {
             if( onConfigCloudPaths )
                 onConfigCloudPaths();
         };
-        pViews.emplace_back( std::move( pDefaults ) );
-        pViews.emplace_back( std::make_unique<SettingsHardware>() );
-        // pViews.emplace_back( new SettingsAudio );
-        pViews.emplace_back( std::make_unique<SettingsMidiSync>() );
-        pViews.emplace_back( std::make_unique<SettingsCV>() );
-        pViews.emplace_back( std::make_unique<SettingsEthernet>() );
-        pViews.emplace_back( std::make_unique<SettingsWifi>() );
-        pViews.emplace_back( std::make_unique<SettingsPlugins>() );
+        addTab( "Project Defaults", std::move( pDefaults ) );
+
+        addTab( "Hardware", std::make_unique<SettingsHardware>() );
+        addTab( "MIDI", std::make_unique<SettingsMidiSync>() );
+
+#if !JUCE_IOS
+        addTab( "CV", std::make_unique<SettingsCV>() );
+        addTab( "Ethernet", std::make_unique<SettingsEthernet>() );
+        addTab( "WiFi", std::make_unique<SettingsWifi>() );
+#endif
+
+        addTab( "Plugins", std::make_unique<SettingsPlugins>() );
+
         auto pCloud = std::make_unique<SettingsCloud>();
         pCloud->onOpenCloudAuth = [this]( int service ) {
             if( onOpenCloudAuth )
@@ -116,34 +133,21 @@ namespace kick_ui
             if( onConfigWebDav )
                 onConfigWebDav();
         };
-        pViews.emplace_back( std::move( pCloud ) );
+        addTab( "Cloud", std::move( pCloud ) );
 
-        // Add selector buttons...
-        auto idx = 0;
-        for( auto& it : selectors )
+        // Add selector click handlers...
+        for( size_t idx = 0; idx < selectors.size(); ++idx )
         {
-            auto name = selectorStrings[idx];
-            it.setName( name );
-            it.setTitle( name );
-            it.setToggleButtonText( name, name );
-            it.setRadioGroupId( (int)RadioGroupId::SettingsScreen, juce::dontSendNotification );
-            mt::utils::addChildComponents( this, it );
-
-            it.onClick = [this, idx]() {
-                auto state = selectors[idx].getToggleState();
-                if( state )
-                {
-                    showView( idx );
-                }
+            selectors[idx]->onClick = [this, idx]() {
+                if( selectors[idx]->getToggleState() )
+                    showView( static_cast<int>( idx ) );
             };
-            ++idx;
         }
-        selectors[0].setToggleState( true, juce::sendNotification );
+
+        if( !selectors.empty() )
+            selectors[0]->setToggleState( true, juce::sendNotification );
 
         header.onBackButtonPressed = [&]( bool ) { closeScreen( kick_ui::Screen::HomeListView ); };
-
-        // Defaults...
-        selectors[0].setToggleState( true, juce::sendNotification );
 
         ui::themeChanged.connect( [&]() {
             header.setIcon( "Icon_SettingsScreen" );
@@ -194,12 +198,15 @@ namespace kick_ui
         // set header bounds
         header.setBounds( b.removeFromTop( ui::layout::header.getHeight() ) );
         // Set selector bounds
-        b               = b.reduced( 5, 0 );
-        auto bw         = b.getWidth() / (int)selectors.size();
-        auto bSelectors = b.removeFromTop( 64 );
-        for( auto i = 0; i < selectors.size(); ++i )
+        b = b.reduced( 5, 0 );
+        if( !selectors.empty() )
         {
-            selectors[i].setBounds( bSelectors.removeFromLeft( bw ).reduced( 5, 10 ) );
+            auto bw         = b.getWidth() / (int)selectors.size();
+            auto bSelectors = b.removeFromTop( 64 );
+            for( size_t i = 0; i < selectors.size(); ++i )
+            {
+                selectors[i]->setBounds( bSelectors.removeFromLeft( bw ).reduced( 5, 10 ) );
+            }
         }
         // Set view bounds
         bCont = b.reduced( 5, 0 );
