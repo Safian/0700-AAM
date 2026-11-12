@@ -24,6 +24,7 @@
 AppTrackDisplay::AppTrackDisplay( int Seq, int Track )
 {
     setInterceptsMouseClicks( true, true );
+    name.addMouseListener( this, false );
     mt::utils::addAndMakeVisible( this, name, selector, length, transpose, mute, solo, arm, monitor, level, inputmidi, levelMeter, midiPort );
 
     mt::utils::setValueFontHeight( 16, level, transpose, name );

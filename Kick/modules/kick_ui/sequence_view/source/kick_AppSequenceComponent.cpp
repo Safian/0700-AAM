@@ -21,6 +21,8 @@
 
 AppSequenceDisplay::AppSequenceDisplay( int Index )
 {
+    setInterceptsMouseClicks( true, true );
+    name.addMouseListener( this, false );
     mt::utils::addAndMakeVisible( this, name, bpm, bars, start, end, transpose, loop, seqGlobal );
 
     mt::utils::setTitleProportion( .35f, start, end, bars, bpm, seqGlobal );
