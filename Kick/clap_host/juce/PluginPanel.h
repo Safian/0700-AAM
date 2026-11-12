@@ -19,6 +19,13 @@ public:
     // A Q-Link encoder turn. `knobOffset` 0..15 is the DCL knob (EN_KNOB_1 + offset). With clap.remote-controls pages knobs 1..8 drive the
     // focused page and 9..16 the page after it (see kick_clap/RemotePages.h); without pages knobs 1..4 are the four macros. Returns true when used.
     bool adjustKnob(int knobOffset, double delta);
+    /** Hardware +/- and cursor left/right: the previous / next Q-Link page (false: the plug-in has no pages). */
+    bool stepRemotePage(int direction);
+    bool hasRemotePages() const { return !session->host().remotePages().empty(); }
+    /** Hardware Undo / Shift+Undo: sent to the plug-in's GUI as Ctrl+Z / Ctrl+Shift+Z (false: no plug-in GUI is showing). */
+    bool pluginUndoRedo(bool redo);
+    /** Hardware jog wheel: scrolls the plug-in's GUI (steps > 0 = clockwise = reveal what is below). False: no plug-in GUI is showing. */
+    bool scrollGui(int steps);
     // The remote-controls page the knobs follow (index into the plug-in's pages, -1 none), and a title for the display.
     int remoteFocus() const noexcept { return remoteFocusIndex; }
     juce::String remoteTitle() const;

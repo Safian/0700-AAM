@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PluginPanel.h"
+
 #include <clap/ext/params.h>
 #include <kick_clap/PluginManager.h>
 #include <kick_clap/RemotePages.h>
@@ -364,6 +365,25 @@ void PluginPanel::setRemoteFocus(int index, bool tellPlugin) {
     remoteFocusIndex = index < 0 || pages.empty() ? -1 : std::min(index, static_cast<int>(pages.size()) - 1);
     pageTitle.setText(remoteTitle(), juce::dontSendNotification);
     if (tellPlugin && gui && remoteFocusIndex >= 0) gui->showRemotePage(pages[static_cast<size_t>(remoteFocusIndex)].id);
+}
+
+bool PluginPanel::stepRemotePage(int direction) {
+    const auto count = static_cast<int>(session->host().remotePages().size());
+    if (count == 0) return false;
+    setRemoteFocus(remote::stepPage(remoteFocusIndex, direction, count), true);
+    return true;
+}
+
+bool PluginPanel::scrollGui(int steps) {
+    if (!gui || showGeneric || steps == 0) return false;
+    gui->scrollBy(-1.5 * steps);
+    return true;
+}
+
+bool PluginPanel::pluginUndoRedo(bool redo) {
+    if (!gui || showGeneric) return false;
+    const int flags = juce::ModifierKeys::ctrlModifier | (redo ? juce::ModifierKeys::shiftModifier : 0);
+    return gui->keyPressed(juce::KeyPress('z', juce::ModifierKeys(flags), 0));
 }
 
 bool PluginPanel::adjustKnob(int knobOffset, double delta) {

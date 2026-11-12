@@ -61,6 +61,8 @@ public:
     void mouseUp(const juce::MouseEvent&) override;
     void mouseMove(const juce::MouseEvent&) override;
     void mouseExit(const juce::MouseEvent&) override;
+    /** Scroll the GUI by wheel notches (hardware jog wheel): negative reveals what is below. */
+    void scrollBy(double notches);
     void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     bool keyPressed(const juce::KeyPress&) override;
     // Committed text of an on-screen keyboard: replaces the content of the focused text field when `replaceAll`.

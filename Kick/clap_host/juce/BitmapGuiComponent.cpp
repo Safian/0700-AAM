@@ -138,7 +138,8 @@ bool BitmapGuiComponent::open(int w, int h) {
 #if JUCE_MAC || JUCE_WINDOWS || JUCE_IOS
     constexpr uint32_t createFlags = SAFIAN_BITMAP_GUI_CREATE_HOST_RUNS_EVENT_LOOP;
 #else
-    constexpr uint32_t createFlags = 0;
+    // the MPC (Linux) has its own keys: no on-screen piano strip
+    constexpr uint32_t createFlags = SAFIAN_BITMAP_GUI_CREATE_NO_ONSCREEN_KEYBOARD;
 #endif
     if (!client.open(ww, hh, scale, createFlags)) return false;
     safian_bitmap_gui_info_t info{};
@@ -268,6 +269,16 @@ void BitmapGuiComponent::mouseDrag(const juce::MouseEvent& e) { sendPointer(e, S
 void BitmapGuiComponent::mouseUp(const juce::MouseEvent& e) { sendPointer(e, SAFIAN_BITMAP_GUI_POINTER_UP); }
 void BitmapGuiComponent::mouseMove(const juce::MouseEvent& e) { if (!e.source.isTouch()) sendPointer(e, SAFIAN_BITMAP_GUI_POINTER_HOVER); }
 void BitmapGuiComponent::mouseExit(const juce::MouseEvent& e) { if (!e.source.isTouch()) sendPointer(e, SAFIAN_BITMAP_GUI_POINTER_LEAVE); }
+
+void BitmapGuiComponent::scrollBy(double notches) {
+    if (!client.isOpen()) return;
+    safian_bitmap_gui_wheel_event_t ev{};
+    // over the right edge (the vertical scroll bar of the panels): a wheel over a knob would change the knob
+    ev.x = std::max(0, getWidth() - 3); ev.y = getHeight() / 2.0;
+    ev.delta_y = notches;
+    client.wheel(ev);
+    scheduleSoon(1);
+}
 
 void BitmapGuiComponent::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& w) {
     if (!client.isOpen()) return;
