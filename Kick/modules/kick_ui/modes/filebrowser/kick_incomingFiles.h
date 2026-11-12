@@ -278,17 +278,40 @@ namespace kick_incoming
         {
             const fs::path p( explicitPath );
             if( fs::exists( p, ec ) && fs::is_directory( p, ec ) )
-                return p.string();
-            return explicitPath;
+            {
+                if( !fs::is_empty( p, ec ) || explicitPath != "/root/Splice" )
+                    return p.string();
+            }
         }
+
+        std::string firstExisting;
         for( const auto& root : candidateRoots )
         {
             if( root.empty() )
                 continue;
-            const fs::path p = fs::path( root ) / "Splice";
+            fs::path p = fs::path( root );
+            if( p.filename() != "Splice" )
+                p /= "Splice";
+
             if( fs::exists( p, ec ) && fs::is_directory( p, ec ) )
-                return p.string();
+            {
+                if( !fs::is_empty( p, ec ) )
+                    return p.string();
+                if( firstExisting.empty() )
+                    firstExisting = p.string();
+            }
         }
+        if( !firstExisting.empty() )
+            return firstExisting;
+
+        if( !explicitPath.empty() && explicitPath != "/root/Splice" )
+            return explicitPath;
+
+#if JUCE_LINUX || __linux__
+        if( fs::exists( "/sdcard", ec ) && fs::is_directory( "/sdcard", ec ) )
+            return "/sdcard/Splice";
+#endif
+
         return fallback;
     }
 } // namespace kick_incoming

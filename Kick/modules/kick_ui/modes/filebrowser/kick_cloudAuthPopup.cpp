@@ -54,82 +54,89 @@ namespace ui
         folderBtn.setVisible( false );
         addAndMakeVisible( folderBtn );
 
+        syncBtn.setValueColour( ui::Theme::textColour( 1 ) );
+        syncBtn.setValueBackgroundColour( ui::Theme::backgroundColour( 2 ) );
+        syncBtn.setValueFontHeight( 14.0f );
+        syncBtn.setVisible( false );
+        addAndMakeVisible( syncBtn );
+
+        reloginBtn.setValueColour( ui::Theme::textColour( 1 ) );
+        reloginBtn.setValueBackgroundColour( ui::Theme::backgroundColour( 2 ) );
+        reloginBtn.setValueFontHeight( 14.0f );
+        reloginBtn.setVisible( false );
+        addAndMakeVisible( reloginBtn );
+
+        pairingServer = std::make_unique<PhonePairingServer>();
+        juce::Component::SafePointer<CloudAuthQrPopup> safeThis( this );
+
+        pairingServer->getStatus = []() -> PhonePairingServer::StatusInfo {
+            PhonePairingServer::StatusInfo st;
+            st.googleEmail = mt::getSettings().cloudSources.googleUserEmail.get();
+            st.googleConnected = st.googleEmail.isNotEmpty();
+
+            juce::File spliceToken( "/data/Settings/splice-authtoken" );
+            if( spliceToken.existsAsFile() )
+            {
+                juce::String tok = spliceToken.loadFileAsString().trim();
+                st.spliceUser = tok.upToFirstOccurrenceOf( ";", false, false );
+                st.spliceConnected = true;
+            }
+            juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
+            juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
+            std::vector<std::string> roots = {
+                docs.getFullPathName().toStdString(),
+                docs.getChildFile( "Kick" ).getFullPathName().toStdString(),
+                home.getFullPathName().toStdString(),
+#if JUCE_LINUX || __linux__
+                "/data",
+                "/media/az01-internal-sd",
+                "/sdcard",
+#endif
+            };
+            juce::String curPath = mt::getSettings().cloudSources.splicePath.get();
+            std::string fallback = docs.getChildFile( "Splice" ).getFullPathName().toStdString();
+            std::string resolved = kick_incoming::resolveSpliceDir( curPath.toStdString(), roots, fallback );
+            st.spliceFolder = juce::String::fromUTF8( resolved.c_str() );
+            juce::File sdir( st.spliceFolder );
+            if( sdir.isDirectory() )
+            {
+                auto allSamples = sdir.getChildFile( "All Your Samples" );
+                if( allSamples.isDirectory() )
+                    st.spliceSamples = allSamples.getNumberOfChildFiles( juce::File::findFiles );
+                else
+                    st.spliceSamples = sdir.getNumberOfChildFiles( juce::File::findFiles | juce::File::ignoreHiddenFiles );
+            }
+            return st;
+        };
+
+        pairingServer->onGoogleDriveAuth = [safeThis]( const juce::String& credInput, std::function<void( bool, const juce::String&, const juce::String& )> done ) {
+            juce::MessageManager::callAsync( [safeThis, credInput, done]() {
+                if( safeThis != nullptr )
+                    safeThis->processGoogleToken( credInput, done );
+                else if( done )
+                    done( false, {}, "Dialog closed" );
+            } );
+        };
+
+        pairingServer->onSpliceSync = [safeThis]( std::function<void( bool, const juce::String& )> done ) {
+            juce::MessageManager::callAsync( [safeThis, done]() {
+                if( safeThis != nullptr )
+                    safeThis->triggerSpliceSync();
+                if( done )
+                    done( true, "Splice sync started on device" );
+            } );
+        };
+
         if( serviceType == Service::GoogleDrive )
         {
             titleLabel.setText( "GOOGLE DRIVE SIGN-IN", juce::dontSendNotification );
             manualBtn.setVisible( true );
-            manualBtn.onClick = [this]() {
-                juce::Component::SafePointer<CloudAuthQrPopup> safeThis( this );
+            manualBtn.onClick = [safeThis]() {
                 const juce::String curId = mt::getSettings().cloudSources.googleClientId.get();
                 ui::project_actions::askText( "GOOGLE OAUTH CLIENT ID OR TOKEN (ya29... / 1//...)", curId, [safeThis]( juce::String credInput ) {
                     if( safeThis == nullptr )
                         return;
-                    credInput = credInput.trim();
-                    if( credInput.isEmpty() )
-                        return;
-
-                    if( credInput.startsWith( "ya29." ) || credInput.startsWith( "1//" ) )
-                    {
-                        fileSource::gdrive::Credentials creds;
-                        if( credInput.startsWith( "ya29." ) )
-                        {
-                            creds.mode        = "bearer";
-                            creds.accessToken = credInput.toStdString();
-                        }
-                        else
-                        {
-                            creds.mode         = "oauth";
-                            creds.refreshToken = credInput.toStdString();
-                            creds.clientId     = safeThis->clientId;
-                        }
-                        safeThis->statusLabel.setText( "Verifying Google Drive token...", juce::dontSendNotification );
-                        juce::Thread::launch( [safeThis, creds]() mutable {
-                            std::string em, nm;
-                            if( !creds.accessToken.empty() )
-                                fileSource::GoogleDriveSource::fetchUserAbout( creds.accessToken, em, nm );
-                            if( !em.empty() )
-                                creds.email = em;
-
-                            const auto prefs = getAppDirs( MTPrefs );
-                            const auto secretDir = prefs.getChildFile( "file_sources" );
-                            secretDir.createDirectory();
-                            const auto userKey = !creds.email.empty() ? creds.email : std::string( "token" );
-                            const auto srcId = "gdrive-" + fileSource::SourceCache::makeKey( "gd", userKey ).substr( 0, 8 );
-                            fileSource::writeSecretFile( secretDir.getChildFile( srcId + ".secret" ).getFullPathName().toStdString(),
-                                                         fileSource::gdrive::serializeCredentials( creds ) );
-
-                            auto sources = fileSource::loadSources( prefs.getChildFile( "file_sources.txt" ).getFullPathName().toStdString() );
-                            fileSource::SourceConfig cfg;
-                            cfg.type = "gdrive";
-                            cfg.id = srcId;
-                            cfg.name = !creds.email.empty() ? ( "Google Drive (" + creds.email.substr( 0, 20 ) + ")" ) : "Google Drive";
-                            cfg.location = "gdrive://root";
-                            cfg.user = creds.email;
-                            cfg.auth = creds.mode;
-
-                            bool found = false;
-                            for( auto& x : sources )
-                                if( x.id == cfg.id ) { x = cfg; found = true; }
-                            if( !found )
-                                sources.push_back( cfg );
-                            fileSource::saveSources( prefs.getChildFile( "file_sources.txt" ).getFullPathName().toStdString(), sources );
-
-                            juce::MessageManager::callAsync( [safeThis, cfg, creds]() {
-                                if( safeThis == nullptr )
-                                    return;
-                                mt::getSettings().cloudSources.enableGoogleDrive = true;
-                                if( !creds.email.empty() )
-                                    mt::getSettings().cloudSources.googleUserEmail = juce::String::fromUTF8( creds.email.c_str() );
-                                safeThis->finishSuccess( "Connected: " + juce::String::fromUTF8( cfg.name.c_str() ) );
-                            } );
-                        } );
-                    }
-                    else
-                    {
-                        mt::getSettings().cloudSources.googleClientId = credInput;
-                        safeThis->clientId = credInput.toStdString();
-                        safeThis->startGoogleDeviceFlow();
-                    }
+                    safeThis->processGoogleToken( credInput );
                 } );
             };
 
@@ -144,14 +151,12 @@ namespace ui
     CloudAuthQrPopup::~CloudAuthQrPopup()
     {
         stopTimer();
+        pairingServer.reset();
     }
 
     void CloudAuthQrPopup::setupSplice()
     {
         titleLabel.setText( "SPLICE SOUND SYNC", juce::dontSendNotification );
-        qrCode.setText( "https://splice.com/link" );
-        instructionsLabel.setText( "1. Scan the QR code with your phone camera, or go to:\n   https://splice.com/link\n2. Sign in to your Splice account.", juce::dontSendNotification );
-        codeLabel.setText( "Splice Link: https://splice.com/link", juce::dontSendNotification );
 
         juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
         juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
@@ -172,27 +177,64 @@ namespace ui
         if( !spliceDir.exists() )
             spliceDir.createDirectory();
 
-        statusLabel.setText( "Splice folder: " + spliceDir.getFullPathName() + "\n(Loops & samples in this folder appear directly in File Browser)", juce::dontSendNotification );
+        mt::getSettings().cloudSources.splicePath = spliceDir.getFullPathName();
+        mt::getSettings().cloudSources.enableSplice = true;
 
-        folderBtn.setVisible( true );
-        juce::Component::SafePointer<CloudAuthQrPopup> safeThis( this );
-        folderBtn.onClick = [safeThis, spliceDir]() {
-            if( safeThis == nullptr )
-                return;
-            ui::project_actions::askText( "SPLICE FOLDER PATH", spliceDir.getFullPathName(), [safeThis]( juce::String newPath ) {
+        juce::File spliceBinary( "/usr/share/Splice/splicesync" );
+        juce::File spliceToken( "/data/Settings/splice-authtoken" );
+
+        if( spliceBinary.existsAsFile() && spliceToken.existsAsFile() )
+        {
+            const juce::String tokContent = spliceToken.loadFileAsString().trim();
+            const juce::String user = tokContent.upToFirstOccurrenceOf( ";", false, false );
+
+            int numSamples = 0;
+            auto allSamples = spliceDir.getChildFile( "All Your Samples" );
+            if( allSamples.isDirectory() )
+                numSamples = allSamples.getNumberOfChildFiles( juce::File::findFiles );
+
+            qrCode.setText( "https://splice.com/link" );
+            instructionsLabel.setText( "Connected Splice Account: " + user + "\nFolder: " + spliceDir.getFullPathName() + ( numSamples > 0 ? " (" + juce::String( numSamples ) + " samples)" : "" ) + "\n\nAll loops and samples appear in File Browser under Places.", juce::dontSendNotification );
+            codeLabel.setText( "Account: " + user + "  (Status: Active)", juce::dontSendNotification );
+            statusLabel.setText( "Tap 'Sync Samples Now' to sync newly added samples.", juce::dontSendNotification );
+
+            syncBtn.setVisible( true );
+            syncBtn.onClick = [this]() { triggerSpliceSync(); };
+
+            reloginBtn.setVisible( true );
+            reloginBtn.onClick = [this]() { startSpliceLogin(); };
+        }
+        else if( spliceBinary.existsAsFile() )
+        {
+            startSpliceLogin();
+        }
+        else
+        {
+            qrCode.setText( "https://splice.com/link" );
+            instructionsLabel.setText( "1. Scan the QR code with your phone camera, or visit:\n   https://splice.com/link\n2. Sign in to your Splice account.", juce::dontSendNotification );
+            codeLabel.setText( "Splice Link: https://splice.com/link", juce::dontSendNotification );
+            statusLabel.setText( "Splice folder: " + spliceDir.getFullPathName(), juce::dontSendNotification );
+
+            folderBtn.setVisible( true );
+            juce::Component::SafePointer<CloudAuthQrPopup> safeThis( this );
+            folderBtn.onClick = [safeThis, spliceDir]() {
                 if( safeThis == nullptr )
                     return;
-                newPath = newPath.trim();
-                if( newPath.isNotEmpty() )
-                {
-                    juce::File f( newPath );
-                    f.createDirectory();
-                    mt::getSettings().cloudSources.splicePath = newPath;
-                    mt::getSettings().cloudSources.enableSplice = true;
-                    safeThis->statusLabel.setText( "Splice folder: " + newPath, juce::dontSendNotification );
-                }
-            } );
-        };
+                ui::project_actions::askText( "SPLICE FOLDER PATH", spliceDir.getFullPathName(), [safeThis]( juce::String newPath ) {
+                    if( safeThis == nullptr )
+                        return;
+                    newPath = newPath.trim();
+                    if( newPath.isNotEmpty() )
+                    {
+                        juce::File f( newPath );
+                        f.createDirectory();
+                        mt::getSettings().cloudSources.splicePath   = newPath;
+                        mt::getSettings().cloudSources.enableSplice = true;
+                        safeThis->statusLabel.setText( "Splice folder: " + newPath, juce::dontSendNotification );
+                    }
+                } );
+            };
+        }
 
         actionBtn.setButtonText( "Done" );
         actionBtn.onClick = [this]() {
@@ -201,6 +243,133 @@ namespace ui
                 onAuthSuccess();
             mt::utils::exitDialog( this, UI::APPLY );
         };
+    }
+
+    void CloudAuthQrPopup::triggerSpliceSync()
+    {
+#if JUCE_LINUX || __linux__
+        statusLabel.setText( "Syncing samples with Splice cloud...", juce::dontSendNotification );
+        syncBtn.setEnabled( false );
+        juce::Component::SafePointer<CloudAuthQrPopup> safeThis( this );
+
+        juce::Thread::launch( [safeThis]() {
+            const juce::String cmd = "/usr/share/Splice/splicesync -authTokenPath /data/Settings/splice-authtoken -path /sdcard/Splice -logPath /tmp/splicesync.log";
+            int ret = std::system( cmd.toRawUTF8() );
+
+            juce::MessageManager::callAsync( [safeThis, ret]() {
+                if( safeThis == nullptr )
+                    return;
+                safeThis->syncBtn.setEnabled( true );
+                if( ret == 0 )
+                {
+                    safeThis->statusLabel.setText( "Sync complete! Samples refreshed in File Browser.", juce::dontSendNotification );
+                    safeThis->statusLabel.setValueColour( juce::Colours::lightgreen );
+                    if( safeThis->onAuthSuccess )
+                        safeThis->onAuthSuccess();
+                }
+                else
+                {
+                    safeThis->statusLabel.setText( "Sync finished (code " + juce::String( ret ) + ").", juce::dontSendNotification );
+                }
+            } );
+        } );
+#else
+        statusLabel.setText( "Splice sync is handled automatically on this platform.", juce::dontSendNotification );
+#endif
+    }
+
+    void CloudAuthQrPopup::startSpliceLogin()
+    {
+#if JUCE_LINUX || __linux__
+        isSpliceLoggingIn = true;
+        reloginBtn.setEnabled( false );
+        statusLabel.setText( "Requesting Splice pairing code...", juce::dontSendNotification );
+
+        juce::Thread::launch( []() {
+            std::system( "killall splicesync 2>/dev/null" );
+            std::system( "/usr/share/Splice/splicesync -authTokenPath /data/Settings/splice-authtoken -logPath /tmp/splicelogin.log -login &" );
+        } );
+
+        startTimer( 1000 );
+#endif
+    }
+
+    void CloudAuthQrPopup::processGoogleToken( juce::String credInput, std::function<void( bool ok, const juce::String& email, const juce::String& err )> done )
+    {
+        credInput = credInput.trim();
+        if( credInput.isEmpty() )
+        {
+            if( done )
+                done( false, {}, "Empty token" );
+            return;
+        }
+
+        if( credInput.startsWith( "ya29." ) || credInput.startsWith( "1//" ) )
+        {
+            fileSource::gdrive::Credentials creds;
+            if( credInput.startsWith( "ya29." ) )
+            {
+                creds.mode        = "bearer";
+                creds.accessToken = credInput.toStdString();
+            }
+            else
+            {
+                creds.mode         = "oauth";
+                creds.refreshToken = credInput.toStdString();
+                creds.clientId     = clientId;
+            }
+            statusLabel.setText( "Verifying Google Drive token...", juce::dontSendNotification );
+            juce::Component::SafePointer<CloudAuthQrPopup> safeThis( this );
+            juce::Thread::launch( [safeThis, creds, done]() mutable {
+                std::string em, nm;
+                if( !creds.accessToken.empty() )
+                    fileSource::GoogleDriveSource::fetchUserAbout( creds.accessToken, em, nm );
+                if( !em.empty() )
+                    creds.email = em;
+
+                const auto prefs     = getAppDirs( MTPrefs );
+                const auto secretDir = prefs.getChildFile( "file_sources" );
+                secretDir.createDirectory();
+                const auto userKey  = !creds.email.empty() ? creds.email : std::string( "token" );
+                const auto srcId    = "gdrive-" + fileSource::SourceCache::makeKey( "gd", userKey ).substr( 0, 8 );
+                fileSource::writeSecretFile( secretDir.getChildFile( srcId + ".secret" ).getFullPathName().toStdString(),
+                                             fileSource::gdrive::serializeCredentials( creds ) );
+
+                auto sources = fileSource::loadSources( prefs.getChildFile( "file_sources.txt" ).getFullPathName().toStdString() );
+                fileSource::SourceConfig cfg;
+                cfg.type     = "gdrive";
+                cfg.id       = srcId;
+                cfg.name     = !creds.email.empty() ? ( "Google Drive (" + creds.email.substr( 0, 20 ) + ")" ) : "Google Drive";
+                cfg.location = "gdrive://root";
+                cfg.user     = creds.email;
+                cfg.auth     = creds.mode;
+
+                bool found = false;
+                for( auto& x : sources )
+                    if( x.id == cfg.id ) { x = cfg; found = true; }
+                if( !found )
+                    sources.push_back( cfg );
+                fileSource::saveSources( prefs.getChildFile( "file_sources.txt" ).getFullPathName().toStdString(), sources );
+
+                juce::MessageManager::callAsync( [safeThis, cfg, creds, done]() {
+                    mt::getSettings().cloudSources.enableGoogleDrive = true;
+                    if( !creds.email.empty() )
+                        mt::getSettings().cloudSources.googleUserEmail = juce::String::fromUTF8( creds.email.c_str() );
+                    if( done )
+                        done( true, juce::String::fromUTF8( creds.email.c_str() ), {} );
+                    if( safeThis != nullptr )
+                        safeThis->finishSuccess( "Connected: " + juce::String::fromUTF8( cfg.name.c_str() ) );
+                } );
+            } );
+        }
+        else
+        {
+            mt::getSettings().cloudSources.googleClientId = credInput;
+            clientId = credInput.toStdString();
+            if( done )
+                done( true, {}, "Client ID set" );
+            startGoogleDeviceFlow();
+        }
     }
 
     void CloudAuthQrPopup::startGoogleDeviceFlow()
@@ -217,6 +386,17 @@ namespace ui
 
         if( clientId.empty() )
         {
+            if( pairingServer && pairingServer->isRunning() )
+            {
+                const auto phoneUrl = pairingServer->getUrl();
+                qrCode.setText( phoneUrl );
+                instructionsLabel.setText( "1. Scan the QR code with your phone camera, or visit:\n   " + phoneUrl + "\n2. Authorize Google Drive on the web page.", juce::dontSendNotification );
+                codeLabel.setText( "Phone Connect URL:  " + phoneUrl, juce::dontSendNotification );
+                statusLabel.setText( "Waiting for phone connection...", juce::dontSendNotification );
+                startTimer( 1000 );
+                return;
+            }
+
             qrCode.setText( "https://console.cloud.google.com/apis/credentials" );
             instructionsLabel.setText( "No Google OAuth Client ID configured.\nScan or enter an OAuth Client ID or Token below:", juce::dontSendNotification );
             codeLabel.setText( "Device Flow requires a Google Client ID", juce::dontSendNotification );
@@ -269,6 +449,17 @@ namespace ui
                 }
                 else
                 {
+                    if( safeThis->pairingServer && safeThis->pairingServer->isRunning() )
+                    {
+                        const auto phoneUrl = safeThis->pairingServer->getUrl();
+                        safeThis->qrCode.setText( phoneUrl );
+                        safeThis->instructionsLabel.setText( "1. Scan the QR code with your phone camera, or visit:\n   " + phoneUrl + "\n2. Authorize Google Drive on the web page.", juce::dontSendNotification );
+                        safeThis->codeLabel.setText( "Phone Connect URL:  " + phoneUrl, juce::dontSendNotification );
+                        safeThis->statusLabel.setText( "Waiting for phone connection...", juce::dontSendNotification );
+                        safeThis->startTimer( 1000 );
+                        return;
+                    }
+
                     juce::String err = "Google Device Code error (" + juce::String( statusCode ) + ")";
                     if( obj != nullptr && obj->hasProperty( "error_description" ) )
                         err += ": " + obj->getProperty( "error_description" ).toString();
@@ -286,8 +477,47 @@ namespace ui
 
     void CloudAuthQrPopup::timerCallback()
     {
-        if( isPolling.load() || deviceCode.empty() )
+        if( isSpliceLoggingIn )
+        {
+            juce::File logFile( "/tmp/splicelogin.log" );
+            if( logFile.existsAsFile() )
+            {
+                const juce::String log = logFile.loadFileAsString();
+                const int scIdx = log.indexOf( "msg: shortcode: " );
+                if( scIdx >= 0 && spliceShortCode.isEmpty() )
+                {
+                    spliceShortCode = log.substring( scIdx + 16, scIdx + 22 ).trim();
+                    if( spliceShortCode.isNotEmpty() )
+                    {
+                        qrCode.setText( "https://splice.com/link?code=" + spliceShortCode );
+                        instructionsLabel.setText( "1. Scan QR code with phone, or visit:\n   https://splice.com/link\n2. Enter code: " + spliceShortCode, juce::dontSendNotification );
+                        codeLabel.setText( "Confirmation Code:  " + spliceShortCode, juce::dontSendNotification );
+                        statusLabel.setText( "Waiting for confirmation on splice.com...", juce::dontSendNotification );
+                    }
+                }
+                if( log.contains( "msg: done:" ) || log.contains( "msg: user:" ) )
+                {
+                    stopTimer();
+                    isSpliceLoggingIn = false;
+                    mt::getSettings().cloudSources.enableSplice = true;
+                    finishSuccess( "Splice Connected Successfully!" );
+                    return;
+                }
+            }
             return;
+        }
+
+        if( isPolling.load() || deviceCode.empty() )
+        {
+            if( pairingServer && pairingServer->isRunning() && serviceType == Service::GoogleDrive )
+            {
+                dotCounter = ( dotCounter + 1 ) % 4;
+                juce::String dots;
+                for( int i = 0; i < dotCounter; ++i ) dots += ".";
+                statusLabel.setText( "Waiting for phone connection at " + pairingServer->getUrl() + dots, juce::dontSendNotification );
+            }
+            return;
+        }
 
         dotCounter = ( dotCounter + 1 ) % 4;
         juce::String dots;
@@ -335,10 +565,7 @@ namespace ui
                 {
                     const auto err = obj->getProperty( "error" ).toString().toStdString();
                     if( err == "authorization_pending" )
-                    {
-                        // User has not approved yet; keep polling
                         return;
-                    }
                     if( err == "slow_down" )
                     {
                         safeThis->pollInterval += 5;
@@ -441,30 +668,40 @@ namespace ui
         bounds.removeFromTop( 10 );
 
         auto bottomRow = bounds.removeFromBottom( 38 );
-        actionBtn.setBounds( bottomRow.removeFromRight( 110 ) );
+        actionBtn.setBounds( bottomRow.removeFromRight( 100 ) );
+
         if( manualBtn.isVisible() )
         {
-            bottomRow.removeFromRight( 12 );
+            bottomRow.removeFromRight( 10 );
             manualBtn.setBounds( bottomRow.removeFromRight( 200 ) );
+        }
+        if( syncBtn.isVisible() )
+        {
+            bottomRow.removeFromRight( 10 );
+            syncBtn.setBounds( bottomRow.removeFromRight( 160 ) );
+        }
+        if( reloginBtn.isVisible() )
+        {
+            bottomRow.removeFromRight( 10 );
+            reloginBtn.setBounds( bottomRow.removeFromRight( 150 ) );
         }
         if( folderBtn.isVisible() )
         {
-            bottomRow.removeFromRight( 12 );
-            folderBtn.setBounds( bottomRow.removeFromRight( 160 ) );
+            bottomRow.removeFromRight( 10 );
+            folderBtn.setBounds( bottomRow.removeFromRight( 140 ) );
         }
 
         bounds.removeFromBottom( 10 );
 
-        // Split center area: QR code on left (200x200), instructions & code on right
         const int qrWidth = 200;
         qrCode.setBounds( bounds.removeFromLeft( qrWidth ).withHeight( qrWidth ) );
         bounds.removeFromLeft( 20 );
 
-        instructionsLabel.setBounds( bounds.removeFromTop( 60 ) );
+        instructionsLabel.setBounds( bounds.removeFromTop( 72 ) );
         bounds.removeFromTop( 8 );
-        codeLabel.setBounds( bounds.removeFromTop( 38 ) );
+        codeLabel.setBounds( bounds.removeFromTop( 36 ) );
         bounds.removeFromTop( 8 );
-        statusLabel.setBounds( bounds.removeFromTop( 50 ) );
+        statusLabel.setBounds( bounds.removeFromTop( 54 ) );
     }
 
     void CloudAuthQrPopup::paint( juce::Graphics& g )

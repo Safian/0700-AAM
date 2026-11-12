@@ -80,6 +80,7 @@
 #include "modes/padperform/kick_PadPerform.cpp"
 #include "modes/pianoview/kick_PianoView.cpp"
 #include "modes/filebrowser/kick_fileUtils.cpp"
+#include "modes/filebrowser/kick_phonePairingServer.cpp"
 #include "modes/filebrowser/kick_fileBrowser.cpp"
 #include "modes/filebrowser/kick_cloudAuthPopup.cpp"
 

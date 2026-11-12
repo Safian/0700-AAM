@@ -2076,14 +2076,20 @@ namespace ui
             home.getFullPathName().toStdString(),
             mus.getFullPathName().toStdString(),
 #if JUCE_LINUX || __linux__
-            "/data",
-            "/media/az01-internal-sd",
             "/sdcard",
+            "/sdcard/Splice",
+            "/media/az01-internal-sd",
+            "/media/az01-internal-sd/Splice",
+            "/media/az01-internal-sd/MPC Documents/Splice",
+            "/data",
+            "/data/Splice",
 #endif
         };
 
 #if JUCE_IOS
         const std::string fallback = docs.getChildFile( "Splice" ).getFullPathName().toStdString();
+#elif JUCE_LINUX || __linux__
+        const std::string fallback = "/sdcard/Splice";
 #else
         const std::string fallback = home.getChildFile( "Splice" ).getFullPathName().toStdString();
 #endif
@@ -2099,12 +2105,15 @@ namespace ui
         const bool gdriveEnabled = cs.enableGoogleDrive.get();
         const bool webdavEnabled = cs.enableWebDav.get();
 
-        // 1. Splice Place (auto-discovers or auto-creates Splice folder; always visible when enabled)
-        if( spliceEnabled )
+        // 1. Splice Place (always visible by default; auto-discovers real samples)
+        juce::File spliceDir = findBestSpliceDirectory();
+        if( spliceEnabled || spliceDir.isDirectory() )
         {
-            juce::File spliceDir = findBestSpliceDirectory();
             if( !spliceDir.exists() )
                 spliceDir.createDirectory();
+            if( cs.splicePath.get() != spliceDir.getFullPathName() )
+                cs.splicePath = spliceDir.getFullPathName();
+
             Place p;
             p.kind       = Place::Kind::Shortcut;
             p.label      = "Splice";
@@ -2116,56 +2125,47 @@ namespace ui
             sourcePlaces.push_back( p );
         }
 
-        // 2. Google Drive Place: check hub source, local folder, or unconnected placeholder
+        // 2. Google Drive Place: check mounted local accounts (e.g. macOS ~/Library/CloudStorage), remote hub, or placeholder
         bool hasGoogleDriveConfig = false;
-        if( hub )
+        bool hasLocalGoogleDrive = false;
+
+        // Check local CloudStorage on macOS (adds each account found so multi-account drives all show up)
+        juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
+        juce::File cloudStorage = home.getChildFile( "Library/CloudStorage" );
+        if( cloudStorage.isDirectory() )
         {
-            for( auto& cfg : hub->allConfigs() )
+            for( auto iter : juce::RangedDirectoryIterator( cloudStorage, false, "*GoogleDrive*" ) )
             {
-                if( cfg.type == "gdrive" )
+                if( iter.getFile().isDirectory() )
                 {
-                    hasGoogleDriveConfig = true;
-                    break;
+                    auto myDrive = iter.getFile().getChildFile( "My Drive" );
+                    juce::File targetDir = myDrive.isDirectory() ? myDrive : iter.getFile();
+                    juce::String folderName = iter.getFile().getFileName();
+                    juce::String userLabel = folderName.startsWith( "GoogleDrive-" ) ? folderName.substring( 12 ) : folderName;
+
+                    Place p;
+                    p.kind       = Place::Kind::Shortcut;
+                    p.label      = "Google Drive (" + userLabel + ")";
+                    p.icon       = "Icon_Internal";
+                    p.iconActive = "Icon_InternalActive";
+                    p.width      = 18.0f;
+                    p.height     = 16.0f;
+                    p.path       = targetDir.getFullPathName();
+                    sourcePlaces.push_back( p );
+                    hasLocalGoogleDrive = true;
                 }
             }
         }
-        bool hasLocalGoogleDrive = false;
-        if( gdriveEnabled && !hasGoogleDriveConfig )
+
+        if( !hasLocalGoogleDrive && cs.googleDrivePath.get().isNotEmpty() )
         {
-            juce::File gdriveDir;
-            if( cs.googleDrivePath.get().isNotEmpty() )
-                gdriveDir = juce::File( cs.googleDrivePath.get() );
-            else
-            {
-                juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
-                juce::File cloudStorage = home.getChildFile( "Library/CloudStorage" );
-                if( cloudStorage.isDirectory() )
-                {
-                    for( auto iter : juce::RangedDirectoryIterator( cloudStorage, false, "*GoogleDrive*" ) )
-                    {
-                        if( iter.getFile().isDirectory() )
-                        {
-                            auto myDrive = iter.getFile().getChildFile( "My Drive" );
-                            gdriveDir = myDrive.isDirectory() ? myDrive : iter.getFile();
-                            break;
-                        }
-                    }
-                }
-                if( !gdriveDir.isDirectory() && home.getChildFile( "Google Drive" ).isDirectory() )
-                    gdriveDir = home.getChildFile( "Google Drive" );
-                else if( !gdriveDir.isDirectory() )
-                {
-                    auto docsDrive = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory ).getChildFile( "Google Drive" );
-                    if( docsDrive.isDirectory() )
-                        gdriveDir = docsDrive;
-                }
-            }
+            juce::File gdriveDir( cs.googleDrivePath.get() );
             if( gdriveDir.isDirectory() )
             {
                 hasLocalGoogleDrive = true;
                 Place p;
                 p.kind       = Place::Kind::Shortcut;
-                p.label      = "Google Drive (Local)";
+                p.label      = "Google Drive";
                 p.icon       = "Icon_Internal";
                 p.iconActive = "Icon_InternalActive";
                 p.width      = 18.0f;
@@ -2174,7 +2174,31 @@ namespace ui
                 sourcePlaces.push_back( p );
             }
         }
-        if( gdriveEnabled && !hasGoogleDriveConfig && !hasLocalGoogleDrive )
+
+        // 3. Configured Cloud & Folder hub sources (Google Drive OAuth/API, WebDAV, custom remote sources)
+        if( hub )
+        {
+            for( auto& cfg : hub->allConfigs() )
+            {
+                if( cfg.type == "webdav" && !webdavEnabled ) continue;
+                if( cfg.type == "splice" && !spliceEnabled ) continue;
+                if( cfg.type == "gdrive" )
+                    hasGoogleDriveConfig = true;
+
+                Place p;
+                p.kind       = Place::Kind::Source;
+                p.label      = juce::String::fromUTF8( cfg.name.c_str() );
+                p.icon       = cfg.type == "gdrive" ? "Icon_Internal" : "Icon_Library";
+                p.iconActive = cfg.type == "gdrive" ? "Icon_InternalActive" : "Icon_LibraryActive";
+                p.width      = 18.0f;
+                p.height     = 16.0f;
+                p.path       = juce::String::fromUTF8( cfg.id.c_str() );
+                sourcePlaces.push_back( p );
+            }
+        }
+
+        // Always show Google Drive in the folder list so the user can easily browse or connect
+        if( !hasGoogleDriveConfig && !hasLocalGoogleDrive )
         {
             Place p;
             p.kind       = Place::Kind::Source;
@@ -2185,27 +2209,6 @@ namespace ui
             p.height     = 16.0f;
             p.path       = "gdrive-unconnected";
             sourcePlaces.push_back( p );
-        }
-
-        // 3. Configured Cloud & Folder hub sources (Google Drive OAuth/API, WebDAV, custom local folders)
-        if( hub )
-        {
-            for( auto& cfg : hub->allConfigs() )
-            {
-                if( cfg.type == "webdav" && !webdavEnabled ) continue;
-                if( cfg.type == "splice" && !spliceEnabled ) continue;
-                if( cfg.type == "gdrive" && !gdriveEnabled ) continue;
-
-                Place p;
-                p.kind       = Place::Kind::Source;
-                p.label      = juce::String::fromUTF8( cfg.name.c_str() );
-                p.icon       = cfg.type == "gdrive" ? "Icon_Internal" : "Icon_Library";
-                p.iconActive = cfg.type == "gdrive" ? "Icon_InternalActive" : "Icon_LibraryActive";
-                p.width      = 18.0f;
-                p.height     = 16.0f;
-                p.path       = juce::String::fromUTF8( cfg.id.c_str() ); // the source id
-                sourcePlaces.push_back( p );
-            }
         }
         rebuildShown();
         if( left.table )

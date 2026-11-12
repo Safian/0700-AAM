@@ -2,6 +2,7 @@
 #include "kick_ui_settings_cloud.h"
 #include "../../kick_ui/recent_project/kick_ProjectActions.h"
 #include "../../kick_ui/modes/filebrowser/kick_sourceConfig.h"
+#include "../../kick_ui/modes/filebrowser/kick_incomingFiles.h"
 
 namespace kick_ui
 {
@@ -118,16 +119,71 @@ namespace kick_ui
         if( gEmail.isNotEmpty() )
             lblGoogleUser.setText( "Status: Connected (" + gEmail + ")", juce::dontSendNotification );
         else
-            lblGoogleUser.setText( "Status: Not Signed In (Tap 'QR Sign In' to connect)", juce::dontSendNotification );
+        {
+            // Check for mounted Google Drive
+            juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
+            juce::File cloudStorage = home.getChildFile( "Library/CloudStorage" );
+            juce::String localUser;
+            if( cloudStorage.isDirectory() )
+            {
+                for( auto iter : juce::RangedDirectoryIterator( cloudStorage, false, "*GoogleDrive*" ) )
+                {
+                    if( iter.getFile().isDirectory() )
+                    {
+                        juce::String fn = iter.getFile().getFileName();
+                        localUser = fn.startsWith( "GoogleDrive-" ) ? fn.substring( 12 ) : fn;
+                        break;
+                    }
+                }
+            }
+            if( localUser.isNotEmpty() )
+                lblGoogleUser.setText( "Status: Mounted Locally (" + localUser + ")", juce::dontSendNotification );
+            else
+                lblGoogleUser.setText( "Status: Not Signed In (Tap 'QR Sign In' to connect)", juce::dontSendNotification );
+        }
 
         toggleSplice.setToggleState( settings.cloudSources.enableSplice.get(), juce::dontSendNotification );
-        juce::String sPath = settings.cloudSources.splicePath.get();
-        if( sPath.isEmpty() )
+
+        juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
+        juce::File home = juce::File::getSpecialLocation( juce::File::userHomeDirectory );
+        std::vector<std::string> roots = {
+            docs.getFullPathName().toStdString(),
+            docs.getChildFile( "Kick" ).getFullPathName().toStdString(),
+            home.getFullPathName().toStdString(),
+#if JUCE_LINUX || __linux__
+            "/sdcard",
+            "/sdcard/Splice",
+            "/media/az01-internal-sd",
+            "/media/az01-internal-sd/Splice",
+            "/data",
+#endif
+        };
+        juce::String curPath = settings.cloudSources.splicePath.get();
+        std::string fallback = docs.getChildFile( "Splice" ).getFullPathName().toStdString();
+        std::string resolved = kick_incoming::resolveSpliceDir( curPath.toStdString(), roots, fallback );
+        juce::File sdir( juce::String::fromUTF8( resolved.c_str() ) );
+        if( curPath != sdir.getFullPathName() )
+            settings.cloudSources.splicePath = sdir.getFullPathName();
+
+        juce::File spliceToken( "/data/Settings/splice-authtoken" );
+        if( spliceToken.existsAsFile() )
         {
-            juce::File docs = juce::File::getSpecialLocation( juce::File::userDocumentsDirectory );
-            sPath           = docs.getChildFile( "Splice" ).getFullPathName();
+            juce::String user = spliceToken.loadFileAsString().trim().upToFirstOccurrenceOf( ";", false, false );
+            int numSamples = 0;
+            if( sdir.isDirectory() )
+            {
+                auto all = sdir.getChildFile( "All Your Samples" );
+                if( all.isDirectory() )
+                    numSamples = all.getNumberOfChildFiles( juce::File::findFiles );
+                else
+                    numSamples = sdir.getNumberOfChildFiles( juce::File::findFiles | juce::File::ignoreHiddenFiles );
+            }
+            lblSplicePath.setText( "Status: Connected (" + user + ")  |  Folder: " + sdir.getFullPathName() + ( numSamples > 0 ? " (" + juce::String( numSamples ) + " samples)" : "" ), juce::dontSendNotification );
         }
-        lblSplicePath.setText( "Folder: " + sPath, juce::dontSendNotification );
+        else
+        {
+            lblSplicePath.setText( "Folder: " + sdir.getFullPathName(), juce::dontSendNotification );
+        }
 
         toggleWebDav.setToggleState( settings.cloudSources.enableWebDav.get(), juce::dontSendNotification );
     }
