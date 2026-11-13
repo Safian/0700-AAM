@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 #include <PluginPanel.h>
+#include <kick_clap/HardwareHooks.h>
 #include <kick_ui_controls/kick_ui_controls.h>
 #include <contracts/dcl/dcl_signals.h>
 #include <contracts/dcl/dcl_contracts_helper.h>
@@ -79,18 +80,32 @@ public:
             if (!safe || !safe->isVisible()) return false;
             auto* modal = juce::Component::getCurrentlyModalComponent();
             if (modal != nullptr && modal != safe->getTopLevelComponent() && !modal->isParentOf(safe.getComponent())) return false;
+            // Hardware +/- and cursor left/right (the bridge sends both as EN_PLUS / EN_MINUS): the previous / next Q-Link page. Press and release
+            // are both taken while the plug-in has pages, so the release finds no one else and nothing else sees a lone release.
+            if (contracts::DclContractsHelper::isButtonMessage(message)) {
+                const auto button = contracts::DclContractsHelper::getButtonCode(message);
+                if (button != contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS && button != contracts::DeviceControlContracts::BtnLedSequence::EN_MINUS) return false;
+                if (contracts::DclContractsHelper::getButtonState(message) != contracts::DeviceControlContracts::BTN_PRESSED)
+                    return safe->hasRemotePages();
+                return safe->stepRemotePage(button == contracts::DeviceControlContracts::BtnLedSequence::EN_PLUS ? 1 : -1);
+            }
             if (message.data.size() < 3 || !contracts::DclContractsHelper::isKnobMessage(message)) return false;
             const auto code = contracts::DclContractsHelper::getKnobCode(message);
             const auto value = contracts::DclContractsHelper::getKnobValue(message);
             // Q-Link: EN_KNOB_1 .. EN_KNOB_16 (four encoders times four banks, hardware/qlink_bank.h). With clap.remote-controls pages knobs 1..8
             // drive the page of what is on screen and 9..16 the page after it; without pages knobs 1..4 are the macros (PluginPanel::adjustKnob).
+            // The jog / data wheel scrolls the plug-in's GUI (it is taller than the 1280x800 screen)
+            if (code == contracts::DeviceControlContracts::KnobSequence::EN_KNOB_CENTER) return safe->scrollGui(value > 0 ? 1 : (value < 0 ? -1 : 0));
             const int first = contracts::DeviceControlContracts::KnobSequence::EN_KNOB_1;
             const int index = code - first;
             if (index < 0 || index >= 16) return false;
             return safe->adjustKnob(index, value / 127.0);
         });
+        // Hardware Undo / Shift+Undo go to the plug-in while its panel is open (the bridge asks this hook before the project's undo)
+        kick::clap::hardwareUndoHook() = [safe](bool redo) { return safe && safe->isVisible() && safe->pluginUndoRedo(redo); };
         showPluginGuiNow();
     }
+    ~ClapInstrumentPanel() override { kick::clap::hardwareUndoHook() = nullptr; }
 private:
     contracts::DclSignals::HardwareInputLease hardware;
 };

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "BitmapGuiComponent.h"
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
@@ -129,14 +131,15 @@ void BitmapGuiComponent::wireSinks() {
 bool BitmapGuiComponent::open(int w, int h) {
     if (client.isOpen()) return true;
     wireSinks();
-    scale = renderScale(this);
+    scale = baseScale = pendingScale = renderScale(this);
     uint32_t ww = static_cast<uint32_t>(std::max(1, w)), hh = static_cast<uint32_t>(std::max(1, h));
     // A host whose native event loop runs on this thread (macOS, Windows, iOS: the JUCE app) sets the flag: the plug-in's timers and async messages are
     // delivered by that loop and tick() does not pump it. On Linux / the MPC there is no loop the plug-in's toolkit can join: tick() runs its queue.
 #if JUCE_MAC || JUCE_WINDOWS || JUCE_IOS
     constexpr uint32_t createFlags = SAFIAN_BITMAP_GUI_CREATE_HOST_RUNS_EVENT_LOOP;
 #else
-    constexpr uint32_t createFlags = 0;
+    // the MPC (Linux) has its own keys: no on-screen piano strip
+    constexpr uint32_t createFlags = SAFIAN_BITMAP_GUI_CREATE_NO_ONSCREEN_KEYBOARD;
 #endif
     if (!client.open(ww, hh, scale, createFlags)) return false;
     safian_bitmap_gui_info_t info{};
@@ -147,6 +150,18 @@ bool BitmapGuiComponent::open(int w, int h) {
     wanted = true;
     scheduleSoon(1);
     return true;
+}
+
+void BitmapGuiComponent::adoptScale(double target) {
+    if (!client.isOpen()) return;
+    safian_bitmap_gui_info_t info{};
+    if (client.info(info)) target = std::max(info.min_scale, std::min(info.max_scale, target));
+    if (std::abs(target - scale) <= 0.03 * scale) return;
+    scale = pendingScale = target;
+    client.setScale(scale);
+    image = juce::Image(); // the next frame has another size
+    scheduleSoon(1);
+    repaint();
 }
 
 void BitmapGuiComponent::resized() {
@@ -215,7 +230,18 @@ void BitmapGuiComponent::paint(juce::Graphics& g) {
     if (!image.isValid()) { g.fillAll(juce::Colour(0xff15191e)); return; }
     const auto drawn = juce::Rectangle<int>(0, 0, juce::roundToInt(image.getWidth() / scale), juce::roundToInt(image.getHeight() / scale));
     if (drawn.getWidth() < getWidth() || drawn.getHeight() < getHeight()) { g.setColour(juce::Colour(0xff15191e)); g.fillAll(); }
-    g.setImageResamplingQuality(juce::Graphics::lowResamplingQuality);
+    // The host may paint this component through a transform (the MPC bridge draws the 1024x600 UI scaled up to its 1280x800 framebuffer):
+    // render the plug-in at the pixel density that is really on screen, otherwise its bitmap is enlarged and looks coarse.
+    const double physical = static_cast<double>(g.getInternalContext().getPhysicalPixelScaleFactor());
+    if (physical > 0.1 && wanted && client.isOpen()) {
+        const double target = baseScale * physical;
+        if (std::abs(target - scale) > 0.03 * scale && std::abs(target - pendingScale) > 0.03 * pendingScale) {
+            pendingScale = target;
+            juce::Component::SafePointer<BitmapGuiComponent> safe(this);
+            juce::MessageManager::callAsync([safe, target] { if (safe) safe->adoptScale(target); });
+        }
+    }
+    g.setImageResamplingQuality(std::abs(scale * 1.0 - baseScale * physical) > 0.03 ? juce::Graphics::highResamplingQuality : juce::Graphics::lowResamplingQuality);
     if (scale == 1.0) g.drawImageAt(image, 0, 0);
     else g.drawImageTransformed(image, juce::AffineTransform::scale(static_cast<float>(1.0 / scale)));
 }
@@ -243,6 +269,16 @@ void BitmapGuiComponent::mouseDrag(const juce::MouseEvent& e) { sendPointer(e, S
 void BitmapGuiComponent::mouseUp(const juce::MouseEvent& e) { sendPointer(e, SAFIAN_BITMAP_GUI_POINTER_UP); }
 void BitmapGuiComponent::mouseMove(const juce::MouseEvent& e) { if (!e.source.isTouch()) sendPointer(e, SAFIAN_BITMAP_GUI_POINTER_HOVER); }
 void BitmapGuiComponent::mouseExit(const juce::MouseEvent& e) { if (!e.source.isTouch()) sendPointer(e, SAFIAN_BITMAP_GUI_POINTER_LEAVE); }
+
+void BitmapGuiComponent::scrollBy(double notches) {
+    if (!client.isOpen()) return;
+    safian_bitmap_gui_wheel_event_t ev{};
+    // over the right edge (the vertical scroll bar of the panels): a wheel over a knob would change the knob
+    ev.x = std::max(0, getWidth() - 3); ev.y = getHeight() / 2.0;
+    ev.delta_y = notches;
+    client.wheel(ev);
+    scheduleSoon(1);
+}
 
 void BitmapGuiComponent::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& w) {
     if (!client.isOpen()) return;

@@ -15,6 +15,7 @@
 #include "hardware/system_probe.h"
 #include "hardware/touch_space.h"
 #include "hardware/qlink_bank.h"
+#include <kick_clap/HardwareHooks.h>
 #include "hardware/transport_router.h"
 #include "hardware/screen_dimmer.h"
 #include "hardware/source/kick_PlatformServices.h"
@@ -1670,6 +1671,7 @@ public:
             }
             case HW_BTN_UNDO:
             {
+                if (auto& pluginUndo = kick::clap::hardwareUndoHook(); pluginUndo && pluginUndo(isShiftDown())) break; // a plug-in panel is open
                 if (isShiftDown()) {
                     ae.getUndoManager().redo();
                 } else {

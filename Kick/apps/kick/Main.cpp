@@ -22,6 +22,7 @@
 #include "kick_ui/kick_ui.h"
 #include "kick_ui/kick_ui_grid.h"
 #include "program_edit_ui/program_edit_ui.h"
+#include <cstdlib>
 #include <kick_clap/PluginManager.h>
 #include "hardware/source/kick_PlatformServices.h"
 #include "audio_engine/audio_engine.h"
@@ -524,6 +525,11 @@ public:
 
     void initialise( const juce::String& commandLine ) override
     {
+#if JUCE_LINUX
+        // The MPC starts this process without HOME: a plug-in that keeps its presets, packs and preferences in a per-user folder (SynthyBoy) would have none.
+        // The data partition is writable and survives updates.
+        ::setenv( "SYNTHYBOY_USER_DIR", "/data/synthyboy", 0 );
+#endif
         kick_logger::init();
         kick_log( "info", "[INFO] [APP] Kick %s initialising... commandLine: '%s'\n", getApplicationVersion().toRawUTF8(), commandLine.toRawUTF8() );
         const bool smoke = commandLine.contains("--smoke-test");

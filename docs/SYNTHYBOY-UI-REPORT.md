@@ -101,3 +101,13 @@ Not verified:
 - A plug-in that draws slowly on ARMv7 holds the message thread: render is synchronous in `tick()` / `render()` (the contract). The component renders only when dirty and at most at the plug-in's `next_frame_ms`, but a 1024x572 software frame on the A7 is unmeasured.
 - Two JUCE copies in one process (Kick's 7.0.12 and the module's 8.0.17): the module hides its symbols (`check-clap-exports`); on macOS the plug-in's timers ride the host run loop (`HOST_RUNS_EVENT_LOOP`), which is the documented case.
 - Background discovery starts a scanner process per binary at the first Plugin program; on a slow device with many plug-ins this is the same cost as the panel's Scan button, once per start.
+
+## Hardware control and MPC specifics (verified on the Key 61)
+
+- **Q-Link**: encoders 1..4 times four banks drive the page of what is on screen (knobs 1..8) and the page after it (9..16); hardware `+` / `-` and cursor left / right step the pages (`PluginPanel::stepRemotePage`, taken through the panel's hardware claim, press and release); the page title is shown in the strip.
+- **Undo / Shift+Undo** go to the plug-in (Ctrl+Z / Ctrl+Shift+Z key events) while its panel is open; otherwise the project's undo (`kick_clap/HardwareHooks.h`, asked by the bridge first).
+- **Jog wheel** scrolls the plug-in GUI: a wheel event over the right edge (the scroll bar: a wheel over a knob would change the knob). Two-finger pan and the one-finger drag on a background (SynthyBoy `touch-scroll`) scroll as well; a drag on a control never scrolls.
+- **No on-screen piano** on Linux / MPC: `SAFIAN_BITMAP_GUI_CREATE_NO_ONSCREEN_KEYBOARD` (the hardware keys play).
+- **Render density**: the plug-in bitmap is rendered at the on-screen pixel density (the bridge scales the 1024x600 UI to 1280x800), otherwise it is enlarged and coarse.
+- **User directory**: the MPC starts the app without `HOME`; Kick sets `SYNTHYBOY_USER_DIR=/data/synthyboy` (Linux, when not set). The factory presets go to `/data/synthyboy/packs/factory` with `docs/hardware/key61/tools/deploy_synthyboy_content.sh <SynthyBoyVST>/content/presets`; without them the preset arrows have nothing to step through.
+- Not verified: sound output through the MPC (not listened to), every control of every tab (the tabs, top strip, OSC controls, wavetable editor, preset stepping, knob drag, Q-Link and pages were exercised with screenshots), the Q-Link touch strip and the physical encoders (injected through `kick_cmd` only).
