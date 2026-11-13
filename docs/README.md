@@ -13,6 +13,9 @@ Az Akai MPC támogatás megszűnt (lásd root `AGENTS.md` SCOPE). A régi Key 61
 - `plans/research/` – `sample-sources.md`, `architecture-and-publishing.md` (piano plugin), `cloud-sources.md` (Splice / Google Drive terms).
 - `plans/assets/piano-ui/` – UI mock-up for the piano plugin (its colours are already used by the on-screen keyboard).
 
+## SYNTHYBOY-UI-REPORT.md
+- `SYNTHYBOY-UI-REPORT.md` – the plug-in's own GUI in the plug-in panel (CLAP bitmap GUI extension client): what changed, precedence of a module over the built-in, Q-Link pages, measurements, what is verified and what is not, what the SynthyBoy side needs. Contract and usage: `../Kick/clap_host/README.md` ("Plug-in UI (bitmap GUI)").
+
 ## upstream/ – upstream and fork work
 - `fork-push-advice.md` – push and upstream rules.
 

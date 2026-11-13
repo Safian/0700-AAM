@@ -270,3 +270,54 @@ minimal empty executable; that environment failure does not clear Linux ASan.
 Actual hardware boot, ALSA round-trip latency, xrun behavior, and performance with
 Linux AArch64 plugins must be measured on the target. Desktop results do not
 establish a safe voice count or buffer size for the i.MX8M Mini.
+
+## Plug-in UI (bitmap GUI)
+
+A plug-in can draw its own GUI into memory and let KICK show it: the CLAP extension `com.safian.bitmap-gui/1`
+(`third_party/safian/bitmap_gui_ext.h`, a verbatim copy of the header in SynthyBoyVST; normative text:
+SynthyBoyVST `docs/BITMAP-GUI-EXTENSION.md`). Nothing of the plug-in's toolkit crosses the interface, so a plug-in that links a different JUCE
+than KICK (SynthyBoy ships JUCE 8 inside its `.clap`, KICK links JUCE 7.0.12) works on the Akai MPC (software framebuffer, no X11),
+on the desktop and in a mobile app alike. KICK contains **no copy of SynthyBoy's UI or engine**; the SynthyBoy module is a separate `.clap`.
+
+Layers (each tested on its own):
+
+| Layer | Where | Notes |
+|---|---|---|
+| `BitmapGuiClient` | `include/kick_clap/BitmapGui.h`, `src/BitmapGuiClient.cpp` | JUCE free. create / resize / scale / tick / render / pointer / wheel / key / text / focus / request_done / show_remote_page. The plug-in's calls into the host (`request_render`, `request_text_input`, `request_file`, ...) arrive as `std::function` sinks; a sink that is empty is NULL in the host table the plug-in sees (the plug-in degrades: file entries dimmed, no keyboard request ...). Main thread only; calls from another thread are ignored. |
+| `Host` | `Host::bitmapGui()`, `setBitmapGuiHandler()`, `remotePages()` | Installs the host-side table (`com.safian.bitmap-gui.host/1`) and calls `pluginUnloading()` before the plug-in is destroyed, so the GUI is always destroyed first. Also reads the plug-in's `clap.remote-controls` pages (`changed` / `suggest_page` supported). |
+| `BitmapGuiComponent` | `juce/BitmapGuiComponent.*` | A `juce::Component`. A timer calls `tick()` (about 15 Hz idle; `next_frame_ms` while the frame says it wants another); `render()` only when the plug-in reports dirty, and only the dirty rectangles are copied into one reused `juce::Image` (no per-frame allocation). Input in logical pixels: mouse, wheel, keys, touch with a pointer id per finger (on the MPC the bridge's `ui::TouchSlot`, via `BitmapGuiComponent::touchSlotProvider`). Scale: the display scale, 1.0 on the MPC; `KICK_BITMAP_GUI_SCALE` overrides. |
+| `PluginPanel` | `juce/PluginPanel.*` | If the loaded plug-in offers the extension the panel shows the plug-in's GUI filling the panel, below a 28 px strip: **Parameters** (toggle to the generic parameter list, which stays the fallback for every other plug-in), the Q-Link page title and `<` `>`. |
+| Application hooks | `kick_ClapPanel.h` | Text input = Kick's on-screen keyboard (`KickVirtualKeyBoard`; the edited text replaces the field content, Enter commits). Files = `juce::FileChooser` on macOS / Windows / iOS, an in-panel touch chooser (`juce::FileBrowserComponent`, 44 px rows) on Linux / MPC. Share = the OS share sheet on iOS, "show in Finder/Explorer" on desktop, none on the MPC. URLs = the system browser (`juce::URL`), no-op on the MPC. |
+
+### Which module is used (precedence)
+
+KICK links a Vital-free SynthyBoy statically (`id` `com.safian.synthyboy`, path `internal:static`). That is the fallback of targets that cannot load
+a module (iOS, Android style). Wherever the real module is installed it wins, because it is the full build (Vital engine, bitmap GUI).
+`PluginManager::resolve()` applies this rule to a request for a built-in, in order:
+
+1. an installed package of that id (PluginInstaller + manifest + TrustStore, unchanged checks) whose signature is not `Revoked` or `Expired`;
+2. a `.clap` binary found by discovery (the isolated `kick-clap-scan` enumerated this exact id, and the file still exists): `/usr/lib/clap` on the MPC, `~/.clap`,
+   `CLAP_PATH`, the folders of `KICK/clap-paths.txt` on the desktop;
+3. the built-in.
+
+A request that names a binary path is never rewritten. A project saved with the built-in is therefore opened with the module once it is installed. Discovery runs once in the
+background when the first Plugin program is created (`PluginSession::discoverInBackground()`; the panel's own scans feed the same list); when it finishes, a loaded
+built-in is swapped for the module with its state kept (`PluginSession::service()`). Tests: `tests/BitmapGuiTests.cpp` (`testPrecedence`).
+
+### Q-Link
+
+`include/kick_clap/RemotePages.h` is the JUCE-free logic (tested in `tests/platform/QLinkBankTests.cpp`). The MPC's 4 encoders times 4 banks are the knobs `EN_KNOB_1 .. EN_KNOB_16`.
+With `clap.remote-controls` pages, knobs 1-8 drive the **focused page** and knobs 9-16 the page after it. The focused page follows the plug-in: when the user moves to another
+panel the plug-in calls the host's `set_active_remote_page` (and `clap_host_remote_controls.suggest_page`); the `<` `>` buttons step through the pages and tell the plug-in
+(`show_remote_page`), so the GUI shows that panel. Plug-ins without pages keep the old behaviour: knobs 1-4 are the four assignable macros.
+
+### Test the client against the real SynthyBoy module
+
+```sh
+cmake -S Kick/clap_host -B /tmp/kick-clap -DKICK_SYNTHYBOY_CLAP=/path/to/synthyboy.clap   # or the environment variable of the same name
+cmake --build /tmp/kick-clap && ctest --test-dir /tmp/kick-clap -R bitmap
+```
+
+Without the path the real-module cases print `SKIPPED` (the fake plug-in cases and the precedence test always run). In the full application,
+`KICK_SMOKE_CLAP_PANEL=/path/to/synthyboy.clap ... Kick --smoke-test` opens the plug-in panel at 1024x600, measures the idle and animating cost, drives the Q-Link knobs and writes a screenshot
+(`KICK_SMOKE_PANEL_PNG`, default `$KICK_DATA_ROOT/clap-panel.png`). See `docs/SYNTHYBOY-UI-REPORT.md`.

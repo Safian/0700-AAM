@@ -732,6 +732,17 @@ public:
                 juce::PNGImageFormat png;
                 if (!output.openedOk() || !png.writeImageToStream(image, output)) setApplicationReturnValue(2);
             }
+#if KICK_APP_SMOKE_TEST
+            if (const auto panelPath = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_CLAP_PANEL", {}); panelPath.isNotEmpty())
+            {
+                // The plug-in panel with the plug-in's own GUI (bitmap GUI extension), ClapPanelSmoke.h; asynchronous, it quits when it is done.
+                startKickClapPanelSmoke(panelPath, [this](const juce::String& panelError) {
+                    if (panelError.isNotEmpty()) { std::cerr << "FAIL: " << panelError << std::endl; setApplicationReturnValue(3); }
+                    quit();
+                });
+                return;
+            }
+#endif
             if (const auto dialogs = juce::SystemStats::getEnvironmentVariable("KICK_SMOKE_DIALOGS", {}); dialogs.isNotEmpty())
             {
                 auto file = juce::File(juce::SystemStats::getEnvironmentVariable("KICK_DATA_ROOT", {})).getChildFile("dialogs/Project.kickPrj");
