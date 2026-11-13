@@ -1,3 +1,5 @@
+> **ARCHIVÁLT, NEM FEJLESZTENDŐ, scope-on kívül (2026-11-13).** Az Akai MPC támogatás megszűnt (owner: "a kick-es akai fejlesztését el tudjuk engedni mostantól, az akaira fejlesztünk csak (a SynthyBoy-t)! max mobilra fogjuk folytatni"). Történeti hivatkozás: ne fejleszts rá, ne használd kiindulásnak. Az itt említett kódútvonalak/linkek elavultak lehetnek.
+
 # MPC Key 61 – a hardver gombjainak fizikai működése (tudás-napló)
 
 **Cél:** ami a hardverről egyszer ki lett derítve, itt marad, hogy ne kelljen újra megmérni (pl. háromszor egymás után megnyomni a gombot). Ha egy sor azt mondja, hogy fizikailag mért, akkor **a hardver kizárható**, és a mögötte lévő folyamatot (adapter, híd, UI) a felhasználó nélkül lehet vizsgálni: a rögzített nyers MIDI visszajátszható a `rawmidi` paranccsal (lásd 5. szakasz).

@@ -1,3 +1,5 @@
+> **ARCHIVÁLT, NEM FEJLESZTENDŐ, scope-on kívül (2026-11-13).** Az Akai MPC támogatás megszűnt (owner: "a kick-es akai fejlesztését el tudjuk engedni mostantól, az akaira fejlesztünk csak (a SynthyBoy-t)! max mobilra fogjuk folytatni"). Történeti hivatkozás: ne fejleszts rá, ne használd kiindulásnak. Az itt említett kódútvonalak/linkek elavultak lehetnek.
+
 # Terv: az MPC v3.10 útmutató soronkénti végigvétele, párhuzamos fejlesztéssel
 
 **Szabály:** funkció → keresés a dokumentációban → a leírás alapján fejlesztés. Hipotézis nincs: minden állítás mellett bizonyíték áll (útmutató-oldal, kódsor, napló, snapshot, fotó), vagy "nem vizsgált". Az útmutató: *MPC Standalone OS – User Guide v3.10* (528 oldal, ez érvényes az MPC Key 61-re is), [README.md](README.md).

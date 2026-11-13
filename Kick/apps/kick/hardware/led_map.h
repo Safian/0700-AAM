@@ -92,7 +92,7 @@ inline uint8_t akaiLedValue(bool twoColour, int level)
 }
 
 // Status byte of a button LED write: Control Change 0xB0 <note> <byte> on channel 0 (Port 1). Verified on the
-// MPC Key 61 with a camera (docs/hardware/key61/led-colours.md); Note On/Off does not switch the LEDs.
+// MPC Key 61 with a camera (docs/archive/akai-key61/led-colours.md); Note On/Off does not switch the LEDs.
 constexpr uint8_t kAkaiLedStatus = 0xB0;
 
 // The 3 bytes of one LED write (channel 0). 'byte' comes from akaiLedValue().

@@ -1,5 +1,13 @@
 # BehringerKick – agent instructions
 
+## SCOPE (owner, 2026-11-13): az Akai MPC támogatás megszűnt, ne fejlessz rá
+- **Scope: az Akai MPC támogatás megszűnt, ne fejlessz rá.** A Kick mostantól csak mobil (iOS/iPadOS; Android csak ha a repó tartalmaz rá célt). Az Akai MPC-n (Key 61 stb.) kizárólag a SynthyBoy fejlődik, külön repóban (`SynthyBoyVST`).
+- Owner szavai: "a kick-es akai fejlesztését el tudjuk engedni mostantól, az akaira fejlesztünk csak (a SynthyBoy-t)! max mobilra fogjuk folytatni. távolítsd el az akairól, és a telós változat meg annyit tudjon, hogy ha egy usb-c-vel csatlakoztatunk rá egy kidit akkor DAW-ként azt kiszolgálja."
+- **Új követelmény:** a mobil változat, ha USB-C-vel csatlakoztatunk rá valamit, DAW-ként kiszolgálja azt. **OWNER PONTOSÍTÁSÁRA VÁR: mit csatlakoztatunk USB-C-n (kontroller/hangszer?)** - az üzenetben "kidit" szerepel (elírás, a jelentés nem biztos); ne találgass, ne implementálj, amíg nincs pontosítás. Háttér (archív, nem megerősített): `docs/archive/akai-key61/usb-and-phone.md`.
+- Az Akai-specifikus anyag (`docs/archive/akai-key61/`, `docs/hardware/key61/tools/`, `Kick/apps/{kick/hardware/adapters,mpc_gui,mpc_piano}`) ARCHIVÁLT / NEM FEJLESZTENDŐ. Ne indíts hardveres munkát, ne hívd a `kick-mpc-deploy` skillt, ne csatlakozz MPC-hez.
+- A `docs/hardware/key61/tools/` és a `kick-armv7-builder` image azért marad, mert a SynthyBoyVST MPC-build használja (`build_arm.sh`) és a `kick-tkgl-bootstrap` host-teszt hivatkozik rájuk.
+
+
 Local fork of `MusicTribeOpenSource/0700-AAM` (Behringer KICK, AGPL-3.0-or-later).
 Goal: contribute to Kick upstream (iOS/iPad port, scalable full-screen UI with external MIDI controller connectivity) and ship
 a **Proper** build that is Kick plus a skin only. Everything except the skin should be upstreamable.
@@ -16,8 +24,8 @@ a **Proper** build that is Kick plus a skin only. Everything except the skin sho
 - Upstream first: one PR = one change, branched from clean `main`. Do not base upstream PRs on the local
   platform-glue commit (it is cherry-picked from upstream PR #13 and may diverge from upstream's fix for issue #9).
 - Platform code behind `#if JUCE_IOS` / `JUCE_MAC`; Linux/hardware behaviour must not change.
-- Keep the hardware 1024x600 behaviour the default; scaling/mobile layouts are opt-in.
-- Mobile app (iOS/iPad): the Kick UI looks the same as on the Akai: full screen only, no hardware-lookalike chassis, drawers
+- Linux/hardware code paths are legacy (out of scope, see SCOPE above): do not extend them; the mobile/desktop UI is the product.
+- Mobile app (iOS/iPad): the Kick UI is full screen only, no hardware-lookalike chassis, drawers
   or on-screen hardware controls. Full operation needs an external MIDI controller connected; the mobile app is the Kick port
   to which external MIDI is attached.
 - Trademarks: "Behringer" and "KICK" names/logos are not licensed. Proper builds use their own name and logo.
@@ -78,6 +86,5 @@ Per-change compile check without a full build: take the TU command from `build-l
 prefix to your worktree, drop `-o`/`-MD`, add `-fsyntax-only`. Syntax checks must cover every TU the change reaches (e.g. the `audio_program.cpp` unity TU, `kick_ui.cpp`, `Main.cpp`), not only `audio_engine.cpp`; `verify-green.sh` is the final judge.
 Worker template: `.claude/agents/kick-worker.md`.
 
-## Akai MPC Key 61 (hardware)
-Hardware, ARM build/deploy and on-device debugging rules live in `Kick/apps/kick/AGENTS.md` (loaded when you work there).
-Push only to the `fork` remote (`HEAD:safian/main`), never `origin`. Documentation index: `docs/README.md`. All documentation (reviews, reports, plans) goes under `docs/` only; never create `documents/` or other doc folders.
+## Git remotes
+Push only to the `fork` remote (`HEAD:safian/develop` / `safian/main`), never `origin`. Documentation index: `docs/README.md`. All documentation (reviews, reports, plans) goes under `docs/` only; never create `documents/` or other doc folders.

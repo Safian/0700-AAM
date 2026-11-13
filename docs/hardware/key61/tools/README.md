@@ -1,3 +1,5 @@
+> **NEM FEJLESZTENDŐ, scope-on kívül (2026-11-13): az Akai MPC támogatás megszűnt.** Ez a könyvtár a megszűnt Akai-célhoz tartozó szkripteket őrzi. Szándékosan itt maradnak, mert (1) a `kick-tkgl-bootstrap` host-teszt (`Kick/tests/platform/CMakeLists.txt`) ezekre hivatkozik, (2) a SynthyBoyVST MPC-build a `build_arm.sh` / `kick-armv7-builder` image-et használja (a SynthyBoy az egyetlen aktív Akai-cél, külön repó). Kick-funkciót ide ne fejlessz. Az eltávolítási lépések: `uninstall_kick.sh`.
+
 # Eszközök (MPC Key 61 hardveres munka)
 
 | Fájl | Mire való |

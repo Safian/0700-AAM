@@ -1,3 +1,5 @@
+> **SCOPE-VÁLTOZÁS (owner, 2026-11-13):** az Akai MPC támogatás megszűnt; a Kick csak mobil. Az ebben a fájlban szereplő Akai/MPC/Key 61-es tételek (hardveres próbák, Akai-paritás, MPC-build/deploy, pendrive, hardver-híd) **ARCHIVÁLTAK, NEM FEJLESZTENDŐK**; csak a mobilra/közös motorra vonatkozó tételek érvényesek. Lásd root `AGENTS.md` SCOPE.
+
 # TODO — csak a nyitott tételek (2026-11-05)
 
 Kész és `safian/main`-ben van (nem itt követjük): W1-A..D, W2-A..D, W3-A/E, S-A..F, R-1..R-12 egységek (a maradékok lent) (Preferences, Grid, MIDI program, CLAP-FX host, indítás, főképernyő tabok, fájlböngésző-források, érintő-zongora, `.kickplug`, mixer/mute, szekvencer-szerkesztők, minta/sampler, Inserts/XY FX/Q-Link/MIDI Control/Looper, Power-ablak), a mobil hardverkinézet kivétele. Kapuk, amik lefutottak: Mac-build, ARM-build 0 hiba, ctest 102/102, smoke-ok, az MPC-n a képernyők megnyílnak. Amit hang, LED vagy ujj nélkül nem lehet igazolni, az B-ben van. A VST/FX-fejlesztés külön repóban fut (SynthyBoyVST, KickEQ).
@@ -32,7 +34,7 @@ Szabályok minden egységre: saját worktree és ág, csak a felsorolt fájlok, 
 
 A sor-azonosítók (AS-, SA-, SE-, PM-, MU-, CM-, SS-, NS-, LE-) leírása a törölt képernyő-review doksikban volt: `git show 4fa7f88f:docs/planning/plans/screens/<képernyő>.md`.
 
-## C. Ember kell (pontos lépések: [hw-test-checklist.md](../hardware/key61/hw-test-checklist.md))
+## C. Ember kell (pontos lépések: [hw-test-checklist.md](../archive/akai-key61/hw-test-checklist.md))
 0. **Először (2 perc):** a bekapcsoló gomb rövid nyomása → "Power" ablak; ujjal a Cancel/X gomb; majd Shut Down egy mentett projekttel (tiszta leállás, mentetlen változásnál rákérdez-e). A tényleges Shut Down/Restart még senki sem próbálta (R-12).
 1. **Hallgatás** (indok: üres bemenet, nincs hangszóró-visszacsatolás a gépnek): Demo 01 zongora alul/középen/fent, halk/hangos; képernyő-zongora (glissando, bend, vibrato, sustain, velocity-módok); Looper Sync füllel (REC 4 ütem → STOP → PLAY; a drift mérés szerint megoldott); busz-insertek (Reverb egy Return-ön); XY FX mind a 11 preset és cél (CPU/xrun ARM-on); Pad Perform akkord/progression, Layer Play, poly aftertouch; Sample Edit Fade/Normalize/Stereo>Mono; Sampler felvétel; az `adsr.h` változás hatása a samplerre; insert-CPU ARMv7-n (R11-2).
 2. **Fizikai:** strip Track Level ujjal; többujjas érintés; Q-Link/mixer; hardveres REC/OVERDUB/STOP/PLAY képernyőnként; a Data Dial fizikai forgatása (injektálva lép, fizikailag nem mért: naplózni kell a `B0 64 xx` érkezését); a modális ablakok X gombja ujjal; `<`/`>` és `<<`/`>>` fizikailag megállítva; TC ablak MAIN / Shift+STOP = Cancel; Controller Mode mérés Mac-en, majd iPhone/iPad.

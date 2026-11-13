@@ -1,3 +1,5 @@
+> **ARCHIVÁLT, NEM FEJLESZTENDŐ, scope-on kívül (2026-11-13).** Az Akai MPC támogatás megszűnt (owner: "a kick-es akai fejlesztését el tudjuk engedni mostantól, az akaira fejlesztünk csak (a SynthyBoy-t)! max mobilra fogjuk folytatni"). Történeti hivatkozás: ne fejleszts rá, ne használd kiindulásnak. Az itt említett kódútvonalak/linkek elavultak lehetnek.
+
 # Helyi modell kísérlet: dokumentum → állítás-lap (WP-A, Key 61 vezérlő-leírás)
 
 **Cél:** megmérni, hogy egy helyi modell megbízhatóan alakítja-e át az útmutató szövegét a [walkthrough-plan.md](walkthrough-plan.md) állítás-lap soraivá. A cél nem a modell képességeinek találgatása, hanem mérés a már kézzel ellenőrzött WP-A anyagon.

@@ -1,3 +1,5 @@
+> **ARCHIVÁLT, NEM FEJLESZTENDŐ, scope-on kívül (2026-11-13).** Az Akai MPC támogatás megszűnt (owner: "a kick-es akai fejlesztését el tudjuk engedni mostantól, az akaira fejlesztünk csak (a SynthyBoy-t)! max mobilra fogjuk folytatni"). Történeti hivatkozás: ne fejleszts rá, ne használd kiindulásnak. Az itt említett kódútvonalak/linkek elavultak lehetnek.
+
 # MPC Key 61 – touch strip módok az útmutatóból
 
 Forrás: *MPC Standalone OS User Guide v3.10* (a PDF-oldal = a nyomtatott oldalszám), fejezet: **Touch Strip, 101–103. oldal**; kiegészítésként a *Preferences > Hardware* rész (100. oldal), a *MIDI Control Mode* (Touch Sense, Note, Low/High Range, 334. oldal) és a *Key 61 Quickstart v1.2* (33–35. elem). Csak az útmutató szövege szerepel itt; amit az útmutató nem mond ki, az **„nincs a doksiban”** jelzést kapott. A hardveren mért adatok külön, a végén vannak.

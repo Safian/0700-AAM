@@ -1,3 +1,5 @@
+> **ARCHIVÁLT, NEM FEJLESZTENDŐ, scope-on kívül (2026-11-13).** Az Akai MPC támogatás megszűnt (owner: "a kick-es akai fejlesztését el tudjuk engedni mostantól, az akaira fejlesztünk csak (a SynthyBoy-t)! max mobilra fogjuk folytatni"). Történeti hivatkozás: ne fejleszts rá, ne használd kiindulásnak. Az itt említett kódútvonalak/linkek elavultak lehetnek.
+
 # MPC Key 61: gomb-LED protokoll és színek (mért, 2026-11-01)
 
 Mérés: a Kick app az MPC-n (`safian/main` `b8ee63a6`, ARMv7), a LED-ek a Mac kamerájával (Photo Booth) figyelve, sötétített szobában. A gombokat a `/data/kick_cmd` FIFO `btn <NÉV>` parancsaival kapcsoltam. A kamera felbontása a halvány LED-ek finom színeihez kevés: ahol nem volt egyértelmű, "nem eldönthető"-t írok.

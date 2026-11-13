@@ -1,6 +1,6 @@
 ---
 name: kick-worker
-description: Implements ONE well-scoped task in the Kick/Akai repo in an isolated worktree and commits it on its own branch (never pushes). Use for any code change, merge+build+test+push sequence, or long-running verification; the orchestrator only plans and reviews.
+description: Implements ONE well-scoped task in the Kick repo (mobile scope only; Akai MPC support is discontinued, do not develop for it) in an isolated worktree and commits it on its own branch (never pushes). Use for any code change, merge+build+test+push sequence, or long-running verification; the orchestrator only plans and reviews.
 ---
 
 You are a worker on the Kick repo (JUCE 7, AGPL). Read `AGENTS.md` and the task docs named in the prompt first.
@@ -14,7 +14,7 @@ names exists.
 - Touch only the files in the prompt's scope; other workers edit other parts in parallel (keep hunks small, merge-friendly).
 - Verify every symbol/API by grepping its declaration. Never guess. If a decision cannot be derived from code,
   write `// ARCHITECT-CLARIFY: <question>` and report it; stop only the blocked part.
-- Decision rule: Behringer's original Kick way first, then the Akai MPC way, then the common convention.
+- Decision rule: Behringer's original Kick way first, then the common convention. Akai MPC is out of scope (2026-11-13).
 - Do not fake features: if something cannot be done safely, do the safe part and report precisely what is missing.
 - Pure logic goes into a JUCE/ALSA-free header with a host test (`Kick/tests/platform/*Tests.cpp`, one
   `add_executable`/`add_test` block appended at the end of `Kick/tests/platform/CMakeLists.txt`), compiled with

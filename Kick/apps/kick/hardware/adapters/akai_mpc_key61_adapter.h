@@ -672,7 +672,7 @@ public:
         }
 
         // Stock MPC application start-up (observed with an LD_PRELOAD logger on the stock app, 2026-11-02, see
-        // docs/hardware/key61/hw-behaviour.md section 4 and tools/mpcsnoop.c): it opens Port 0 for OUTPUT only and
+        // docs/archive/akai-key61/hw-behaviour.md section 4 and tools/mpcsnoop.c): it opens Port 0 for OUTPUT only and
         // writes this block to it. A control surface that has not seen it (Kick started first after a power-on) keeps
         // the buttons on Port 0 (Public mode) and ignores the mode command below. Same bytes, same order.
         if (m_out0 && m_port0_writes) {

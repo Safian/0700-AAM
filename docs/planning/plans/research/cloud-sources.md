@@ -1,3 +1,5 @@
+> **SCOPE-VÁLTOZÁS (owner, 2026-11-13):** az Akai MPC támogatás megszűnt; a Kick csak mobil. Az ebben a fájlban szereplő Akai/MPC/Key 61-es tételek (hardveres próbák, Akai-paritás, MPC-build/deploy, pendrive, hardver-híd) **ARCHIVÁLTAK, NEM FEJLESZTENDŐK**; csak a mobilra/közös motorra vonatkozó tételek érvényesek. Lásd root `AGENTS.md` SCOPE.
+
 # Felhőforrások a Kick fájlböngészőjében: Splice és Google Drive (kutatás, 2026-11-04)
 
 Módszer: csak webes olvasás (WebSearch/WebFetch). Minden állítás mellett forrás-URL.

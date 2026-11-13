@@ -1,8 +1,10 @@
+> **SCOPE-VÁLTOZÁS (owner, 2026-11-13):** az Akai MPC támogatás megszűnt; a Kick csak mobil. Az ebben a fájlban szereplő Akai/MPC/Key 61-es tételek (hardveres próbák, Akai-paritás, MPC-build/deploy, pendrive, hardver-híd) **ARCHIVÁLTAK, NEM FEJLESZTENDŐK**; csak a mobilra/közös motorra vonatkozó tételek érvényesek. Lásd root `AGENTS.md` SCOPE.
+
 # Képernyő-backlog (S-C, S-D, S-E, S-F maradékok)
 
 A 22 képernyő-review dokumentum (2026-11-04, statikus kódolvasás) összevonva: csak a **nyitott** sorok és a körök végén írt állapot-szakaszok maradtak, a kész sorok és a review-leírások törölve. A sor-azonosítók leírása és a teljes review: `git show 4fa7f88f:docs/planning/plans/screens/<képernyő>.md`. Az S-A/S-B képernyők (assign-sample, sample-edit, sampler, channel-mixer, pad-mixer, pad-mute-track-mute) maradéka a [todo-master.md](todo-master.md) R-1/R-4 soraiban van.
 A `G-xxx` hivatkozások a törölt `wp-g.md` / `wp-d.md` sorai (`git show 4fa7f88f:docs/hardware/key61/walkthrough/wp-g.md`).
-Rövidítések: `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `B:` / `bridge` = `Kick/apps/kick/kick_hardware_bridge.h`. `[ ]` nyitott, `[~]` részleges; a "S-C/R-8/R-11/S-F" szakaszok a körök végi állapotok, a "Kész" tételek mellett a nyitottak és az owner-döntések a mérvadók. Hardveres ellenőrzés: [hw-test-checklist.md](../hardware/key61/hw-test-checklist.md).
+Rövidítések: `M/` = `Kick/modules/`, `A/` = `Kick/apps/kick/`, `B:` / `bridge` = `Kick/apps/kick/kick_hardware_bridge.h`. `[ ]` nyitott, `[~]` részleges; a "S-C/R-8/R-11/S-F" szakaszok a körök végi állapotok, a "Kész" tételek mellett a nyitottak és az owner-döntések a mérvadók. Hardveres ellenőrzés: [hw-test-checklist.md](../archive/akai-key61/hw-test-checklist.md).
 
 ## Menu (HomeOptions) — review és TODO
 

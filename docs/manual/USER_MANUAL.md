@@ -1,3 +1,5 @@
+> **SCOPE-VÁLTOZÁS (owner, 2026-11-13):** az Akai MPC támogatás megszűnt; a Kick csak mobil. Az ebben a fájlban szereplő Akai/MPC/Key 61-es tételek (hardveres próbák, Akai-paritás, MPC-build/deploy, pendrive, hardver-híd) **ARCHIVÁLTAK, NEM FEJLESZTENDŐK**; csak a mobilra/közös motorra vonatkozó tételek érvényesek. Lásd root `AGENTS.md` SCOPE.
+
 # Safian Kick – Felhasználói és Fejlesztői Kézikönyv (User Manual & Reference)
 
 <p align="center">
@@ -184,6 +186,6 @@ A beállítások menüben a hardveres interfészek, hálózati kapcsolatok és f
 
 ## 📚 Kapcsolódó További Dokumentumok a Repóban
 
-- [Akai MPC Key 61 Pendrive Telepítési Útmutató (pendrive-install.md)](../hardware/key61/pendrive-install.md)
-- [Hardver Viselkedés és LED Protokoll (hw-behaviour.md)](../hardware/key61/hw-behaviour.md)
+- [Akai MPC Key 61 Pendrive Telepítési Útmutató (pendrive-install.md)](../archive/akai-key61/pendrive-install.md)
+- [Hardver Viselkedés és LED Protokoll (hw-behaviour.md)](../archive/akai-key61/hw-behaviour.md)
 - [CLAP Plugin Hoszt Építési Útmutató](../../Kick/clap_host/README.md)

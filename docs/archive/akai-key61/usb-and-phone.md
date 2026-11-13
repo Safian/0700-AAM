@@ -1,3 +1,5 @@
+> **ARCHIVÁLT, NEM FEJLESZTENDŐ, scope-on kívül (2026-11-13).** Az Akai MPC támogatás megszűnt (owner: "a kick-es akai fejlesztését el tudjuk engedni mostantól, az akaira fejlesztünk csak (a SynthyBoy-t)! max mobilra fogjuk folytatni"). Történeti hivatkozás: ne fejleszts rá, ne használd kiindulásnak. Az itt említett kódútvonalak/linkek elavultak lehetnek.
+
 # Key 61 USB: Controller Mode, tablet and phone use (research, 2026-11-03)
 
 Question: can a phone or tablet use the MPC Key 61 as a MIDI controller (the idea: Kick on a phone + the Key 61 hardware, without the stock MPC UI)?

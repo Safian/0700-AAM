@@ -1,3 +1,5 @@
+> **ARCHIVÁLT, NEM FEJLESZTENDŐ, scope-on kívül (2026-11-13).** Az Akai MPC támogatás megszűnt (owner: "a kick-es akai fejlesztését el tudjuk engedni mostantól, az akaira fejlesztünk csak (a SynthyBoy-t)! max mobilra fogjuk folytatni"). Történeti hivatkozás: ne fejleszts rá, ne használd kiindulásnak. Az itt említett kódútvonalak/linkek elavultak lehetnek.
+
 # Akai MPC Key 61 – hardveres próbalista (csak a még nem igazolt pontok)
 
 Az eszközön végigpróbálandó, **hardveren/hallgatással még nem igazolt** pontok (az igazolt: indulás, érintés, gombok és gombpárok, LED-protokoll `cc`, bank/MIX/MUTE/AUTOMATION LED-ek, két Shift LED, pad egyszeri trigger, strip bemenet, SOUNDS, megállított bar-seek injektálva; lásd [hw-behaviour.md](hw-behaviour.md), [led-colours.md](led-colours.md)). A nyitott tételek összefoglalója: [../../planning/todo-master.md](../../planning/todo-master.md). Ha valami elromlik, a motor-érintő munkák külön commitok (`git log --oneline -- Kick/modules/engine`), egyenként visszavonhatók.

@@ -1,3 +1,5 @@
+> **SCOPE-VÁLTOZÁS (owner, 2026-11-13):** az Akai MPC támogatás megszűnt; a Kick csak mobil. Az ebben a fájlban szereplő Akai/MPC/Key 61-es tételek (hardveres próbák, Akai-paritás, MPC-build/deploy, pendrive, hardver-híd) **ARCHIVÁLTAK, NEM FEJLESZTENDŐK**; csak a mobilra/közös motorra vonatkozó tételek érvényesek. Lásd root `AGENTS.md` SCOPE.
+
 # Terv 03 — Kick plugin-ökoszisztéma (saját Vital-alapú szintetizátor + telepíthető, harmadik féltől származó pluginok)
 
 Állapot: terv, nyitott kutatással (lásd 02). Owner döntés (2026-11-04): az út lefektetett — Vital-alapú, Serum-minőségű saját szintetizátor; a fejlesztése közben dolgozzuk ki a teljes Kick-plugin infrastruktúrát; a letöltés MCP-szerű; mi adjuk a backendet; **harmadik felek is publikálhatnak**: aki megcsinál egy VST-instrumentet a megfelelő formátumban és kirakja egy linkre, az az appba behúzható.

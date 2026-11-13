@@ -1,3 +1,5 @@
+> **SCOPE-VÁLTOZÁS (owner, 2026-11-13):** az Akai MPC támogatás megszűnt; a Kick csak mobil. Az ebben a fájlban szereplő Akai/MPC/Key 61-es tételek (hardveres próbák, Akai-paritás, MPC-build/deploy, pendrive, hardver-híd) **ARCHIVÁLTAK, NEM FEJLESZTENDŐK**; csak a mobilra/közös motorra vonatkozó tételek érvényesek. Lásd root `AGENTS.md` SCOPE.
+
 # Terv 02 — Zongora-CLAP (terjedelmi terv + mintaforrások)
 
 Állapot: terv. Háttér-kutatás: `research/sample-sources.md`, `research/architecture-and-publishing.md` (forrás-URL-ekkel). UI-minta: `assets/piano-ui/`. Kapcsolódó: 03 (plugin-ökoszisztéma: a zongora ennek az első hivatalos pluginja).

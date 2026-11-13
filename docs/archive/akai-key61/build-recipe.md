@@ -1,3 +1,5 @@
+> **ARCHIVÁLT, NEM FEJLESZTENDŐ, scope-on kívül (2026-11-13).** Az Akai MPC támogatás megszűnt (owner: "a kick-es akai fejlesztését el tudjuk engedni mostantól, az akaira fejlesztünk csak (a SynthyBoy-t)! max mobilra fogjuk folytatni"). Történeti hivatkozás: ne fejleszts rá, ne használd kiindulásnak. Az itt említett kódútvonalak/linkek elavultak lehetnek.
+
 # Akai MPC Key 61 – ARMv7 build-recept (Docker, macOS gazdán)
 
 A korábbi recept sehol nem volt rögzítve; ez a 2026-11-01-i hardveres próbánál ténylegesen használt, működő recept. A `kick-armv7-builder` image arm64 Debian (g++-arm-linux-gnueabihf, `:armhf` könyvtárak, gdb-multiarch, readelf).
