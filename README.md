@@ -8,7 +8,7 @@ Independent, enhanced community fork of **Behringer KICK (`MusicTribeOpenSource/
 > **Scope (owner decision, 2026-11-13): Akai MPC support has been discontinued; do not develop for it.**
 > Owner, verbatim: *"a kick-es akai fejlesztését el tudjuk engedni mostantól, az akaira fejlesztünk csak (a SynthyBoy-t)! max mobilra fogjuk folytatni. távolítsd el az akairól, és a telós változat meg annyit tudjon, hogy ha egy usb-c-vel csatlakoztatunk rá egy kidit akkor DAW-ként azt kiszolgálja."*
 > Kick continues on mobile only (iOS/iPadOS; Android only if the repo gains a target). On Akai MPC hardware only SynthyBoy is developed (separate repo).
-> **New requirement:** when something is attached over USB-C, the mobile app serves it as a DAW. **Awaiting owner clarification: what is attached over USB-C (controller / instrument?)** – the word "kidit" in the message is a typo of unknown meaning; it is not guessed here.
+> **New requirement:** when something is attached over USB-C, the mobile app serves it as a DAW. Owner clarification (2026-11-13, Hungarian, verbatim): *"mondjuk egy akai-t kontrolermódban vagy egy midi zongorát, vagy egy akai mkII vagy hármat ... szóval minden szoftvermentes midi hardverből csinálna olyat mint az akai MPC hardverek - ez a cél kb"*. In short: any software-less USB-MIDI hardware (an Akai in controller mode, a MIDI piano, one or more Akai MK2 devices) becomes an MPC-like instrument/DAW with the phone running Kick. "kidit" was a typo.
 
 ## Features
 
