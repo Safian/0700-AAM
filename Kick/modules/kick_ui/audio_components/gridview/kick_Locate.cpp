@@ -393,7 +393,7 @@ namespace mt::ac
             auto* pData = ae.getProgramDataForTrack( ae.getSelectedSequence(), row );
             if( pData != nullptr )
             {
-                int pIdx = ae.getProgramIndexByName( pData->getName() );
+                int pIdx = ae.getProgramIndexByName( pData->name.get() );
                 if( pIdx >= 0 )
                     prog.setSelected( pIdx, juce::dontSendNotification );
             }
@@ -442,7 +442,7 @@ namespace mt::ac
         track.setListOptions( trackList, ae.getSelectedTrack() );
 
         auto* pData = ae.getProgramDataForTrack( ae.getSelectedSequence(), ae.getSelectedTrack() );
-        int pIdx = pData != nullptr ? ae.getProgramIndexByName( pData->getName() ) : ae.getSelectedProgram();
+        int pIdx = pData != nullptr ? ae.getProgramIndexByName( pData->name.get() ) : ae.getSelectedProgram();
         if( pIdx < 0 ) pIdx = ae.getSelectedProgram();
 
         prog.setNumColumns( juce::jmax( 1, (int)progList.size() ) );
@@ -465,7 +465,7 @@ namespace mt::ac
         track.setListOptions( trackList, ae.getSelectedTrack() );
 
         auto* pData = ae.getProgramDataForTrack( ae.getSelectedSequence(), ae.getSelectedTrack() );
-        int pIdx = pData != nullptr ? ae.getProgramIndexByName( pData->getName() ) : ae.getSelectedProgram();
+        int pIdx = pData != nullptr ? ae.getProgramIndexByName( pData->name.get() ) : ae.getSelectedProgram();
         if( pIdx < 0 ) pIdx = ae.getSelectedProgram();
 
         prog.setNumColumns( juce::jmax( 1, (int)progList.size() ) );
