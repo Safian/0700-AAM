@@ -590,3 +590,10 @@ add_executable(kick-network-scanner-tests NetworkScannerTests.cpp)
 add_test(NAME kick-network-scanner COMMAND kick-network-scanner-tests)
 set_tests_properties(kick-network-scanner PROPERTIES TIMEOUT 10)
 
+# Playhead control menu dropdowns, project saving paths & keybed live note routing
+add_executable(kick-playhead-keybed-tests PlayheadProjectKeybedTests.cpp)
+target_include_directories(kick-playhead-keybed-tests PRIVATE ../../apps/kick)
+add_test(NAME kick-playhead-keybed COMMAND kick-playhead-keybed-tests)
+set_tests_properties(kick-playhead-keybed PROPERTIES TIMEOUT 10)
+
+

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "PluginSession.h"
 #include <clap/ext/params.h>
+#include <kick_clap/PluginManager.h>
 #include <cmath>
 
 namespace kick::clap {
@@ -13,6 +14,16 @@ std::shared_ptr<PluginSession> PluginSession::create(juce::ValueTree program) {
 }
 PluginSession::PluginSession(juce::ValueTree program)
     : state(program.getOrCreateChildWithName("CLAP", nullptr)) {
+    if (state.getProperty("pluginId").toString().isEmpty()) {
+        const auto insts = PluginManager::getInstance().getInstrumentDescriptors();
+        if (!insts.empty()) {
+            state.setProperty("path", juce::String(insts.front().path), nullptr);
+            state.setProperty("pluginId", juce::String(insts.front().id), nullptr);
+            state.setProperty("name", juce::String(insts.front().name), nullptr);
+            state.setProperty("vendor", juce::String(insts.front().vendor), nullptr);
+            reload.store(true);
+        }
+    }
     state.addListener(this);
     startTimerHz(30);
 }
@@ -25,7 +36,15 @@ void PluginSession::select(const Descriptor& descriptor) {
     if (processor.loaded() && !save()) return;
     // A failed replacement retains the old saved identity and opaque state.
     auto rate = requestedRate.load(); auto frames = requestedFrames.load();
-    if (rate <= 0) { statusMessage = "Audio engine is not prepared"; return; }
+    if (rate <= 0) {
+        state.setProperty("path", juce::String(descriptor.path), nullptr);
+        state.setProperty("pluginId", juce::String(descriptor.id), nullptr);
+        state.setProperty("name", juce::String(descriptor.name), nullptr);
+        state.setProperty("vendor", juce::String(descriptor.vendor), nullptr);
+        reload.store(true);
+        statusMessage = "Audio engine is not prepared";
+        return;
+    }
     const bool samePlugin = state.getProperty("pluginId").toString() == juce::String(descriptor.id);
     std::vector<uint8_t> restore;
     if (samePlugin) {
@@ -57,12 +76,25 @@ void PluginSession::remove() {
 }
 void PluginSession::prepare(double rate, uint32_t frames) noexcept {
     requestedFrames.store(std::max(1u, frames)); requestedRate.store(rate);
+    if (renderRate.load() == 0 || renderRate.load() != rate) {
+        reload.store(true);
+    }
 }
 void PluginSession::service() {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     const auto rate = requestedRate.load(); const auto frames = requestedFrames.load();
     if (rate <= 0 || !std::isfinite(rate)) return;
-    if (reload.exchange(false)) {
+    if (state.getProperty("pluginId").toString().isEmpty()) {
+        const auto insts = PluginManager::getInstance().getInstrumentDescriptors();
+        if (!insts.empty()) {
+            state.setProperty("path", juce::String(insts.front().path), nullptr);
+            state.setProperty("pluginId", juce::String(insts.front().id), nullptr);
+            state.setProperty("name", juce::String(insts.front().name), nullptr);
+            state.setProperty("vendor", juce::String(insts.front().vendor), nullptr);
+            reload.store(true);
+        }
+    }
+    if (reload.exchange(false) || (!processor.loaded() && state.getProperty("pluginId").toString().isNotEmpty())) {
         const auto path = state.getProperty("path").toString();
         const auto id = state.getProperty("pluginId").toString();
         if (path.isNotEmpty() && id.isNotEmpty()) {

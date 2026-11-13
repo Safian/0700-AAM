@@ -25,6 +25,7 @@
 #include "kick_ui_controls/source/kick_Theme.h"
 #include "kick_ui_controls/source/kick_ControlBase.h"
 #include "kick_ui_controls/source/kick_table.h"
+#include "kick_ui_controls/source/kick_listbox.h"
 #include "audio_engine/audio_engine.h"
 #include <cerrno>
 #include <cstring>
@@ -124,6 +125,7 @@ private:
     // the kick_cmd injector on the message thread both reach the on_* callbacks).
     std::mutex m_target_mutex;
     kick_hw::NoteTargets<mt::MTSelected> m_key_target;
+    kick_hw::NoteTargets<int>            m_key_direct_prog;
     kick_hw::HeldTarget<mt::MTSelected>  m_bend_target;       // pitch wheel (on_pitch_bend)
     kick_hw::HeldTarget<mt::MTSelected>  m_strip_bend_target; // touch strip in pitch bend mode (own target, G16)
     kick_hw::SustainState<mt::MTSelected> m_sustain; // physical pedal + touch strip Sustain (own target each) + strip flag; only under m_target_mutex
@@ -616,6 +618,14 @@ private:
             if (dynamic_cast<juce::Label*>(target) != nullptr)
                 if (auto* sl = target->findParentComponentOfClass<juce::Slider>())
                     target = sl;
+
+            // Similarly, KickListBox's internal labels (title and value) do not process dropdown open events directly.
+            // Ensure taps anywhere in a KickListBox (except its plus/minus buttons) target the KickListBox component.
+            if (auto* lb = (dynamic_cast<ui::KickListBox*>(target) != nullptr ? (ui::KickListBox*)target : target->findParentComponentOfClass<ui::KickListBox>()))
+            {
+                if (dynamic_cast<juce::Button*>(target) == nullptr)
+                    target = lb;
+            }
 
             // A modal dialog is open but the finger landed somewhere else than on it: the dialog can not be reached (the "Power
             // window does not react" case). Category "warn" (on by default; "touch" is off), at most one line a second.
@@ -2329,11 +2339,18 @@ public:
         }
         auto& ae = mt::getAudioInterface();
         const mt::MTSelected sel = ae.getSelected();
+        const int selProg = ae.getSelectedProgram();
+        const bool routeDirectToProg = (ae.getProgramType(selProg) == mt::MTProgramType::Plugin &&
+                                        ae.getProgramForTrack(sel.sequence, sel.track) != ae.getProgram(selProg));
         {
             std::lock_guard<std::mutex> lk(m_target_mutex);
             m_key_target.set(pitch, sel); // F5: the note-off goes to the track that got the note-on
+            if (routeDirectToProg)
+                m_key_direct_prog.set(pitch, selProg);
         }
         ae.addLiveMidiNote(sel, sounding_pitch, vel);
+        if (routeDirectToProg)
+            ae.addLiveMidiNote(selProg, sounding_pitch, vel);
 
         if (ae.isSequenceRecArmed() && !ae.isSequencePlaying()) {
             juce::MessageManager::callAsync([sounding_pitch, vel]() {
@@ -2379,11 +2396,15 @@ public:
         }
         auto& ae = mt::getAudioInterface();
         mt::MTSelected target;
+        int directProg = -1;
         {
             std::lock_guard<std::mutex> lk(m_target_mutex);
             target = m_key_target.take(pitch, ae.getSelected());
+            directProg = m_key_direct_prog.take(pitch, -1);
         }
         ae.stopLiveMidiNote(target, sounding_pitch);
+        if (directProg >= 0)
+            ae.stopLiveMidiNote(directProg, sounding_pitch);
     }
 
     void pollCommands()
