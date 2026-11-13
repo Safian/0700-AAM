@@ -47,6 +47,8 @@ namespace ui
         setScrollOnDragMode( juce::Viewport::ScrollOnDragMode::all );
         listComp.setWantsKeyboardFocus( false );
 
+        getProperties().set( "outsideTapCancels", true );
+
         setViewedComponent( &listComp, false );
 
         if( Options.size() )
@@ -471,6 +473,8 @@ namespace ui
 
         this->setPaintingIsUnclipped( true );
         this->setInterceptsMouseClicks( true, false );
+        title.setInterceptsMouseClicks( false, false );
+        value.setInterceptsMouseClicks( false, false );
 
         // Setup defaults...
         title.setText( Title, juce::dontSendNotification );
@@ -612,17 +616,8 @@ namespace ui
         if( checker.shouldBailOut() )
             return;
 
-#if KICK_TOUCH_SINGLE_TAP_LISTBOX
-        // Touch-only builds (Akai MPC bridge): a single tap opens the list.
+        // Single tap or click opens the dropdown list directly.
         knobClicked();
-#else
-        auto currentTime = juce::Time::getCurrentTime();
-
-        if( ( currentTime - lastClickTime ).inMilliseconds() <= doubleClickTimeoutMs && currentTime != lastClickTime )
-            mouseDoubleClick( event );
-        else
-            lastClickTime = currentTime;
-#endif
     }
 
     void KickListBox::resized()

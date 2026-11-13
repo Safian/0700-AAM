@@ -361,6 +361,7 @@ namespace ui
         void editGoogleDriveSource();
         void startGoogleOAuthSignIn( const std::string& clientId, const std::string& clientSecret, const juce::String& emailHint, const std::string& existingId );
         void finishGoogleDriveSourceSetup( const fileSource::SourceConfig& cfg, const std::string& secretText, const juce::String& statusMsg );
+        void scanNetworkSources();
         void editLocalSource();
         juce::File findBestSpliceDirectory() const;
         juce::Component* remoteCell( int row, juce::Component* existing );

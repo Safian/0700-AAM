@@ -376,6 +376,7 @@ namespace mt::ac
             ae.setSelectedSequence( seq.getSelectedIndex() );
             ae.setSelectedTrack( track.getSelectedIndex() );
             ae.setSelectedProgram( prog.getSelectedIndex() );
+            ae.setProgramToTrack( prog.getSelectedIndex(), seq.getSelectedIndex(), track.getSelectedIndex() );
             applied = true;
             close( UI::APPLY );
         };
@@ -386,6 +387,19 @@ namespace mt::ac
         seq.onSelectionChanged = [&]( int row, const juce::String& ) {
             ae.setSelectedSequence( row );
             updateTrackAndProgramLists(); // the tracks of the new sequence
+        };
+        track.onSelectionChanged = [&]( int row, const juce::String& ) {
+            ae.setSelectedTrack( row );
+            auto* pData = ae.getProgramDataForTrack( ae.getSelectedSequence(), row );
+            if( pData != nullptr )
+            {
+                int pIdx = ae.getProgramIndexByName( pData->getName() );
+                if( pIdx >= 0 )
+                    prog.setSelected( pIdx, juce::dontSendNotification );
+            }
+        };
+        prog.onSelectionChanged = [&]( int row, const juce::String& ) {
+            ae.setSelectedProgram( row );
         };
         updateList();
 
@@ -426,8 +440,13 @@ namespace mt::ac
         progList  = ae.getProgramList();
         track.setNumColumns( juce::jmax( 1, (int)trackList.size() ) );
         track.setListOptions( trackList, ae.getSelectedTrack() );
+
+        auto* pData = ae.getProgramDataForTrack( ae.getSelectedSequence(), ae.getSelectedTrack() );
+        int pIdx = pData != nullptr ? ae.getProgramIndexByName( pData->getName() ) : ae.getSelectedProgram();
+        if( pIdx < 0 ) pIdx = ae.getSelectedProgram();
+
         prog.setNumColumns( juce::jmax( 1, (int)progList.size() ) );
-        prog.setListOptions( progList, ae.getSelectedProgram() );
+        prog.setListOptions( progList, pIdx );
     }
 
     void LocateSTPDialog::updateList()
@@ -445,8 +464,12 @@ namespace mt::ac
         track.setNumColumns( juce::jmax( 1, (int)trackList.size() ) );
         track.setListOptions( trackList, ae.getSelectedTrack() );
 
+        auto* pData = ae.getProgramDataForTrack( ae.getSelectedSequence(), ae.getSelectedTrack() );
+        int pIdx = pData != nullptr ? ae.getProgramIndexByName( pData->getName() ) : ae.getSelectedProgram();
+        if( pIdx < 0 ) pIdx = ae.getSelectedProgram();
+
         prog.setNumColumns( juce::jmax( 1, (int)progList.size() ) );
-        prog.setListOptions( progList, ae.getSelectedProgram() );
+        prog.setListOptions( progList, pIdx );
     }
 
     void LocateSTPDialog::buttonClicked( juce::Button* ) {}

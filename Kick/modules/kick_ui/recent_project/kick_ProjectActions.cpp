@@ -328,7 +328,9 @@ namespace ui
             }
             if( !ae.saveProject() )
             {
-                kick_ui::AppStatusbar::Instance().setBoxInfo( "UNSAVED: " + ae.getProjectSaveError() );
+                const auto err = ae.getProjectSaveError();
+                kick_ui::AppStatusbar::Instance().setBoxInfo( "UNSAVED: " + err );
+                warn( "The project could not be saved: " + ( err.isNotEmpty() ? err : "write error" ) );
                 return false;
             }
             kick_ui::AppStatusbar::Instance().setBoxInfo( "Saved" );
@@ -344,7 +346,10 @@ namespace ui
                 warn( kick_project::describe( problem ) );
                 return;
             }
-            const auto file = getAppDirs( MTProjects ).getChildFile( juce::String( name ) );
+            const auto projectsDir = getAppDirs( MTProjects );
+            if( !projectsDir.isDirectory() )
+                projectsDir.createDirectory();
+            const auto file = projectsDir.getChildFile( juce::String( name ) );
             if( file.exists() )
             {
                 warn( kick_project::describe( kick_project::CreateResult::AlreadyExists ) );

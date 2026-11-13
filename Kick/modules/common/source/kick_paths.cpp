@@ -135,27 +135,23 @@ juce::File getAppDirs( DirType T )
         return f;
     };
 
+    const juce::File data( "/data" );
+    const bool       hasData = data.isDirectory();
+
     if( T == MTAssets )
-        return resolveLinuxPath( "/data/assets", "/app/assets" );
+        return ( hasData && data.getChildFile( "assets" ).exists() ) ? data.getChildFile( "assets" ) : juce::File( "/app/assets" );
     else if( T == MTSamples )
-        return makeDir( resolveLinuxPath( "/data/sounds", "/app/sounds" ) );
+        return makeDir( hasData ? data.getChildFile( "sounds" ) : resolveLinuxPath( "/data/sounds", "/app/sounds" ) );
     else if( T == MTDemos )
-        return resolveLinuxPath( "/data/demos", "/app/demos" );
+        return ( hasData && data.getChildFile( "demos" ).exists() ) ? data.getChildFile( "demos" ) : juce::File( "/app/demos" );
     else if( T == MTTemp )
-        return resolveLinuxPath( "/data/templates", "/app/templates" );
+        return ( hasData && data.getChildFile( "templates" ).exists() ) ? data.getChildFile( "templates" ) : juce::File( "/app/templates" );
     else if( T == MTProjects )
-        return makeDir( resolveLinuxPath( "/data/projects", "/home/Kick/projects" ) );
+        return makeDir( hasData ? data.getChildFile( "projects" ) : resolveLinuxPath( "/data/projects", "/home/Kick/projects" ) );
     else if( T == MTLog )
-        return makeDir( resolveLinuxPath( "/data/logs", "/home/Kick/logs" ) );
+        return makeDir( hasData ? data.getChildFile( "logs" ) : resolveLinuxPath( "/data/logs", "/home/Kick/logs" ) );
     else if( T == MTPrefs )
-    {
-        // /data is the writable partition of the device; the fallback is on the read-only root file system, where the
-        // preferences, menu layout and insert presets could never be saved (MPC, 2026-11-04: no /data/prefs, brightness 0, empty settings).
-        const juce::File data( "/data" );
-        if( data.isDirectory() )
-            return makeDir( data.getChildFile( "prefs" ) );
-        return makeDir( resolveLinuxPath( "/data/prefs", "/home/Kick/prefs" ) );
-    }
+        return makeDir( hasData ? data.getChildFile( "prefs" ) : resolveLinuxPath( "/data/prefs", "/home/Kick/prefs" ) );
 #endif
 
     return juce::File::getSpecialLocation( juce::File::tempDirectory );

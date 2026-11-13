@@ -254,6 +254,7 @@ namespace ui
 
             inline std::string basicAuthValue( const std::string& user, const std::string& password )
             {
+                if( user.empty() && password.empty() ) return {};
                 if( hasLineBreak( user ) || hasLineBreak( password ) ) return {};
                 return "Basic " + base64Encode( user + ":" + password );
             }
