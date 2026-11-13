@@ -2308,7 +2308,7 @@ namespace ui
                 default: msg = "Server error"; break;
             }
             statusBar.setBoxInfo( msg );
-            kick_log( "FILESRC", "list failed: status=%d http=%d", static_cast<int>( lr.result.status ), lr.result.httpStatus );
+            kick_log( "error", "[FILESRC] list failed: status=%d http=%d msg=%s\n", static_cast<int>( lr.result.status ), lr.result.httpStatus, lr.result.message.c_str() );
             if( remoteEntries.empty() )
             {
                 remoteShown.clear();
@@ -2976,7 +2976,7 @@ namespace ui
                 cfg.id       = "mac-share";
                 cfg.name     = ds.name.empty() ? "Mac Share" : ds.name;
                 cfg.location = ds.url;
-                cfg.auth     = "basic";
+                cfg.auth     = "none";
                 mt::getSettings().cloudSources.enableWebDav = true;
 
                 if( !safeThis->hub->upsertWebDav( cfg, "" ) )

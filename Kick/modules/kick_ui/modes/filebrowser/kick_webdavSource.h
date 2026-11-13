@@ -55,9 +55,23 @@ namespace ui
                 Reply      rep;
                 auto       sp = webdav::normaliseSourcePath( path );
                 r.result      = request( "PROPFIND", sp, true, "Depth: 1\r\nContent-Type: application/xml; charset=utf-8\r\n", webdav::propfindBody(), 0, cancel, rep );
-                if( !r.result.ok() ) return r;
-                if( rep.status != 207 ) { r.result = Result::make( Status::BadResponse, "unexpected PROPFIND status", rep.status ); return r; }
-                if( !webdav::parsePropfind( rep.body, cfg.location, sp, r.entries ) ) { r.result = Result::make( Status::BadResponse, "unreadable PROPFIND response" ); return r; }
+                if( !r.result.ok() )
+                {
+                    kick_log( "error", "[WEBDAV-DEBUG] request failed: status=%d http=%d msg=%s\n", static_cast<int>( r.result.status ), r.result.httpStatus, r.result.message.c_str() );
+                    return r;
+                }
+                if( rep.status != 207 )
+                {
+                    kick_log( "error", "[WEBDAV-DEBUG] rep.status != 207 (got %d)\n", rep.status );
+                    r.result = Result::make( Status::BadResponse, "unexpected PROPFIND status", rep.status );
+                    return r;
+                }
+                if( !webdav::parsePropfind( rep.body, cfg.location, sp, r.entries ) )
+                {
+                    kick_log( "error", "[WEBDAV-DEBUG] parsePropfind failed: body_len=%zu\n", rep.body.size() );
+                    r.result = Result::make( Status::BadResponse, "unreadable PROPFIND response" );
+                    return r;
+                }
                 std::sort( r.entries.begin(), r.entries.end(), []( const Entry& a, const Entry& b ) { return a.isDir != b.isDir ? a.isDir : a.name < b.name; } );
                 return r;
             }
@@ -137,6 +151,7 @@ namespace ui
 
             std::string authorization() const
             {
+                if( cfg.auth == "none" ) return {};
                 std::string secret;
                 if( !readSecretFile( secretPath, secret ) ) return {};
                 while( !secret.empty() && ( secret.back() == '\n' || secret.back() == '\r' ) ) secret.pop_back();
@@ -169,6 +184,7 @@ namespace ui
                     if( cancel && cancel() ) return Result::make( Status::Cancelled );
                     std::string headers = extraHeaders;
                     if( !auth.empty() ) headers += "Authorization: " + auth + "\r\n";
+                    kick_log( "error", "[WEBDAV-DEBUG] req method=%s url=%s headers='%s' body_len=%zu\n", method, url.c_str(), headers.c_str(), body.size() );
                     juce::URL u( juce::String::fromUTF8( url.c_str() ) );
                     if( !body.empty() ) u = u.withPOSTData( juce::String::fromUTF8( body.c_str() ) );
                     int                  status = 0;
@@ -184,8 +200,10 @@ namespace ui
                     if( !in )
                     {
                         st = State::Offline;
+                        kick_log( "error", "[WEBDAV-DEBUG] createInputStream null: %s\n", url.c_str() );
                         return Result::make( Status::NetworkError, "cannot connect to " + webdav::redactedUrl( url ) );
                     }
+                    kick_log( "error", "[WEBDAV-DEBUG] createInputStream ok: status=%d url=%s\n", status, url.c_str() );
                     rep.status = status;
                     if( status == 301 || status == 302 || status == 307 || status == 308 )
                     {
